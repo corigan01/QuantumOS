@@ -63,15 +63,15 @@ pub struct Writer {
 
 
 impl Writer {
-    pub fn write_byte(&mut self, byte: u8) {
+    pub fn vga_write_byte(&mut self, byte: u8) {
         match byte {
-            b'\n' => self.new_line(),
+            b'\n' => self.vga_new_line(),
             0x7F => {
                 self.column_position -= 1;
             },
             byte => {
                 if self.column_position >= BUFFER_WIDTH {
-                    self.new_line();
+                    self.vga_new_line();
                 }
 
                 let row = self.row_pos;
@@ -88,7 +88,7 @@ impl Writer {
         }
     }
 
-    pub fn clear_line(&mut self, line: usize) {
+    pub fn vga_clear_line(&mut self, line: usize) {
 
         let color_code = self.color_code;
 
@@ -100,7 +100,7 @@ impl Writer {
         }   
     }
 
-    pub fn new_line(&mut self) {
+    pub fn vga_new_line(&mut self) {
         self.row_pos += 1;
         self.column_position = 0;
 
@@ -113,33 +113,35 @@ impl Writer {
                 }
             }
 
-            self.clear_line(BUFFER_HEIGHT - 1);
+            self.vga_clear_line(BUFFER_HEIGHT - 1);
 
             return;
         }
 
 
-        self.clear_line(BUFFER_HEIGHT - 1);
+        self.vga_clear_line(BUFFER_HEIGHT - 1);
     }
     
-    pub fn write_string(&mut self, s: &str) {
+    pub fn vga_write_string(&mut self, s: &str) {
         for byte in s.bytes() {
             match byte {
                 // printable ASCII byte or newline
-                0x20..=0x7e | b'\n' => self.write_byte(byte),
+                0x20..=0x7e | b'\n' => self.vga_write_byte(byte),
                 // not part of printable ASCII range
 
-                _ => self.write_byte(0xfe),
+                _ => self.vga_write_byte(0xfe),
             }
 
         }
     }
 
+    
+
 }
 
 impl fmt::Write for Writer {
     fn write_str(&mut self, s: &str) -> fmt::Result {
-        self.write_string(s);
+        self.vga_write_string(s);
         Ok(())
     }
 }

@@ -3,6 +3,8 @@
 
 mod vga_buffer;
 
+mod vga;
+
 use core::panic::PanicInfo;
 
 /// This function is called on panic.
@@ -20,8 +22,8 @@ pub extern "C" fn _start() -> ! {
     vga_println!("---------------------");
 
     vga_println!();
-    vga_println!("[CPU] INIT |");
-    vga_println!("\\");
+    vga_println!("[CPU] INIT");
+
 
     loop {}
 }
