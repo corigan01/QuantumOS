@@ -1,1 +1,0 @@
-{"rustc":14715860307154437801,"features":"","target":0,"profile":0,"path":0,"deps":[[8427705233296525817,"build_script_build",false,2012342198413941602]],"local":[{"RerunIfChanged":{"output":"x86_64-quantum_os/debug/build/compiler_builtins-189aa9aeba2c7b83/output","paths":["build.rs"]}}],"rustflags":[],"metadata":0,"config":0,"compile_kind":0}
