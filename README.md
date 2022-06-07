@@ -1,5 +1,4 @@
-# QuantumOS
-The Operating System built for the modern human!
+![Black Blue and Neon Pink Modern Tech Electronics and Technology X-Frame Banner](https://user-images.githubusercontent.com/33582457/172409522-ac3c5d78-fdbc-4c4c-b6f0-3db54b9d1656.png)
 
 ---
 
