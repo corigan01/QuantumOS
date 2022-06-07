@@ -1,0 +1,7 @@
+cargo:rerun-if-changed=/home/corigan01/CLionProjects/QuantumOS/Cargo.toml
+cargo:rustc-link-search=native=/home/corigan01/CLionProjects/QuantumOS/target/bootimage/bootloader/x86_64-bootloader/release/build/bootloader-734ef26804990c29/out
+cargo:rustc-link-lib=static=kernel_bin-quantum_os
+cargo:rerun-if-env-changed=KERNEL
+cargo:rerun-if-env-changed=KERNEL_MANIFEST
+cargo:rerun-if-changed=/home/corigan01/CLionProjects/QuantumOS/target/x86_64-quantum_os/debug/quantum_os
+cargo:rerun-if-changed=build.rs

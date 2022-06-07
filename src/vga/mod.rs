@@ -9,6 +9,7 @@
  =======================
 
  This file is here to contain the vga text mode driver functions such as drawing to the screen.
+
 */
 
 mod low_level;
