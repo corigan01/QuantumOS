@@ -12,4 +12,35 @@
 
 */
 
-mod low_level;
+use volatile::Volatile;
+
+pub mod low_level;
+
+pub enum FramebufferType {
+    TextMode,
+    PixelMode
+}
+
+pub enum OutputType {
+    TextOnly,
+    PixelOnly
+}
+
+pub fn init_kernel_vga(framebuffer_type: FramebufferType, output_type: OutputType,
+                        buffer: u64, frame_size: (u32, u32)) {
+
+    match framebuffer_type {
+        TextMode => {
+
+        },
+
+        PixelMode => {
+
+        },
+
+        _ => {
+
+        }
+    }
+
+}
