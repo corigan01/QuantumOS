@@ -1,28 +1,37 @@
 #![no_std] // don't link the Rust standard library
 #![no_main] // disable all Rust-level entry points
 
-mod vga_buffer;
-
-mod vga;
+//mod vga;
 
 use core::panic::PanicInfo;
+use bootloader::boot_info::BootInfo;
+use bootloader::entry_point;
+
+entry_point!(main);
 
 /// This function is called on panic.
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
-    vga_println!("{}", info);
+    //vga_println!("{}", info);
     loop {}
 }
 
 
 
-#[no_mangle]
-pub extern "C" fn _start() -> ! {
-    vga_println!("Quantum OS v0.1.0");
-    vga_println!("---------------------");
+fn main(boot_info: &'static mut BootInfo) -> ! {
+    if let Some(framebuffer) = boot_info.framebuffer.as_mut() {
+        for byte in framebuffer.buffer_mut() {
+            *byte = 0xF0;
+        }
+        for byte in framebuffer.buffer_mut() {
+            *byte = 0x00;
+        }
 
-    vga_println!();
-    vga_println!("[CPU] INIT");
+        let buffer = framebuffer.buffer_mut();
+
+        buffer[1] = 0xF0;
+    }
+
 
 
     loop {}

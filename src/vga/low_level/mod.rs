@@ -16,8 +16,5 @@
 
 pub mod text_mode;
 
-pub enum FramebufferType {
-    TextMode,
-    PixelMode
-}
+
 
