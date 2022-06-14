@@ -31,10 +31,13 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 mod vga;
 mod serial;
+mod port;
 
+use core::arch::asm;
 use core::panic::PanicInfo;
 use bootloader::boot_info::{BootInfo, FrameBuffer};
 use bootloader::entry_point;
+use crate::serial::{SerialCOM, SerialDevice};
 use crate::vga::low_level::FBuffer;
 
 entry_point!(main);
@@ -49,7 +52,10 @@ fn panic(info: &PanicInfo) -> ! {
 
 
 fn main(boot_info: &'static mut BootInfo) -> ! {
-    serial_println!("QuantumOS Kernel -----");
+
+    serial_println!("[QUANTUM OS PRE-KERNEL]");
+
+
 
     if let Some(framebuffer) = boot_info.framebuffer.as_mut() {
         for byte in framebuffer.buffer_mut() {
