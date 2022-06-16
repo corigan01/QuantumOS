@@ -32,10 +32,11 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 mod vga;
 mod serial;
 mod port;
+mod arch;
 
 use core::arch::asm;
 use core::panic::PanicInfo;
-use bootloader::boot_info::{BootInfo, FrameBuffer};
+use bootloader::boot_info::{BootInfo, FrameBuffer, MemoryRegion};
 use bootloader::entry_point;
 use crate::serial::{SerialCOM, SerialDevice};
 use crate::vga::low_level::FBuffer;
@@ -53,15 +54,29 @@ fn panic(info: &PanicInfo) -> ! {
 
 fn main(boot_info: &'static mut BootInfo) -> ! {
 
-    serial_println!("[QUANTUM OS PRE-KERNEL]");
+    serial_println!("\n\n[QUANTUM OS PRE-KERNEL]");
+    serial_println!("--- Quantum is using this serial port for debug information ---");
+    serial_println!("---       Baud rate is set at '38400' bits per second       ---");
 
+    serial_println!("\n");
 
+    serial_println!("Boot info\n=======");
+    serial_println!("framebuffer check  : {:?}", boot_info.framebuffer.as_ref().is_some());
+    serial_println!("phy mem offset     : {:?}", boot_info.physical_memory_offset);
+    serial_println!("rsdp address       : {:?}", boot_info.rsdp_addr);
+    serial_println!("Memory Regions     : {:?}", boot_info.memory_regions);
+    serial_println!("\n\n");
+
+    serial_print!("Checking the framebuffer ... ");
 
     if let Some(framebuffer) = boot_info.framebuffer.as_mut() {
         for byte in framebuffer.buffer_mut() {
             *byte = 0x0F;
         }
+
+        serial_println!("OK");
     }
+    else { serial_println!("FAIL"); }
 
     let kernel_buffer = FBuffer::new(&boot_info.framebuffer);
 
@@ -69,5 +84,8 @@ fn main(boot_info: &'static mut BootInfo) -> ! {
     kernel_buffer.draw_rec((100, 100), (100, 100), 0x00FF00);
     kernel_buffer.draw_rec((200, 200), (100, 100), 0x0000FF);
 
+
+    serial_println!("\n\n\n==== KERNEL MAIN FINISHED ==== ");
+    serial_println!("In later versions of this kernel, the kernel should not finish!");
     loop {}
 }
