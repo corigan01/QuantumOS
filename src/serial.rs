@@ -1,6 +1,5 @@
 use crate::port;
 use crate::port::{byte_in, byte_out};
-use crate::serial::SerialCOM::COM_1;
 use lazy_static::lazy_static;
 use spin::Mutex;
 use core::fmt;
@@ -10,11 +9,11 @@ use core::fmt::Arguments;
 #[repr(u16)]
 #[allow(dead_code)]
 pub enum SerialCOM {
-    COM_1 = 0x3F8,
-    COM_2 = 0x2F8,
-    COM_3 = 0x3E8,
-    COM_4 = 0x2E8,
-    COM_NULL = 0x00
+    Com1 = 0x3F8,
+    Com2 = 0x2F8,
+    Com3 = 0x3E8,
+    Com4 = 0x2E8,
+    None = 0x00
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -80,7 +79,7 @@ impl SerialDevice {
     }
 
     pub fn write_byte(&self, byte: u8) {
-        assert_ne!(self.port, SerialCOM::COM_NULL);
+        assert_ne!(self.port, SerialCOM::None);
 
         unsafe {
             loop {
@@ -112,7 +111,7 @@ impl fmt::Write for SerialDevice {
 
 lazy_static! {
     pub static ref SERIAL1: Mutex<Option<SerialDevice>> =
-        Mutex::new(SerialDevice::new(SerialCOM::COM_2));
+        Mutex::new(SerialDevice::new(SerialCOM::Com1));
 }
 
 
