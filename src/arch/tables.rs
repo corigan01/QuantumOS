@@ -24,6 +24,11 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 */
 
-mod isr;
-mod gdt;
-mod tables;
+use crate::memory;
+
+#[derive(Clone, Copy, Debug)]
+#[repr(C, packed(2))]
+pub struct DscpTable {
+    dt_size: u16,
+    addr: u64
+}

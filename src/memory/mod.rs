@@ -24,6 +24,39 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 */
 
-mod isr;
-mod gdt;
-mod tables;
+
+
+use core::result;
+
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[repr(transparent)]
+pub struct VirtualAddress(u64);
+
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[repr(transparent)]
+pub struct NotValidAddress(u64);
+
+// Only bits under 48-64 are valid
+impl VirtualAddress {
+
+    #[inline]
+    pub fn new(address: u64) -> VirtualAddress {
+        VirtualAddress::try_new(address).expect("Not Valid Address, bit check failed!")
+    }
+
+    #[inline]
+    pub fn try_new(address: u64) -> Result<VirtualAddress, NotValidAddress> {
+        match address << 48 {
+            0 => Ok(VirtualAddress(address)),
+            _ => Err(NotValidAddress(address))
+        }
+    }
+
+    #[inline]
+    pub fn zero() -> VirtualAddress { VirtualAddress(0) }
+
+    // unsafe
+    pub unsafe fn new_unsafe(address: u64) -> VirtualAddress {
+        VirtualAddress(address)
+    }
+}

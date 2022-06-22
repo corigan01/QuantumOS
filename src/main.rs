@@ -33,7 +33,7 @@ mod vga;
 mod serial;
 mod port;
 mod arch;
-
+mod memory;
 use core::arch::asm;
 use core::panic::PanicInfo;
 use bootloader::boot_info::{BootInfo, FrameBuffer, MemoryRegion};
