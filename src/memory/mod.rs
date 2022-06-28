@@ -24,17 +24,21 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 */
 
-
-
 use core::result;
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(transparent)]
 pub struct VirtualAddress(u64);
 
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
 #[repr(transparent)]
 pub struct NotValidAddress(u64);
+
+impl NotValidAddress {
+    pub fn get_ptr(self) -> u64 {
+        self.0
+    }
+}
 
 // Only bits under 48-64 are valid
 impl VirtualAddress {
@@ -46,7 +50,7 @@ impl VirtualAddress {
 
     #[inline]
     pub fn try_new(address: u64) -> Result<VirtualAddress, NotValidAddress> {
-        match address << 48 {
+        match address & (0xFF00000000000000 as u64) {
             0 => Ok(VirtualAddress(address)),
             _ => Err(NotValidAddress(address))
         }
@@ -55,8 +59,37 @@ impl VirtualAddress {
     #[inline]
     pub fn zero() -> VirtualAddress { VirtualAddress(0) }
 
-    // unsafe
-    pub unsafe fn new_unsafe(address: u64) -> VirtualAddress {
-        VirtualAddress(address)
+    #[inline]
+    pub fn as_u64(self) -> u64 {
+        self.0
     }
+
+    #[inline]
+    pub fn is_null(&self) -> bool {
+        self.as_u64() == 0
+    }
+
+    #[inline]
+    pub fn is_some(&self) -> bool {
+        self.as_u64() > 0
+    }
+
+    #[inline]
+    pub fn from_ptr<T>(ptr: *const T) -> VirtualAddress {
+        VirtualAddress::new(ptr as u64)
+    }
+
+    #[inline]
+    pub fn as_ptr<T>(self) -> *const T {
+        self.as_u64() as *const T
+    }
+
+    #[inline]
+    pub fn as_mut_ptr<T>(self) -> *mut T {
+        self.as_u64() as *mut T
+    }
+
+
+    // unsafe
+    pub unsafe fn new_unsafe(address: u64) -> VirtualAddress { VirtualAddress(address) }
 }

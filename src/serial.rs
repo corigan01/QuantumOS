@@ -79,11 +79,11 @@ impl SerialDevice {
             port::byte_out(mode + 1, 0x00); //                            (hi byte)
             port::byte_out(mode + 3, 0x03); // Use 8 bits, no parity bits, and one stop bit
             port::byte_out(mode + 2, 0xC7); // Enable FIFO
-            port::byte_out(mode + 4, 0x1E); // Set Serial to loopback mode
 
             // TEST
             let test_byte: u8 = b'A';
 
+            port::byte_out(mode + 4, 0x1E); // Set Serial to loopback mode
             port::byte_out(mode + 0, test_byte); // Send test byte
 
             let serial_response = port::byte_in(mode + 0);
@@ -93,11 +93,10 @@ impl SerialDevice {
             }
 
             // Success
-            port::byte_out(mode + 4, 0x0F);
+            port::byte_out(mode + 4, 0x0F); // Set Serial to normal mode
         }
 
         Some(SerialDevice { port })
-
     }
 
     unsafe fn is_transmit_empty(&self) -> bool {

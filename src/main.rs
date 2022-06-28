@@ -29,15 +29,17 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 //mod vga;
 
+
 mod vga;
 mod serial;
 mod port;
-mod arch;
+mod arch_x86_64;
 mod memory;
 use core::arch::asm;
 use core::panic::PanicInfo;
 use bootloader::boot_info::{BootInfo, FrameBuffer, MemoryRegion};
 use bootloader::entry_point;
+use crate::arch_x86_64::gdt::{GDT_Entry, GlobalDescriptorTable};
 use crate::serial::{SerialCOM, SerialDevice};
 use crate::vga::low_level::FBuffer;
 
@@ -49,8 +51,6 @@ fn panic(info: &PanicInfo) -> ! {
     serial_println!("{}", info);
     loop {}
 }
-
-
 
 fn main(boot_info: &'static mut BootInfo) -> ! {
 
@@ -77,6 +77,18 @@ fn main(boot_info: &'static mut BootInfo) -> ! {
         serial_println!("OK");
     }
     else { serial_println!("FAIL"); }
+
+    serial_print!("Setting up GDT ... ");
+
+    let mut gdt = GlobalDescriptorTable::new();
+
+    gdt.add_entry(GDT_Entry::new()).unwrap();
+    gdt.add_entry(GDT_Entry::new_raw(0, 0xFFFFFFFF, 0x9A, 0xCF)).unwrap();
+    gdt.add_entry(GDT_Entry::new_raw(0, 0xFFFFFFFF, 0x92, 0xCF)).unwrap();
+
+    gdt.submit_entries().load();
+
+    serial_println!("OK");
 
     let kernel_buffer = FBuffer::new(&boot_info.framebuffer);
 

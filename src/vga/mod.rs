@@ -26,14 +26,6 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 pub mod low_level;
 
-use bootloader::boot_info::{FrameBuffer, FrameBufferInfo};
-
-pub fn init_kernel_vga(framebuffer: FrameBuffer) {
-    let framebuffer_info = framebuffer.info();
-    let framebuffer_pixel = framebuffer_info.pixel_format;
 
 
-
-
-}
 
