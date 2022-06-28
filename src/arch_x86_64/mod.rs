@@ -24,9 +24,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 */
 
-use core::arch::asm;
-use crate::arch::tables;
-
-unsafe fn load_gdt_ptr() {
-    asm!("lgdt [{}]", in(reg) gdt, options(readonly, nostack, preserves_flags));
-}
+mod isr;
+pub mod gdt;
+mod tables;
+mod idt;
