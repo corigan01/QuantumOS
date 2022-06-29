@@ -26,6 +26,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 #![no_std] // don't link the Rust standard library
 #![no_main] // disable all Rust-level entry points
+#![allow(dead_code)]
 
 //mod vga;
 
@@ -39,7 +40,9 @@ use core::arch::asm;
 use core::panic::PanicInfo;
 use bootloader::boot_info::{BootInfo, FrameBuffer, MemoryRegion};
 use bootloader::entry_point;
-use crate::arch_x86_64::gdt::{GDT_Entry, GlobalDescriptorTable};
+use crate::arch_x86_64::CpuPrivilegeLevel;
+use crate::arch_x86_64::gdt::{GdtEntry, GlobalDescriptorTable};
+use crate::arch_x86_64::idt::{GateType, IdtEntry};
 use crate::serial::{SerialCOM, SerialDevice};
 use crate::vga::low_level::FBuffer;
 
@@ -82,13 +85,22 @@ fn main(boot_info: &'static mut BootInfo) -> ! {
 
     let mut gdt = GlobalDescriptorTable::new();
 
-    gdt.add_entry(GDT_Entry::new()).unwrap();
-    gdt.add_entry(GDT_Entry::new_raw(0, 0xFFFFFFFF, 0x9A, 0xCF)).unwrap();
-    gdt.add_entry(GDT_Entry::new_raw(0, 0xFFFFFFFF, 0x92, 0xCF)).unwrap();
+    gdt.add_entry(GdtEntry::new()).unwrap();
+    gdt.add_entry(GdtEntry::new_raw(0, 0xFFFFFFFF, 0x9A, 0xCF)).unwrap();
+    gdt.add_entry(GdtEntry::new_raw(0, 0xFFFFFFFF, 0x92, 0xCF)).unwrap();
 
     gdt.submit_entries().load();
 
     serial_println!("OK");
+
+    let mut idt = IdtEntry::new();
+    idt.set_type_attributes(true, CpuPrivilegeLevel::RING0, GateType::InterruptGate);
+
+
+
+
+
+
 
     let kernel_buffer = FBuffer::new(&boot_info.framebuffer);
 
