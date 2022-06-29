@@ -32,14 +32,14 @@ use crate::serial_println;
 
 #[derive(Clone, Copy)]
 #[repr(C, packed(2))]
-pub struct GDT_Register {
+pub struct GdtRegister {
     size: u16,
     ptr: VirtualAddress
 }
 
 #[derive(Clone, Copy, Debug)]
 #[repr(C, packed(2))]
-pub struct GDT_Entry {
+pub struct GdtEntry {
     limit_low: u16,
     base_low: u16,
     base_middle: u8,
@@ -50,11 +50,11 @@ pub struct GDT_Entry {
 
 #[derive(Clone, Copy, Debug)]
 pub struct GlobalDescriptorTable {
-    table: [GDT_Entry; 8],
+    table: [GdtEntry; 8],
     length: u16
 }
 
-impl GDT_Register {
+impl GdtRegister {
     pub fn load(self) {
         unsafe {
             asm!("lgdt [{}]", in(reg) &self, options(readonly, nostack, preserves_flags));
@@ -62,9 +62,9 @@ impl GDT_Register {
     }
 }
 
-impl GDT_Entry {
-    pub fn new() -> GDT_Entry {
-        GDT_Entry {
+impl GdtEntry {
+    pub fn new() -> Self {
+        GdtEntry {
             limit_low: 0,
             base_low: 0,
             base_middle: 0,
@@ -74,8 +74,8 @@ impl GDT_Entry {
         }
     }
 
-    pub fn new_raw(base: u32, limit: u32, access: u8, gran: u8) -> GDT_Entry {
-        let mut entry = GDT_Entry::new();
+    pub fn new_raw(base: u32, limit: u32, access: u8, gran: u8) -> Self {
+        let mut entry = GdtEntry::new();
 
         entry.base_low = (base & 0xFFFF) as u16;
         entry.base_middle = ((base >> 16) & 0xFF) as u8;
@@ -97,20 +97,20 @@ impl GDT_Entry {
     }
 
     pub fn set_null(&mut self) {
-        *self = GDT_Entry::new();
+        *self = GdtEntry::new();
     }
 
 }
 
 impl GlobalDescriptorTable {
-    pub fn new() -> GlobalDescriptorTable {
+    pub fn new() -> Self {
         GlobalDescriptorTable {
-            table: [GDT_Entry::new(); 8],
+            table: [GdtEntry::new(); 8],
             length: 0
         }
     }
 
-    pub fn add_entry(&mut self, entry: GDT_Entry) -> Result<(), ()> {
+    pub fn add_entry(&mut self, entry: GdtEntry) -> Result<(), ()> {
         if self.length >= 8 { return Err(()); }
         if self.length == 0 && entry.as_u64() != 0x00 {return Err(()); }
 
@@ -120,9 +120,9 @@ impl GlobalDescriptorTable {
         return Ok(());
     }
 
-    pub fn submit_entries(self) -> GDT_Register {
-        GDT_Register {
-            size: self.length - 1,
+    pub fn submit_entries(self) -> GdtRegister {
+        GdtRegister {
+            size: (self.length * 8) - 1,
             ptr: VirtualAddress::from_ptr(self.table.as_ptr())
         }
     }

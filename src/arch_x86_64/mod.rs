@@ -24,7 +24,16 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 */
 
-mod isr;
+pub mod isr;
 pub mod gdt;
-mod tables;
-mod idt;
+pub mod tables;
+pub mod idt;
+
+#[derive(Clone, Copy, Debug)]
+#[repr(u8)]
+pub enum CpuPrivilegeLevel {
+    RING0 = 0b00,
+    RING1 = 0b01,
+    RING2 = 0b10,
+    RING3 = 0b11,
+}
