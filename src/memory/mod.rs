@@ -48,6 +48,8 @@ impl VirtualAddress {
         VirtualAddress::try_new(address).expect("Not Valid Address, bit check failed!")
     }
 
+
+
     #[inline]
     pub fn try_new(address: u64) -> Result<VirtualAddress, NotValidAddress> {
         match address & (0xFF00000000000000 as u64) {
