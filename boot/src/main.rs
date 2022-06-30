@@ -3,6 +3,7 @@ use std::{
     process::Command,
 };
 
+// "--no-reboot"
 const RUN_ARGS: &[&str] = &["--no-reboot", "-s", "-serial", "stdio"];
 
 fn main() {

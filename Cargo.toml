@@ -8,11 +8,19 @@ members = [
     "boot",
 ]
 
+[features]
+default = [ "nightly", "instructions" ]
+instructions = []
+nightly = [ "const_fn", "abi_x86_interrupt" ]
+abi_x86_interrupt = []
+const_fn = []
+
 [dependencies]
 bootloader = "0.10.12"
 no-std-compat = "0.4.1"
 volatile = "0.2.6"
 spin = "0.5.2"
+x86_64 = "0.14.9"
 
 [dependencies.lazy_static]
 version = "1.0"

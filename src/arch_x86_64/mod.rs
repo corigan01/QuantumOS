@@ -24,6 +24,11 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 */
 
+use core::arch::asm;
+use lazy_static::lazy_static;
+use crate::{GateType, GdtEntry, GlobalDescriptorTable, IdtEntry, InterruptDescriptorTable, serial_println, VirtualAddress};
+use crate::arch_x86_64::idt::{SegmentSelector, TableSelect};
+
 pub mod isr;
 pub mod gdt;
 pub mod tables;
@@ -36,4 +41,59 @@ pub enum CpuPrivilegeLevel {
     RING1 = 0b01,
     RING2 = 0b10,
     RING3 = 0b11,
+}
+
+lazy_static! {
+    static ref GDT: GlobalDescriptorTable = {
+        let mut gdt = GlobalDescriptorTable::new();
+
+        gdt.add_entry(GdtEntry::new()).unwrap();
+        gdt.add_entry(GdtEntry::new_raw(0, 0xFFFFFFFF, 0x9A, 0xCF)).unwrap();
+        gdt.add_entry(GdtEntry::new_raw(0, 0xFFFFFFFF, 0x92, 0xCF)).unwrap();
+
+        gdt
+    };
+}
+
+lazy_static! {
+    static ref IDT: InterruptDescriptorTable = {
+        let mut idt = InterruptDescriptorTable::new();
+
+        let mut idt_entry = IdtEntry::new();
+
+        idt_entry.set_type_attributes(true, CpuPrivilegeLevel::RING0, GateType::InterruptGate);
+        idt_entry.set_segment_selector(
+            SegmentSelector::new(1, TableSelect::GDT, CpuPrivilegeLevel::RING0)
+        );
+        idt_entry.set_gate(VirtualAddress::from_ptr(&test_fn));
+
+        idt.add_entry_range(idt_entry, 0..255);
+
+
+        idt
+    };
+}
+
+pub fn set_up_gdt() {
+    GDT.submit_entries().load();
+}
+
+#[no_mangle]
+#[cfg(feature = "abi_x86_interrupt")]
+extern "x86-interrupt" fn test_fn() -> ! {
+
+    serial_println!("Function ran");
+
+    loop {}
+}
+
+
+
+pub fn set_up_idt() {
+
+    IDT.submit_entries().load();
+
+    unsafe {
+        asm!("int 0x03");
+    }
 }

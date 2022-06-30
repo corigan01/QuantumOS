@@ -55,9 +55,11 @@ pub struct GlobalDescriptorTable {
 }
 
 impl GdtRegister {
+
+    #[inline]
     pub fn load(self) {
         unsafe {
-            asm!("lgdt [{}]", in(reg) &self, options(readonly, nostack, preserves_flags));
+            asm!("lgdt [{}]", in(reg) VirtualAddress::from_ptr(&self).as_u64(), options(readonly, nostack, preserves_flags));
         }
     }
 }
@@ -110,9 +112,9 @@ impl GlobalDescriptorTable {
         }
     }
 
-    pub fn add_entry(&mut self, entry: GdtEntry) -> Result<(), ()> {
-        if self.length >= 8 { return Err(()); }
-        if self.length == 0 && entry.as_u64() != 0x00 {return Err(()); }
+    pub fn add_entry(&mut self, entry: GdtEntry) -> Result<(), &str> {
+        if self.length >= 8 { return Err("Too many entries in the GDT"); }
+        if self.length == 0 && entry.as_u64() != 0x00 {return Err("First entry must be null"); }
 
         self.table[self.length as usize] = entry;
         self.length += 1;
@@ -120,7 +122,8 @@ impl GlobalDescriptorTable {
         return Ok(());
     }
 
-    pub fn submit_entries(self) -> GdtRegister {
+    #[inline]
+    pub fn submit_entries(&'static self) -> GdtRegister {
         GdtRegister {
             size: (self.length * 8) - 1,
             ptr: VirtualAddress::from_ptr(self.table.as_ptr())

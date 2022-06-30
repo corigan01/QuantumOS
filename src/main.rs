@@ -1,3 +1,4 @@
+#![feature(abi_x86_interrupt)]
 /*
   ____                 __               __ __                 __
  / __ \__ _____ ____  / /___ ____ _    / //_/__ _______  ___ / /
@@ -40,9 +41,10 @@ use core::arch::asm;
 use core::panic::PanicInfo;
 use bootloader::boot_info::{BootInfo, FrameBuffer, MemoryRegion};
 use bootloader::entry_point;
-use crate::arch_x86_64::CpuPrivilegeLevel;
+use crate::arch_x86_64::{CpuPrivilegeLevel, set_up_gdt, set_up_idt};
 use crate::arch_x86_64::gdt::{GdtEntry, GlobalDescriptorTable};
-use crate::arch_x86_64::idt::{GateType, IdtEntry};
+use crate::arch_x86_64::idt::{GateType, IdtEntry, InterruptDescriptorTable};
+use crate::memory::VirtualAddress;
 use crate::serial::{SerialCOM, SerialDevice};
 use crate::vga::low_level::FBuffer;
 
@@ -54,6 +56,7 @@ fn panic(info: &PanicInfo) -> ! {
     serial_println!("{}", info);
     loop {}
 }
+
 
 fn main(boot_info: &'static mut BootInfo) -> ! {
 
@@ -81,23 +84,12 @@ fn main(boot_info: &'static mut BootInfo) -> ! {
     }
     else { serial_println!("FAIL"); }
 
-    serial_print!("Setting up GDT ... ");
-
-    let mut gdt = GlobalDescriptorTable::new();
-
-    gdt.add_entry(GdtEntry::new()).unwrap();
-    gdt.add_entry(GdtEntry::new_raw(0, 0xFFFFFFFF, 0x9A, 0xCF)).unwrap();
-    gdt.add_entry(GdtEntry::new_raw(0, 0xFFFFFFFF, 0x92, 0xCF)).unwrap();
-
-    gdt.submit_entries().load();
-
-    serial_println!("OK");
-
-    let mut idt = IdtEntry::new();
-    idt.set_type_attributes(true, CpuPrivilegeLevel::RING0, GateType::InterruptGate);
+    // setup cpu
 
 
 
+    //serial_print!("Setting up GDT ... "); set_up_gdt(); serial_println!("OK");
+    serial_print!("Setting up IDT ... "); set_up_idt(); serial_println!("OK");
 
 
 
