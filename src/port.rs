@@ -1,5 +1,5 @@
 /*!
-```
+```text
   ____                 __               __ __                 __
  / __ \__ _____ ____  / /___ ____ _    / //_/__ _______  ___ / /
 / /_/ / // / _ `/ _ \/ __/ // /  ' \  / ,< / -_) __/ _ \/ -_) /
@@ -46,7 +46,7 @@ would assure the operation is safe and checks input and outputs.
 
 
 ## List of IO Ports commonly used (https://wiki.osdev.org/I/O_Ports)
-```
+```text
 Port range	    Summary
 0x0000-0x001F	The first legacy DMA controller
 0x0020-0x0021	The first PIC

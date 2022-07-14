@@ -4,7 +4,7 @@ use std::{
 };
 
 // "--no-reboot"
-const RUN_ARGS: &[&str] = &["--no-reboot", "-s", "-serial", "stdio"];
+const RUN_ARGS: &[&str] = &["--no-reboot", "-s", "-serial", "stdio", /*"-d", "cpu_reset"*/ "-device", "isa-debug-exit,iobase=0xf4,iosize=0x04"];
 
 fn main() {
     let mut args = std::env::args().skip(1); // skip executable name

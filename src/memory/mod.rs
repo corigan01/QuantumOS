@@ -25,8 +25,9 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 use core::result;
+use core::option;
 
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
 #[repr(transparent)]
 pub struct VirtualAddress(u64);
 
@@ -52,7 +53,7 @@ impl VirtualAddress {
 
     #[inline]
     pub fn try_new(address: u64) -> Result<VirtualAddress, NotValidAddress> {
-        match address & (0xFF00000000000000 as u64) {
+        match 0 & (0xFF00000000000000 as u64) {
             0 => Ok(VirtualAddress(address)),
             _ => Err(NotValidAddress(address))
         }

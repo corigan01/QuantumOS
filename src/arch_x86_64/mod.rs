@@ -25,9 +25,12 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 use core::arch::asm;
+use core::mem::size_of;
 use lazy_static::lazy_static;
-use crate::{GateType, GdtEntry, GlobalDescriptorTable, IdtEntry, InterruptDescriptorTable, serial_println, VirtualAddress};
-use crate::arch_x86_64::idt::{SegmentSelector, TableSelect};
+use crate::{memory::VirtualAddress, serial_println};
+use crate::arch_x86_64::idt::*;
+use crate::arch_x86_64::gdt::*;
+
 
 pub mod isr;
 pub mod gdt;
@@ -55,45 +58,65 @@ lazy_static! {
     };
 }
 
+pub struct Idt(
+    pub [IdtEntry; 16]
+);
+
+impl Idt {
+    pub fn new() -> Self {
+        Idt([IdtEntry::new(); 16])
+    }
+
+
+    pub fn load(&self) {
+        let rg = IdtRegister { bytes: 16 * 16, ptr: (VirtualAddress::from_ptr(self)) };
+
+        rg.load();
+
+    }
+}
+
+
 lazy_static! {
-    static ref IDT: InterruptDescriptorTable = {
-        let mut idt = InterruptDescriptorTable::new();
+    static ref IDT: Idt = {
+        let mut idt = Idt::new();
 
         let mut idt_entry = IdtEntry::new();
 
         idt_entry.set_type_attributes(true, CpuPrivilegeLevel::RING0, GateType::InterruptGate);
         idt_entry.set_segment_selector(
-            SegmentSelector::new(1, TableSelect::GDT, CpuPrivilegeLevel::RING0)
+            SegmentSelector::new(0, TableSelect::GDT, CpuPrivilegeLevel::RING0)
         );
-        idt_entry.set_gate(VirtualAddress::from_ptr(&test_fn));
 
-        idt.add_entry_range(idt_entry, 0..255);
+        idt_entry.set_gate(test_fn);
 
+        idt.0[2] = idt_entry;
 
         idt
     };
 }
 
 pub fn set_up_gdt() {
-    GDT.submit_entries().load();
+    //GDT.submit_entries().load();
 }
 
-#[no_mangle]
-#[cfg(feature = "abi_x86_interrupt")]
-extern "x86-interrupt" fn test_fn() -> ! {
 
+extern "x86-interrupt" fn test_fn(isf: InterruptStackFrame, e: u64) {
     serial_println!("Function ran");
 
-    loop {}
+    loop {};
 }
-
-
 
 pub fn set_up_idt() {
 
-    IDT.submit_entries().load();
+    IDT.load();
+
+    serial_println!("U64 max = {}", u64::MAX);
+
+    serial_println!("Size of entry: {}", size_of::<IdtEntry>());
 
     unsafe {
         asm!("int 0x03");
     }
 }
+

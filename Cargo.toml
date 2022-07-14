@@ -1,7 +1,7 @@
 [package]
 name = "quantum_os"
 version = "0.1.0"
-edition = "2018"
+edition = "2021"
 
 [workspace]
 members = [
@@ -15,12 +15,17 @@ nightly = [ "const_fn", "abi_x86_interrupt" ]
 abi_x86_interrupt = []
 const_fn = []
 
+[profile.dev]
+panic = "unwind"
+
 [dependencies]
 bootloader = "0.10.12"
 no-std-compat = "0.4.1"
 volatile = "0.2.6"
 spin = "0.5.2"
-x86_64 = "0.14.9"
+
+[package.metadata.bootloader]
+physical-memory-offset = "0xFFFF800000000000"
 
 [dependencies.lazy_static]
 version = "1.0"
