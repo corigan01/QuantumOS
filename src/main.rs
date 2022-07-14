@@ -1,4 +1,3 @@
-#![feature(abi_x86_interrupt)]
 /*
   ____                 __               __ __                 __
  / __ \__ _____ ____  / /___ ____ _    / //_/__ _______  ___ / /
@@ -29,49 +28,30 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #![no_main] // disable all Rust-level entry points
 #![allow(dead_code)]
 
+#![feature(custom_test_frameworks)]
+#![test_runner(quantum_os::test_handler::test_runner)]
+
 //mod vga;
-
-
-mod vga;
-mod serial;
-mod port;
-mod arch_x86_64;
-mod memory;
 use core::arch::asm;
 use core::panic::PanicInfo;
 use bootloader::boot_info::{BootInfo, FrameBuffer, MemoryRegion};
 use bootloader::entry_point;
-use crate::arch_x86_64::{CpuPrivilegeLevel, set_up_gdt, set_up_idt};
-use crate::arch_x86_64::gdt::{GdtEntry, GlobalDescriptorTable};
-use crate::arch_x86_64::idt::{GateType, IdtEntry, InterruptDescriptorTable};
-use crate::memory::VirtualAddress;
-use crate::serial::{SerialCOM, SerialDevice};
-use crate::vga::low_level::FBuffer;
 
+use quantum_os::{serial_println, serial_print};
+use quantum_os::arch_x86_64::{set_up_gdt, set_up_idt};
+use quantum_os::serial::SERIAL1;
+use quantum_os::vga::low_level::FBuffer;
+
+#[cfg(not(test))]
 entry_point!(main);
 
-/// This function is called on panic.
-#[panic_handler]
-fn panic(info: &PanicInfo) -> ! {
-    serial_println!("{}", info);
-    loop {}
-}
-
-
+#[cfg(not(test))]
 fn main(boot_info: &'static mut BootInfo) -> ! {
-
-    serial_println!("\n\n[QUANTUM OS PRE-KERNEL]");
-    serial_println!("--- Quantum is using this serial port for debug information ---");
-    serial_println!("---       Baud rate is set at '38400' bits per second       ---");
-
-    serial_println!("\n");
-
-    serial_println!("Boot info\n=======");
-    serial_println!("framebuffer check  : {:?}", boot_info.framebuffer.as_ref().is_some());
-    serial_println!("phy mem offset     : {:?}", boot_info.physical_memory_offset);
-    serial_println!("rsdp address       : {:?}", boot_info.rsdp_addr);
-    serial_println!("Memory Regions     : {:?}", boot_info.memory_regions);
     serial_println!("\n\n");
+    serial_println!("--- Quantum is using this serial port for debug information ---");
+    serial_println!("---       Baud rate is set at 'None' bits per second        ---");
+
+    serial_println!("\n{:#?}\n", boot_info);
 
     serial_print!("Checking the framebuffer ... ");
 
@@ -85,13 +65,8 @@ fn main(boot_info: &'static mut BootInfo) -> ! {
     else { serial_println!("FAIL"); }
 
     // setup cpu
-
-
-
-    //serial_print!("Setting up GDT ... "); set_up_gdt(); serial_println!("OK");
+    serial_print!("Setting up GDT ... "); set_up_gdt(); serial_println!("OK");
     serial_print!("Setting up IDT ... "); set_up_idt(); serial_println!("OK");
-
-
 
 
     let kernel_buffer = FBuffer::new(&boot_info.framebuffer);

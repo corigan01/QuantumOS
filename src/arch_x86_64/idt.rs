@@ -33,12 +33,12 @@ use crate::{serial_print, serial_println};
 #[derive(Clone, Copy)]
 #[repr(C, packed(2))]
 pub struct IdtRegister {
-    bytes: u16,
-    ptr: VirtualAddress
+    pub(crate) bytes: u16,
+    pub(crate) ptr: VirtualAddress
 }
 
 #[derive(Clone, Copy, Debug)]
-#[repr(C, packed(2))]
+#[repr(C, packed)]
 pub struct IdtEntry {
     offset1: u16,
     selector: u16,
@@ -66,8 +66,8 @@ pub struct SegmentSelector {
 #[derive(Clone, Copy, Debug)]
 #[repr(u8)]
 pub enum GateType {
-    InterruptGate = 0xE,
-    TrapGate = 0xF
+    InterruptGate = 0x0,
+    TrapGate = 0x1
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -76,6 +76,18 @@ pub enum GateType {
 pub struct InterruptDescriptorTable {
     table: [IdtEntry; 255]
 }
+
+#[derive(Clone, Copy, Debug)]
+#[repr(C)]
+pub struct InterruptStackFrame {
+    pub instruction_pointer: VirtualAddress,
+    pub code_segment: u64,
+    pub flags: u64,
+    pub stack_pointer: VirtualAddress,
+    pub stack_segment: u64
+}
+
+pub type HandlerFunc = extern "x86-interrupt" fn(isf: InterruptStackFrame, e: u64);
 
 impl IdtRegister {
     pub fn load(self) {
@@ -114,10 +126,10 @@ impl IdtEntry {
             offset1: 0,
             selector: 0,
             ist: 0,
-            type_attributes: 0,
+            type_attributes: GateType::InterruptGate as u8,
             offset2: 0,
             offset3: 0,
-            zero: 0 // must be 0x00
+            zero: 0x0 // must be 0x00
         }
     }
 
@@ -154,12 +166,12 @@ impl IdtEntry {
         self.selector = segment.as_u16();
     }
 
-    pub fn set_gate(&mut self, f: VirtualAddress) {
-        let pointer = f.as_u64();
+    pub fn set_gate(&mut self, f: HandlerFunc) {
+        let pointer = f as u64;
 
         self.offset1 = pointer as u16;
-        self.offset2 = (pointer >> 0x10) as u16;
-        self.offset3 = (pointer >> 0x20) as u32;
+        self.offset2 = (pointer >> 16) as u16;
+        self.offset3 = (pointer >> 32) as u32;
     }
 }
 
@@ -208,6 +220,28 @@ impl InterruptDescriptorTable {
     }
 
     pub fn submit_entries(&'static self) -> IdtRegister {
+        // this is where we safety check one last time if any data is malformed before its
+        // sent off to the cpu.
+        for entry in self.table {
+            let must_be_zero = entry.zero == 0 && (entry.type_attributes & 0b10000 == 0);
+            let gate_info = entry.type_attributes & 0b1111;
+            let gate_check = gate_info == GateType::InterruptGate as u8 || gate_info == GateType::TrapGate as u8;
+
+            let p = (entry.type_attributes & 0x80) != 0;
+            let segment_index = (entry.selector >> 3);
+            let segment_check = (p && segment_index >= 0 && segment_index <= 8) || !p;
+
+            if !(must_be_zero && gate_check && segment_check) {
+                panic!(
+                    "Tried to send a malformed entry to the CPU. (This will likely cause a fault)! MBZ: {}, GC: {}, SC: {}",
+                    must_be_zero, gate_check, segment_check
+                );
+            }
+        }
+
+        serial_println!("Table Entry 3 = {:#x?}\nOffset = 0x{:x}", self.table[3], self.table[3].offset_as_u64());
+
+
         use core::mem::size_of;
         IdtRegister {
             bytes: (size_of::<Self>() - 1) as u16,
