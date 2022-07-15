@@ -41,6 +41,7 @@ use quantum_os::{serial_println, serial_print};
 use quantum_os::arch_x86_64::{set_up_gdt, set_up_idt};
 use quantum_os::serial::SERIAL1;
 use quantum_os::vga::low_level::FBuffer;
+use quantum_os::bitset;
 
 #[cfg(not(test))]
 entry_point!(main);
