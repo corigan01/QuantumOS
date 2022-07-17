@@ -39,13 +39,15 @@ Quantum OS Lib file, documentation coming soon!
 
 use bootloader::{BootInfo, entry_point};
 
-/// Entry point for `cargo test`
+
 #[cfg(test)]
 entry_point!(test_main);
 
 #[cfg(test)]
+/// Entry point for `cargo test`
 fn test_main(boot_info: &'static mut BootInfo) -> ! {
     serial_println!("\n\n== QuantumOS in Test Mode == \n");
+
 
     run_test();
 
