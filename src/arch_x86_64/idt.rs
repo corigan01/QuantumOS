@@ -34,7 +34,7 @@ use x86_64::{PrivilegeLevel, VirtAddr};
 
 pub type HandlerFunc = extern "x86-interrupt" fn();
 
-pub struct Idt([Entry; 16]);
+pub struct Idt([Entry; 255]);
 
 #[derive(Debug, Clone, Copy)]
 #[repr(C, packed)]
@@ -74,7 +74,7 @@ impl Entry {
 
 impl Idt {
     pub fn new() -> Idt {
-        Idt([Entry::missing(); 16])
+        Idt([Entry::missing(); 255])
     }
 
     pub fn set_handler(&mut self, entry: u8, handler: HandlerFunc){
@@ -149,8 +149,16 @@ mod test_case {
     use lazy_static::lazy_static;
     use crate::serial_println;
 
-    extern "x86-interrupt" fn TEST_divide_by_zero_handler() {
+    extern "x86-interrupt" fn dv0_handler() {
         // We want this to be called and returned!
+
+        // Do some random stuff to make sure the stack is returned correctly!
+        let mut i = 0;
+        for e in 33..134 {
+            i += 1;
+        }
+
+        let _ = i;
     }
 
     use crate::arch_x86_64::idt::Idt;
@@ -159,13 +167,13 @@ mod test_case {
         static ref IDT_TEST: Idt = {
             let mut idt = Idt::new();
 
-            idt.set_handler(0, TEST_divide_by_zero_handler);
+            idt.set_handler(0, dv0_handler);
 
             idt
         };
     }
 
-    fn divide_by_zero_TEST() {
+    fn divide_by_zero_fault() {
         unsafe {
             asm!("int $0x0");
         }
@@ -175,7 +183,7 @@ mod test_case {
     fn test_handler_by_fault() {
         IDT_TEST.load();
 
-        divide_by_zero_TEST();
+        divide_by_zero_fault();
 
         // [OK] We passed!
     }
