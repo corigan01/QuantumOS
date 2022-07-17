@@ -24,6 +24,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 */
 
+use core::mem::size_of;
 use crate::arch_x86_64::CpuPrivilegeLevel;
 use crate::memory::VirtualAddress;
 use crate::{serial_print, serial_println};
@@ -31,6 +32,7 @@ use crate::bitset::BitSet;
 use x86_64::instructions::segmentation;
 use x86_64::structures::gdt::SegmentSelector;
 use x86_64::{PrivilegeLevel, VirtAddr};
+use x86_64::instructions::tables::lidt;
 
 pub type HandlerFunc = extern "x86-interrupt" fn();
 
@@ -70,6 +72,10 @@ impl Entry {
             reserved: 0,
         }
     }
+
+    pub fn is_missing(&self) -> bool {
+        self.pointer_low == 0 && self.pointer_middle == 0 && self.pointer_high == 0
+    }
 }
 
 impl Idt {
@@ -81,16 +87,55 @@ impl Idt {
         self.0[entry as usize] = Entry::new(segmentation::cs(), handler);
     }
 
-    pub fn load(&self) {
-        use x86_64::instructions::tables::{DescriptorTablePointer, lidt};
-        use core::mem::size_of;
+    pub fn submit_entries(&self) -> Result<IdtTablePointer, &str> {
+        // This is where it gets wild, we need to make sure that the entire idt is safe and can be
+        // used without the computer throwing an error, we are going to make sure that the table
+        // is not malformed and can be loaded correctly.
 
-        let ptr = DescriptorTablePointer {
-            base: VirtAddr::new(self as *const _ as u64),
+        for i in self.0.iter() {
+            // if the entry is missing, the missing type will take care of being safe
+            if i.is_missing() { continue; }
+
+            // make sure that when we load a **valid** entry, it has a GDT selector that isnt 0
+            // and do this for all possible rings, we dont want to have any loop-holes
+            if i.gdt_selector.0 == SegmentSelector::new(0, PrivilegeLevel::Ring0).0
+                || i.gdt_selector.0 == SegmentSelector::new(0, PrivilegeLevel::Ring1).0
+                || i.gdt_selector.0 == SegmentSelector::new(0, PrivilegeLevel::Ring2).0
+                || i.gdt_selector.0 == SegmentSelector::new(0, PrivilegeLevel::Ring3).0
+            { return Err("GDT_Selector is malformed and does not contain a valid index"); }
+
+            // make sure the reserved bits are **always** zero
+            if i.reserved != 0 {
+                return Err("Reserved bits are set, this can cause a protection fault when loaded")
+            }
+
+            // make sure the must be set bits are correctly set
+            if i.options.0 == 0 {
+                return Err("\'Must be 1 bits\' are unset in EntryOptions");
+            }
+
+            // TODO: Add more checks to ensure each entry is set correctly
+        }
+
+        Ok(IdtTablePointer {
+            base: VirtualAddress::new(self as *const _ as u64),
             limit: (size_of::<Self>() - 1) as u16,
-        };
+        })
+    }
+}
 
-        unsafe { lidt(&ptr) };
+#[derive(Copy, Clone, Debug)]
+#[repr(C, packed(2))]
+pub struct IdtTablePointer{
+    limit: u16,
+    base: VirtualAddress
+}
+
+impl IdtTablePointer {
+    pub fn load(&self) {
+        use core::arch::asm;
+
+        unsafe { asm!("lidt [{}]", in(reg) &self.clone(), options(readonly, nostack, preserves_flags)); };
     }
 }
 
@@ -114,7 +159,7 @@ impl EntryOptions {
 
         // set the default options for the struct that the user might want
         new_s
-            .set_cpu_prv(CpuPrivilegeLevel::RING0)
+            .set_cpu_prv(CpuPrivilegeLevel::Ring0)
             .enable_int(false)
             .set_present_flag(true);
 
@@ -147,9 +192,11 @@ mod test_case {
     use core::arch::asm;
     use crate::arch_x86_64::idt::EntryOptions;
     use lazy_static::lazy_static;
-    use crate::serial_println;
+    use crate::{serial_print, serial_println};
 
     extern "x86-interrupt" fn dv0_handler() {
+        serial_print!("  [DV0 CALLED]  ");
+
         // We want this to be called and returned!
 
         // Do some random stuff to make sure the stack is returned correctly!
@@ -181,7 +228,7 @@ mod test_case {
 
     #[test_case]
     fn test_handler_by_fault() {
-        IDT_TEST.load();
+        IDT_TEST.submit_entries().unwrap().load();
 
         divide_by_zero_fault();
 
