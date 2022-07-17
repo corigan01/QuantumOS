@@ -23,6 +23,7 @@ bootloader = "0.10.12"
 no-std-compat = "0.4.1"
 volatile = "0.2.6"
 spin = "0.5.2"
+x86_64 = "0.14.9"
 
 [package.metadata.bootloader]
 physical-memory-offset = "0xFFFF800000000000"

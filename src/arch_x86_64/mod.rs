@@ -27,6 +27,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 use core::arch::asm;
 use core::mem::size_of;
 use lazy_static::lazy_static;
+use x86_64::instructions::segmentation;
 use crate::{memory::VirtualAddress, serial_println};
 use crate::arch_x86_64::idt::*;
 use crate::arch_x86_64::gdt::*;
@@ -58,65 +59,32 @@ lazy_static! {
     };
 }
 
-pub struct Idt(
-    pub [IdtEntry; 16]
-);
-
-impl Idt {
-    pub fn new() -> Self {
-        Idt([IdtEntry::new(); 16])
-    }
-
-
-    pub fn load(&self) {
-        let rg = IdtRegister { bytes: 16 * 16, ptr: (VirtualAddress::from_ptr(self)) };
-
-        rg.load();
-
-    }
+extern "x86-interrupt" fn divide_by_zero_handler() {
+    serial_println!("EXCEPTION: DIVIDE BY ZERO");
 }
 
-
 lazy_static! {
-    static ref IDT: Idt = {
-        let mut idt = Idt::new();
+    static ref IDT: idt::Idt = {
+        let mut idt = idt::Idt::new();
 
-        let mut idt_entry = IdtEntry::new();
-
-        idt_entry.set_type_attributes(true, CpuPrivilegeLevel::RING0, GateType::InterruptGate);
-        idt_entry.set_segment_selector(
-            SegmentSelector::new(0, TableSelect::GDT, CpuPrivilegeLevel::RING0)
-        );
-
-        idt_entry.set_gate(test_fn);
-
-        idt.0[2] = idt_entry;
+        idt.set_handler(0, divide_by_zero_handler);
 
         idt
     };
 }
 
-pub fn set_up_gdt() {
-    //GDT.submit_entries().load();
-}
-
-
-extern "x86-interrupt" fn test_fn(isf: InterruptStackFrame, e: u64) {
-    serial_println!("Function ran");
-
-    loop {};
-}
-
-pub fn set_up_idt() {
-
+pub fn init_idt() {
     IDT.load();
 
-    serial_println!("U64 max = {}", u64::MAX);
+    serial_println!("Segmentation: {:#?}", segmentation::cs());
 
-    serial_println!("Size of entry: {}", size_of::<IdtEntry>());
+    divide_by_zero();
+}
 
+pub fn divide_by_zero() {
     unsafe {
-        asm!("int 0x03");
+        asm!("int $0x0");
     }
 }
+
 
