@@ -41,10 +41,10 @@ pub mod idt;
 #[derive(Clone, Copy, Debug)]
 #[repr(u8)]
 pub enum CpuPrivilegeLevel {
-    RING0 = 0b00,
-    RING1 = 0b01,
-    RING2 = 0b10,
-    RING3 = 0b11,
+    Ring0 = 0b00,
+    Ring1 = 0b01,
+    Ring2 = 0b10,
+    Ring3 = 0b11,
 }
 
 lazy_static! {
@@ -74,7 +74,7 @@ lazy_static! {
 }
 
 pub fn init_idt() {
-    IDT.load();
+    IDT.submit_entries().unwrap().load();
 
     serial_println!("Segmentation: {:#?}", segmentation::cs());
 
