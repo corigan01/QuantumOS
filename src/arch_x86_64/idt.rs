@@ -31,10 +31,10 @@ use crate::{serial_print, serial_println};
 use crate::bitset::BitSet;
 use x86_64::instructions::segmentation;
 use x86_64::structures::gdt::SegmentSelector;
-use x86_64::{PrivilegeLevel, VirtAddr};
-use x86_64::instructions::tables::lidt;
+use x86_64::PrivilegeLevel;
 
-pub type HandlerFunc = extern "x86-interrupt" fn();
+
+pub type HandlerFunc = extern "x86-interrupt" fn(InterruptFrame);
 
 pub struct Idt([Entry; 255]);
 
@@ -47,6 +47,20 @@ pub struct Entry {
     pointer_middle: u16,
     pointer_high: u32,
     reserved: u32,
+}
+
+#[derive(Debug, Clone, Copy)]
+#[repr(C)]
+pub struct InterruptFrame {
+    eip: VirtualAddress,
+    code_seg: u64,
+    flags: u64,
+    stack_pointer: VirtualAddress,
+    stack_segment: u64
+}
+
+extern "x86-interrupt" fn missing_handler(i_frame: InterruptFrame) {
+    panic!("Missing Interrupt handler was called! Please add a handler to handle this interrupt! {:#x?}", i_frame);
 }
 
 impl Entry {
@@ -63,18 +77,18 @@ impl Entry {
     }
 
     pub fn missing() -> Self {
-        Entry {
-            gdt_selector: SegmentSelector::new(0, PrivilegeLevel::Ring0),
-            pointer_low: 0,
-            pointer_middle: 0,
-            pointer_high: 0,
-            options: EntryOptions::new_minimal(),
-            reserved: 0,
-        }
+        Self::new(
+            SegmentSelector::new(1, PrivilegeLevel::Ring0),
+            missing_handler
+        )
     }
 
     pub fn is_missing(&self) -> bool {
-        self.pointer_low == 0 && self.pointer_middle == 0 && self.pointer_high == 0
+        let missing_ref = Self::missing();
+
+        self.pointer_low == missing_ref.pointer_low                          &&
+            self.pointer_middle == missing_ref.pointer_middle                &&
+            self.pointer_high == missing_ref.pointer_high
     }
 }
 
