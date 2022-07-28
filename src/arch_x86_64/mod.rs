@@ -59,7 +59,7 @@ lazy_static! {
     };
 }
 
-extern "x86-interrupt" fn divide_by_zero_handler() {
+extern "x86-interrupt" fn divide_by_zero_handler(i_frame: InterruptFrame) {
     serial_println!("EXCEPTION: DIVIDE BY ZERO");
 }
 
@@ -83,7 +83,7 @@ pub fn init_idt() {
 
 pub fn divide_by_zero() {
     unsafe {
-        asm!("int $0x0");
+        asm!("int $0x1");
     }
 }
 
