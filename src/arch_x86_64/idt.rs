@@ -32,11 +32,33 @@ use crate::bitset::BitSet;
 use x86_64::instructions::segmentation;
 use x86_64::structures::gdt::SegmentSelector;
 use x86_64::PrivilegeLevel;
+use x86_64::PrivilegeLevel::Ring0;
 
 
-pub type HandlerFunc = extern "x86-interrupt" fn(InterruptFrame);
+type RawHandlerFuncNe  /* No Error             */ = extern "x86-interrupt" fn(InterruptFrame);
+type RawHandlerFuncE   /* With Error           */ = extern "x86-interrupt" fn(InterruptFrame, u64);
+type RawHandlerFuncDne /* Diverging No Error   */ = extern "x86-interrupt" fn(InterruptFrame) -> !;
+type RawHandlerFuncDe  /* Diverging With Error */ = extern "x86-interrupt" fn(InterruptFrame, u64) -> !;
+
+/// # General Handler Function type
+/// This is the function you will use when a interrupt gets called, the idt should abstract the
+/// calling to each of the Raw Handlers to ensure safety. Once this type gets called, it automatically
+/// will fill in the options based on what they are. So InterruptFrame, and index will always be
+/// filled, but the error not not always be apparent.
+pub type GeneralHandlerFunc = extern "x86-interrupt" fn(InterruptFrame, u8, Option<u64>);
 
 pub struct Idt([Entry; 255]);
+
+#[derive(Debug, Clone, Copy)]
+#[repr(C, packed)]
+struct GeneralHandlerFocus {
+    index: Option<u8>,
+    diverging: Option<bool>,
+    handler: Option<GeneralHandlerFunc>,
+}
+
+/// Translates the call from one of the raw handlers to one of the called handlers
+struct TranslationLayer([GeneralHandlerFocus; 255]);
 
 #[derive(Debug, Clone, Copy)]
 #[repr(C, packed)]
@@ -59,28 +81,121 @@ pub struct InterruptFrame {
     stack_segment: u64
 }
 
-extern "x86-interrupt" fn missing_handler(i_frame: InterruptFrame) {
+#[cfg(not(test))]
+extern "x86-interrupt" fn missing_handler(i_frame: InterruptFrame) -> !{
     panic!("Missing Interrupt handler was called! Please add a handler to handle this interrupt! {:#x?}", i_frame);
 }
 
+impl GeneralHandlerFocus {
+    pub fn new() -> Self {
+        GeneralHandlerFocus {
+            index: Option::None,
+            diverging: Option::None,
+            handler: Option::None
+        }
+    }
+
+    pub fn new_handler(index: u8, diverging: bool, handler: GeneralHandlerFunc) -> Self {
+        GeneralHandlerFocus {
+            index: Option::Some(index),
+            diverging: Option::Some(diverging),
+            handler: Option::Some(handler)
+        }
+    }
+}
+
+impl TranslationLayer {
+    pub fn new() -> Self {
+        TranslationLayer([GeneralHandlerFocus::new(); 255])
+    }
+
+    pub fn set_handler(&mut self, index: u8, diverging: bool, handler: GeneralHandlerFunc) {
+        self.0[index as usize] = GeneralHandlerFocus::new_handler(index, diverging, handler);
+    }
+
+    pub fn remove_handler(&mut self, index: u8) {
+        self.0[index as usize] = GeneralHandlerFocus::new();
+    }
+}
+
 impl Entry {
-    pub fn new(gdt_select: SegmentSelector, handler: HandlerFunc) -> Self {
+    pub fn new_raw_ne(gdt_select: SegmentSelector, handler: RawHandlerFuncNe) -> Self {
         let pointer = handler as u64;
+        let mut blank = Self::new_blank(gdt_select);
+
+        blank.set_handler(VirtualAddress::new(pointer));
+
+        blank
+    }
+
+    pub fn new_raw_e(gdt_select: SegmentSelector, handler: RawHandlerFuncE) -> Self {
+        let pointer = handler as u64;
+        let mut blank = Self::new_blank(gdt_select);
+
+        blank.set_handler(VirtualAddress::new(pointer));
+
+        blank
+    }
+
+    pub fn new_raw_dne(gdt_select: SegmentSelector, handler: RawHandlerFuncDne) -> Self {
+        let pointer = handler as u64;
+        let mut blank = Self::new_blank(gdt_select);
+
+        blank.set_handler(VirtualAddress::new(pointer));
+
+        blank
+    }
+
+    pub fn new_raw_de(gdt_select: SegmentSelector, handler: RawHandlerFuncDe) -> Self {
+        let pointer = handler as u64;
+        let mut blank = Self::new_blank(gdt_select);
+
+        blank.set_handler(VirtualAddress::new(pointer));
+
+        blank
+    }
+
+    pub fn new_blank(gdt_select: SegmentSelector) -> Self {
         Entry {
             gdt_selector: gdt_select,
-            pointer_low: pointer as u16,
-            pointer_middle: (pointer >> 16) as u16,
-            pointer_high: (pointer >> 32) as u32,
+            pointer_low: 0,
+            pointer_middle: 0,
+            pointer_high: 0,
             options: EntryOptions::new(),
             reserved: 0,
         }
     }
 
+    pub fn set_handler(&mut self, handler: VirtualAddress) {
+        let pointer = handler.as_u64();
+
+        self.pointer_low = pointer as u16;
+        self.pointer_middle = (pointer >> 16) as u16;
+        self.pointer_high = (pointer >> 32) as u32;
+    }
+
     pub fn missing() -> Self {
-        Self::new(
+        Self::new_raw_dne(
             SegmentSelector::new(1, PrivilegeLevel::Ring0),
             missing_handler
         )
+    }
+
+    /// # Safety
+    /// Super unsafe function as it sets all entry fields to null!
+    /// This can cause undefined behavior, and maybe even crash upon loading the IDT!
+    /// ---
+    /// **Luckily, the IDT will not let you submit with a null entry! You must override in 2-places
+    /// to override the safety of this function as its that unstable!**
+    pub unsafe fn new_null() -> Self {
+        Entry {
+            gdt_selector: SegmentSelector::new(0, PrivilegeLevel::Ring0),
+            pointer_low: 0,
+            pointer_middle: 0,
+            pointer_high: 0,
+            options: EntryOptions::new_zero(),
+            reserved: 0
+        }
     }
 
     pub fn is_missing(&self) -> bool {
@@ -90,6 +205,14 @@ impl Entry {
             self.pointer_middle == missing_ref.pointer_middle                &&
             self.pointer_high == missing_ref.pointer_high
     }
+
+    pub fn is_null(&self) -> bool {
+
+        self.pointer_low == 0                           &&
+            self.pointer_middle == 0                    &&
+            self.pointer_high == 0
+
+    }
 }
 
 impl Idt {
@@ -97,7 +220,9 @@ impl Idt {
         Idt([Entry::missing(); 255])
     }
 
-    pub fn set_handler(&mut self, entry: u8, handler: HandlerFunc){
+    pub fn set_handler(&mut self, entry: u8, handler: GeneralHandlerFunc) {
+
+
         self.0[entry as usize] = Entry::new(segmentation::cs(), handler);
     }
 
@@ -110,7 +235,7 @@ impl Idt {
             // if the entry is missing, the missing type will take care of being safe
             if i.is_missing() { continue; }
 
-            // make sure that when we load a **valid** entry, it has a GDT selector that isnt 0
+            // make sure that when we load a **valid** entry, it has a GDT selector that isn't 0
             // and do this for all possible rings, we dont want to have any loop-holes
             if i.gdt_selector.0 == SegmentSelector::new(0, PrivilegeLevel::Ring0).0
                 || i.gdt_selector.0 == SegmentSelector::new(0, PrivilegeLevel::Ring1).0
@@ -135,6 +260,24 @@ impl Idt {
             base: VirtualAddress::new(self as *const _ as u64),
             limit: (size_of::<Self>() - 1) as u16,
         })
+    }
+
+    pub unsafe fn unsafe_submit_entries(&self) -> IdtTablePointer {
+        let checking_if_valid = self.submit_entries();
+
+        if let Ok(valid) = checking_if_valid {
+            // There was no errors with this idt, so loading it should be safe :)
+            valid
+        } else {
+            serial_println!("Detected 1 or more Errors with IDT, loading this IDT can lead to undefined behavior!");
+
+            // Do as the master said, and submit anyway!
+            IdtTablePointer {
+                base: VirtualAddress::new(self as *const _ as u64),
+                limit: (size_of::<Self>() - 1) as u16,
+            }
+        }
+
     }
 }
 
@@ -202,13 +345,19 @@ impl EntryOptions {
 }
 
 #[cfg(test)]
+extern "x86-interrupt" fn missing_handler(i_frame: InterruptFrame) {
+    serial_print!("  [MS0 CALLED]  ");
+}
+
+#[cfg(test)]
 mod test_case {
     use core::arch::asm;
-    use crate::arch_x86_64::idt::EntryOptions;
+    use crate::arch_x86_64::idt::{EntryOptions, InterruptFrame};
     use lazy_static::lazy_static;
+    use x86_64::PrivilegeLevel;
     use crate::{serial_print, serial_println};
 
-    extern "x86-interrupt" fn dv0_handler() {
+    extern "x86-interrupt" fn dv0_handler(i_frame: InterruptFrame) {
         serial_print!("  [DV0 CALLED]  ");
 
         // We want this to be called and returned!
@@ -219,7 +368,13 @@ mod test_case {
             i += 1;
         }
 
-        let _ = i;
+        i -= 100;
+
+        unsafe {
+            let d = i == 1;
+
+            serial_print!("[{}]  ", d);
+        }
     }
 
     use crate::arch_x86_64::idt::Idt;
@@ -240,6 +395,12 @@ mod test_case {
         }
     }
 
+    fn unhandled_fault() {
+        unsafe {
+            asm!("int $0x01");
+        }
+    }
+
     #[test_case]
     fn test_handler_by_fault() {
         IDT_TEST.submit_entries().unwrap().load();
@@ -247,6 +408,16 @@ mod test_case {
         divide_by_zero_fault();
 
         // [OK] We passed!
+    }
+
+    #[test_case]
+    fn test_handler_by_not_valid() {
+        IDT_TEST.submit_entries().unwrap().load();
+
+        unhandled_fault();
+
+        // [OK] We passed!
+
     }
 
     #[test_case]
