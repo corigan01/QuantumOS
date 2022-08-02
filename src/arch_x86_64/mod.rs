@@ -31,6 +31,8 @@ use x86_64::instructions::segmentation;
 use crate::{memory::VirtualAddress, serial_println};
 use crate::arch_x86_64::idt::*;
 use crate::arch_x86_64::gdt::*;
+use crate::general_function_to_interrupt_ne;
+use crate::interrupt_wrapper;
 
 
 pub mod isr;
@@ -59,15 +61,22 @@ lazy_static! {
     };
 }
 
-extern "x86-interrupt" fn divide_by_zero_handler(i_frame: InterruptFrame) {
-    serial_println!("EXCEPTION: DIVIDE BY ZERO");
+fn divide_by_zero_handler(i_frame: InterruptFrame, int_n: u8, error_code: Option<u64>) {
+    serial_println!("EXCEPTION: DIVIDE BY ZERO {}", int_n);
 }
 
 lazy_static! {
     static ref IDT: idt::Idt = {
         let mut idt = idt::Idt::new();
 
-        idt.set_handler(0, divide_by_zero_handler);
+        idt.set_handler(0, interrupt_wrapper!(divide_by_zero_handler, 8));
+
+        // TODO:
+        // make a custom struct that handler_wrapper exports
+        // make handler_wrapper take in all types of handlers
+        // make sure that the thing is safe for diverging ints
+        // make set_handler only take handler_wrapper structs (aka 1)
+        // make a GeneralHandler for all handles that you want to be all in one place (for Errors)
 
         idt
     };
@@ -83,7 +92,7 @@ pub fn init_idt() {
 
 pub fn divide_by_zero() {
     unsafe {
-        asm!("int $0x1");
+        asm!("int $0x0");
     }
 }
 

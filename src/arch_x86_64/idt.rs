@@ -45,20 +45,10 @@ type RawHandlerFuncDe  /* Diverging With Error */ = extern "x86-interrupt" fn(In
 /// calling to each of the Raw Handlers to ensure safety. Once this type gets called, it automatically
 /// will fill in the options based on what they are. So InterruptFrame, and index will always be
 /// filled, but the error not not always be apparent.
-pub type GeneralHandlerFunc = extern "x86-interrupt" fn(InterruptFrame, u8, Option<u64>);
+pub type GeneralHandlerFunc = fn(InterruptFrame, u8, Option<u64>);
 
 pub struct Idt([Entry; 255]);
 
-#[derive(Debug, Clone, Copy)]
-#[repr(C, packed)]
-struct GeneralHandlerFocus {
-    index: Option<u8>,
-    diverging: Option<bool>,
-    handler: Option<GeneralHandlerFunc>,
-}
-
-/// Translates the call from one of the raw handlers to one of the called handlers
-struct TranslationLayer([GeneralHandlerFocus; 255]);
 
 #[derive(Debug, Clone, Copy)]
 #[repr(C, packed)]
@@ -86,37 +76,6 @@ extern "x86-interrupt" fn missing_handler(i_frame: InterruptFrame) -> !{
     panic!("Missing Interrupt handler was called! Please add a handler to handle this interrupt! {:#x?}", i_frame);
 }
 
-impl GeneralHandlerFocus {
-    pub fn new() -> Self {
-        GeneralHandlerFocus {
-            index: Option::None,
-            diverging: Option::None,
-            handler: Option::None
-        }
-    }
-
-    pub fn new_handler(index: u8, diverging: bool, handler: GeneralHandlerFunc) -> Self {
-        GeneralHandlerFocus {
-            index: Option::Some(index),
-            diverging: Option::Some(diverging),
-            handler: Option::Some(handler)
-        }
-    }
-}
-
-impl TranslationLayer {
-    pub fn new() -> Self {
-        TranslationLayer([GeneralHandlerFocus::new(); 255])
-    }
-
-    pub fn set_handler(&mut self, index: u8, diverging: bool, handler: GeneralHandlerFunc) {
-        self.0[index as usize] = GeneralHandlerFocus::new_handler(index, diverging, handler);
-    }
-
-    pub fn remove_handler(&mut self, index: u8) {
-        self.0[index as usize] = GeneralHandlerFocus::new();
-    }
-}
 
 impl Entry {
     pub fn new_raw_ne(gdt_select: SegmentSelector, handler: RawHandlerFuncNe) -> Self {
@@ -220,10 +179,10 @@ impl Idt {
         Idt([Entry::missing(); 255])
     }
 
-    pub fn set_handler(&mut self, entry: u8, handler: GeneralHandlerFunc) {
+    pub fn set_handler(&mut self, entry: u8, handler: RawHandlerFuncNe) {
 
 
-        self.0[entry as usize] = Entry::new(segmentation::cs(), handler);
+        self.0[entry as usize] = Entry::new_raw_ne(segmentation::cs(), handler);
     }
 
     pub fn submit_entries(&self) -> Result<IdtTablePointer, &str> {
@@ -343,6 +302,99 @@ impl EntryOptions {
         self
     }
 }
+
+
+#[macro_export]
+macro_rules! general_function_to_interrupt_ne {
+    ($name: ident, $int_num: expr) => {{
+        extern "x86-interrupt" fn wrapper(i_frame: InterruptFrame) {
+            use core::option;
+
+            let function = $name as $crate::arch_x86_64::idt::GeneralHandlerFunc;
+
+            function(i_frame, $int_num, None);
+        }
+
+        wrapper
+    }};
+}
+
+#[macro_export]
+macro_rules! general_function_to_interrupt_e {
+    ($name: ident, $int_num: expr) => {{
+        extern "x86-interrupt" fn wrapper(i_frame: InterruptFrame, error_code: u64) {
+            use core::option;
+
+            let function = $name as $crate::arch_x86_64::idt::GeneralHandlerFunc;
+
+            function(i_frame, $int_num, Some(error_code));
+        }
+
+        wrapper
+    }};
+}
+
+#[macro_export]
+macro_rules! general_function_to_interrupt_dne {
+    ($name: ident, $int_num: expr) => {{
+        extern "x86-interrupt" fn wrapper(i_frame: InterruptFrame) {
+            use core::option;
+
+            let function = $name as $crate::arch_x86_64::idt::GeneralHandlerFunc;
+
+            function(i_frame, $int_num, None);
+
+            panic!("Diverging Interrupt Function should not return!");
+        }
+
+        wrapper
+    }};
+}
+
+#[macro_export]
+macro_rules! general_function_to_interrupt_de {
+    ($name: ident, $int_num: expr) => {{
+        extern "x86-interrupt" fn wrapper(i_frame: InterruptFrame, error_code: u64) {
+            use core::option;
+
+            let function = $name as $crate::arch_x86_64::idt::GeneralHandlerFunc;
+
+            function(i_frame, $int_num, Some(error_code));
+
+            panic!("Diverging Interrupt Function should not return!");
+        }
+
+        wrapper
+    }};
+}
+
+#[macro_export]
+macro_rules! interrupt_wrapper {
+    ($name: ident, 8) => {{ general_function_to_interrupt_de!($name, 8 ) }};  /* Double Fault        */
+    ($name: ident, 10) => {{ general_function_to_interrupt_e!($name, 10) }};  /* Invalid tss         */
+    ($name: ident, 11) => {{ general_function_to_interrupt_e!($name, 11) }};  /* Segment Not Present */
+    ($name: ident, 12) => {{ general_function_to_interrupt_e!($name, 12) }};  /* Stack Segment Fault */
+    ($name: ident, 13) => {{ general_function_to_interrupt_e!($name, 13) }};  /* General Protection  */
+    ($name: ident, 14) => {{ general_function_to_interrupt_e!($name, 14) }};  /* Page Fault          */
+    ($name: ident, 17) => {{ general_function_to_interrupt_e!($name, 17) }};  /* Alignment Check     */
+    ($name: ident, 18) => {{ general_function_to_interrupt_de!($name,18) }};  /* Machine Check       */
+    ($name: ident, 29) => {{ general_function_to_interrupt_e!($name, 29) }};  /* VMM COMM Exception  */
+    ($name: ident, 30) => {{ general_function_to_interrupt_e!($name, 30) }};  /* Security Exception  */
+
+    ($name: ident, 9 ) => {{  panic!("Tried to set a reserved handler"); }};  /* RESERVED HANDLER    */
+    ($name: ident, 21) => {{  panic!("Tried to set a reserved handler"); }};  /* RESERVED HANDLER    */
+    ($name: ident, 22) => {{  panic!("Tried to set a reserved handler"); }};  /* RESERVED HANDLER    */
+    ($name: ident, 23) => {{  panic!("Tried to set a reserved handler"); }};  /* RESERVED HANDLER    */
+    ($name: ident, 24) => {{  panic!("Tried to set a reserved handler"); }};  /* RESERVED HANDLER    */
+    ($name: ident, 25) => {{  panic!("Tried to set a reserved handler"); }};  /* RESERVED HANDLER    */
+    ($name: ident, 26) => {{  panic!("Tried to set a reserved handler"); }};  /* RESERVED HANDLER    */
+    ($name: ident, 27) => {{  panic!("Tried to set a reserved handler"); }};  /* RESERVED HANDLER    */
+    ($name: ident, 28) => {{  panic!("Tried to set a reserved handler"); }};  /* RESERVED HANDLER    */
+    ($name: ident, 31) => {{  panic!("Tried to set a reserved handler"); }};  /* RESERVED HANDLER    */
+
+    ($name: ident, $int_n: expr) => {{ general_function_to_interrupt_ne!($name, $int_n) }};
+}
+
 
 #[cfg(test)]
 extern "x86-interrupt" fn missing_handler(i_frame: InterruptFrame) {
