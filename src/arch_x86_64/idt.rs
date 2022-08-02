@@ -72,7 +72,7 @@ pub struct InterruptFrame {
 }
 
 #[cfg(not(test))]
-extern "x86-interrupt" fn missing_handler(i_frame: InterruptFrame) -> !{
+extern "x86-interrupt" fn missing_handler(i_frame: InterruptFrame) -> ! {
     panic!("Missing Interrupt handler was called! Please add a handler to handle this interrupt! {:#x?}", i_frame);
 }
 
@@ -133,8 +133,17 @@ impl Entry {
         self.pointer_high = (pointer >> 32) as u32;
     }
 
+    #[cfg(not(test))]
     pub fn missing() -> Self {
         Self::new_raw_dne(
+            SegmentSelector::new(1, PrivilegeLevel::Ring0),
+            missing_handler
+        )
+    }
+
+    #[cfg(test)]
+    pub fn missing() -> Self {
+        Self::new_raw_ne(
             SegmentSelector::new(1, PrivilegeLevel::Ring0),
             missing_handler
         )
@@ -380,16 +389,16 @@ macro_rules! general_function_to_interrupt_de {
 
 #[macro_export]
 macro_rules! interrupt_wrapper {
-    ($name: ident, 8) => {{ general_function_to_interrupt_de!($name, 8 ) }};  /* Double Fault        */
-    ($name: ident, 10) => {{ general_function_to_interrupt_e!($name, 10) }};  /* Invalid tss         */
-    ($name: ident, 11) => {{ general_function_to_interrupt_e!($name, 11) }};  /* Segment Not Present */
-    ($name: ident, 12) => {{ general_function_to_interrupt_e!($name, 12) }};  /* Stack Segment Fault */
-    ($name: ident, 13) => {{ general_function_to_interrupt_e!($name, 13) }};  /* General Protection  */
-    ($name: ident, 14) => {{ general_function_to_interrupt_e!($name, 14) }};  /* Page Fault          */
-    ($name: ident, 17) => {{ general_function_to_interrupt_e!($name, 17) }};  /* Alignment Check     */
-    ($name: ident, 18) => {{ general_function_to_interrupt_de!($name,18) }};  /* Machine Check       */
-    ($name: ident, 29) => {{ general_function_to_interrupt_e!($name, 29) }};  /* VMM COMM Exception  */
-    ($name: ident, 30) => {{ general_function_to_interrupt_e!($name, 30) }};  /* Security Exception  */
+    ($name: ident, 8)  => {{ $crate::general_function_to_interrupt_de!($name, 8) }};  /* Double Fault        */
+    ($name: ident, 10) => {{ $crate::general_function_to_interrupt_e!($name, 10) }};  /* Invalid tss         */
+    ($name: ident, 11) => {{ $crate::general_function_to_interrupt_e!($name, 11) }};  /* Segment Not Present */
+    ($name: ident, 12) => {{ $crate::general_function_to_interrupt_e!($name, 12) }};  /* Stack Segment Fault */
+    ($name: ident, 13) => {{ $crate::general_function_to_interrupt_e!($name, 13) }};  /* General Protection  */
+    ($name: ident, 14) => {{ $crate::general_function_to_interrupt_e!($name, 14) }};  /* Page Fault          */
+    ($name: ident, 17) => {{ $crate::general_function_to_interrupt_e!($name, 17) }};  /* Alignment Check     */
+    ($name: ident, 18) => {{ $crate::general_function_to_interrupt_de!($name,18) }};  /* Machine Check       */
+    ($name: ident, 29) => {{ $crate::general_function_to_interrupt_e!($name, 29) }};  /* VMM COMM Exception  */
+    ($name: ident, 30) => {{ $crate::general_function_to_interrupt_e!($name, 30) }};  /* Security Exception  */
 
     ($name: ident, 9 ) => {{  panic!("Tried to set a reserved handler"); }};  /* RESERVED HANDLER    */
     ($name: ident, 21) => {{  panic!("Tried to set a reserved handler"); }};  /* RESERVED HANDLER    */
@@ -402,45 +411,46 @@ macro_rules! interrupt_wrapper {
     ($name: ident, 28) => {{  panic!("Tried to set a reserved handler"); }};  /* RESERVED HANDLER    */
     ($name: ident, 31) => {{  panic!("Tried to set a reserved handler"); }};  /* RESERVED HANDLER    */
 
-    ($name: ident, $int_n: expr) => {{ general_function_to_interrupt_ne!($name, $int_n) }};
+    ($name: ident, $int_n: expr) => {{ $crate::general_function_to_interrupt_ne!($name, $int_n) }};
 }
 
 #[macro_export]
 macro_rules! attach_interrupt {
 
     ($idt: expr, $name: ident, 8 ) => /* Double Fault        */
-    { $idt.raw_set_handler_de(8, interrupt_wrapper!($name, 8 )); };
+    { $idt.raw_set_handler_de(8, $crate::interrupt_wrapper!($name, 8 )); };
 
     ($idt: expr, $name: ident, 10) => /* Invalid tss         */
-    { $idt.raw_set_handler_e(10, interrupt_wrapper!($name, 10)); };
+    { $idt.raw_set_handler_e(10, $crate::interrupt_wrapper!($name, 10)); };
 
     ($idt: expr, $name: ident, 11) => /* Segment Not Present */
-    { $idt.raw_set_handler_e(11, interrupt_wrapper!($name, 11)); };
+    { $idt.raw_set_handler_e(11, $crate::interrupt_wrapper!($name, 11)); };
 
     ($idt: expr, $name: ident, 12) => /* Stack Segment Fault */
-    { $idt.raw_set_handler_e(12, interrupt_wrapper!($name, 12)); };
+    { $idt.raw_set_handler_e(12, $crate::interrupt_wrapper!($name, 12)); };
 
     ($idt: expr, $name: ident, 13) => /* General Protection  */
-    { $idt.raw_set_handler_e(13, interrupt_wrapper!($name, 13)); };
+    { $idt.raw_set_handler_e(13, $crate::interrupt_wrapper!($name, 13)); };
 
     ($idt: expr, $name: ident, 14) => /* Page Fault          */
-    { $idt.raw_set_handler_e(14, interrupt_wrapper!($name, 14)); };
+    { $idt.raw_set_handler_e(14, $crate::interrupt_wrapper!($name, 14)); };
 
     ($idt: expr, $name: ident, 17) => /* Alignment Check     */
-    { $idt.raw_set_handler_e(17, interrupt_wrapper!($name, 17)); };
+    { $idt.raw_set_handler_e(17, $crate::interrupt_wrapper!($name, 17)); };
 
     ($idt: expr, $name: ident, 18) => /* Machine Check       */
-    { $idt.raw_set_handler_de(18, interrupt_wrapper!($name, 18));};
+    { $idt.raw_set_handler_de(18, $crate::interrupt_wrapper!($name, 18));};
 
     ($idt: expr, $name: ident, 29) => /* VMM COMM Exception  */
-    { $idt.raw_set_handler_e(29, interrupt_wrapper!($name, 29)); };
+    { $idt.raw_set_handler_e(29, $crate::interrupt_wrapper!($name, 29)); };
 
     ($idt: expr, $name: ident, 30) => /* Security Exception  */
-    { $idt.raw_set_handler_e(30, interrupt_wrapper!($name, 30)); };
+    { $idt.raw_set_handler_e(30, $crate::interrupt_wrapper!($name, 30)); };
 
 
     ($idt: expr, $name: ident, $int_n: literal) => /* Default Handler */
-    { $idt.raw_set_handler_ne($int_n, interrupt_wrapper!($name, $int_n)); };
+    { $idt.raw_set_handler_ne($int_n, $crate::interrupt_wrapper!($name, $int_n)); };
+
 }
 
 
@@ -457,7 +467,7 @@ mod test_case {
     use x86_64::PrivilegeLevel;
     use crate::{serial_print, serial_println};
 
-    extern "x86-interrupt" fn dv0_handler(i_frame: InterruptFrame) {
+    fn dv0_handler(i_frame: InterruptFrame, intn: u8, error: Option<u64>) {
         serial_print!("  [DV0 CALLED]  ");
 
         // We want this to be called and returned!
@@ -468,10 +478,10 @@ mod test_case {
             i += 1;
         }
 
-        i -= 100;
+        i -= 101;
 
         unsafe {
-            let d = i == 1;
+            let d = i == intn;
 
             serial_print!("[{}]  ", d);
         }
@@ -481,9 +491,10 @@ mod test_case {
 
     lazy_static! {
         static ref IDT_TEST: Idt = {
+            use crate::attach_interrupt;
             let mut idt = Idt::new();
 
-            idt.set_handler(0, dv0_handler);
+            attach_interrupt!(idt, dv0_handler, 0);
 
             idt
         };
