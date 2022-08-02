@@ -32,7 +32,9 @@ use crate::{memory::VirtualAddress, serial_println};
 use crate::arch_x86_64::idt::*;
 use crate::arch_x86_64::gdt::*;
 use crate::general_function_to_interrupt_ne;
+use crate::general_function_to_interrupt_de;
 use crate::interrupt_wrapper;
+use crate::attach_interrupt;
 
 
 pub mod isr;
@@ -69,14 +71,8 @@ lazy_static! {
     static ref IDT: idt::Idt = {
         let mut idt = idt::Idt::new();
 
-        idt.set_handler(0, interrupt_wrapper!(divide_by_zero_handler, 8));
+        attach_interrupt!(idt, divide_by_zero_handler, 0);
 
-        // TODO:
-        // make a custom struct that handler_wrapper exports
-        // make handler_wrapper take in all types of handlers
-        // make sure that the thing is safe for diverging ints
-        // make set_handler only take handler_wrapper structs (aka 1)
-        // make a GeneralHandler for all handles that you want to be all in one place (for Errors)
 
         idt
     };
