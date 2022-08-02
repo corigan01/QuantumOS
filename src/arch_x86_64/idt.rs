@@ -179,10 +179,20 @@ impl Idt {
         Idt([Entry::missing(); 255])
     }
 
-    pub fn set_handler(&mut self, entry: u8, handler: RawHandlerFuncNe) {
-
-
+    pub fn raw_set_handler_ne(&mut self, entry: u8, handler: RawHandlerFuncNe) {
         self.0[entry as usize] = Entry::new_raw_ne(segmentation::cs(), handler);
+    }
+
+    pub fn raw_set_handler_e(&mut self, entry: u8, handler: RawHandlerFuncE) {
+        self.0[entry as usize] = Entry::new_raw_e(segmentation::cs(), handler);
+    }
+
+    pub fn raw_set_handler_dne(&mut self, entry: u8, handler: RawHandlerFuncDne) {
+        self.0[entry as usize] = Entry::new_raw_dne(segmentation::cs(), handler);
+    }
+
+    pub fn raw_set_handler_de(&mut self, entry: u8, handler: RawHandlerFuncDe) {
+        self.0[entry as usize] = Entry::new_raw_de(segmentation::cs(), handler);
     }
 
     pub fn submit_entries(&self) -> Result<IdtTablePointer, &str> {
@@ -337,7 +347,7 @@ macro_rules! general_function_to_interrupt_e {
 #[macro_export]
 macro_rules! general_function_to_interrupt_dne {
     ($name: ident, $int_num: expr) => {{
-        extern "x86-interrupt" fn wrapper(i_frame: InterruptFrame) {
+        extern "x86-interrupt" fn wrapper(i_frame: InterruptFrame) -> ! {
             use core::option;
 
             let function = $name as $crate::arch_x86_64::idt::GeneralHandlerFunc;
@@ -354,7 +364,7 @@ macro_rules! general_function_to_interrupt_dne {
 #[macro_export]
 macro_rules! general_function_to_interrupt_de {
     ($name: ident, $int_num: expr) => {{
-        extern "x86-interrupt" fn wrapper(i_frame: InterruptFrame, error_code: u64) {
+        extern "x86-interrupt" fn wrapper(i_frame: InterruptFrame, error_code: u64) -> ! {
             use core::option;
 
             let function = $name as $crate::arch_x86_64::idt::GeneralHandlerFunc;
@@ -393,6 +403,44 @@ macro_rules! interrupt_wrapper {
     ($name: ident, 31) => {{  panic!("Tried to set a reserved handler"); }};  /* RESERVED HANDLER    */
 
     ($name: ident, $int_n: expr) => {{ general_function_to_interrupt_ne!($name, $int_n) }};
+}
+
+#[macro_export]
+macro_rules! attach_interrupt {
+
+    ($idt: expr, $name: ident, 8 ) => /* Double Fault        */
+    { $idt.raw_set_handler_de(8, interrupt_wrapper!($name, 8 )); };
+
+    ($idt: expr, $name: ident, 10) => /* Invalid tss         */
+    { $idt.raw_set_handler_e(10, interrupt_wrapper!($name, 10)); };
+
+    ($idt: expr, $name: ident, 11) => /* Segment Not Present */
+    { $idt.raw_set_handler_e(11, interrupt_wrapper!($name, 11)); };
+
+    ($idt: expr, $name: ident, 12) => /* Stack Segment Fault */
+    { $idt.raw_set_handler_e(12, interrupt_wrapper!($name, 12)); };
+
+    ($idt: expr, $name: ident, 13) => /* General Protection  */
+    { $idt.raw_set_handler_e(13, interrupt_wrapper!($name, 13)); };
+
+    ($idt: expr, $name: ident, 14) => /* Page Fault          */
+    { $idt.raw_set_handler_e(14, interrupt_wrapper!($name, 14)); };
+
+    ($idt: expr, $name: ident, 17) => /* Alignment Check     */
+    { $idt.raw_set_handler_e(17, interrupt_wrapper!($name, 17)); };
+
+    ($idt: expr, $name: ident, 18) => /* Machine Check       */
+    { $idt.raw_set_handler_de(18, interrupt_wrapper!($name, 18));};
+
+    ($idt: expr, $name: ident, 29) => /* VMM COMM Exception  */
+    { $idt.raw_set_handler_e(29, interrupt_wrapper!($name, 29)); };
+
+    ($idt: expr, $name: ident, 30) => /* Security Exception  */
+    { $idt.raw_set_handler_e(30, interrupt_wrapper!($name, 30)); };
+
+
+    ($idt: expr, $name: ident, $int_n: literal) => /* Default Handler */
+    { $idt.raw_set_handler_ne($int_n, interrupt_wrapper!($name, $int_n)); };
 }
 
 
