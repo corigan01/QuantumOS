@@ -437,7 +437,15 @@ impl EntryOptions {
     }
 }
 
-
+/// # General Function To Interrupt (No Error)
+/// This is a general wrapper around a `GeneralHandlerFunc` type and the corresponding interrupt
+/// type. This generates a new function that matches what the cpu will be expecting, then will pass
+/// the arguments it gathers to the called function. This allows one simple general type of function
+/// to handle many different types of interrupts regardless of how each interrupt needs to be
+/// structured. Some interrupts have error codes pushed to the stack, and others don't. This is why
+/// we need to wrap your function around a "wrapper" to make sure you are not trying to access unsafe
+/// memory. This also makes sure if your function is diverging, it will panic before the function
+/// returns to stop a triple fault from happening.
 #[macro_export]
 macro_rules! general_function_to_interrupt_ne {
     ($name: ident, $int_num: expr) => {{
@@ -453,6 +461,15 @@ macro_rules! general_function_to_interrupt_ne {
     }};
 }
 
+/// # General Function To Interrupt (With Error)
+/// This is a general wrapper around a `GeneralHandlerFunc` type and the corresponding interrupt
+/// type. This generates a new function that matches what the cpu will be expecting, then will pass
+/// the arguments it gathers to the called function. This allows one simple general type of function
+/// to handle many different types of interrupts regardless of how each interrupt needs to be
+/// structured. Some interrupts have error codes pushed to the stack, and others don't. This is why
+/// we need to wrap your function around a "wrapper" to make sure you are not trying to access unsafe
+/// memory. This also makes sure if your function is diverging, it will panic before the function
+/// returns to stop a triple fault from happening.
 #[macro_export]
 macro_rules! general_function_to_interrupt_e {
     ($name: ident, $int_num: expr) => {{
@@ -468,6 +485,15 @@ macro_rules! general_function_to_interrupt_e {
     }};
 }
 
+/// # General Function To Interrupt (Diverging No Error)
+/// This is a general wrapper around a `GeneralHandlerFunc` type and the corresponding interrupt
+/// type. This generates a new function that matches what the cpu will be expecting, then will pass
+/// the arguments it gathers to the called function. This allows one simple general type of function
+/// to handle many different types of interrupts regardless of how each interrupt needs to be
+/// structured. Some interrupts have error codes pushed to the stack, and others don't. This is why
+/// we need to wrap your function around a "wrapper" to make sure you are not trying to access unsafe
+/// memory. This also makes sure if your function is diverging, it will panic before the function
+/// returns to stop a triple fault from happening.
 #[macro_export]
 macro_rules! general_function_to_interrupt_dne {
     ($name: ident, $int_num: expr) => {{
@@ -485,6 +511,15 @@ macro_rules! general_function_to_interrupt_dne {
     }};
 }
 
+/// # General Function To Interrupt (Diverging With Error)
+/// This is a general wrapper around a `GeneralHandlerFunc` type and the corresponding interrupt
+/// type. This generates a new function that matches what the cpu will be expecting, then will pass
+/// the arguments it gathers to the called function. This allows one simple general type of function
+/// to handle many different types of interrupts regardless of how each interrupt needs to be
+/// structured. Some interrupts have error codes pushed to the stack, and others don't. This is why
+/// we need to wrap your function around a "wrapper" to make sure you are not trying to access unsafe
+/// memory. This also makes sure if your function is diverging, it will panic before the function
+/// returns to stop a triple fault from happening.
 #[macro_export]
 macro_rules! general_function_to_interrupt_de {
     ($name: ident, $int_num: expr) => {{
@@ -502,70 +537,107 @@ macro_rules! general_function_to_interrupt_de {
     }};
 }
 
+/// # Interrupt Match Wrapper
+/// This wraps the match statement that filters out the type of interrupt. This is so it can be used
+/// in other macros to provide easier to read code!
 #[macro_export]
-macro_rules! interrupt_wrapper {
-    ($name: ident, 8)  => {{ $crate::general_function_to_interrupt_de!($name, 8) }};  /* Double Fault        */
-    ($name: ident, 10) => {{ $crate::general_function_to_interrupt_e!($name, 10) }};  /* Invalid tss         */
-    ($name: ident, 11) => {{ $crate::general_function_to_interrupt_e!($name, 11) }};  /* Segment Not Present */
-    ($name: ident, 12) => {{ $crate::general_function_to_interrupt_e!($name, 12) }};  /* Stack Segment Fault */
-    ($name: ident, 13) => {{ $crate::general_function_to_interrupt_e!($name, 13) }};  /* General Protection  */
-    ($name: ident, 14) => {{ $crate::general_function_to_interrupt_e!($name, 14) }};  /* Page Fault          */
-    ($name: ident, 17) => {{ $crate::general_function_to_interrupt_e!($name, 17) }};  /* Alignment Check     */
-    ($name: ident, 18) => {{ $crate::general_function_to_interrupt_de!($name,18) }};  /* Machine Check       */
-    ($name: ident, 29) => {{ $crate::general_function_to_interrupt_e!($name, 29) }};  /* VMM COMM Exception  */
-    ($name: ident, 30) => {{ $crate::general_function_to_interrupt_e!($name, 30) }};  /* Security Exception  */
-
-    ($name: ident, 9 ) => {{  panic!("Tried to set a reserved handler"); }};  /* RESERVED HANDLER    */
-    ($name: ident, 21) => {{  panic!("Tried to set a reserved handler"); }};  /* RESERVED HANDLER    */
-    ($name: ident, 22) => {{  panic!("Tried to set a reserved handler"); }};  /* RESERVED HANDLER    */
-    ($name: ident, 23) => {{  panic!("Tried to set a reserved handler"); }};  /* RESERVED HANDLER    */
-    ($name: ident, 24) => {{  panic!("Tried to set a reserved handler"); }};  /* RESERVED HANDLER    */
-    ($name: ident, 25) => {{  panic!("Tried to set a reserved handler"); }};  /* RESERVED HANDLER    */
-    ($name: ident, 26) => {{  panic!("Tried to set a reserved handler"); }};  /* RESERVED HANDLER    */
-    ($name: ident, 27) => {{  panic!("Tried to set a reserved handler"); }};  /* RESERVED HANDLER    */
-    ($name: ident, 28) => {{  panic!("Tried to set a reserved handler"); }};  /* RESERVED HANDLER    */
-    ($name: ident, 31) => {{  panic!("Tried to set a reserved handler"); }};  /* RESERVED HANDLER    */
-
-    ($name: ident, $int_n: expr) => {{ $crate::general_function_to_interrupt_ne!($name, $int_n) }};
+macro_rules! interrupt_match_wrapper {
+    ($idt: expr, $name: ident, $int_n: expr) => {
+        match $int_n as usize {
+            8 | 18 => {
+                $idt.raw_set_handler_de($int_n, $crate::general_function_to_interrupt_de!($name, $int_n));
+            },
+            10..=14 | 17 | 29 | 30 => {
+                 $idt.raw_set_handler_e($int_n, $crate::general_function_to_interrupt_e!($name, $int_n));
+            },
+            9 | 21..=28 | 31 => { panic!("Tried to set a reserved handler"); }
+            _ => {
+                $idt.raw_set_handler_ne($int_n, $crate::general_function_to_interrupt_ne!($name, $int_n));
+            }
+        }
+    };
 }
 
+
+/// # Attach Interrupt
+/// This macro will attach a `GeneralHandlerFunc` type of function to the IDT. It will automatically
+/// pick-out the type of interrupt and wrap it accordingly.
+///
+/// ## Interrupt Types
+/// The following interrupts will produce the following behavior:
+/// ```text
+/// | Interrupt |    Type   |  Function Parameters |
+/// |-----------|-----------|----------------------|
+/// |   0 - 7   |   NO ERR  |   None          ()   |
+/// |     8     |  DV W ERR |   Some         -> !  |
+/// |     9     |  Reserved |         PANIC        |
+/// |  10 - 14  |   W ERR   |   Some          ()   |
+/// |  15 - 16  |   NO ERR  |   None          ()   |
+/// |    17     |   W ERR   |   Some          ()   |
+/// |    18     |  DV W ERR |   Some         -> !  |
+/// |  19 - 20  |   NO ERR  |   None          ()   |
+/// |  21 - 28  |  Reserved |         PANIC        |
+/// |  29 - 30  |   W ERR   |   Some          ()   |
+/// |    31     |  Reserved |         PANIC        |
+/// |-----------|-----------|----------------------|
+/// ```
+///
+/// ## Interrupts 0-31
+/// These are system generated interrupts. These interrupts are usually called 'Faults'. Most
+/// Interrupts in this range can be handled and returned, but there are some that can't. Commonly
+/// though, the interrupts are usually caused by a fault of some kind. This could be as simple as a
+/// Divide-By-Zero.
+///
+/// ```text
+/// | Number |      Interrupt Name      | Short Name |
+/// |--------|--------------------------|------------|
+/// |    0   |      Divide by Zero      |    #DE     |
+/// |    1   |          Debug           |    #DB     |
+/// |    2   |  NON Maskable Interrupt  |    NMI     |
+/// |    3   |       BreakPoint         |    #BP     |
+/// |    4   |        OverFlow          |    #OF     |
+/// |    5   |   Bound Range Exceeded   |    #BR     |
+/// |    6   |      Invalid Opcode      |    #UD     |
+/// |    7   |   Device not Available   |    #NM     |
+/// |    8   |       Double Fault       |    #DF     |
+/// |    9   |         RESERVED         |    RSV     |
+/// |   10   |        Invalid TSS       |    #TS     |
+/// |   11   |    Segment not Present   |    #NP     |
+/// |   12   |    Stack Segment Fault   |    #SS     |
+/// |   13   | General Protection Fault |    #GP     |
+/// |   14   |        Page Fault        |    #PF     |
+/// |   15   |         RESERVED         |    RSV     |
+/// |   16   |    X87 Floating Point    |    #MF     |
+/// |   17   |     Alignment Check      |    #AC     |
+/// |   18   |      Machine Check       |    #MC     |
+/// |   19   |    SIMD Floating Point   |    #XF     |
+/// |   20   |      Virtualization      |     V      |
+/// |   21   |         RESERVED         |    RSV     |
+/// |   22   |         RESERVED         |    RSV     |
+/// |   23   |         RESERVED         |    RSV     |
+/// |   24   |         RESERVED         |    RSV     |
+/// |   25   |         RESERVED         |    RSV     |
+/// |   26   |         RESERVED         |    RSV     |
+/// |   27   |         RESERVED         |    RSV     |
+/// |   28   |         RESERVED         |    RSV     |
+/// |   29   |    VMM Comm Exception    |    #VC     |
+/// |   30   |    Security Exception    |    #SX     |
+/// |   31   |         RESERVED         |    RSV     |
+/// |--------|--------------------------|------------|
+/// ```
+///
+///
 #[macro_export]
 macro_rules! attach_interrupt {
+    ($idt: expr, $name: ident, $int_n: literal) => {
+        $crate::interrupt_match_wrapper!($idt, $name, $int_n);
+    };
 
-    ($idt: expr, $name: ident, 8 ) => /* Double Fault        */
-    { $idt.raw_set_handler_de(8, $crate::interrupt_wrapper!($name, 8 )); };
-
-    ($idt: expr, $name: ident, 10) => /* Invalid tss         */
-    { $idt.raw_set_handler_e(10, $crate::interrupt_wrapper!($name, 10)); };
-
-    ($idt: expr, $name: ident, 11) => /* Segment Not Present */
-    { $idt.raw_set_handler_e(11, $crate::interrupt_wrapper!($name, 11)); };
-
-    ($idt: expr, $name: ident, 12) => /* Stack Segment Fault */
-    { $idt.raw_set_handler_e(12, $crate::interrupt_wrapper!($name, 12)); };
-
-    ($idt: expr, $name: ident, 13) => /* General Protection  */
-    { $idt.raw_set_handler_e(13, $crate::interrupt_wrapper!($name, 13)); };
-
-    ($idt: expr, $name: ident, 14) => /* Page Fault          */
-    { $idt.raw_set_handler_e(14, $crate::interrupt_wrapper!($name, 14)); };
-
-    ($idt: expr, $name: ident, 17) => /* Alignment Check     */
-    { $idt.raw_set_handler_e(17, $crate::interrupt_wrapper!($name, 17)); };
-
-    ($idt: expr, $name: ident, 18) => /* Machine Check       */
-    { $idt.raw_set_handler_de(18, $crate::interrupt_wrapper!($name, 18));};
-
-    ($idt: expr, $name: ident, 29) => /* VMM COMM Exception  */
-    { $idt.raw_set_handler_e(29, $crate::interrupt_wrapper!($name, 29)); };
-
-    ($idt: expr, $name: ident, 30) => /* Security Exception  */
-    { $idt.raw_set_handler_e(30, $crate::interrupt_wrapper!($name, 30)); };
-
-
-    ($idt: expr, $name: ident, $int_n: literal) => /* Default Handler */
-    { $idt.raw_set_handler_ne($int_n, $crate::interrupt_wrapper!($name, $int_n)); };
-
+    ($idt: expr, $name: ident, $int_n: expr) => {
+        for i in $int_n {
+            $crate::interrupt_match_wrapper!($idt, $name, i);
+        }
+    };
 }
 
 // --- Tests ---
