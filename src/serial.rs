@@ -25,13 +25,9 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 use crate::port;
-use crate::port::{byte_in, byte_out};
 use lazy_static::lazy_static;
 use spin::Mutex;
 use core::fmt;
-use core::fmt::Arguments;
-use core::result;
-use core::option;
 
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -27,7 +27,7 @@ Quantum OS Lib file, documentation coming soon!
 */
 
 use core::panic::PanicInfo;
-use crate::{serial_print, serial_println};
+use crate::serial_println;
 
 /// This function is called on panic.
 #[panic_handler]

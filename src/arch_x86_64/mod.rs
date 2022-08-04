@@ -25,15 +25,12 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 use core::arch::asm;
-use core::mem::size_of;
 use lazy_static::lazy_static;
 use x86_64::instructions::segmentation;
-use crate::{memory::VirtualAddress, serial_println};
+use crate::serial_println;
+use crate::attach_interrupt;
 use crate::arch_x86_64::idt::*;
 use crate::arch_x86_64::gdt::*;
-use crate::general_function_to_interrupt_ne;
-use crate::general_function_to_interrupt_de;
-use crate::attach_interrupt;
 
 
 pub mod isr;
@@ -71,7 +68,6 @@ lazy_static! {
         let mut idt = idt::Idt::new();
 
         attach_interrupt!(idt, divide_by_zero_handler, 0);
-
 
         idt
     };
