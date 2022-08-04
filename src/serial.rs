@@ -139,8 +139,12 @@ impl SerialDevice {
         port::byte_in(self.port as u16 + 5) & 0x20 != 0x00
     }
 
-    pub fn get_baud(&self) -> BaudRate {
+    pub fn get_baud_div(&self) -> BaudRate {
         self.baud.clone()
+    }
+
+    pub fn get_baud(&self) -> u32 {
+        115200 / self.get_baud()
     }
 
     pub fn write_byte(&self, byte: u8) {
