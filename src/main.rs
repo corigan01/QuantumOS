@@ -51,9 +51,7 @@ fn main(boot_info: &'static mut BootInfo) -> ! {
 
     // safely get the baud rate
     let baud_rate = if let Some(serial) = SERIAL1.lock().as_ref() {
-          let div = serial.get_baud();
-
-        115200 / (div as u32)
+          serial.get_baud()
     } else { 0 };
 
     serial_println!("\n\n");
