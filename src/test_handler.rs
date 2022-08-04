@@ -27,9 +27,11 @@ Quantum OS Lib file, documentation coming soon!
 */
 
 use core::panic::PanicInfo;
-use bootloader::{BootInfo, entry_point};
 use crate::qemu::{exit_qemu, QemuExitCode};
 use crate::{serial_print, serial_println};
+
+#[cfg(test)]
+use bootloader::{BootInfo, entry_point};
 
 pub trait Testable {
     fn run(&self) -> ();

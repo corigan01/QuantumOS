@@ -37,8 +37,9 @@ Quantum OS Lib file, documentation coming soon!
 
 #![reexport_test_harness_main = "run_test"]
 
-use bootloader::{BootInfo, entry_point};
 
+#[cfg(test)]
+use bootloader::{BootInfo, entry_point};
 
 #[cfg(test)]
 entry_point!(test_main);

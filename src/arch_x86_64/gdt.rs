@@ -26,9 +26,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 
 use core::arch::asm;
-use crate::arch_x86_64::tables;
 use crate::memory::VirtualAddress;
-use crate::serial_println;
 
 #[derive(Clone, Copy)]
 #[repr(C, packed(2))]

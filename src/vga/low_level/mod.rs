@@ -24,7 +24,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 */
 
-use core::{ops, slice};
+use core::slice;
 use bootloader::boot_info::{FrameBuffer, Optional, PixelFormat};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -27,12 +27,11 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 use core::mem::size_of;
 use crate::arch_x86_64::CpuPrivilegeLevel;
 use crate::memory::VirtualAddress;
-use crate::{serial_print, serial_println};
+use crate::serial_println;
 use crate::bitset::BitSet;
 use x86_64::instructions::segmentation;
 use x86_64::structures::gdt::SegmentSelector;
 use x86_64::PrivilegeLevel;
-use x86_64::PrivilegeLevel::Ring0;
 
 type RawHandlerFuncNe  /* No Error             */ = extern "x86-interrupt" fn(InterruptFrame);
 type RawHandlerFuncE   /* With Error           */ = extern "x86-interrupt" fn(InterruptFrame, u64);
