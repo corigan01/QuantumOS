@@ -542,7 +542,7 @@ macro_rules! general_function_to_interrupt_de {
 /// in other macros to provide easier to read code!
 #[macro_export]
 macro_rules! interrupt_match_wrapper {
-    ($idt: expr, $name: ident, $int_n: expr) => {
+    ($idt: expr, $name: ident, $int_n: tt) => {
         match $int_n as usize {
             8 | 18 => {
                 $idt.raw_set_handler_de($int_n, $crate::general_function_to_interrupt_de!($name, $int_n));
@@ -557,6 +557,37 @@ macro_rules! interrupt_match_wrapper {
         }
     };
 }
+
+/// # Interrupt Match Wrapper Recursive
+/// This macro gets around the rust problem of passing a non-const value into a function. This is fixed
+/// by spawning this macro 255 times, and detecting if that macro contains an index that is inside the
+/// range provided. This is overly complicated, but its a rust limitation on how macros work.
+#[macro_export]
+macro_rules! interrupt_match_wrapper_recursive {
+    ($idt: expr, $name: ident, $range: expr, $bit7:tt, $bit6:tt, $bit5:tt, $bit4:tt, $bit3:tt, $bit2:tt, $bit1:tt, $bit0:tt) => {{
+
+        // Now that we have all 8 bits populated, we have to detect if this permutation is inside
+        // the range that we provided. If this permutation is with-in the range, then it gets to live
+        // otherwise it dies. This leaves us with just a macro that fits our range. Then we can finally
+        // call interrupt_match_wrapper! to have that permutation added.
+        const INDEX: u8 = $bit0 | ($bit1 << 1) | ($bit2 << 2) | ($bit3 << 3) | ($bit4 << 4) | ($bit5 << 5) | ($bit6 << 6) | ($bit7 << 7);
+
+        // This is to make sure we dont hit any reserved handlers
+        if (INDEX != 9 && INDEX != 31 && !((21..=28).contains(&INDEX))) {
+
+            // Check if the index is inside the range
+            if $range.contains(&INDEX) { $crate::interrupt_match_wrapper!($idt, $name, INDEX); }
+        }
+    }};
+
+    ($idt: expr, $name: ident, $range: expr $(, $bits:tt)*) => {
+
+        // Spawn every permutation of bits 00000000 -> 11111111
+        $crate::interrupt_match_wrapper_recursive!($idt, $name, $range $(, $bits)*, 0);
+        $crate::interrupt_match_wrapper_recursive!($idt, $name, $range $(, $bits)*, 1);
+    };
+}
+
 
 
 /// # Attach Interrupt
@@ -634,9 +665,7 @@ macro_rules! attach_interrupt {
     };
 
     ($idt: expr, $name: ident, $int_n: expr) => {
-        for i in $int_n {
-            $crate::interrupt_match_wrapper!($idt, $name, i);
-        }
+        $crate::interrupt_match_wrapper_recursive!($idt, $name, $int_n);
     };
 }
 
