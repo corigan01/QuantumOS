@@ -450,7 +450,6 @@ impl EntryOptions {
 macro_rules! general_function_to_interrupt_ne {
     ($name: ident, $int_num: expr) => {{
         extern "x86-interrupt" fn wrapper(i_frame: InterruptFrame) {
-            use core::option;
 
             let function = $name as $crate::arch_x86_64::idt::GeneralHandlerFunc;
 
@@ -474,7 +473,6 @@ macro_rules! general_function_to_interrupt_ne {
 macro_rules! general_function_to_interrupt_e {
     ($name: ident, $int_num: expr) => {{
         extern "x86-interrupt" fn wrapper(i_frame: InterruptFrame, error_code: u64) {
-            use core::option;
 
             let function = $name as $crate::arch_x86_64::idt::GeneralHandlerFunc;
 
@@ -498,7 +496,6 @@ macro_rules! general_function_to_interrupt_e {
 macro_rules! general_function_to_interrupt_dne {
     ($name: ident, $int_num: expr) => {{
         extern "x86-interrupt" fn wrapper(i_frame: InterruptFrame) -> ! {
-            use core::option;
 
             let function = $name as $crate::arch_x86_64::idt::GeneralHandlerFunc;
 
@@ -524,7 +521,6 @@ macro_rules! general_function_to_interrupt_dne {
 macro_rules! general_function_to_interrupt_de {
     ($name: ident, $int_num: expr) => {{
         extern "x86-interrupt" fn wrapper(i_frame: InterruptFrame, error_code: u64) -> ! {
-            use core::option;
 
             let function = $name as $crate::arch_x86_64::idt::GeneralHandlerFunc;
 
