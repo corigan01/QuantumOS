@@ -33,7 +33,6 @@ use crate::arch_x86_64::idt::*;
 use crate::arch_x86_64::gdt::*;
 use crate::general_function_to_interrupt_ne;
 use crate::general_function_to_interrupt_de;
-use crate::interrupt_wrapper;
 use crate::attach_interrupt;
 
 
