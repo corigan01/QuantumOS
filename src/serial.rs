@@ -29,7 +29,6 @@ use lazy_static::lazy_static;
 use spin::Mutex;
 use core::fmt;
 
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u16)]
 #[allow(dead_code)]
@@ -144,7 +143,7 @@ impl SerialDevice {
     }
 
     pub fn get_baud(&self) -> u32 {
-        115200 / self.get_baud()
+        115200 / (self.get_baud_div() as u32)
     }
 
     pub fn write_byte(&self, byte: u8) {
@@ -179,7 +178,7 @@ impl fmt::Write for SerialDevice {
 
 lazy_static! {
     pub static ref SERIAL1: Mutex<Option<SerialDevice>> =
-        Mutex::new(SerialDevice::new(SerialCOM::Com1, BaudRate::Baud38400));
+        Mutex::new(SerialDevice::new(SerialCOM::Com1, BaudRate::Baud9600));
 }
 
 
