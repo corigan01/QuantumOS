@@ -36,7 +36,7 @@ fn main() {
     run_cmd.args(RUN_ARGS);
 
     let exit_status = run_cmd.status().unwrap();
-    if !exit_status.success() {
+    if !exit_status.success()  {
         std::process::exit(exit_status.code().unwrap_or(1));
     }
 }

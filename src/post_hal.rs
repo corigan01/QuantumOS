@@ -24,4 +24,16 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 */
 
+use crate::memory::VirtualAddress;
+use crate::vga::low_level::FBuffer;
 
+struct QuantumBootState {
+    memory_map_pointer: VirtualAddress,
+    bootloader_frame_buffer: FBuffer,
+    physical_memory_offset: Option<VirtualAddress>,
+    recursive_page_index: Option<VirtualAddress>
+}
+
+impl QuantumBootState {
+
+}

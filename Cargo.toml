@@ -26,7 +26,8 @@ spin = "0.5.2"
 x86_64 = "0.14.9"
 
 [package.metadata.bootloader]
-physical-memory-offset = "0xFFFF800000000000"
+map-physical-memory = true
+aslr = true
 
 [dependencies.lazy_static]
 version = "1.0"

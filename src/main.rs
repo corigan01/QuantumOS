@@ -29,16 +29,20 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #![allow(dead_code)]
 
 #![feature(custom_test_frameworks)]
+#![feature(abi_x86_interrupt)]
 #![test_runner(quantum_os::test_handler::test_runner)]
 
 //mod vga;
 use core::arch::asm;
+use core::borrow::Borrow;
 use core::panic::PanicInfo;
+use core::u32::MAX;
 use bootloader::boot_info::{BootInfo, FrameBuffer, MemoryRegion};
 use bootloader::entry_point;
 
-use quantum_os::{serial_println, serial_print};
-use quantum_os::arch_x86_64::init_idt;
+use quantum_os::{serial_println, serial_print, attach_interrupt, remove_interrupt};
+use quantum_os::arch_x86_64::InterruptDT;
+use quantum_os::arch_x86_64::idt::InterruptFrame;
 use quantum_os::serial::SERIAL1;
 use quantum_os::vga::low_level::FBuffer;
 use quantum_os::bitset;
@@ -72,8 +76,10 @@ fn main(boot_info: &'static mut BootInfo) -> ! {
     else { serial_println!("FAIL"); }
 
     // setup cpu
-    serial_print!("Setting up GDT ... "); serial_println!("OK");
-    serial_print!("Setting up IDT ... "); init_idt(); serial_println!("OK");
+    {
+
+    }
+
 
 
     let kernel_buffer = FBuffer::new(&boot_info.framebuffer);
@@ -81,6 +87,21 @@ fn main(boot_info: &'static mut BootInfo) -> ! {
     kernel_buffer.draw_rec((000, 000), (100, 100), 0xFF0000);
     kernel_buffer.draw_rec((100, 100), (100, 100), 0x00FF00);
     kernel_buffer.draw_rec((200, 200), (100, 100), 0x0000FF);
+
+    let mut x: i32 = 0;
+    let mut sign: i32 = 1;
+    loop {
+        if x == 255 {
+            sign = -1;
+        }
+        if x == 0 {
+            sign = 1;
+        }
+        x += sign;
+
+        let color = (x as u32) << 16 | (x as u32) << 8 | (x as u32);
+        kernel_buffer.draw_rec((300, 300), (100, 100), color);
+    }
 
 
     serial_println!("\n\n\n==== KERNEL MAIN FINISHED ==== ");

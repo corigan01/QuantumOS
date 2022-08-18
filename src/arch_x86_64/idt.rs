@@ -27,7 +27,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 use core::mem::size_of;
 use crate::arch_x86_64::CpuPrivilegeLevel;
 use crate::memory::VirtualAddress;
-use crate::serial_println;
+use crate::{serial_print, serial_println};
 use crate::bitset::BitSet;
 use x86_64::instructions::segmentation;
 use x86_64::structures::gdt::SegmentSelector;
@@ -335,7 +335,7 @@ impl Idt {
         Ok(IdtTablePointer {
             base: VirtualAddress::new(self as *const _ as u64),
             limit: (size_of::<Self>() - 1) as u16,
-        })
+    })
     }
 
     pub unsafe fn unsafe_submit_entries(&self) -> IdtTablePointer {
@@ -353,7 +353,18 @@ impl Idt {
                 limit: (size_of::<Self>() - 1) as u16,
             }
         }
+    }
 
+    pub fn check_for_entry(&self, interrupt: u8) -> bool {
+        let entry = self.0[interrupt as usize];
+
+        !(entry.is_missing() || entry.is_null())
+    }
+
+    pub fn remove_entry(&mut self, interrupt: u8) {
+        if self.check_for_entry(interrupt) {
+            self.0[interrupt as usize] = Entry::missing();
+        }
     }
 }
 
@@ -664,6 +675,32 @@ macro_rules! attach_interrupt {
     };
 }
 
+
+/// # Remove Interrupt
+/// This macro will remove the current interrupt handler that was set.
+///
+/// ## Basic Use:
+/// ```rust
+/// use quantum_os::remove_interrupt;
+///
+///
+/// remove_interrupt!(your_idt, 0); // removes #DE
+/// remove_interrupt!(your_idt, 1..10); // removes a range of interrupts
+///
+/// ```
+#[macro_export]
+macro_rules! remove_interrupt {
+    ($idt: expr, $int_n: literal) => {
+        $idt.remove_entry($int_n);
+    };
+
+    ($idt: expr, $int_n: expr) => {
+        for i in $int_n {
+            $idt.remove_entry(i);
+        }
+    };
+}
+
 // --- Tests ---
 // These are to ensure the system is working as intended.
 
@@ -675,6 +712,7 @@ extern "x86-interrupt" fn missing_handler(i_frame: InterruptFrame) {
 #[cfg(test)]
 mod test_case {
     use core::arch::asm;
+    use spin::Mutex;
     use crate::arch_x86_64::idt::{EntryOptions, InterruptFrame};
     use lazy_static::lazy_static;
     use x86_64::PrivilegeLevel;
@@ -703,13 +741,13 @@ mod test_case {
     use crate::arch_x86_64::idt::Idt;
 
     lazy_static! {
-        static ref IDT_TEST: Idt = {
+        static ref IDT_TEST: Mutex<Idt> = {
             use crate::attach_interrupt;
             let mut idt = Idt::new();
 
             attach_interrupt!(idt, dv0_handler, 0);
 
-            idt
+            Mutex::new(idt)
         };
     }
 
@@ -727,7 +765,8 @@ mod test_case {
 
     #[test_case]
     fn test_handler_by_fault() {
-        IDT_TEST.submit_entries().unwrap().load();
+        let m_idt = IDT_TEST.lock();
+        m_idt.submit_entries().unwrap().load();
 
         divide_by_zero_fault();
 
@@ -736,12 +775,36 @@ mod test_case {
 
     #[test_case]
     fn test_handler_by_not_valid() {
-        IDT_TEST.submit_entries().unwrap().load();
+        let mut m_idt = IDT_TEST.lock();
+        m_idt.submit_entries().unwrap().load();
 
         unhandled_fault();
 
-        // [OK] We passed!
+        remove_interrupt!(m_idt, 0);
 
+        m_idt.submit_entries().unwrap().load();
+
+        divide_by_zero_fault();
+
+        // [OK] We passed!
+    }
+
+    #[test_case]
+    fn test_add_and_remove_case() {
+        let mut m_idt = IDT_TEST.lock();
+
+        attach_interrupt!(m_idt, dv0_handler, 0..255);
+
+        m_idt.submit_entries().unwrap().load();
+
+        remove_interrupt!(m_idt, 0..255);
+
+        m_idt.submit_entries().unwrap().load();
+
+        for i in 0..255 {
+            assert!(!m_idt.check_for_entry(i),
+                    "Entry {} is present after removing entries", i);
+        }
     }
 
     #[test_case]

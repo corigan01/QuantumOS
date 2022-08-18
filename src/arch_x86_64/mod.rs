@@ -26,12 +26,13 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 use core::arch::asm;
 use lazy_static::lazy_static;
+use spin::Mutex;
 use x86_64::instructions::segmentation;
 use crate::serial_println;
 use crate::attach_interrupt;
 use crate::arch_x86_64::idt::*;
 use crate::arch_x86_64::gdt::*;
-
+use crate::remove_interrupt;
 
 pub mod isr;
 pub mod gdt;
@@ -47,6 +48,10 @@ pub enum CpuPrivilegeLevel {
     Ring3 = 0b11,
 }
 
+fn test_interrupt_dev0(iframe: InterruptFrame, interrupt: u8, error: Option<u64>) {
+    serial_println!("IDT OK!");
+}
+
 lazy_static! {
     static ref GDT: GlobalDescriptorTable = {
         let mut gdt = GlobalDescriptorTable::new();
@@ -59,32 +64,27 @@ lazy_static! {
     };
 }
 
-fn divide_by_zero_handler(i_frame: InterruptFrame, int_n: u8, error_code: Option<u64>) {
-    serial_println!("EXCEPTION: DIVIDE BY ZERO {}", int_n);
-}
-
 lazy_static! {
-    static ref IDT: idt::Idt = {
+    pub static ref InterruptDT: Mutex<idt::Idt> = {
         let mut idt = idt::Idt::new();
 
-        attach_interrupt!(idt, divide_by_zero_handler, 0);
+        attach_interrupt!(idt, test_interrupt_dev0, 0);
 
-        idt
+        idt.submit_entries().expect("Unable to load IDT!").load();
+
+        // test the handler
+        unsafe {
+            asm!("int $0x00");
+        }
+
+        remove_interrupt!(idt, 0);
+
+        idt.submit_entries().expect("Unable to load IDT!").load();
+
+        Mutex::new(idt)
     };
 }
 
-pub fn init_idt() {
-    IDT.submit_entries().unwrap().load();
 
-    serial_println!("Segmentation: {:#?}", segmentation::cs());
-
-    divide_by_zero();
-}
-
-pub fn divide_by_zero() {
-    unsafe {
-        asm!("int $0x0");
-    }
-}
 
 
