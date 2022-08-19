@@ -36,16 +36,16 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 use core::arch::asm;
 use core::borrow::Borrow;
 use core::panic::PanicInfo;
-use core::u32::MAX;
 use bootloader::boot_info::{BootInfo, FrameBuffer, MemoryRegion};
 use bootloader::entry_point;
 
 use quantum_os::{serial_println, serial_print, attach_interrupt, remove_interrupt};
-use quantum_os::arch_x86_64::InterruptDT;
-use quantum_os::arch_x86_64::idt::InterruptFrame;
+use quantum_os::arch_x86_64::{INTERRUPT_DT, GLOBAL_DT};
+use quantum_os::arch_x86_64::idt::{interrupt_tester, InterruptFrame};
 use quantum_os::serial::SERIAL1;
 use quantum_os::vga::low_level::FBuffer;
 use quantum_os::bitset;
+use quantum_os::arch_x86_64::isr::general_isr;
 
 #[cfg(not(test))]
 entry_point!(main);
@@ -75,10 +75,24 @@ fn main(boot_info: &'static mut BootInfo) -> ! {
     }
     else { serial_println!("FAIL"); }
 
-    // setup cpu
-    {
 
+    { // init the cpu, we just need to wake up the lazy_statics for them to init
+        let mut idt = INTERRUPT_DT.lock();
+
+        //GLOBAL_DT.submit_entries().expect("Failed to load GDT!").load();
+
+        attach_interrupt!(idt, general_isr, 0..32);
+
+        idt.submit_entries().expect("Failed to load IDT!").load();
+
+        serial_println!("Testing Interrupts ... ");
+
+        interrupt_tester();
+
+        serial_println!("OK");
     }
+
+
 
 
 
@@ -88,6 +102,11 @@ fn main(boot_info: &'static mut BootInfo) -> ! {
     kernel_buffer.draw_rec((100, 100), (100, 100), 0x00FF00);
     kernel_buffer.draw_rec((200, 200), (100, 100), 0x0000FF);
 
+    serial_println!("\n\n\n==== KERNEL MAIN FINISHED ==== ");
+    serial_println!("In later versions of this kernel, the kernel should not finish!");
+
+    // Make a little color changing box on screen to let the user know
+    // that the kernel is still alive and running.
     let mut x: i32 = 0;
     let mut sign: i32 = 1;
     loop {
@@ -102,9 +121,4 @@ fn main(boot_info: &'static mut BootInfo) -> ! {
         let color = (x as u32) << 16 | (x as u32) << 8 | (x as u32);
         kernel_buffer.draw_rec((300, 300), (100, 100), color);
     }
-
-
-    serial_println!("\n\n\n==== KERNEL MAIN FINISHED ==== ");
-    serial_println!("In later versions of this kernel, the kernel should not finish!");
-    loop {}
 }

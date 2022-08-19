@@ -26,13 +26,14 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 
 use core::arch::asm;
+
 use crate::memory::VirtualAddress;
 
 #[derive(Clone, Copy)]
 #[repr(C, packed(2))]
 pub struct GdtRegister {
     size: u16,
-    ptr: VirtualAddress
+    ptr: VirtualAddress,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -43,17 +44,16 @@ pub struct GdtEntry {
     base_middle: u8,
     access: u8,
     granularity: u8,
-    base_high: u8
+    base_high: u8,
 }
 
 #[derive(Clone, Copy, Debug)]
 pub struct GlobalDescriptorTable {
     table: [GdtEntry; 8],
-    length: u16
+    length: u16,
 }
 
 impl GdtRegister {
-
     #[inline]
     pub fn load(self) {
         unsafe {
@@ -70,7 +70,7 @@ impl GdtEntry {
             base_middle: 0,
             access: 0,
             granularity: 0,
-            base_high: 0
+            base_high: 0,
         }
     }
 
@@ -99,20 +99,19 @@ impl GdtEntry {
     pub fn set_null(&mut self) {
         *self = GdtEntry::new();
     }
-
 }
 
 impl GlobalDescriptorTable {
     pub fn new() -> Self {
         GlobalDescriptorTable {
             table: [GdtEntry::new(); 8],
-            length: 0
+            length: 0,
         }
     }
 
     pub fn add_entry(&mut self, entry: GdtEntry) -> Result<(), &str> {
         if self.length >= 8 { return Err("Too many entries in the GDT"); }
-        if self.length == 0 && entry.as_u64() != 0x00 {return Err("First entry must be null"); }
+        if self.length == 0 && entry.as_u64() != 0x00 { return Err("First entry must be null"); }
 
         self.table[self.length as usize] = entry;
         self.length += 1;
@@ -120,12 +119,13 @@ impl GlobalDescriptorTable {
         return Ok(());
     }
 
+    // FIXME: Add a check to make sure the GDT is formed correctly before use!
     #[inline]
-    pub fn submit_entries(&'static self) -> GdtRegister {
-        GdtRegister {
+    pub fn submit_entries(&'static self) -> Result<GdtRegister, &str> {
+        Ok(GdtRegister {
             size: (self.length * 8) - 1,
-            ptr: VirtualAddress::from_ptr(self.table.as_ptr())
-        }
+            ptr: VirtualAddress::from_ptr(self.table.as_ptr()),
+        })
     }
 }
 

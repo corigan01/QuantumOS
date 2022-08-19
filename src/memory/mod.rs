@@ -30,6 +30,10 @@ pub struct VirtualAddress(u64);
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
 #[repr(transparent)]
+pub struct PhysicalAddress(u64);
+
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
+#[repr(transparent)]
 pub struct NotValidAddress(u64);
 
 impl NotValidAddress {
@@ -45,8 +49,6 @@ impl VirtualAddress {
     pub fn new(address: u64) -> VirtualAddress {
         VirtualAddress::try_new(address).expect("Not Valid Address, bit check failed!")
     }
-
-
 
     #[inline]
     pub fn try_new(address: u64) -> Result<VirtualAddress, NotValidAddress> {
@@ -92,4 +94,8 @@ impl VirtualAddress {
 
     // unsafe
     pub unsafe fn new_unsafe(address: u64) -> VirtualAddress { VirtualAddress(address) }
+}
+
+impl PhysicalAddress {
+
 }
