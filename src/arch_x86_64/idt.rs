@@ -547,46 +547,76 @@ pub struct ExtraHandlerInfo {
     /// interrupt if this flag is true!*
     pub reserved_interrupt: bool,
 
+    /// should interrupt be quite
+    pub quiet_interrupt: bool,
+
     /// Interrupt name
     pub interrupt_name: &'static str,
 }
 
 impl ExtraHandlerInfo {
     pub fn new(interrupt_id: u8) -> ExtraHandlerInfo {
-        match interrupt_id {
-             0 => { ExtraHandlerInfo { should_handler_diverge: false, reserved_interrupt: false, interrupt_name: "Divide by Zero" } },
-             1 => { ExtraHandlerInfo { should_handler_diverge: false, reserved_interrupt: false, interrupt_name: "Debug" } },
-             2 => { ExtraHandlerInfo { should_handler_diverge: false, reserved_interrupt: false, interrupt_name: "NON Maskable Interrupt" } },
-             3 => { ExtraHandlerInfo { should_handler_diverge: false, reserved_interrupt: false, interrupt_name: "BreakPoint" } },
-             4 => { ExtraHandlerInfo { should_handler_diverge: false, reserved_interrupt: false, interrupt_name: "OverFlow" } },
-             5 => { ExtraHandlerInfo { should_handler_diverge: false, reserved_interrupt: false, interrupt_name: "Bound Range Exceeded" } },
-             6 => { ExtraHandlerInfo { should_handler_diverge: false, reserved_interrupt: false, interrupt_name: "Invalid Opcode" } },
-             7 => { ExtraHandlerInfo { should_handler_diverge: false, reserved_interrupt: false, interrupt_name: "Device not Available" } },
-             8 => { ExtraHandlerInfo { should_handler_diverge: true, reserved_interrupt: false, interrupt_name: "Double Fault" } },
-            10 => { ExtraHandlerInfo { should_handler_diverge: false, reserved_interrupt: false, interrupt_name: "Invalid TSS" } },
-            11 => { ExtraHandlerInfo { should_handler_diverge: false, reserved_interrupt: false, interrupt_name: "Segment not Present" } },
-            12 => { ExtraHandlerInfo { should_handler_diverge: false, reserved_interrupt: false, interrupt_name: "Stack Segment Fault" } },
-            13 => { ExtraHandlerInfo { should_handler_diverge: false, reserved_interrupt: false, interrupt_name: "General Protection Fault" } },
-            14 => { ExtraHandlerInfo { should_handler_diverge: false, reserved_interrupt: false, interrupt_name: "Page Fault" } },
-            16 => { ExtraHandlerInfo { should_handler_diverge: false, reserved_interrupt: false, interrupt_name: "X87 Floating Point" } },
-            17 => { ExtraHandlerInfo { should_handler_diverge: false, reserved_interrupt: false, interrupt_name: "Alignment Check" } },
-            18 => { ExtraHandlerInfo { should_handler_diverge: true, reserved_interrupt: false, interrupt_name: "Machine Check" } },
-            19 => { ExtraHandlerInfo { should_handler_diverge: false, reserved_interrupt: false, interrupt_name: "SIMD Floating Point" } },
-            20 => { ExtraHandlerInfo { should_handler_diverge: false, reserved_interrupt: false, interrupt_name: "Virtualization" } },
-            29 => { ExtraHandlerInfo { should_handler_diverge: false, reserved_interrupt: false, interrupt_name: "VMM Comm Exception" } },
-            30 => { ExtraHandlerInfo { should_handler_diverge: false, reserved_interrupt: false, interrupt_name: "Security Exception" } },
+        let mut info = ExtraHandlerInfo {
+            should_handler_diverge: false,
+            reserved_interrupt: false,
+            quiet_interrupt: QUITE_INTERRUPT_VECTOR.lock()[interrupt_id as usize],
+            interrupt_name: "unnamed interrupt",
+        };
 
-            9 | 21..=28 | 31 | 15 => { ExtraHandlerInfo { should_handler_diverge: false, reserved_interrupt: true, interrupt_name: "RESERVED" } },
+        match interrupt_id {
+             0 => { ExtraHandlerInfo { interrupt_name: "Divide by Zero", ..info } },
+             1 => { ExtraHandlerInfo { interrupt_name: "Debug", ..info } },
+             2 => { ExtraHandlerInfo { interrupt_name: "NON Maskable Interrupt", ..info } },
+             3 => { ExtraHandlerInfo { interrupt_name: "BreakPoint", ..info } },
+             4 => { ExtraHandlerInfo { interrupt_name: "OverFlow", ..info } },
+             5 => { ExtraHandlerInfo { interrupt_name: "Bound Range Exceeded", ..info } },
+             6 => { ExtraHandlerInfo { interrupt_name: "Invalid Opcode", ..info } },
+             7 => { ExtraHandlerInfo { interrupt_name: "Device not Available", ..info } },
+             8 => { ExtraHandlerInfo { should_handler_diverge: true, interrupt_name: "Double Fault", ..info } },
+            10 => { ExtraHandlerInfo { interrupt_name: "Invalid TSS", ..info } },
+            11 => { ExtraHandlerInfo { interrupt_name: "Segment not Present", ..info } },
+            12 => { ExtraHandlerInfo { interrupt_name: "Stack Segment Fault", ..info } },
+            13 => { ExtraHandlerInfo { interrupt_name: "General Protection Fault", ..info } },
+            14 => { ExtraHandlerInfo { interrupt_name: "Page Fault", ..info } },
+            16 => { ExtraHandlerInfo { interrupt_name: "X87 Floating Point", ..info } },
+            17 => { ExtraHandlerInfo { interrupt_name: "Alignment Check", ..info } },
+            18 => { ExtraHandlerInfo { should_handler_diverge: true, interrupt_name: "Machine Check", ..info } },
+            19 => { ExtraHandlerInfo { interrupt_name: "SIMD Floating Point", ..info } },
+            20 => { ExtraHandlerInfo { interrupt_name: "Virtualization", ..info } },
+            29 => { ExtraHandlerInfo { interrupt_name: "VMM Comm Exception", ..info } },
+            30 => { ExtraHandlerInfo { interrupt_name: "Security Exception", ..info } },
+
+            9 | 21..=28 | 31 | 15 => { ExtraHandlerInfo { reserved_interrupt: true, ..info } },
 
             _ => {
-                ExtraHandlerInfo {
-                    should_handler_diverge: false,
-                    reserved_interrupt: false,
-                    interrupt_name: "unnamed interrupt"
-                }
+                info
             }
         }
     }
+}
+
+lazy_static! {
+    static ref QUITE_INTERRUPT_VECTOR: Mutex<[bool; 255]> = {
+        Mutex::new([false; 255])
+    };
+}
+
+/// # Set Quite Interrupt
+/// This function will set a flag on the ExtraHandlerInfo struct to let your handler know it should
+/// not produce any output for that interrupt.
+///
+/// # Usage
+/// ```rust
+/// use quantum_os::arch_x86_64::idt::set_quite_interrupt;
+///
+/// set_quite_interrupt(10, true); // Sets "Invalid TSS" to not produce output when called
+/// set_quite_interrupt(12, false); // Sets "Stack Segment Fault" to produce output when called
+///
+/// // Default is NON-QUITE output!
+///
+/// ```
+pub fn set_quite_interrupt(interrupt_id: u8, quiet: bool) {
+    QUITE_INTERRUPT_VECTOR.lock()[interrupt_id as usize] = quiet;
 }
 
 

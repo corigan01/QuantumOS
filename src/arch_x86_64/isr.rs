@@ -31,6 +31,10 @@ use crate::arch_x86_64::idt::ExtraHandlerInfo;
 pub fn general_isr(i_frame: InterruptFrame, interrupt_id: u8, error_code: Option<u64>) {
     let extra_info = ExtraHandlerInfo::new(interrupt_id);
 
+    if extra_info.quiet_interrupt && !extra_info.should_handler_diverge {
+       return;
+    }
+
     if extra_info.reserved_interrupt && !extra_info.should_handler_diverge {
         serial_println!("Reserved Fault was called!");
         return;

@@ -41,7 +41,7 @@ use bootloader::entry_point;
 
 use quantum_os::{serial_println, serial_print, attach_interrupt, remove_interrupt};
 use quantum_os::arch_x86_64::{INTERRUPT_DT, GLOBAL_DT};
-use quantum_os::arch_x86_64::idt::{interrupt_tester, InterruptFrame};
+use quantum_os::arch_x86_64::idt::{interrupt_tester, InterruptFrame, set_quite_interrupt};
 use quantum_os::serial::SERIAL1;
 use quantum_os::vga::low_level::FBuffer;
 use quantum_os::bitset;
@@ -83,17 +83,16 @@ fn main(boot_info: &'static mut BootInfo) -> ! {
 
         attach_interrupt!(idt, general_isr, 0..32);
 
+        set_quite_interrupt(1, true);
+
         idt.submit_entries().expect("Failed to load IDT!").load();
 
-        serial_println!("Testing Interrupts ... ");
+        serial_print!("Testing Interrupts ... ");
 
         interrupt_tester();
 
         serial_println!("OK");
     }
-
-
-
 
 
     let kernel_buffer = FBuffer::new(&boot_info.framebuffer);
