@@ -57,7 +57,7 @@ impl GdtRegister {
     #[inline]
     pub fn load(self) {
         unsafe {
-            asm!("lgdt [{}]", in(reg) VirtualAddress::from_ptr(&self).as_u64(), options(readonly, nostack, preserves_flags));
+            asm!("lgdt [{}]", in(reg) &self, options(readonly, nostack, preserves_flags));
         }
     }
 }
