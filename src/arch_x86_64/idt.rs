@@ -24,14 +24,20 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 */
 
+use core::arch::asm;
 use core::mem::size_of;
-use crate::arch_x86_64::CpuPrivilegeLevel;
-use crate::memory::VirtualAddress;
-use crate::{serial_print, serial_println};
-use crate::bitset::BitSet;
+use core::ops::Deref;
+use lazy_static::lazy_static;
+use spin::Mutex;
+
 use x86_64::instructions::segmentation;
-use x86_64::structures::gdt::SegmentSelector;
 use x86_64::PrivilegeLevel;
+use x86_64::structures::gdt::SegmentSelector;
+
+use crate::{serial_print, serial_println};
+use crate::arch_x86_64::CpuPrivilegeLevel;
+use crate::bitset::BitSet;
+use crate::memory::VirtualAddress;
 
 type RawHandlerFuncNe  /* No Error             */ = extern "x86-interrupt" fn(InterruptFrame);
 type RawHandlerFuncE   /* With Error           */ = extern "x86-interrupt" fn(InterruptFrame, u64);
@@ -161,7 +167,7 @@ pub struct InterruptFrame {
     pub code_seg: u64,
     pub flags: u64,
     pub stack_pointer: VirtualAddress,
-    pub stack_segment: u64
+    pub stack_segment: u64,
 }
 
 
@@ -235,7 +241,7 @@ impl Entry {
     pub fn missing() -> Self {
         Self::new_raw_dne(
             SegmentSelector::new(1, PrivilegeLevel::Ring0),
-            missing_handler
+            missing_handler,
         )
     }
 
@@ -243,7 +249,7 @@ impl Entry {
     pub fn missing() -> Self {
         Self::new_raw_ne(
             SegmentSelector::new(1, PrivilegeLevel::Ring0),
-            missing_handler
+            missing_handler,
         )
     }
 
@@ -260,24 +266,22 @@ impl Entry {
             pointer_middle: 0,
             pointer_high: 0,
             options: EntryOptions::new_zero(),
-            reserved: 0
+            reserved: 0,
         }
     }
 
     pub fn is_missing(&self) -> bool {
         let missing_ref = Self::missing();
 
-        self.pointer_low == missing_ref.pointer_low                          &&
-            self.pointer_middle == missing_ref.pointer_middle                &&
+        self.pointer_low == missing_ref.pointer_low &&
+            self.pointer_middle == missing_ref.pointer_middle &&
             self.pointer_high == missing_ref.pointer_high
     }
 
     pub fn is_null(&self) -> bool {
-
-        self.pointer_low == 0                           &&
-            self.pointer_middle == 0                    &&
+        self.pointer_low == 0 &&
+            self.pointer_middle == 0 &&
             self.pointer_high == 0
-
     }
 }
 
@@ -321,7 +325,7 @@ impl Idt {
 
             // make sure the reserved bits are **always** zero
             if i.reserved != 0 {
-                return Err("Reserved bits are set, this can cause a protection fault when loaded")
+                return Err("Reserved bits are set, this can cause a protection fault when loaded");
             }
 
             // make sure the must be set bits are correctly set
@@ -335,7 +339,7 @@ impl Idt {
         Ok(IdtTablePointer {
             base: VirtualAddress::new(self as *const _ as u64),
             limit: (size_of::<Self>() - 1) as u16,
-    })
+        })
     }
 
     pub unsafe fn unsafe_submit_entries(&self) -> IdtTablePointer {
@@ -386,16 +390,34 @@ impl Idt {
 /// made through the IDT.
 #[derive(Copy, Clone, Debug)]
 #[repr(C, packed(2))]
-pub struct IdtTablePointer{
+pub struct IdtTablePointer {
     limit: u16,
-    base: VirtualAddress
+    base: VirtualAddress,
 }
+
+lazy_static! {
+    pub static ref IDT_TABLE_POINTER: Mutex<IdtTablePointer> = {
+        let mut temp_idt = Idt::new();
+
+        Mutex::new(temp_idt.submit_entries().expect("Could not Init temp IDT!"))
+    };
+}
+
+
 
 impl IdtTablePointer {
     pub fn load(&self) {
         use core::arch::asm;
 
-        unsafe { asm!("lidt [{}]", in(reg) &self.clone(), options(readonly, nostack, preserves_flags)); };
+        IDT_TABLE_POINTER.lock().copy_from(*self);
+
+
+        unsafe { asm!("lidt [{}]", in(reg) IDT_TABLE_POINTER.lock().deref(), options(readonly, nostack, preserves_flags)); };
+    }
+
+    pub fn copy_from(&mut self, other: Self) {
+        self.limit = other.limit;
+        self.base = other.base;
     }
 }
 
@@ -446,6 +468,137 @@ impl EntryOptions {
         self
     }
 }
+
+/// # Extra Handler Info
+/// If you ask about the interrupt, this struct will be created and populated with the
+/// extra information that the isr might benefit from knowing. This struct will tell you
+/// basic info regarding if the interrupt is allowed to terminate, or should return.
+///
+/// # Future
+/// This struct should be populated with scheduler information regarding the process that the
+/// interrupt might need to be handled.
+///
+/// # Interrupts
+/// ```text
+/// | Interrupt |    Type   |  Function Parameters |
+/// |-----------|-----------|----------------------|
+/// |   0 - 7   |   NO ERR  |   None          ()   |
+/// |     8     |  DV W ERR |   Some         -> !  |
+/// |     9     |  Reserved |         PANIC        |
+/// |  10 - 14  |   W ERR   |   Some          ()   |
+/// |  15 - 16  |   NO ERR  |   None          ()   |
+/// |    17     |   W ERR   |   Some          ()   |
+/// |    18     |  DV W ERR |   Some         -> !  |
+/// |  19 - 20  |   NO ERR  |   None          ()   |
+/// |  21 - 28  |  Reserved |         PANIC        |
+/// |  29 - 30  |   W ERR   |   Some          ()   |
+/// |    31     |  Reserved |         PANIC        |
+/// |-----------|-----------|----------------------|
+/// ```
+///
+/// ## Interrupts 0-31
+/// These are system generated interrupts. These interrupts are usually called 'Faults'. Most
+/// Interrupts in this range can be handled and returned, but there are some that can't. Commonly
+/// though, the interrupts are usually caused by a fault of some kind. This could be as simple as a
+/// Divide-By-Zero.
+///
+/// ```text
+/// | Number |      Interrupt Name      | Short Name |
+/// |--------|--------------------------|------------|
+/// |    0   |      Divide by Zero      |    #DE     |
+/// |    1   |          Debug           |    #DB     |
+/// |    2   |  NON Maskable Interrupt  |    NMI     |
+/// |    3   |       BreakPoint         |    #BP     |
+/// |    4   |        OverFlow          |    #OF     |
+/// |    5   |   Bound Range Exceeded   |    #BR     |
+/// |    6   |      Invalid Opcode      |    #UD     |
+/// |    7   |   Device not Available   |    #NM     |
+/// |    8   |       Double Fault       |    #DF     |
+/// |    9   |         RESERVED         |    RSV     |
+/// |   10   |        Invalid TSS       |    #TS     |
+/// |   11   |    Segment not Present   |    #NP     |
+/// |   12   |    Stack Segment Fault   |    #SS     |
+/// |   13   | General Protection Fault |    #GP     |
+/// |   14   |        Page Fault        |    #PF     |
+/// |   15   |         RESERVED         |    RSV     |
+/// |   16   |    X87 Floating Point    |    #MF     |
+/// |   17   |     Alignment Check      |    #AC     |
+/// |   18   |      Machine Check       |    #MC     |
+/// |   19   |    SIMD Floating Point   |    #XF     |
+/// |   20   |      Virtualization      |     V      |
+/// |   21   |         RESERVED         |    RSV     |
+/// |   22   |         RESERVED         |    RSV     |
+/// |   23   |         RESERVED         |    RSV     |
+/// |   24   |         RESERVED         |    RSV     |
+/// |   25   |         RESERVED         |    RSV     |
+/// |   26   |         RESERVED         |    RSV     |
+/// |   27   |         RESERVED         |    RSV     |
+/// |   28   |         RESERVED         |    RSV     |
+/// |   29   |    VMM Comm Exception    |    #VC     |
+/// |   30   |    Security Exception    |    #SX     |
+/// |   31   |         RESERVED         |    RSV     |
+/// |--------|--------------------------|------------|
+/// ```
+pub struct ExtraHandlerInfo {
+    /// *This type of interrupt should not return and will cause a panic if returned*
+    pub should_handler_diverge: bool,
+
+    /// *Setting a reserved interrupt is not recommended, and you should return or panic from the
+    /// interrupt if this flag is true!*
+    pub reserved_interrupt: bool,
+
+    /// Interrupt name
+    pub interrupt_name: &'static str,
+}
+
+impl ExtraHandlerInfo {
+    pub fn new(interrupt_id: u8) -> ExtraHandlerInfo {
+        match interrupt_id {
+             0 => { ExtraHandlerInfo { should_handler_diverge: false, reserved_interrupt: false, interrupt_name: "Divide by Zero" } },
+             1 => { ExtraHandlerInfo { should_handler_diverge: false, reserved_interrupt: false, interrupt_name: "Debug" } },
+             2 => { ExtraHandlerInfo { should_handler_diverge: false, reserved_interrupt: false, interrupt_name: "NON Maskable Interrupt" } },
+             3 => { ExtraHandlerInfo { should_handler_diverge: false, reserved_interrupt: false, interrupt_name: "BreakPoint" } },
+             4 => { ExtraHandlerInfo { should_handler_diverge: false, reserved_interrupt: false, interrupt_name: "OverFlow" } },
+             5 => { ExtraHandlerInfo { should_handler_diverge: false, reserved_interrupt: false, interrupt_name: "Bound Range Exceeded" } },
+             6 => { ExtraHandlerInfo { should_handler_diverge: false, reserved_interrupt: false, interrupt_name: "Invalid Opcode" } },
+             7 => { ExtraHandlerInfo { should_handler_diverge: false, reserved_interrupt: false, interrupt_name: "Device not Available" } },
+             8 => { ExtraHandlerInfo { should_handler_diverge: true, reserved_interrupt: false, interrupt_name: "Double Fault" } },
+            10 => { ExtraHandlerInfo { should_handler_diverge: false, reserved_interrupt: false, interrupt_name: "Invalid TSS" } },
+            11 => { ExtraHandlerInfo { should_handler_diverge: false, reserved_interrupt: false, interrupt_name: "Segment not Present" } },
+            12 => { ExtraHandlerInfo { should_handler_diverge: false, reserved_interrupt: false, interrupt_name: "Stack Segment Fault" } },
+            13 => { ExtraHandlerInfo { should_handler_diverge: false, reserved_interrupt: false, interrupt_name: "General Protection Fault" } },
+            14 => { ExtraHandlerInfo { should_handler_diverge: false, reserved_interrupt: false, interrupt_name: "Page Fault" } },
+            16 => { ExtraHandlerInfo { should_handler_diverge: false, reserved_interrupt: false, interrupt_name: "X87 Floating Point" } },
+            17 => { ExtraHandlerInfo { should_handler_diverge: false, reserved_interrupt: false, interrupt_name: "Alignment Check" } },
+            18 => { ExtraHandlerInfo { should_handler_diverge: true, reserved_interrupt: false, interrupt_name: "Machine Check" } },
+            19 => { ExtraHandlerInfo { should_handler_diverge: false, reserved_interrupt: false, interrupt_name: "SIMD Floating Point" } },
+            20 => { ExtraHandlerInfo { should_handler_diverge: false, reserved_interrupt: false, interrupt_name: "Virtualization" } },
+            29 => { ExtraHandlerInfo { should_handler_diverge: false, reserved_interrupt: false, interrupt_name: "VMM Comm Exception" } },
+            30 => { ExtraHandlerInfo { should_handler_diverge: false, reserved_interrupt: false, interrupt_name: "Security Exception" } },
+
+            9 | 21..=28 | 31 | 15 => { ExtraHandlerInfo { should_handler_diverge: false, reserved_interrupt: true, interrupt_name: "RESERVED" } },
+
+            _ => {
+                ExtraHandlerInfo {
+                    should_handler_diverge: false,
+                    reserved_interrupt: false,
+                    interrupt_name: "unnamed interrupt"
+                }
+            }
+        }
+    }
+}
+
+
+/// # Interrupt Tester
+/// This will simply just call a basic interrupt to test your IDT. This interrupt will call
+/// interrupt 1 - or simply known as 'Debug'.
+pub fn interrupt_tester() {
+    unsafe {
+        asm!("int $0x01");
+    }
+}
+
 
 /// # General Function To Interrupt (No Error)
 /// This is a general wrapper around a `GeneralHandlerFunc` type and the corresponding interrupt
@@ -712,11 +865,14 @@ extern "x86-interrupt" fn missing_handler(i_frame: InterruptFrame) {
 #[cfg(test)]
 mod test_case {
     use core::arch::asm;
-    use spin::Mutex;
-    use crate::arch_x86_64::idt::{EntryOptions, InterruptFrame};
+
     use lazy_static::lazy_static;
+    use spin::Mutex;
     use x86_64::PrivilegeLevel;
+
     use crate::{serial_print, serial_println};
+    use crate::arch_x86_64::idt::{EntryOptions, InterruptFrame};
+    use crate::arch_x86_64::idt::Idt;
 
     fn dv0_handler(i_frame: InterruptFrame, intn: u8, error: Option<u64>) {
         serial_print!("  [DV0 CALLED]  ");
@@ -737,8 +893,6 @@ mod test_case {
             serial_print!("[{}]  ", d);
         }
     }
-
-    use crate::arch_x86_64::idt::Idt;
 
     lazy_static! {
         static ref IDT_TEST: Mutex<Idt> = {
@@ -765,8 +919,11 @@ mod test_case {
 
     #[test_case]
     fn test_handler_by_fault() {
-        let m_idt = IDT_TEST.lock();
-        m_idt.submit_entries().unwrap().load();
+        {
+            let m_idt = IDT_TEST.lock();
+
+            m_idt.submit_entries().unwrap().load();
+        }
 
         divide_by_zero_fault();
 
@@ -775,12 +932,15 @@ mod test_case {
 
     #[test_case]
     fn test_handler_by_not_valid() {
+
+
         let mut m_idt = IDT_TEST.lock();
+
         m_idt.submit_entries().unwrap().load();
 
         unhandled_fault();
 
-        remove_interrupt!(m_idt, 0);
+        remove_interrupt!(m_idt, 0..255);
 
         m_idt.submit_entries().unwrap().load();
 
@@ -792,6 +952,7 @@ mod test_case {
     #[test_case]
     fn test_add_and_remove_case() {
         let mut m_idt = IDT_TEST.lock();
+
 
         attach_interrupt!(m_idt, dv0_handler, 0..255);
 

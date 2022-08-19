@@ -25,14 +25,15 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 use core::arch::asm;
+
 use lazy_static::lazy_static;
 use spin::Mutex;
-use x86_64::instructions::segmentation;
-use crate::serial_println;
-use crate::attach_interrupt;
-use crate::arch_x86_64::idt::*;
+
 use crate::arch_x86_64::gdt::*;
+use crate::arch_x86_64::idt::*;
+use crate::attach_interrupt;
 use crate::remove_interrupt;
+use crate::{serial_println, serial_print};
 
 pub mod isr;
 pub mod gdt;
@@ -48,25 +49,33 @@ pub enum CpuPrivilegeLevel {
     Ring3 = 0b11,
 }
 
+
+
 fn test_interrupt_dev0(iframe: InterruptFrame, interrupt: u8, error: Option<u64>) {
-    serial_println!("IDT OK!");
+    serial_println!("OK");
 }
 
 lazy_static! {
-    static ref GDT: GlobalDescriptorTable = {
+    pub static ref GLOBAL_DT: GlobalDescriptorTable = {
         let mut gdt = GlobalDescriptorTable::new();
+
+        serial_print!("Checking GDT ... ");
 
         gdt.add_entry(GdtEntry::new()).unwrap();
         gdt.add_entry(GdtEntry::new_raw(0, 0xFFFFFFFF, 0x9A, 0xCF)).unwrap();
         gdt.add_entry(GdtEntry::new_raw(0, 0xFFFFFFFF, 0x92, 0xCF)).unwrap();
+
+        serial_println!("OK");
 
         gdt
     };
 }
 
 lazy_static! {
-    pub static ref InterruptDT: Mutex<idt::Idt> = {
+    pub static ref INTERRUPT_DT: Mutex<idt::Idt> = {
         let mut idt = idt::Idt::new();
+
+        serial_print!("Checking IDT ... ");
 
         attach_interrupt!(idt, test_interrupt_dev0, 0);
 
@@ -84,7 +93,6 @@ lazy_static! {
         Mutex::new(idt)
     };
 }
-
 
 
 

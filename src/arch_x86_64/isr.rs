@@ -24,3 +24,32 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 */
 
+use crate::{ serial_println, serial_print };
+use crate::arch_x86_64::idt::InterruptFrame;
+use crate::arch_x86_64::idt::ExtraHandlerInfo;
+
+pub fn general_isr(i_frame: InterruptFrame, interrupt_id: u8, error_code: Option<u64>) {
+    let extra_info = ExtraHandlerInfo::new(interrupt_id);
+
+    if extra_info.reserved_interrupt && !extra_info.should_handler_diverge {
+        serial_println!("Reserved Fault was called!");
+        return;
+    }
+
+    serial_println!("\n\n=== FAULT HANDLER CALLED! ===");
+    serial_println!("{} was called with an error code of {:#?}!",
+        extra_info.interrupt_name, error_code);
+    serial_println!("Interrupt Stack Frame:");
+    serial_println!("\tCode Segment:        {}", i_frame.code_seg);
+    serial_println!("\tInstruction Pointer: {:?}", i_frame.eip);
+    serial_println!("\tFlags:               {}", i_frame.flags);
+    serial_println!("\tStack Pointer:       {:?}", i_frame.stack_pointer);
+    serial_println!("\tStack Segment:       {:?}", i_frame.stack_segment);
+
+
+    if extra_info.should_handler_diverge {
+        panic!("Diverging interrupt: {} was called!\n\t::{:#?}",
+               extra_info.interrupt_name,
+               error_code);
+    }
+}
