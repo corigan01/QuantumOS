@@ -22,21 +22,5 @@ NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FO
 DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-Quantum OS Lib file, documentation coming soon!
-
 */
 
-use core::panic::PanicInfo;
-use crate::serial_println;
-
-/// This function is called on panic.
-#[panic_handler]
-#[cfg(not(test))] // new attribute
-fn panic(info: &PanicInfo) -> ! {
-    serial_println!("\n\n == QUANTUM PANIC == ");
-
-    serial_println!("{}", info);
-
-    serial_println!("");
-    loop {}
-}

@@ -178,7 +178,7 @@ impl fmt::Write for SerialDevice {
 
 lazy_static! {
     pub static ref SERIAL1: Mutex<Option<SerialDevice>> =
-        Mutex::new(SerialDevice::new(SerialCOM::Com1, BaudRate::Baud9600));
+        Mutex::new(SerialDevice::new(SerialCOM::Com1, BaudRate::Baud115200));
 }
 
 

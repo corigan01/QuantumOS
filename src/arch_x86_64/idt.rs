@@ -171,15 +171,24 @@ pub struct InterruptFrame {
 }
 
 
+/// # Fall Back Missing handler
+/// This handler is attached when the IDT is created, but the missing_handler should be attached
+/// once the interrupt table is loaded. This makes sure that there can be no interrupt without a
+/// handler so matter where the error takes place. We want to make sure the nicer missing_handler
+/// gets called, because that one is formatted currently for each and every interrupt.
+#[cfg(not(test))]
+extern "x86-interrupt" fn fallback_missing_handler(i_frame: InterruptFrame) -> ! {
+    panic!("Fall back Missing Interrupt (UNKNOWN) handler was called!\n {:#x?}", i_frame);
+}
+
 /// # Missing handler
 /// This handler is here for safety. This is called whenever an interrupt is called, but unfortunately
 /// the user forgot to add a handler for that interrupt. It does not really provide much info, but
 /// it causes the system to crash to make sure undefined behavior or a protection fault occurred.
 #[cfg(not(test))]
-extern "x86-interrupt" fn missing_handler(i_frame: InterruptFrame) -> ! {
-    panic!("Missing Interrupt handler was called! Please add a handler to handle this interrupt! {:#x?}", i_frame);
+fn missing_handler(i_frame: InterruptFrame, interrupt: u8, error: Option<u64>) {
+    panic!("Missing Interrupt ({}) handler was called!\n {:#x?}", interrupt, i_frame);
 }
-
 
 impl Entry {
     pub fn new_raw_ne(gdt_select: SegmentSelector, handler: RawHandlerFuncNe) -> Self {
@@ -241,7 +250,7 @@ impl Entry {
     pub fn missing() -> Self {
         Self::new_raw_dne(
             SegmentSelector::new(1, PrivilegeLevel::Ring0),
-            missing_handler,
+            fallback_missing_handler,
         )
     }
 
@@ -249,7 +258,7 @@ impl Entry {
     pub fn missing() -> Self {
         Self::new_raw_ne(
             SegmentSelector::new(1, PrivilegeLevel::Ring0),
-            missing_handler,
+            fallback_missing_handler,
         )
     }
 
@@ -287,7 +296,14 @@ impl Entry {
 
 impl Idt {
     pub fn new() -> Idt {
-        Idt([Entry::missing(); 255])
+        use crate::attach_interrupt;
+
+        // Attach the nicer missing_handler to the idt this
+        // one will be correctly formatted for each interrupt!
+        let mut idt = Idt([Entry::missing(); 255]);
+        attach_interrupt!(idt, missing_handler, 0..255);
+
+        idt
     }
 
     pub fn raw_set_handler_ne(&mut self, entry: u8, handler: RawHandlerFuncNe) {
@@ -397,9 +413,7 @@ pub struct IdtTablePointer {
 
 lazy_static! {
     pub static ref IDT_TABLE_POINTER: Mutex<IdtTablePointer> = {
-        let mut temp_idt = Idt::new();
-
-        Mutex::new(temp_idt.submit_entries().expect("Could not Init temp IDT!"))
+        Mutex::new(Idt::new().submit_entries().expect("Could not Init temp IDT!"))
     };
 }
 
@@ -911,7 +925,7 @@ mod test_case {
 
         // Do some random stuff to make sure the stack is returned correctly!
         let mut i = 0;
-        for e in 33..134 {
+        for _ in 33..134 {
             i += 1;
         }
 
