@@ -76,10 +76,9 @@ fn main(boot_info: &'static mut BootInfo) -> ! {
     else { serial_println!("FAIL"); }
 
 
+
     { // init the cpu, we just need to wake up the lazy_statics for them to init
         let mut idt = INTERRUPT_DT.lock();
-
-        //GLOBAL_DT.submit_entries().expect("Failed to load GDT!").load();
 
         attach_interrupt!(idt, general_isr, 0..32);
 
@@ -100,6 +99,7 @@ fn main(boot_info: &'static mut BootInfo) -> ! {
     kernel_buffer.draw_rec((000, 000), (100, 100), 0xFF0000);
     kernel_buffer.draw_rec((100, 100), (100, 100), 0x00FF00);
     kernel_buffer.draw_rec((200, 200), (100, 100), 0x0000FF);
+
 
     serial_println!("\n\n\n==== KERNEL MAIN FINISHED ==== ");
     serial_println!("In later versions of this kernel, the kernel should not finish!");

@@ -61,9 +61,9 @@ lazy_static! {
 
         serial_print!("Checking GDT ... ");
 
-        gdt.add_entry(GdtEntry::new()).unwrap();
-        gdt.add_entry(GdtEntry::new_raw(0, 0xFFFFFFFF, 0x9A, 0xCF)).unwrap();
-        gdt.add_entry(GdtEntry::new_raw(0, 0xFFFFFFFF, 0x92, 0xCF)).unwrap();
+        //gdt.add_entry(GdtEntry::new()).unwrap();
+        //gdt.add_entry(GdtEntry::new_raw(0, 0xFFFFFFFF, 0x9A, 0xCF)).unwrap();
+        //gdt.add_entry(GdtEntry::new_raw(0, 0xFFFFFFFF, 0x92, 0xCF)).unwrap();
 
         serial_println!("OK");
 

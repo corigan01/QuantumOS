@@ -24,6 +24,10 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 */
 
+mod paging;
+
+use bit_field::BitField;
+
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
 #[repr(transparent)]
 pub struct VirtualAddress(u64);
@@ -52,10 +56,7 @@ impl VirtualAddress {
 
     #[inline]
     pub fn try_new(address: u64) -> Result<VirtualAddress, NotValidAddress> {
-        match 0 & (0xFF00000000000000 as u64) {
-            0 => Ok(VirtualAddress(address)),
-            _ => Err(NotValidAddress(address))
-        }
+        Ok(VirtualAddress(address))
     }
 
     #[inline]
@@ -91,11 +92,54 @@ impl VirtualAddress {
         self.as_u64() as *mut T
     }
 
-
     // unsafe
     pub unsafe fn new_unsafe(address: u64) -> VirtualAddress { VirtualAddress(address) }
 }
 
 impl PhysicalAddress {
+    #[inline]
+    pub fn new(address: u64) -> PhysicalAddress {
+        PhysicalAddress::try_new(address).expect("Not Valid Address, bit check failed!")
+    }
 
+    #[inline]
+    pub fn try_new(address: u64) -> Result<PhysicalAddress, NotValidAddress> {
+        Ok(PhysicalAddress(address))
+    }
+
+    #[inline]
+    pub fn zero() -> PhysicalAddress { PhysicalAddress(0) }
+
+    #[inline]
+    pub fn as_u64(self) -> u64 {
+        self.0
+    }
+
+    #[inline]
+    pub fn is_null(&self) -> bool {
+        self.as_u64() == 0
+    }
+
+    #[inline]
+    pub fn is_some(&self) -> bool {
+        self.as_u64() > 0
+    }
+
+    #[inline]
+    pub fn from_ptr<T>(ptr: *const T) -> PhysicalAddress {
+        PhysicalAddress::new(ptr as u64)
+    }
+
+    #[inline]
+    pub fn as_ptr<T>(self) -> *const T {
+        self.as_u64() as *const T
+    }
+
+    #[inline]
+    pub fn as_mut_ptr<T>(self) -> *mut T {
+        self.as_u64() as *mut T
+    }
+
+    // unsafe
+    pub unsafe fn new_unsafe(address: u64) -> PhysicalAddress { PhysicalAddress(address) }
 }

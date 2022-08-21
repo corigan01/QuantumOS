@@ -23,7 +23,10 @@ bootloader = "0.10.12"
 no-std-compat = "0.4.1"
 volatile = "0.2.6"
 spin = "0.5.2"
+
+# Should be implmented in Quantum
 x86_64 = "0.14.9"
+bit_field = "0.10.1"
 
 [package.metadata.bootloader]
 map-physical-memory = true
