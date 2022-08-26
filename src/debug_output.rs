@@ -31,12 +31,14 @@ use lazy_static::lazy_static;
 use owo_colors::OwoColorize;
 use crate::{serial_println, serial_print };
 
-pub type OutputStream = fn(&str);
+pub type OutputStream = fn(u8);
 
 pub struct StreamInfo {
     pub output_stream: Option<OutputStream>,
     pub name: Option<&'static str>,
     pub speed: Option<u64>,
+    pub message_header: bool,
+    pub color: bool
 }
 
 impl StreamInfo {
@@ -45,6 +47,8 @@ impl StreamInfo {
             name: None,
             speed: None,
             output_stream: None,
+            message_header: false,
+            color: false
         }
     }
 
@@ -52,15 +56,50 @@ impl StreamInfo {
         self.name = input_pram.name;
         self.speed = input_pram.speed;
         self.output_stream = input_pram.output_stream;
+        self.message_header = input_pram.message_header;
+        self.color = input_pram.color;
     }
 
     pub fn write_string(&self, s: &str) {
         if let Some(stream) =  self.output_stream {
-            for i in s.bytes() {
 
+            // make a little helper function to help with printing out strings
+            fn stream_str(stream: OutputStream, str: &str) {
+                for i in str.bytes() {
+                    stream(i);
+                }
             }
-            stream(s);
+
+            // loop through all bytes of the message to find tokens
+            for i in s.bytes() {
+                match i {
+                    b'\n' => {
+                        if self.color { stream_str(stream, "\x1b[90m"); }
+
+                        stream(b'\n');
+
+                        if self.message_header {
+                            if self.color { stream_str(stream, "[\x1b[95mQUANTUM-KRNL\x1b[90m]: "); }
+                            else { stream_str(stream, "[QUANTUM-KRNL]: "); }
+                        }
+                    }
+                    _ => stream(i)
+                }
+            }
         }
+    }
+
+
+    pub fn disable_header(&mut self) {
+        self.message_header = false;
+    }
+
+    pub fn enable_header(&mut self) {
+        self.message_header = true;
+    }
+
+    pub fn toggle_header(&mut self) {
+        self.message_header = !self.message_header;
     }
 }
 
@@ -100,16 +139,25 @@ macro_rules! debug_println {
 }
 
 pub fn set_stream(stream_info: StreamInfo) {
-    let (output_some, name_option, speed_option) = {
-        let mut global_stream = DEBUG_OUTPUT_STREAM.lock();
-        global_stream.fill_from(stream_info);
+    let (output_some,
+        name_option,
+        speed_option,
+        header_option) = {
 
-        (global_stream.output_stream.is_some(), global_stream.name, global_stream.speed)
+        let mut global_stream = DEBUG_OUTPUT_STREAM.lock();
+        let header_option = stream_info.message_header;
+
+        global_stream.fill_from(stream_info);
+        global_stream.disable_header();
+
+        (global_stream.output_stream.is_some(),
+         global_stream.name,
+         global_stream.speed,
+         header_option)
     };
 
     if output_some {
         debug_println!("\n\n{}", "Quantum is using this stream for debug information!".bright_green().bold());
-        
 
         if let Some(name) = name_option {
             debug_println!("\t- {}: {}", "Debug Output Name".bright_blue(), name.bright_green().bold());
@@ -117,5 +165,11 @@ pub fn set_stream(stream_info: StreamInfo) {
         if let Some(speed) = speed_option {
             debug_println!("\t- {}: {}", "Speed Information".bright_blue(), speed.bright_green().bold());
         }
+
+        debug_println!("\n{}------------------------ {} ------------------------\n",
+            "".green(),
+            "Quantum".underline().italic().bold());
     }
+
+    DEBUG_OUTPUT_STREAM.lock().message_header = header_option;
 }

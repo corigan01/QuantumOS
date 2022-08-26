@@ -31,7 +31,7 @@ use spin::Mutex;
 
 use crate::arch_x86_64::gdt::*;
 use crate::arch_x86_64::idt::*;
-use crate::attach_interrupt;
+use crate::{attach_interrupt, debug_println, debug_print};
 use crate::remove_interrupt;
 use crate::{serial_println, serial_print};
 
@@ -47,12 +47,6 @@ pub enum CpuPrivilegeLevel {
     Ring1 = 0b01,
     Ring2 = 0b10,
     Ring3 = 0b11,
-}
-
-
-
-fn test_interrupt_dev0(iframe: InterruptFrame, interrupt: u8, error: Option<u64>) {
-    serial_println!("OK");
 }
 
 lazy_static! {
@@ -75,7 +69,13 @@ lazy_static! {
     pub static ref INTERRUPT_DT: Mutex<idt::Idt> = {
         let mut idt = idt::Idt::new();
 
-        serial_print!("Checking IDT ... ");
+        debug_print!("Checking IDT ... ");
+
+
+        // Our little test handler to make sure it gets called when we cause a Divide by Zero
+        fn test_interrupt_dev0(iframe: InterruptFrame, interrupt: u8, error: Option<u64>) {
+            debug_println!("OK");
+        }
 
         attach_interrupt!(idt, test_interrupt_dev0, 0);
 
