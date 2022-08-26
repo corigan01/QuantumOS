@@ -2,9 +2,17 @@ use std::{
     path::{Path, PathBuf},
     process::Command,
 };
-
 // "--no-reboot"
-const RUN_ARGS: &[&str] = &["--no-reboot", "-s", "-serial", "stdio", "-d", "cpu_reset", "-device", "isa-debug-exit,iobase=0xf4,iosize=0x04"];
+const RUN_ARGS: &[&str] = &[
+    "--no-reboot",
+    "-s",
+    "-serial",
+    "stdio",
+    "-d",
+    "cpu_reset",
+    "-device",
+    "isa-debug-exit,iobase=0xf4,iosize=0x04",
+];
 
 fn main() {
     let mut args = std::env::args().skip(1); // skip executable name
@@ -36,7 +44,7 @@ fn main() {
     run_cmd.args(RUN_ARGS);
 
     let exit_status = run_cmd.status().unwrap();
-    if !exit_status.success()  {
+    if !exit_status.success() {
         std::process::exit(exit_status.code().unwrap_or(1));
     }
 }
