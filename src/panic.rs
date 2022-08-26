@@ -27,15 +27,17 @@ Quantum OS Lib file, documentation coming soon!
 */
 
 use core::panic::PanicInfo;
-use crate::serial_println;
+use owo_colors::OwoColorize;
+use crate::{ serial_println, serial_print };
 
 /// This function is called on panic.
 #[panic_handler]
 #[cfg(not(test))] // new attribute
 fn panic(info: &PanicInfo) -> ! {
-    serial_println!("\n\n == QUANTUM PANIC == ");
+    serial_println!("\n\n {}\n=======================", "QUANTUM PANIC".blink().bold().bright_red());
 
-    serial_println!("{}", info);
+    serial_println!("{}\n", "All information we gathered for the crash are as follows:  --- ".purple());
+    serial_println!("{}", info.bright_red());
 
     serial_println!("");
     loop {}
