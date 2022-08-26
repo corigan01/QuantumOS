@@ -36,44 +36,55 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 use core::arch::asm;
 use core::borrow::Borrow;
 use core::panic::PanicInfo;
-use bootloader::boot_info::{BootInfo, FrameBuffer, MemoryRegion};
 use bootloader::entry_point;
+use owo_colors::OwoColorize;
+use bootloader::boot_info::{BootInfo, FrameBuffer, MemoryRegion};
 
-use quantum_os::{serial_println, serial_print, attach_interrupt, remove_interrupt};
-use quantum_os::arch_x86_64::{INTERRUPT_DT, GLOBAL_DT};
-use quantum_os::arch_x86_64::idt::{interrupt_tester, InterruptFrame, set_quite_interrupt};
+use quantum_os::{bitset, debug_print, debug_println};
+use quantum_os::debug_output;
 use quantum_os::serial::SERIAL1;
 use quantum_os::vga::low_level::FBuffer;
-use quantum_os::bitset;
+use quantum_os::debug_output::StreamInfo;
 use quantum_os::arch_x86_64::isr::general_isr;
+use quantum_os::arch_x86_64::{INTERRUPT_DT, GLOBAL_DT};
+use quantum_os::{serial_println, serial_print, attach_interrupt, remove_interrupt};
+use quantum_os::arch_x86_64::idt::{interrupt_tester, InterruptFrame, set_quiet_interrupt};
 
 #[cfg(not(test))]
 entry_point!(main);
 
+fn debug_stream_output(string: &str) {
+    if let Some(serial_info) = SERIAL1.lock().as_ref() {
+        serial_info.write_string(string);
+    }
+}
+
 #[cfg(not(test))]
 fn main(boot_info: &'static mut BootInfo) -> ! {
-
     // safely get the baud rate
     let baud_rate = if let Some(serial) = SERIAL1.lock().as_ref() {
           serial.get_baud()
     } else { 0 };
 
-    serial_println!("\n\n");
-    serial_println!("--- Quantum is using this serial port for debug information ---");
-    serial_println!("---       Baud rate is set at '{}' bits per second\t    ---", baud_rate);
+    debug_output::set_stream(
+        StreamInfo {
+            output_stream: Some(debug_stream_output),
+            name: Some("Serial"),
+            speed: Some(baud_rate as u64)
+        }
+    );
 
-    serial_println!("\n{:#?}\n", boot_info);
-
-    serial_print!("Checking the framebuffer ... ");
+    debug_println!("\n{:#?}\n", boot_info);
+    debug_print!("Checking the framebuffer ... ");
 
     if let Some(framebuffer) = boot_info.framebuffer.as_mut() {
         for byte in framebuffer.buffer_mut() {
             *byte = 0x0F;
         }
 
-        serial_println!("OK");
+        debug_println!("{}", "OK".bright_green().bold());
     }
-    else { serial_println!("FAIL"); }
+    else { debug_println!("FAIL"); }
 
 
 
@@ -82,15 +93,15 @@ fn main(boot_info: &'static mut BootInfo) -> ! {
 
         attach_interrupt!(idt, general_isr, 0..32);
 
-        set_quite_interrupt(1, true);
+        set_quiet_interrupt(1, true);
 
         idt.submit_entries().expect("Failed to load IDT!").load();
 
-        serial_print!("Testing Interrupts ... ");
+        debug_print!("Testing Interrupts ... ");
 
         interrupt_tester();
 
-        serial_println!("OK");
+        debug_println!("OK");
     }
 
 
@@ -101,8 +112,8 @@ fn main(boot_info: &'static mut BootInfo) -> ! {
     kernel_buffer.draw_rec((200, 200), (100, 100), 0x0000FF);
 
 
-    serial_println!("\n\n\n==== KERNEL MAIN FINISHED ==== ");
-    serial_println!("In later versions of this kernel, the kernel should not finish!");
+    debug_println!("\n\n\n==== KERNEL MAIN FINISHED ==== ");
+    debug_println!("In later versions of this kernel, the kernel should not finish!");
 
     // Make a little color changing box on screen to let the user know
     // that the kernel is still alive and running.

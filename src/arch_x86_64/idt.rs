@@ -570,10 +570,10 @@ pub struct ExtraHandlerInfo {
 
 impl ExtraHandlerInfo {
     pub fn new(interrupt_id: u8) -> ExtraHandlerInfo {
-        let mut info = ExtraHandlerInfo {
+        let info = ExtraHandlerInfo {
             should_handler_diverge: false,
             reserved_interrupt: false,
-            quiet_interrupt: QUITE_INTERRUPT_VECTOR.lock()[interrupt_id as usize],
+            quiet_interrupt: QUIET_INTERRUPT_VECTOR.lock()[interrupt_id as usize],
             interrupt_name: "unnamed interrupt",
         };
 
@@ -610,7 +610,7 @@ impl ExtraHandlerInfo {
 }
 
 lazy_static! {
-    static ref QUITE_INTERRUPT_VECTOR: Mutex<[bool; 255]> = {
+    static ref QUIET_INTERRUPT_VECTOR: Mutex<[bool; 255]> = {
         Mutex::new([false; 255])
     };
 }
@@ -621,16 +621,16 @@ lazy_static! {
 ///
 /// # Usage
 /// ```rust
-/// use quantum_os::arch_x86_64::idt::set_quite_interrupt;
+/// use quantum_os::arch_x86_64::idt::set_quiet_interrupt;
 ///
-/// set_quite_interrupt(10, true); // Sets "Invalid TSS" to not produce output when called
-/// set_quite_interrupt(12, false); // Sets "Stack Segment Fault" to produce output when called
+/// set_quiet_interrupt(10, true); // Sets "Invalid TSS" to not produce output when called
+/// set_quiet_interrupt(12, false); // Sets "Stack Segment Fault" to produce output when called
 ///
 /// // Default is NON-QUITE output!
 ///
 /// ```
-pub fn set_quite_interrupt(interrupt_id: u8, quiet: bool) {
-    QUITE_INTERRUPT_VECTOR.lock()[interrupt_id as usize] = quiet;
+pub fn set_quiet_interrupt(interrupt_id: u8, quiet: bool) {
+    QUIET_INTERRUPT_VECTOR.lock()[interrupt_id as usize] = quiet;
 }
 
 

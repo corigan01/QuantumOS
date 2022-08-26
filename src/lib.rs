@@ -68,3 +68,4 @@ pub mod bitset;
 pub mod panic;
 pub mod qemu;
 pub mod post_hal;
+pub mod debug_output;
