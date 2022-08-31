@@ -150,9 +150,10 @@ fn main(boot_info: &'static mut BootInfo) -> ! {
         debug_println!("Does the memory overlap    : {}", region_map.do_regions_overlap());
 
         let free_bytes = region_map.get_total_bytes(PhyRegionKind::Usable);
+        let free_pages = region_map.get_usable_pages();
 
         debug_println!("Total Free Physical Memory : {} {} ({} MB)",
-            (free_bytes / 4096).green().bold(),
+            free_pages.green().bold(),
             "Pages".green().bold(),
             free_bytes / (1024 * 1024));
 

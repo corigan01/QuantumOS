@@ -29,7 +29,7 @@ use core::ops::{Range, RangeInclusive};
 use lazy_static::lazy_static;
 use spin::Mutex;
 use crate::{debug_println, debug_print };
-use crate::memory::PhysicalAddress;
+use crate::memory::{PAGE_SIZE, PhysicalAddress};
 use heapless::Vec;
 
 #[derive(PartialEq, Copy, Clone, Debug)]
@@ -141,5 +141,11 @@ impl PhyRegionMap {
 
             memory_bytes
         } else { 0 }
+    }
+
+    pub fn get_usable_pages(&self) -> u64 {
+        let bytes = self.get_total_bytes(PhyRegionKind::Usable);
+
+        bytes / (PAGE_SIZE as u64)
     }
 }

@@ -24,16 +24,31 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 */
 
+
 pub mod paging;
 pub mod physical_memory;
 pub mod pmm;
 
+const PAGE_SIZE: usize = 4096;
+
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
-pub enum UsedMemoryType {
-    Kernel,
-    UserSpace,
-    Volatile,
-    Unknown
+#[repr(u8)]
+pub enum UsedMemoryKind {
+    Unknown   = 0,
+    Kernel    = 1,
+    UserSpace = 2,
+    Volatile  = 3,
+}
+
+impl UsedMemoryKind {
+    pub fn from_u8(value: u8) -> Self {
+        match value {
+            1 => Self::Kernel,
+            2 => Self::UserSpace,
+            3 => Self::Volatile,
+            _ => Self::Unknown
+        }
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
