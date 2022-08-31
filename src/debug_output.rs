@@ -79,7 +79,7 @@ impl StreamInfo {
                         stream(b'\n');
 
                         if self.message_header {
-                            if self.color { stream_str(stream, "[\x1b[95mQUANTUM-KRNL\x1b[90m]: "); }
+                            if self.color { stream_str(stream, "[\x1b[94mQUANTUM-KRNL\x1b[90m]: "); }
                             else { stream_str(stream, "[QUANTUM-KRNL]: "); }
                         }
                     }
@@ -138,7 +138,7 @@ macro_rules! debug_println {
         concat!($fmt, "\n"), $($arg)*));
 }
 
-pub fn set_stream(stream_info: StreamInfo) {
+pub fn set_debug_stream(stream_info: StreamInfo) {
     let (output_some,
         name_option,
         speed_option,

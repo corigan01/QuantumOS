@@ -37,7 +37,7 @@ use core::fmt::Write;
 use core::panic::PanicInfo;
 
 //mod vga;
-use bootloader::boot_info::{BootInfo, FrameBuffer, MemoryRegion};
+use bootloader::boot_info::{BootInfo, FrameBuffer, MemoryRegion, MemoryRegionKind};
 use bootloader::entry_point;
 use owo_colors::OwoColorize;
 
@@ -50,6 +50,8 @@ use quantum_os::serial::SERIAL1;
 use quantum_os::vga::low_level::FBuffer;
 use quantum_os::{attach_interrupt, remove_interrupt, serial_print, serial_println};
 use quantum_os::{bitset, debug_print, debug_println};
+use quantum_os::memory::{physical_memory, PhysicalAddress};
+use quantum_os::memory::physical_memory::{PhyRegionKind, PhyRegion, PhyRegionMap};
 
 fn debug_output_char(char: u8) {
     if let Some(serial_info) = SERIAL1.lock().as_ref() {
@@ -60,7 +62,7 @@ fn debug_output_char(char: u8) {
 #[cfg(not(test))]
 entry_point!(main);
 
-#[cfg(not(test))]
+//#[cfg(not(test))]
 fn main(boot_info: &'static mut BootInfo) -> ! {
     // safely get the baud rate
     let baud_rate = if let Some(serial) = SERIAL1.lock().as_ref() {
@@ -70,7 +72,7 @@ fn main(boot_info: &'static mut BootInfo) -> ! {
     };
 
     // set the debug stream to the serial output
-    debug_output::set_stream(StreamInfo {
+    debug_output::set_debug_stream(StreamInfo {
         output_stream: Some(debug_output_char),
         name: Some("Serial"),
         speed: Some(baud_rate as u64),
@@ -78,8 +80,8 @@ fn main(boot_info: &'static mut BootInfo) -> ! {
         message_header: true,
     });
 
-    debug_println!("\n{:#?}\n", boot_info);
-    debug_print!("Checking the framebuffer ... ");
+    debug_println!("\n{:#x?}\n", boot_info);
+    debug_print!("{}", "Checking the framebuffer ... ".white());
 
     if let Some(framebuffer) = boot_info.framebuffer.as_mut() {
         for byte in framebuffer.buffer_mut() {
@@ -87,10 +89,12 @@ fn main(boot_info: &'static mut BootInfo) -> ! {
         }
 
         debug_println!("{}", "OK".bright_green().bold());
-    } else {
-        debug_println!("FAIL");
+    }
+    else {
+        debug_println!("{}", "FAIL".bright_red().bold());
     }
 
+    // init the cpu
     {
         // init the cpu, we just need to wake up the lazy_statics for them to init
         let mut idt = INTERRUPT_DT.lock();
@@ -108,11 +112,60 @@ fn main(boot_info: &'static mut BootInfo) -> ! {
         debug_println!("OK");
     }
 
+    // init memory regions
+    {
+        debug_println!("\n\nBoot Memory Info:");
+
+        let memory_info = &boot_info.memory_regions;
+        let mut region_map = PhyRegionMap::new();
+
+        debug_println!("|      START      |       END       |         KIND       |");
+        debug_println!("|-----------------|-----------------|--------------------|");
+
+        for i in 0..memory_info.len() {
+            let memory_region = memory_info[i];
+            let memory_entry = PhyRegion::new()
+                .set_type(
+                    if memory_region.kind == MemoryRegionKind::Usable
+                    { PhyRegionKind::Usable} else { PhyRegionKind::NotUsable})
+                .set_address_range(memory_region.start..memory_region.end);
+
+            if memory_region.kind == MemoryRegionKind::Usable {
+                debug_println!("| {:#15X} | {:#15X} | \t{:?}  \t |",
+                    memory_region.start, memory_region.end, memory_region.kind.bold().green());
+            } else if memory_region.kind == MemoryRegionKind::Bootloader {
+                debug_println!("| {:#15X} | {:#15X} | \t{:?}\t |",
+                    memory_region.start, memory_region.end, memory_region.kind.yellow())
+            } else {
+                debug_println!("| {:#15X} | {:#15X} | \t{:?}\t |",
+                    memory_region.start, memory_region.end, memory_region.kind.red())
+            }
+
+
+            region_map.add_entry(memory_entry);
+        }
+
+        debug_println!("|-----------------|-----------------|--------------------|");
+
+        debug_println!("Does the memory overlap    : {}", region_map.do_regions_overlap());
+
+        let free_bytes = region_map.get_total_bytes(PhyRegionKind::Usable);
+
+        debug_println!("Total Free Physical Memory : {} {} ({} MB)",
+            (free_bytes / 4096).green().bold(),
+            "Pages".green().bold(),
+            free_bytes / (1024 * 1024));
+
+
+
+    }
+
     let kernel_buffer = FBuffer::new(&boot_info.framebuffer);
 
     kernel_buffer.draw_rec((000, 000), (100, 100), 0xFF0000);
     kernel_buffer.draw_rec((100, 100), (100, 100), 0x00FF00);
     kernel_buffer.draw_rec((200, 200), (100, 100), 0x0000FF);
+
 
     debug_println!("\n\n\n==== KERNEL MAIN FINISHED ==== ");
     debug_println!("In later versions of this kernel, the kernel should not finish!");

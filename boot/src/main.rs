@@ -4,6 +4,8 @@ use std::{
 };
 // "--no-reboot"
 const RUN_ARGS: &[&str] = &[
+    "-m",
+    "256M",
     "--no-reboot",
     "-s",
     "-serial",
