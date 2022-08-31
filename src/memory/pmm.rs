@@ -24,36 +24,34 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 */
 
-use crate::{ debug_println, debug_print };
-use crate::arch_x86_64::idt::InterruptFrame;
-use crate::arch_x86_64::idt::ExtraHandlerInfo;
+use core::mem::MaybeUninit;
+use crate::{debug_println, debug_print };
+use crate::memory::physical_memory::PhyRegionMap;
+use crate::memory::UsedMemoryType;
 
-pub fn general_isr(i_frame: InterruptFrame, interrupt_id: u8, error_code: Option<u64>) {
-    let extra_info = ExtraHandlerInfo::new(interrupt_id);
+pub struct PhyMM {
 
-    if extra_info.quiet_interrupt && !extra_info.should_handler_diverge {
-       return;
+}
+
+#[derive(Debug, Clone, Copy)]
+#[repr(C)]
+pub struct PhyPage {
+    index: usize,
+    used: Option<UsedMemoryType>
+}
+
+impl PhyPage {
+    pub fn new() -> Self {
+        Self {
+            index: 0,
+            used: None
+        }
     }
 
-    if extra_info.reserved_interrupt && !extra_info.should_handler_diverge {
-        debug_println!("Reserved Fault was called!");
-        return;
-    }
+    pub fn set_used(&mut self, used: Option<UsedMemoryType>) -> Self {
+        self.used = used;
 
-    debug_println!("\n\n=== FAULT HANDLER CALLED! ===");
-    debug_println!("{} was called with an error code of {:#?}!",
-        extra_info.interrupt_name, error_code);
-    debug_println!("Interrupt Stack Frame:");
-    debug_println!("\tCode Segment:        {}", i_frame.code_seg);
-    debug_println!("\tInstruction Pointer: {:?}", i_frame.eip);
-    debug_println!("\tFlags:               {}", i_frame.flags);
-    debug_println!("\tStack Pointer:       {:?}", i_frame.stack_pointer);
-    debug_println!("\tStack Segment:       {:?}", i_frame.stack_segment);
-
-
-    if extra_info.should_handler_diverge {
-        panic!("Diverging interrupt: {} was called!\n\t::{:#?}",
-               extra_info.interrupt_name,
-               error_code);
+        *self
     }
 }
+

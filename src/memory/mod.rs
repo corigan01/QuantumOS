@@ -11,7 +11,7 @@ Permission is hereby granted, free of charge, to any person obtaining a copy of 
 associated documentation files (the "Software"), to deal in the Software without restriction,
 including without limitation the rights to use, copy, modify, merge, publish, distribute,
 sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+furnished to do so, subject to the following conditions
 
 The above copyright notice and this permission notice shall be included in all copies or substantial
 portions of the Software.
@@ -24,9 +24,17 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 */
 
-mod paging;
+pub mod paging;
+pub mod physical_memory;
+pub mod pmm;
 
-use bit_field::BitField;
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
+pub enum UsedMemoryType {
+    Kernel,
+    UserSpace,
+    Volatile,
+    Unknown
+}
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
 #[repr(transparent)]
@@ -92,7 +100,9 @@ impl VirtualAddress {
         self.as_u64() as *mut T
     }
 
-    // unsafe
+    /// # Safety
+    /// Using this function means that the user must ensure that the input is valid and doesnt
+    /// cause fault.
     pub unsafe fn new_unsafe(address: u64) -> VirtualAddress { VirtualAddress(address) }
 }
 
@@ -140,6 +150,9 @@ impl PhysicalAddress {
         self.as_u64() as *mut T
     }
 
-    // unsafe
+    /// # Safety
+    /// This creates a new PhysicalAddress without checking if the address is valid. This means
+    /// that the user must ensure that the address contains a valid address that will not cause a
+    /// fault!
     pub unsafe fn new_unsafe(address: u64) -> PhysicalAddress { PhysicalAddress(address) }
 }
