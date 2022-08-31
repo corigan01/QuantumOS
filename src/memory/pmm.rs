@@ -25,33 +25,94 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 use core::mem::MaybeUninit;
+use heapless::pool::{ Pool, singleton::Box };
+use heapless::Vec;
 use crate::{debug_println, debug_print };
+use bit_field::BitField;
 use crate::memory::physical_memory::PhyRegionMap;
-use crate::memory::UsedMemoryType;
+use crate::memory::{PhysicalAddress, UsedMemoryKind};
 
 pub struct PhyMM {
-
+    page_vector: Pool<PhySection>,
+    pool_count: u16
 }
 
-#[derive(Debug, Clone, Copy)]
-#[repr(C)]
-pub struct PhyPage {
-    index: usize,
-    used: Option<UsedMemoryType>
-}
-
-impl PhyPage {
+impl PhyMM {
     pub fn new() -> Self {
-        Self {
-            index: 0,
-            used: None
+        PhyMM {
+            page_vector: Pool::new(),
+            pool_count: 0
         }
     }
 
-    pub fn set_used(&mut self, used: Option<UsedMemoryType>) -> Self {
-        self.used = used;
+    fn find_free_pool_id(&self) -> Option<u64> {
 
-        *self
+
+        None
     }
+
+    pub fn grow_pool(&self, bytes: &'static mut [u8]) {
+        self.page_vector.grow(bytes);
+    }
+
+    pub fn commit_page(kind: UsedMemoryKind) {
+
+    }
+
+
+}
+
+struct PhySection {
+    page_vector: Vec<PhyPage, 255>,
+    address_offset: PhysicalAddress,
+}
+
+pub fn test() {
+    static mut INITIAL_PMM_MEMORY: [u8; 4096] = [0; 4096];
+
+    let mut pool: Pool<PhySection> = Pool::new();
+
+    unsafe { pool.grow(&mut INITIAL_PMM_MEMORY) };
+
+    let vector = pool.alloc().unwrap();
+
+    let init = vector.init(Vec::new());
+
+    let something = init.is_empty();
+
+}
+
+
+/// # Physical Page
+/// A page is normally a 4k section of memory that is aligned to the next 4k section of memory.
+/// This will allow us to calculate the address from a vector of address conversion stored in the
+/// PhyMM. This makes this struct incredibly small and memory dense. We want to store all we can
+/// in the smalled amount of memory because as total memory grows, the amount of pages does too.
+#[derive(Debug, Clone, Copy)]
+pub struct PhyPage(u8);
+
+impl PhyPage {
+    pub fn new() -> Self {
+        PhyPage {
+            0: 0
+        }
+    }
+
+    pub fn set_used(&mut self, used: bool) {
+        self.0.set_bit(7, used);
+    }
+
+    pub fn is_free(&self) -> bool {
+        self.0.get_bit(7)
+    }
+
+    pub fn set_type(&mut self, kind: UsedMemoryKind) {
+        self.0.set_bits(0..4, kind as u8);
+    }
+
+    pub fn get_type(&self) -> UsedMemoryKind {
+        UsedMemoryKind::from_u8(self.0.get_bits(0..4))
+    }
+
 }
 
