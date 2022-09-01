@@ -157,8 +157,6 @@ fn main(boot_info: &'static mut BootInfo) -> ! {
             "Pages".green().bold(),
             free_bytes / (1024 * 1024));
 
-
-
     }
 
     let kernel_buffer = FBuffer::new(&boot_info.framebuffer);
