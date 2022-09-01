@@ -27,14 +27,14 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 use core::arch::asm;
 use core::mem::size_of;
 use core::ops::{Deref, Range};
+
 use lazy_static::lazy_static;
 use spin::Mutex;
-
 use x86_64::instructions::segmentation;
 use x86_64::PrivilegeLevel;
 use x86_64::structures::gdt::SegmentSelector;
 
-use crate::{serial_print, serial_println};
+use crate::{serial_println};
 use crate::arch_x86_64::CpuPrivilegeLevel;
 use crate::bitset::BitSet;
 use crate::memory::VirtualAddress;
@@ -415,10 +415,7 @@ lazy_static! {
 
 impl IdtTablePointer {
     pub fn load(&self) {
-        use core::arch::asm;
-
         IDT_TABLE_POINTER.lock().copy_from(*self);
-
 
         unsafe { asm!("lidt [{}]", in(reg) IDT_TABLE_POINTER.lock().deref(), options(readonly, nostack, preserves_flags)); };
     }

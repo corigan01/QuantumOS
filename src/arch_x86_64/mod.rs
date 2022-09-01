@@ -29,11 +29,11 @@ use core::arch::asm;
 use lazy_static::lazy_static;
 use spin::Mutex;
 
+use crate::{attach_interrupt, debug_print, debug_println};
+use crate::{serial_print, serial_println};
 use crate::arch_x86_64::gdt::*;
 use crate::arch_x86_64::idt::*;
-use crate::{attach_interrupt, debug_println, debug_print};
 use crate::remove_interrupt;
-use crate::{serial_println, serial_print};
 
 pub mod isr;
 pub mod gdt;
@@ -51,7 +51,7 @@ pub enum CpuPrivilegeLevel {
 
 lazy_static! {
     pub static ref GLOBAL_DT: GlobalDescriptorTable = {
-        let mut gdt = GlobalDescriptorTable::new();
+        let gdt = GlobalDescriptorTable::new();
 
         serial_print!("Checking GDT ... ");
 

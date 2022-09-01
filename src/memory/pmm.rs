@@ -24,12 +24,10 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 */
 
-use core::mem::MaybeUninit;
-use heapless::pool::{ Pool, singleton::Box };
+
+use heapless::pool::{ Pool };
 use heapless::Vec;
-use crate::{debug_println, debug_print };
 use crate::bitset::BitSet;
-use crate::memory::physical_memory::PhyRegionMap;
 use crate::memory::{PhysicalAddress, UsedMemoryKind};
 
 pub struct PhyMM {

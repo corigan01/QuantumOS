@@ -29,7 +29,6 @@ use core::fmt::Write;
 use spin::Mutex;
 use lazy_static::lazy_static;
 use owo_colors::OwoColorize;
-use crate::{serial_println, serial_print };
 
 pub type OutputStream = fn(u8);
 
@@ -118,8 +117,6 @@ lazy_static! {
 
 #[doc(hidden)]
 pub fn _print(args: ::core::fmt::Arguments) {
-    use core::fmt::Write;
-
     DEBUG_OUTPUT_STREAM.lock().write_fmt(args).unwrap();
 }
 
