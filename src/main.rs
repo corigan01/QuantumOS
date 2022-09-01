@@ -31,26 +31,26 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #![feature(abi_x86_interrupt)]
 #![test_runner(quantum_os::test_handler::test_runner)]
 
-use core::arch::asm;
-use core::borrow::Borrow;
-use core::fmt::Write;
-use core::panic::PanicInfo;
+
+
+
+
 
 //mod vga;
-use bootloader::boot_info::{BootInfo, FrameBuffer, MemoryRegion, MemoryRegionKind};
-use bootloader::entry_point;
+use bootloader::boot_info::{BootInfo, MemoryRegionKind};
+
 use owo_colors::OwoColorize;
 
 use quantum_os::arch_x86_64::idt::{interrupt_tester, set_quiet_interrupt, InterruptFrame};
 use quantum_os::arch_x86_64::isr::general_isr;
-use quantum_os::arch_x86_64::{GLOBAL_DT, INTERRUPT_DT};
+use quantum_os::arch_x86_64::{INTERRUPT_DT};
 use quantum_os::debug_output;
 use quantum_os::debug_output::StreamInfo;
 use quantum_os::serial::SERIAL1;
 use quantum_os::vga::low_level::FBuffer;
-use quantum_os::{attach_interrupt, remove_interrupt, serial_print, serial_println};
-use quantum_os::{bitset, debug_print, debug_println};
-use quantum_os::memory::{physical_memory, PhysicalAddress};
+use quantum_os::{attach_interrupt};
+use quantum_os::{debug_print, debug_println};
+use bootloader::entry_point;
 use quantum_os::memory::physical_memory::{PhyRegionKind, PhyRegion, PhyRegionMap};
 
 fn debug_output_char(char: u8) {

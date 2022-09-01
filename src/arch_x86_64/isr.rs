@@ -24,7 +24,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 */
 
-use crate::{ debug_println, debug_print };
+use crate::debug_println;
 use crate::arch_x86_64::idt::InterruptFrame;
 use crate::arch_x86_64::idt::ExtraHandlerInfo;
 

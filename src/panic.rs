@@ -28,7 +28,7 @@ Quantum OS Lib file, documentation coming soon!
 
 use core::panic::PanicInfo;
 use owo_colors::OwoColorize;
-use crate::{ serial_println, serial_print };
+use crate::{ serial_println };
 
 /// This function is called on panic.
 #[panic_handler]

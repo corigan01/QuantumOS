@@ -25,10 +25,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 
-use core::ops::{Range, RangeInclusive};
-use lazy_static::lazy_static;
-use spin::Mutex;
-use crate::{debug_println, debug_print };
+use core::ops::Range;
 use crate::memory::{PAGE_SIZE, PhysicalAddress};
 use heapless::Vec;
 
@@ -110,8 +107,8 @@ impl PhyRegionMap {
         false
     }
 
-    pub fn get_regions(&self, kind: PhyRegionKind) -> Option<heapless::Vec<PhyRegion, 255>> {
-        let mut regions : heapless::Vec<PhyRegion, 255> = heapless::Vec::new();
+    pub fn get_regions(&self, kind: PhyRegionKind) -> Option<Vec<PhyRegion, 255>> {
+        let mut regions : Vec<PhyRegion, 255> = Vec::new();
 
         for i in 0..self.size {
             let region = self.regions[i];
