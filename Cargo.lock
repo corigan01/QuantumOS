@@ -221,7 +221,6 @@ checksum = "c1b04fb49957986fdce4d6ee7a65027d55d4b6d2265e5848bbb507b58ccfdb6f"
 name = "quantum_os"
 version = "0.1.0"
 dependencies = [
- "bit_field",
  "bootloader",
  "heapless",
  "lazy_static",

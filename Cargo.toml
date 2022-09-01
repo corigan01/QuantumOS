@@ -26,7 +26,6 @@ spin = "0.5.2"
 
 # Should be implmented in Quantum down the line
 x86_64 = "0.14.9"
-bit_field = "0.10.1"
 owo-colors = "3.4.0"
 heapless = "0.7.16"
 
