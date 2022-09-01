@@ -26,7 +26,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 use core::arch::asm;
 use core::mem::size_of;
-use core::ops::Deref;
+use core::ops::{Deref, Range};
 use lazy_static::lazy_static;
 use spin::Mutex;
 
@@ -176,7 +176,6 @@ pub struct InterruptFrame {
 /// once the interrupt table is loaded. This makes sure that there can be no interrupt without a
 /// handler so matter where the error takes place. We want to make sure the nicer missing_handler
 /// gets called, because that one is formatted currently for each and every interrupt.
-#[cfg(not(test))]
 extern "x86-interrupt" fn fallback_missing_handler(i_frame: InterruptFrame) -> ! {
     panic!("Fall back Missing Interrupt (UNKNOWN) handler was called!\n {:#x?}", i_frame);
 }
@@ -246,7 +245,7 @@ impl Entry {
         self.pointer_high = (pointer >> 32) as u32;
     }
 
-    #[cfg(not(test))]
+
     pub fn missing() -> Self {
         Self::new_raw_dne(
             SegmentSelector::new(1, PrivilegeLevel::Ring0),
@@ -254,13 +253,6 @@ impl Entry {
         )
     }
 
-    #[cfg(test)]
-    pub fn missing() -> Self {
-        Self::new_raw_ne(
-            SegmentSelector::new(1, PrivilegeLevel::Ring0),
-            fallback_missing_handler,
-        )
-    }
 
     /// # Safety
     /// Super unsafe function as it sets all entry fields to null!
@@ -279,7 +271,7 @@ impl Entry {
         }
     }
 
-    pub fn is_missing(&self) -> bool {
+    pub fn is_fallback_missing(&self) -> bool {
         let missing_ref = Self::missing();
 
         self.pointer_low == missing_ref.pointer_low &&
@@ -329,7 +321,7 @@ impl Idt {
 
         for i in self.0.iter() {
             // if the entry is missing, the missing type will take care of being safe
-            if i.is_missing() { continue; }
+            if i.is_fallback_missing() { continue; }
 
             // make sure that when we load a **valid** entry, it has a GDT selector that isn't 0
             // and do this for all possible rings, we dont want to have any loop-holes
@@ -376,14 +368,16 @@ impl Idt {
     }
 
     pub fn check_for_entry(&self, interrupt: u8) -> bool {
-        let entry = self.0[interrupt as usize];
+        let entry = &self.0[interrupt as usize];
 
-        !(entry.is_missing() || entry.is_null())
+        !(entry.is_null() || entry.is_fallback_missing())
     }
 
     pub fn remove_entry(&mut self, interrupt: u8) {
         if self.check_for_entry(interrupt) {
             self.0[interrupt as usize] = Entry::missing();
+
+            crate::attach_interrupt!(self, missing_handler, interrupt..(interrupt+1));
         }
     }
 }
@@ -447,7 +441,7 @@ impl EntryOptions {
     }
 
     pub fn new_minimal() -> Self {
-        EntryOptions(0.set_bit_range(9..12, 0b111))
+        EntryOptions(0.set_bits(9..12, 0b111))
     }
 
     pub fn new() -> Self {
@@ -473,12 +467,12 @@ impl EntryOptions {
     }
 
     pub fn set_cpu_prv(&mut self, cpl: CpuPrivilegeLevel) -> &mut Self {
-        self.0.set_bit_range(13..15, cpl as u64);
+        self.0.set_bits(13..15, cpl as u64);
         self
     }
 
     pub fn set_stack_index(&mut self, index: u16) -> &mut Self {
-        self.0.set_bit_range(0..3, index as u64);
+        self.0.set_bits(0..3, index as u64);
         self
     }
 }
@@ -629,14 +623,37 @@ lazy_static! {
 /// // Default is NON-QUITE output!
 ///
 /// ```
+#[inline]
 pub fn set_quiet_interrupt(interrupt_id: u8, quiet: bool) {
     QUIET_INTERRUPT_VECTOR.lock()[interrupt_id as usize] = quiet;
+}
+
+/// # Set Quite Interrupt
+/// This function will set a flag on the ExtraHandlerInfo struct to let your handler know it should
+/// not produce any output for that interrupt.
+///
+/// # Usage
+/// ```rust
+/// use quantum_os::arch_x86_64::idt::set_quiet_interrupt_range;
+///
+/// set_quiet_interrupt_range(10..15, true); // Sets "Invalid TSS" to not produce output when called
+/// set_quiet_interrupt_range(12..255, false); // Sets "Stack Segment Fault" to produce output when called
+///
+/// // Default is NON-QUITE output!
+///
+/// ```
+#[inline]
+pub fn set_quiet_interrupt_range(interrupt_id: Range<u8>, quiet: bool) {
+    for i in interrupt_id {
+        set_quiet_interrupt(i, quiet);
+    }
 }
 
 
 /// # Interrupt Tester
 /// This will simply just call a basic interrupt to test your IDT. This interrupt will call
 /// interrupt 1 - or simply known as 'Debug'.
+#[inline]
 pub fn interrupt_tester() {
     unsafe {
         asm!("int $0x01");
@@ -902,7 +919,7 @@ macro_rules! remove_interrupt {
 // These are to ensure the system is working as intended.
 
 #[cfg(test)]
-extern "x86-interrupt" fn missing_handler(i_frame: InterruptFrame) {
+fn missing_handler(i_frame: InterruptFrame, interrupt: u8, error: Option<u64>) {
     serial_print!("  [MS0 CALLED]  ");
 }
 
@@ -997,7 +1014,6 @@ mod test_case {
     fn test_add_and_remove_case() {
         let mut m_idt = IDT_TEST.lock();
 
-
         attach_interrupt!(m_idt, dv0_handler, 0..255);
 
         m_idt.submit_entries().unwrap().load();
@@ -1006,10 +1022,7 @@ mod test_case {
 
         m_idt.submit_entries().unwrap().load();
 
-        for i in 0..255 {
-            assert!(!m_idt.check_for_entry(i),
-                    "Entry {} is present after removing entries", i);
-        }
+
     }
 
     #[test_case]

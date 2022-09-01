@@ -28,7 +28,7 @@ use core::mem::MaybeUninit;
 use heapless::pool::{ Pool, singleton::Box };
 use heapless::Vec;
 use crate::{debug_println, debug_print };
-use bit_field::BitField;
+use crate::bitset::BitSet;
 use crate::memory::physical_memory::PhyRegionMap;
 use crate::memory::{PhysicalAddress, UsedMemoryKind};
 
@@ -68,7 +68,7 @@ struct PhySection {
 }
 
 pub fn test() {
-    static mut INITIAL_PMM_MEMORY: [u8; 4096] = [0; 4096];
+    /*static mut INITIAL_PMM_MEMORY: [u8; 4096] = [0; 4096];
 
     let mut pool: Pool<PhySection> = Pool::new();
 
@@ -76,10 +76,7 @@ pub fn test() {
 
     let vector = pool.alloc().unwrap();
 
-    let init = vector.init(Vec::new());
-
-    let something = init.is_empty();
-
+    let init = vector.init(PhySection::new());*/
 }
 
 
@@ -107,7 +104,7 @@ impl PhyPage {
     }
 
     pub fn set_type(&mut self, kind: UsedMemoryKind) {
-        self.0.set_bits(0..4, kind as u8);
+        self.0.set_bits(0..4, kind as u64);
     }
 
     pub fn get_type(&self) -> UsedMemoryKind {

@@ -44,7 +44,7 @@ Bitset can also be used to set a range of bits!
 ```rust
 use quantum_os::bitset::BitSet;
 
-let output = 255_u8.set_bit_range(0..8, 0);
+let output = 255_u8.set_bits(0..8, 0);
 ```
 */
 
@@ -54,563 +54,187 @@ use core::ops::Range;
 /// The main traits for settings bits!
 pub trait BitSet {
     fn set_bit(&mut self, bit: u8, v: bool) -> Self;
-    fn set_bit_range(&mut self, r: Range<u8>, bits: u64) -> Self;
+    fn set_bits(&mut self, r: Range<u8>, bits: u64) -> Self;
 
-    fn get_bit(&self, bit: u8) -> Self;
+    fn get_bit(&self, bit: u8) -> bool;
+    fn get_bits(&self, r: Range<u8>) -> Self;
 }
 
-/// # Bitset for u8
-impl BitSet for u8 {
+macro_rules! bitset_impl {
+    ($($t:ty)*) => ($(
+        impl BitSet for $t {
 
-    /// # set_bit
-    ///
-    /// `set_bit` can toggle a bit in any stream of numbers. This can include setting bit `1` to
-    /// `true`, or setting bit `7` to `false`.
-    ///
-    /// # Safety
-    /// `set_bit` has protections for when you try to set a bit outside the range of the type you are
-    /// setting. For example, if you try to set bit `14` in a `u8` type, this will panic as bit `14`
-    /// does not exist in a u8 type.
-    ///
-    /// # Portability
-    /// The `set_bit` trait can be implemented for any type as long as the type contains a stream
-    /// of numbers ( without gaps ) that the user would like to toggle. This could be a custom struct
-    /// that contains a primitive type.
-    ///
-    /// # Use
-    /// ```rust
-    /// use quantum_os::bitset::BitSet;
-    ///
-    /// let value = 16_u8.set_bit(0, true);
-    /// assert_eq!(value, 17);
-    ///
-    /// ```
-    fn set_bit(&mut self, bit: u8, v: bool) -> Self {
-        use core::mem::size_of;
+            /// # set_bit
+            ///
+            /// `set_bit` can toggle a bit in any stream of numbers. This can include setting bit `1` to
+            /// `true`, or setting bit `7` to `false`.
+            ///
+            /// # Safety
+            /// `set_bit` has protections for when you try to set a bit outside the range of the type you are
+            /// setting. For example, if you try to set bit `14` in a `u8` type, this will panic as bit `14`
+            /// does not exist in a u8 type.
+            ///
+            /// # Portability
+            /// The `set_bit` trait can be implemented for any type as long as the type contains a stream
+            /// of numbers ( without gaps ) that the user would like to toggle. This could be a custom struct
+            /// that contains a primitive type.
+            ///
+            /// # Use
+            /// ```rust
+            /// use quantum_os::bitset::BitSet;
+            ///
+            /// let value = 16_u8.set_bit(0, true);
+            /// assert_eq!(value, 17);
+            ///
+            /// ```
+            fn set_bit(&mut self, bit: u8, v: bool) -> Self {
+                use core::mem::size_of;
 
-        let self_size_bits = size_of::<Self>() * 8;
-        if bit > self_size_bits as u8 { panic!("Tried to set a bit outside the range of the current type!"); }
+                let self_size_bits = size_of::<Self>() * 8;
+                if bit > self_size_bits as u8 { panic!("Tried to set a bit outside the range of the current type!"); }
 
-        let calculate_bit = (2 as Self).pow(bit as u32);
-        *self = if v { *self | calculate_bit } else { *self & ( calculate_bit ^ Self::MAX) };
+                if v {
+                    *self |= 1 << bit;
+                }
+                else {
+                    *self &= !(1 << bit);
+                }
 
-        *self
-    }
+                *self
+            }
 
-    /// # set_bit_range
-    /// `set_bit_range` can toggle multiple bits in any stream of numbers. This can include setting
-    /// bits `1 - 3` to `true`, or setting bits `2-7` to `false`.
-    ///
-    /// # Safety
-    /// `set_bit_range` has protections for when you try to set a bit outside the range of the type
-    /// you are setting. For example, if you try to set bit `14` in a `u8` type, this will panic as
-    /// bit `14` does not exist in a u8 type.
-    ///
-    /// # Portability
-    /// The `set_bit_range` trait can be implemented for any type as long as the type contains a stream
-    /// of numbers ( without gaps ) that the user would like to toggle. This could be a custom struct
-    /// that contains a primitive type.
-    ///
-    /// # Use
-    /// ```rust
-    /// use quantum_os::bitset::BitSet;
-    ///
-    /// let value = 16_u8.set_bit_range(0..2, 0b01);
-    /// assert_eq!(value, 17);
-    ///
-    /// ```
-    fn set_bit_range(&mut self, r: Range<u8>, bits: u64) -> Self {
-        let bit_out_of_range = bits as u64 / (2 as u64).pow(r.end as u32);
-        if bit_out_of_range > 0 { panic!("Tried to set a bit outside the range provided!"); }
+            /// # set_bits
+            /// `set_bits` can toggle multiple bits in any stream of numbers. This can include setting
+            /// bits `1 - 3` to `true`, or setting bits `2-7` to `false`.
+            ///
+            /// # Safety
+            /// `set_bits` has protections for when you try to set a bit outside the range of the type
+            /// you are setting. For example, if you try to set bit `14` in a `u8` type, this will panic as
+            /// bit `14` does not exist in a u8 type.
+            ///
+            /// # Portability
+            /// The `set_bits` trait can be implemented for any type as long as the type contains a stream
+            /// of numbers ( without gaps ) that the user would like to toggle. This could be a custom struct
+            /// that contains a primitive type.
+            ///
+            /// # Use
+            /// ```rust
+            /// use quantum_os::bitset::BitSet;
+            ///
+            /// let value = 16_u8.set_bits(0..2, 0b01);
+            /// assert_eq!(value, 17);
+            ///
+            /// ```
+            fn set_bits(&mut self, r: Range<u8>, bits: u64) -> Self {
+                let bit_out_of_range = bits as u64 / (2 as u64).pow(r.end as u32);
+                if bit_out_of_range > 0 { panic!("Tried to set a bit outside the range provided!"); }
 
-        let mut dev = 0;
-        for bit in r {
-            self.set_bit(bit, (bits >> dev & 1) == 1);
+                let mut dev = 0;
+                for bit in r {
+                    self.set_bit(bit, ((bits >> dev) & 0b1) == 1);
+                    dev += 1;
+                }
 
-            dev += 1;
+                *self
+            }
+
+            /// # get_bit
+            /// `get_bit` can return a bit in any stream of numbers. This can include getting any bits within
+            /// the type limits of the value.
+            ///
+            /// # Safety
+            /// `get_bit` has protections for when you try to get a bit outside the range of the type you are
+            /// using. For example, if you try to get bit `14` in a `u8` type, this will panic as bit `14`
+            /// does not exist in a u8 type.
+            ///
+            /// # Portability
+            /// The `get_bit` trait can be implemented for any type as long as the type contains a stream
+            /// of numbers ( without gaps ) that the user would like to return. This could be a custom struct
+            /// that contains a primitive type.
+            ///
+            /// # Use
+            /// ```rust
+            /// use quantum_os::bitset::BitSet;
+            ///
+            /// let value = 16_u8.get_bit(0);
+            /// assert_eq!(value, 0);
+            ///
+            /// ```
+            fn get_bit(&self, bit: u8) -> bool {
+                use core::mem::size_of;
+
+                let self_size_bits = size_of::<Self>() * 8;
+                if bit > self_size_bits as u8 { panic!("Tried to get a bit outside the range of the current type!"); }
+
+                (self >> bit) & 0b1 == 0b1
+            }
+
+            /// # get_bits
+            /// `get_bit` can return a bit in any stream of numbers. This can include getting any bits within
+            /// the type limits of the value.
+            ///
+            /// # Safety
+            /// `get_bit` has protections for when you try to get a bit outside the range of the type you are
+            /// using. For example, if you try to get bit `14` in a `u8` type, this will panic as bit `14`
+            /// does not exist in a u8 type.
+            ///
+            /// # Portability
+            /// The `get_bit` trait can be implemented for any type as long as the type contains a stream
+            /// of numbers ( without gaps ) that the user would like to return. This could be a custom struct
+            /// that contains a primitive type.
+            ///
+            /// # Use
+            /// ```rust
+            /// use quantum_os::bitset::BitSet;
+            ///
+            /// let value = 4_u8.get_bits(0..2);
+            /// assert_eq!(value, 0);
+            ///
+            /// ```
+            fn get_bits(&self, r: Range<u8>) -> Self {
+                use core::mem::size_of;
+
+                let bits = *self << (((size_of::<Self>() * 8) as Self) - (r.end as Self))
+                >> (((size_of::<Self>() * 8) as Self) - (r.end as Self));
+
+                bits >> r.start
+            }
         }
-
-        *self
-    }
-
-    /// # get_bit
-    /// `get_bit` can return a bit in any stream of numbers. This can include getting any bits within
-    /// the type limits of the value.
-    ///
-    /// # Safety
-    /// `get_bit` has protections for when you try to get a bit outside the range of the type you are
-    /// using. For example, if you try to get bit `14` in a `u8` type, this will panic as bit `14`
-    /// does not exist in a u8 type.
-    ///
-    /// # Portability
-    /// The `get_bit` trait can be implemented for any type as long as the type contains a stream
-    /// of numbers ( without gaps ) that the user would like to return. This could be a custom struct
-    /// that contains a primitive type.
-    ///
-    /// # Use
-    /// ```rust
-    /// use quantum_os::bitset::BitSet;
-    ///
-    /// let value = 16_u8.get_bit(0);
-    /// assert_eq!(value, 0);
-    ///
-    /// ```
-    fn get_bit(&self, bit: u8) -> Self {
-        use core::mem::size_of;
-
-        let self_size_bits = size_of::<Self>() * 8;
-        if bit > self_size_bits as u8 { panic!("Tried to get a bit outside the range of the current type!"); }
-
-        (self >> bit) & 0b1
-    }
+    )*)
 }
 
-/// # Bitset for u16
-impl BitSet for u16 {
+bitset_impl! {  u8 u16 u32 u64 u128 i8 i16 i32 i64 i128 usize isize  }
 
-    /// # set_bit
-    /// `set_bit` can toggle a bit in any stream of numbers. This can include setting bit `1` to
-    /// `true`, or setting bit `7` to `false`.
-    ///
-    /// # Safety
-    /// `set_bit` has protections for when you try to set a bit outside the range of the type you are
-    /// setting. For example, if you try to set bit `14` in a `u8` type, this will panic as bit `14`
-    /// does not exist in a u8 type.
-    ///
-    /// # Portability
-    /// The `set_bit` trait can be implemented for any type as long as the type contains a stream
-    /// of numbers ( without gaps ) that the user would like to toggle. This could be a custom struct
-    /// that contains a primitive type.
-    ///
-    /// # Use
-    /// ```rust
-    /// use quantum_os::bitset::BitSet;
-    ///
-    /// let value = 16_u8.set_bit(0, true);
-    /// assert_eq!(value, 17);
-    ///
-    /// ```
-    fn set_bit(&mut self, bit: u8, v: bool) -> Self {
-        use core::mem::size_of;
-
-        let self_size_bits = size_of::<Self>() * 8;
-        if bit > self_size_bits as u8 { panic!("Tried to set a bit outside the range of the current type!"); }
-
-        let calculate_bit = (2 as Self).pow(bit as u32);
-        *self = if v { *self | calculate_bit } else { *self & ( calculate_bit ^ Self::MAX) };
-
-        *self
-    }
-
-    /// # set_bit_range
-    /// `set_bit_range` can toggle multiple bits in any stream of numbers. This can include setting
-    /// bits `1 - 3` to `true`, or setting bits `2-7` to `false`.
-    ///
-    /// # Safety
-    /// `set_bit_range` has protections for when you try to set a bit outside the range of the type
-    /// you are setting. For example, if you try to set bit `14` in a `u8` type, this will panic as
-    /// bit `14` does not exist in a u8 type.
-    ///
-    /// # Portability
-    /// The `set_bit_range` trait can be implemented for any type as long as the type contains a stream
-    /// of numbers ( without gaps ) that the user would like to toggle. This could be a custom struct
-    /// that contains a primitive type.
-    ///
-    /// # Use
-    /// ```rust
-    /// use quantum_os::bitset::BitSet;
-    ///
-    /// let value = 16_u8.set_bit_range(0..2, 0b01);
-    /// assert_eq!(value, 17);
-    ///
-    /// ```
-    fn set_bit_range(&mut self, r: Range<u8>, bits: u64) -> Self {
-        let bit_out_of_range = bits as u64 / (2 as u64).pow(r.end as u32);
-        if bit_out_of_range > 0 { panic!("Tried to set a bit outside the range provided!"); }
-
-        let mut dev = 0;
-        for bit in r {
-            self.set_bit(bit, (bits >> dev & 1) == 1);
-
-            dev += 1;
-        }
-
-        *self
-    }
-
-    /// # get_bit
-    /// `get_bit` can return a bit in any stream of numbers. This can include getting any bits within
-    /// the type limits of the value.
-    ///
-    /// # Safety
-    /// `get_bit` has protections for when you try to get a bit outside the range of the type you are
-    /// using. For example, if you try to get bit `14` in a `u8` type, this will panic as bit `14`
-    /// does not exist in a u8 type.
-    ///
-    /// # Portability
-    /// The `get_bit` trait can be implemented for any type as long as the type contains a stream
-    /// of numbers ( without gaps ) that the user would like to return. This could be a custom struct
-    /// that contains a primitive type.
-    ///
-    /// # Use
-    /// ```rust
-    /// use quantum_os::bitset::BitSet;
-    ///
-    /// let value = 16_u8.get_bit(0);
-    /// assert_eq!(value, 0);
-    ///
-    /// ```
-    fn get_bit(&self, bit: u8) -> Self {
-        use core::mem::size_of;
-
-        let self_size_bits = size_of::<Self>() * 8;
-        if bit > self_size_bits as u8 { panic!("Tried to get a bit outside the range of the current type!"); }
-
-        (self >> bit) & 0b1
-    }
-}
-
-/// # Bitset for u32
-impl BitSet for u32 {
-
-    /// # set_bit
-    /// `set_bit` can toggle a bit in any stream of numbers. This can include setting bit `1` to
-    /// `true`, or setting bit `7` to `false`.
-    ///
-    /// # Safety
-    /// `set_bit` has protections for when you try to set a bit outside the range of the type you are
-    /// setting. For example, if you try to set bit `14` in a `u8` type, this will panic as bit `14`
-    /// does not exist in a u8 type.
-    ///
-    /// # Portability
-    /// The `set_bit` trait can be implemented for any type as long as the type contains a stream
-    /// of numbers ( without gaps ) that the user would like to toggle. This could be a custom struct
-    /// that contains a primitive type.
-    ///
-    /// # Use
-    /// ```rust
-    /// use quantum_os::bitset::BitSet;
-    ///
-    /// let value = 16_u8.set_bit(0, true);
-    /// assert_eq!(value, 17);
-    ///
-    /// ```
-    fn set_bit(&mut self, bit: u8, v: bool) -> Self {
-        use core::mem::size_of;
-
-        let self_size_bits = size_of::<Self>() * 8;
-        if bit > self_size_bits as u8 { panic!("Tried to set a bit outside the range of the current type!"); }
-
-        let calculate_bit = (2 as Self).pow(bit as u32);
-        *self = if v { *self | calculate_bit } else { *self & ( calculate_bit ^ Self::MAX) };
-
-        *self
-    }
-
-    /// # set_bit_range
-    /// `set_bit_range` can toggle multiple bits in any stream of numbers. This can include setting
-    /// bits `1 - 3` to `true`, or setting bits `2-7` to `false`.
-    ///
-    /// # Safety
-    /// `set_bit_range` has protections for when you try to set a bit outside the range of the type
-    /// you are setting. For example, if you try to set bit `14` in a `u8` type, this will panic as
-    /// bit `14` does not exist in a u8 type.
-    ///
-    /// # Portability
-    /// The `set_bit_range` trait can be implemented for any type as long as the type contains a stream
-    /// of numbers ( without gaps ) that the user would like to toggle. This could be a custom struct
-    /// that contains a primitive type.
-    ///
-    /// # Use
-    /// ```rust
-    /// use quantum_os::bitset::BitSet;
-    ///
-    /// let value = 16_u8.set_bit_range(0..2, 0b01);
-    /// assert_eq!(value, 17);
-    ///
-    /// ```
-    fn set_bit_range(&mut self, r: Range<u8>, bits: u64) -> Self {
-        let bit_out_of_range = bits as u64 / (2 as u64).pow(r.end as u32);
-        if bit_out_of_range > 0 { panic!("Tried to set a bit outside the range provided!"); }
-
-        let mut dev = 0;
-        for bit in r {
-            self.set_bit(bit, (bits >> dev & 1) == 1);
-
-            dev += 1;
-        }
-
-        *self
-    }
-
-    /// # get_bit
-    /// `get_bit` can return a bit in any stream of numbers. This can include getting any bits within
-    /// the type limits of the value.
-    ///
-    /// # Safety
-    /// `get_bit` has protections for when you try to get a bit outside the range of the type you are
-    /// using. For example, if you try to get bit `14` in a `u8` type, this will panic as bit `14`
-    /// does not exist in a u8 type.
-    ///
-    /// # Portability
-    /// The `get_bit` trait can be implemented for any type as long as the type contains a stream
-    /// of numbers ( without gaps ) that the user would like to return. This could be a custom struct
-    /// that contains a primitive type.
-    ///
-    /// # Use
-    /// ```rust
-    /// use quantum_os::bitset::BitSet;
-    ///
-    /// let value = 16_u8.get_bit(0);
-    /// assert_eq!(value, 0);
-    ///
-    /// ```
-    fn get_bit(&self, bit: u8) -> Self {
-        use core::mem::size_of;
-
-        let self_size_bits = size_of::<Self>() * 8;
-        if bit > self_size_bits as u8 { panic!("Tried to get a bit outside the range of the current type!"); }
-
-        (self >> bit) & 0b1
-    }
-}
-
-/// # Bitset for u64
-impl BitSet for u64 {
-
-    /// # set_bit
-    /// `set_bit` can toggle a bit in any stream of numbers. This can include setting bit `1` to
-    /// `true`, or setting bit `7` to `false`.
-    ///
-    /// # Safety
-    /// `set_bit` has protections for when you try to set a bit outside the range of the type you are
-    /// setting. For example, if you try to set bit `14` in a `u8` type, this will panic as bit `14`
-    /// does not exist in a u8 type.
-    ///
-    /// # Portability
-    /// The `set_bit` trait can be implemented for any type as long as the type contains a stream
-    /// of numbers ( without gaps ) that the user would like to toggle. This could be a custom struct
-    /// that contains a primitive type.
-    ///
-    /// # Use
-    /// ```rust
-    /// use quantum_os::bitset::BitSet;
-    ///
-    /// let value = 16_u8.set_bit(0, true);
-    /// assert_eq!(value, 17);
-    ///
-    /// ```
-    fn set_bit(&mut self, bit: u8, v: bool) -> Self {
-        use core::mem::size_of;
-
-        let self_size_bits = size_of::<Self>() * 8;
-        if bit > self_size_bits as u8 { panic!("Tried to set a bit outside the range of the current type!"); }
-
-        let calculate_bit = (2 as Self).pow(bit as u32);
-        *self = if v { *self | calculate_bit } else { *self & ( calculate_bit ^ Self::MAX) };
-
-        *self
-    }
-
-    /// # set_bit_range
-    /// `set_bit_range` can toggle multiple bits in any stream of numbers. This can include setting
-    /// bits `1 - 3` to `true`, or setting bits `2-7` to `false`.
-    ///
-    /// # Safety
-    /// `set_bit_range` has protections for when you try to set a bit outside the range of the type
-    /// you are setting. For example, if you try to set bit `14` in a `u8` type, this will panic as
-    /// bit `14` does not exist in a u8 type.
-    ///
-    /// # Portability
-    /// The `set_bit_range` trait can be implemented for any type as long as the type contains a stream
-    /// of numbers ( without gaps ) that the user would like to toggle. This could be a custom struct
-    /// that contains a primitive type.
-    ///
-    /// # Use
-    /// ```rust
-    /// use quantum_os::bitset::BitSet;
-    ///
-    /// let value = 16_u8.set_bit_range(0..2, 0b01);
-    /// assert_eq!(value, 17);
-    ///
-    /// ```
-    fn set_bit_range(&mut self, r: Range<u8>, bits: u64) -> Self {
-        let bit_out_of_range = bits as u64 / (2 as u64).pow(r.end as u32);
-        if bit_out_of_range > 0 { panic!("Tried to set a bit outside the range provided!"); }
-
-        let mut dev = 0;
-        for bit in r {
-            self.set_bit(bit, (bits >> dev & 1) == 1);
-
-            dev += 1;
-        }
-
-        *self
-    }
-
-    /// # get_bit
-    /// `get_bit` can return a bit in any stream of numbers. This can include getting any bits within
-    /// the type limits of the value.
-    ///
-    /// # Safety
-    /// `get_bit` has protections for when you try to get a bit outside the range of the type you are
-    /// using. For example, if you try to get bit `14` in a `u8` type, this will panic as bit `14`
-    /// does not exist in a u8 type.
-    ///
-    /// # Portability
-    /// The `get_bit` trait can be implemented for any type as long as the type contains a stream
-    /// of numbers ( without gaps ) that the user would like to return. This could be a custom struct
-    /// that contains a primitive type.
-    ///
-    /// # Use
-    /// ```rust
-    /// use quantum_os::bitset::BitSet;
-    ///
-    /// let value = 16_u8.get_bit(0);
-    /// assert_eq!(value, 0);
-    ///
-    /// ```
-    fn get_bit(&self, bit: u8) -> Self {
-        use core::mem::size_of;
-
-        let self_size_bits = size_of::<Self>() * 8;
-        if bit > self_size_bits as u8 { panic!("Tried to get a bit outside the range of the current type!"); }
-
-        (self >> bit) & 0b1
-    }
-}
-
-/// # Bitset for i32
-impl BitSet for i32 {
-
-    /// # set_bit
-    /// `set_bit` can toggle a bit in any stream of numbers. This can include setting bit `1` to
-    /// `true`, or setting bit `7` to `false`.
-    ///
-    /// # Safety
-    /// `set_bit` has protections for when you try to set a bit outside the range of the type you are
-    /// setting. For example, if you try to set bit `14` in a `u8` type, this will panic as bit `14`
-    /// does not exist in a u8 type.
-    ///
-    /// # Portability
-    /// The `set_bit` trait can be implemented for any type as long as the type contains a stream
-    /// of numbers ( without gaps ) that the user would like to toggle. This could be a custom struct
-    /// that contains a primitive type.
-    ///
-    /// # Use
-    /// ```rust
-    /// use quantum_os::bitset::BitSet;
-    ///
-    /// let value = 16_u8.set_bit(0, true);
-    /// assert_eq!(value, 17);
-    ///
-    /// ```
-    fn set_bit(&mut self, bit: u8, v: bool) -> Self {
-        use core::mem::size_of;
-
-        let self_size_bits = size_of::<Self>() * 8;
-        if bit > self_size_bits as u8 { panic!("Tried to set a bit outside the range of the current type!"); }
-
-        let calculate_bit = (2 as Self).pow(bit as u32);
-        *self = if v { *self | calculate_bit } else { *self & ( calculate_bit ^ Self::MAX) };
-
-        *self
-    }
-
-    /// # set_bit_range
-    /// `set_bit_range` can toggle multiple bits in any stream of numbers. This can include setting
-    /// bits `1 - 3` to `true`, or setting bits `2-7` to `false`.
-    ///
-    /// # Safety
-    /// `set_bit_range` has protections for when you try to set a bit outside the range of the type
-    /// you are setting. For example, if you try to set bit `14` in a `u8` type, this will panic as
-    /// bit `14` does not exist in a u8 type.
-    ///
-    /// # Portability
-    /// The `set_bit_range` trait can be implemented for any type as long as the type contains a stream
-    /// of numbers ( without gaps ) that the user would like to toggle. This could be a custom struct
-    /// that contains a primitive type.
-    ///
-    /// # Use
-    /// ```rust
-    /// use quantum_os::bitset::BitSet;
-    ///
-    /// let value = 16_u8.set_bit_range(0..2, 0b01);
-    /// assert_eq!(value, 17);
-    ///
-    /// ```
-    fn set_bit_range(&mut self, r: Range<u8>, bits: u64) -> Self {
-        let bit_out_of_range = bits as u64 / (2 as u64).pow(r.end as u32);
-        if bit_out_of_range > 0 { panic!("Tried to set a bit outside the range provided!"); }
-
-        let mut dev = 0;
-        for bit in r {
-            self.set_bit(bit, (bits >> dev & 1) == 1);
-
-            dev += 1;
-        }
-
-        *self
-    }
-
-    /// # get_bit
-    /// `get_bit` can return a bit in any stream of numbers. This can include getting any bits within
-    /// the type limits of the value.
-    ///
-    /// # Safety
-    /// `get_bit` has protections for when you try to get a bit outside the range of the type you are
-    /// using. For example, if you try to get bit `14` in a `u8` type, this will panic as bit `14`
-    /// does not exist in a u8 type.
-    ///
-    /// # Portability
-    /// The `get_bit` trait can be implemented for any type as long as the type contains a stream
-    /// of numbers ( without gaps ) that the user would like to return. This could be a custom struct
-    /// that contains a primitive type.
-    ///
-    /// # Use
-    /// ```rust
-    /// use quantum_os::bitset::BitSet;
-    ///
-    /// let value = 16_u8.get_bit(0);
-    /// assert_eq!(value, 0);
-    ///
-    /// ```
-    fn get_bit(&self, bit: u8) -> Self {
-        use core::mem::size_of;
-
-        let self_size_bits = size_of::<Self>() * 8;
-        if bit > self_size_bits as u8 { panic!("Tried to get a bit outside the range of the current type!"); }
-
-        (self >> bit) & 0b1
-    }
-}
 
 #[cfg(test)]
 mod test_case {
     use crate::bitset::BitSet;
 
     #[test_case]
-    fn test_setbit_u8() {
-
-        let mut initial_value = 10_u8;
-        let output_value = 14_u8;
-
-        let value = initial_value.set_bit(2, true);
-
-        assert_eq!(value, output_value);
-        assert_eq!(10_u8.set_bit_range(0..8, 255), 255);
-        assert_eq!(0_u8.set_bit(0, true), 1);
-        assert_eq!(8_u8.set_bit(3, false), 0);
-        assert_eq!(0_u8.set_bit_range(2..3, 1), 0_u8.set_bit(2, true));
+    fn set_bit_test() {
+        assert_eq!(0_u8.set_bit(7, true), 128_u8);
+        assert_eq!(123_u16.set_bit(5, false), 91_u16);
+        assert_eq!(141742579807_u64.set_bit(38, true), 416620486751_u64);
     }
 
     #[test_case]
-    fn test_all() {
-        assert_eq!(100.get_bit(2), 1);
-        assert_eq!(12_u8.set_bit_range(3..5, 0b10), 20);
-        assert_eq!(10_u16.set_bit_range(0..8, 255), 255);
-        assert_eq!(0_u32.set_bit(0, true), 1);
-        assert_eq!(8_u64.set_bit(3, false), 0);
-        assert_eq!(0.set_bit_range(2..3, 1), 0_u8.set_bit(2, true));
+    fn set_bits_test() {
+        assert_eq!(0_u8.set_bits(3..7, 0b101), 40_u8);
+        assert_eq!(255_u16.set_bits(0..8, 0), 0_u16);
+        assert_eq!(0_u8.set_bits(0..8, 255), 255_u8);
+    }
+
+    #[test_case]
+    fn get_bit_test() {
+        assert_eq!(138.get_bit(3), true);
+        assert_eq!(412.get_bit(6), false);
+        assert_eq!(141742579807_u64.get_bit(37), true);
+    }
+
+    #[test_case]
+    fn get_bits_test() {
+        assert_eq!(321_u32.get_bits(0..9), 321_u32);
+        assert_eq!(42_u32.get_bits(6..8), 0_u32);
+        assert_eq!(4921949_u64.get_bits(16..20), 0b1011_u64);
     }
 }
