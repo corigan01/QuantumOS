@@ -52,6 +52,7 @@ use quantum_os::{attach_interrupt};
 use quantum_os::{debug_print, debug_println};
 use bootloader::entry_point;
 use quantum_os::memory::physical_memory::{PhyRegionKind, PhyRegion, PhyRegionMap};
+use quantum_os::memory_utils::safe_ptr::test;
 
 fn debug_output_char(char: u8) {
     if let Some(serial_info) = SERIAL1.lock().as_ref() {
@@ -158,6 +159,8 @@ fn main(boot_info: &'static mut BootInfo) -> ! {
             free_bytes / (1024 * 1024));
 
     }
+
+    test();
 
     let kernel_buffer = FBuffer::new(&boot_info.framebuffer);
 
