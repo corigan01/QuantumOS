@@ -28,7 +28,6 @@ pub struct SafeSize{
     size: Option<usize>
 }
 
-
 impl SafeSize {
     pub fn new() -> Self {
         Self {
@@ -62,5 +61,19 @@ impl SafeSize {
         self.size
     }
 
+    pub fn unwrap(&self) -> usize {
+        if self.is_none() {
+            panic!("SafeSize tried to return zero size!");
+        }
 
+        self.size.unwrap()
+    }
+
+    pub fn expect(&self, string: &'static str) -> usize {
+        if self.is_none() {
+            panic!("{}", string);
+        }
+
+        self.unwrap()
+    }
 }

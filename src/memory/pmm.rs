@@ -27,19 +27,19 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 use heapless::Vec;
 use crate::bitset::BitSet;
 use crate::memory::{PhysicalAddress, UsedMemoryKind};
+use crate::memory_utils::safe_ptr::SafePtr;
 
 pub struct PhyMM {
-    page_vector: Vec<PhySection, 255>
+    page_vector: SafePtr<PhySection>
 }
 
 impl PhyMM {
     pub fn new() -> Self {
         PhyMM {
-            page_vector: Vec::new(),
+            page_vector: SafePtr::new(),
         }
     }
-
-
+    
 
 }
 

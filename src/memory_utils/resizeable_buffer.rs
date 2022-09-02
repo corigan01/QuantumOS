@@ -24,4 +24,42 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 */
 
-// TODO: IMPLEMENT A RESIZEABLE VECTOR LIB
+use heapless::Vec;
+use crate::memory_utils::safe_ptr::SafePtr;
+
+pub struct ResizeableBuffer<T> {
+    /// # Internal Buffer
+    /// We can store up to 255 pointers with differing sizes before we overflow, but that should
+    /// be more then enough because each pointer can store tons of memory at a time.
+    /// ## Scaling
+    /// Each time the buffer expands it expands experimentally with the amount of elements. The first
+    /// allocation might only have 1k in storage, but as we allocate more and more memory to this
+    /// buffer we know that we are going to need more memory to hold it all.
+    /// ## Example of allocation
+    ///
+    /// ```text
+    /// ELEMENTS: [========================            ][...] 24/40 elements are filled
+    ///
+    /// | First Allocation | |       Second Allocation      | |        Final Allocation        |
+    /// [==================] [==============================] [=======                         ]
+    ///       100 bytes                  150 bytes                          200 bytes
+    /// [=============================================================                         ]
+    ///                                      275/450 bytes used
+    /// Total memory used: 450 bytes
+    /// Memory with data: 275 bytes
+    /// Efficiency: 60%
+    ///
+    /// ```
+    ///
+    /// ## Freeing allocations
+    /// If the buffer is given the ability to free its allocations then we will look for when we hit
+    /// 60% usage on the previous allocation to free the latest allocation.
+    ///
+    /// This gives us the most efficiency with not allocating / freeing too much memory at for small
+    /// changes to the vector.
+    internal_buffer: Vec<SafePtr<T>, 255>
+}
+
+impl<T> ResizeableBuffer<T> {
+
+}
