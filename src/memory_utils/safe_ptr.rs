@@ -24,8 +24,6 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 */
 
-
-use core::str::ParseBoolError;
 use crate::debug_println;
 use crate::memory::VirtualAddress;
 
@@ -49,7 +47,7 @@ impl<T> SafePtr<T> {
         unsafe { Self::unsafe_new(ptr) }
     }
 
-    pub fn new_from_address(ptr: VirtualAddress) -> Self {
+    pub unsafe fn unsafe_from_address(ptr: VirtualAddress) -> Self {
         Self::new_from_ptr(ptr.as_u64() as *mut T)
     }
 
@@ -82,7 +80,11 @@ impl<T> SafePtr<T> {
 }
 
 pub fn test() {
-    let something: SafePtr<i32> = SafePtr::new_from_address(VirtualAddress::zero());
+    use crate::arch_x86_64::idt::Entry;
+    use crate::arch_x86_64::idt::EntryOptions;
+
+    let something: SafePtr<Entry> =
+        unsafe { SafePtr::unsafe_from_address(VirtualAddress::from_ptr(&EntryOptions::new_minimal())) };
 
     if let Some(number) = something.as_ptr() {
         unsafe { debug_println!("Value: {:?} *{:?}", *number, number); };
