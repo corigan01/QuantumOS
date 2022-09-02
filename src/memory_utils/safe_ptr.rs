@@ -24,60 +24,32 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 */
 
-use heapless::Vec;
-use crate::bitset::BitSet;
-use crate::memory::{PhysicalAddress, UsedMemoryKind};
 
-pub struct PhyMM {
-    page_vector: Vec<PhySection, 255>
+pub struct SafePtr<T: ?Sized> {
+    pointer: Option<*const T>,
 }
 
-impl PhyMM {
-    pub fn new() -> Self {
-        PhyMM {
-            page_vector: Vec::new(),
+impl<T: ?Sized> SafePtr<T> {
+    pub fn new_null() -> Self {
+        Self {
+            pointer: None
         }
     }
 
-
-
-}
-
-struct PhySection {
-    page_vector: Vec<PhyPage, 1024>,
-    address_offset: PhysicalAddress,
-}
-
-
-/// # Physical Page
-/// A page is normally a 4k section of memory that is aligned to the next 4k section of memory.
-/// This will allow us to calculate the address from a vector of address conversion stored in the
-/// PhyMM. This makes this struct incredibly small and memory dense. We want to store all we can
-/// in the smalled amount of memory because as total memory grows, the amount of pages does too.
-#[derive(Debug, Clone, Copy)]
-pub struct PhyPage(u8);
-
-impl PhyPage {
-    pub fn new() -> Self {
-        PhyPage {
-            0: 0
+    pub fn new(ptr: *mut T) -> Self {
+        if ptr.is_null() {
+            return Self::new_null();
+        }
+        
+        unsafe { Self::unsafe_new(ptr) }
+    }
+    
+    
+    
+    
+    pub unsafe fn unsafe_new(ptr: *mut T) -> Self {
+        Self {
+            pointer: Some(ptr)
         }
     }
-
-    pub fn set_used(&mut self, used: bool) {
-        self.0.set_bit(7, used);
-    }
-
-    pub fn is_free(&self) -> bool {
-        self.0.get_bit(7)
-    }
-
-    pub fn set_type(&mut self, kind: UsedMemoryKind) {
-        self.0.set_bits(0..4, kind as u64);
-    }
-
-    pub fn get_type(&self) -> UsedMemoryKind {
-        UsedMemoryKind::from_u8(self.0.get_bits(0..4))
-    }
 }
-
