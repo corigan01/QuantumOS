@@ -25,31 +25,70 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 
-pub struct SafePtr<T: ?Sized> {
+use core::str::ParseBoolError;
+use crate::debug_println;
+use crate::memory::VirtualAddress;
+
+
+pub struct SafePtr<T> {
     pointer: Option<*const T>,
 }
 
-impl<T: ?Sized> SafePtr<T> {
-    pub fn new_null() -> Self {
+impl<T> SafePtr<T> {
+    pub fn new() -> Self {
         Self {
             pointer: None
         }
     }
 
-    pub fn new(ptr: *mut T) -> Self {
+    pub fn new_from_ptr(ptr: *mut T) -> Self {
         if ptr.is_null() {
-            return Self::new_null();
+            return Self::new();
         }
         
         unsafe { Self::unsafe_new(ptr) }
     }
-    
-    
-    
-    
+
+    pub fn new_from_address(ptr: VirtualAddress) -> Self {
+        Self::new_from_ptr(ptr.as_u64() as *mut T)
+    }
+
     pub unsafe fn unsafe_new(ptr: *mut T) -> Self {
         Self {
             pointer: Some(ptr)
         }
     }
+
+    pub unsafe fn advance_ptr(&self) -> Option<*mut T> {
+        if !self.is_valid() {
+            return None;
+        }
+
+        Some((self.pointer.unwrap() as *mut T).offset(1))
+    }
+
+    pub fn as_ptr(&self) -> Option<*mut T> {
+        if let Some(pointer) = self.pointer {
+            Some(pointer as *mut _)
+        }
+        else {
+            None
+        }
+    }
+
+    pub fn is_valid(&self) -> bool {
+        self.pointer.is_some()
+    }
+}
+
+pub fn test() {
+    let something: SafePtr<i32> = SafePtr::new_from_address(VirtualAddress::zero());
+
+    if let Some(number) = something.as_ptr() {
+        unsafe { debug_println!("Value: {:?} *{:?}", *number, number); };
+    } else {
+        debug_println!("NULL PTR!!");
+    }
+
+
 }
