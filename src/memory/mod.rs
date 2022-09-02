@@ -28,6 +28,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 pub mod paging;
 pub mod physical_memory;
 pub mod pmm;
+pub mod heap;
 
 const PAGE_SIZE: usize = 4096;
 
