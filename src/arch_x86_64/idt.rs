@@ -34,7 +34,7 @@ use x86_64::instructions::segmentation;
 use x86_64::PrivilegeLevel;
 use x86_64::structures::gdt::SegmentSelector;
 
-use crate::{serial_println};
+use crate::{serial_print, serial_println};
 use crate::arch_x86_64::CpuPrivilegeLevel;
 use crate::bitset::BitSet;
 use crate::memory::VirtualAddress;
