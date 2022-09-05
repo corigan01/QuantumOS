@@ -26,6 +26,13 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 use heapless::Vec;
 use crate::memory_utils::safe_ptr::SafePtr;
+use crate::memory_utils::safe_size::SafeSize;
+
+struct BufferComponent<T> {
+    ptr: SafePtr<T>,
+    capacity: SafeSize,
+    used: usize,
+}
 
 pub struct ResizeableBuffer<T> {
     /// # Internal Buffer
@@ -52,14 +59,57 @@ pub struct ResizeableBuffer<T> {
     /// ```
     ///
     /// ## Freeing allocations
-    /// If the buffer is given the ability to free its allocations then we will look for when we hit
+    /// If the buffer is given the ability to free its allocations; then we will look for when we hit
     /// 60% usage on the previous allocation to free the latest allocation.
     ///
     /// This gives us the most efficiency with not allocating / freeing too much memory at for small
     /// changes to the vector.
-    internal_buffer: Vec<SafePtr<T>, 255>
+    internal_buffer: Option<Vec<BufferComponent<T>, 255>>,
+
+    /// # Total Capacity
+    /// This is the capacity in elements that can be pushed into the current size of the buffer.
+    ///
+    /// # Why this?
+    /// This allows us to quickly determine if the number of elements in the buffer without
+    /// iterating over each element to check if its freed or not. Each `BufferComponent` also
+    /// contains a size vector for its type.
+    ///
+    /// # Safety
+    /// This element uses `SafeSize` to ensure that the value isn't defined unless its above 0. We
+    /// do this to make sure that the capacity is not defined for states that are not valid like
+    /// having a capacity of zero!
+    total_capacity: SafeSize,
+
+    /// # Used Elements
+    /// This value is defined to the amount of elements that currently are populated with a value.
+    /// Each `BufferComponent` also has its own used_elements variable to speed up the lookup
+    /// process of knowing how much we have allocated, and where all those allocations reside.
+    ///
+    /// # Future
+    /// When the used elements in each `BufferComponent` drop below a defined value, we should drop
+    /// the allocation, and move each element to a different `BufferComponent`.
+    used_elements: usize,
+
+    // total `BufferComponent`
+    total_allocations: SafeSize,
+
+    /// the percentage that we free `BufferComponent`'s
+    to_free_percentage: SafeSize,
+
 }
 
 impl<T> ResizeableBuffer<T> {
+    pub fn new() -> Self {
+        Self {
+            internal_buffer: None,
+            total_capacity: SafeSize::new(),
+            used_elements: 0,
+            total_allocations: SafeSize::new(),
+            to_free_percentage: SafeSize::new()
+        }
+    }
+}
 
+pub fn test() {
+    let buffer: ResizeableBuffer<i32> = ResizeableBuffer::new();
 }

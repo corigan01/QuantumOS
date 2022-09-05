@@ -24,6 +24,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 */
 
+use core::ptr::null;
 use crate::debug_println;
 use crate::memory::VirtualAddress;
 
@@ -83,8 +84,9 @@ pub fn test() {
     use crate::arch_x86_64::idt::Entry;
     use crate::arch_x86_64::idt::EntryOptions;
 
-    let something: SafePtr<Entry> =
-        unsafe { SafePtr::unsafe_from_address(VirtualAddress::from_ptr(&EntryOptions::new_minimal())) };
+
+    let something: SafePtr<i32> =
+        unsafe { SafePtr::unsafe_from_address(VirtualAddress::from_ptr(&mut 8)) };
 
     if let Some(number) = something.as_ptr() {
         unsafe { debug_println!("Value: {:?} *{:?}", *number, number); };
