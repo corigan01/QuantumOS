@@ -24,6 +24,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 */
 
+#[derive(Debug, Clone, Copy)]
 pub struct SafeSize{
     size: Option<usize>
 }

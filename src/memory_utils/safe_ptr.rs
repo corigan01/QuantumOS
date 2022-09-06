@@ -28,7 +28,7 @@ use core::ptr::null;
 use crate::debug_println;
 use crate::memory::VirtualAddress;
 
-
+#[derive(Debug, Clone, Copy)]
 pub struct SafePtr<T> {
     pointer: Option<*const T>,
 }
@@ -83,7 +83,6 @@ impl<T> SafePtr<T> {
 pub fn test() {
     use crate::arch_x86_64::idt::Entry;
     use crate::arch_x86_64::idt::EntryOptions;
-
 
     let something: SafePtr<i32> =
         unsafe { SafePtr::unsafe_from_address(VirtualAddress::from_ptr(&mut 8)) };

@@ -31,15 +31,10 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #![feature(abi_x86_interrupt)]
 #![test_runner(quantum_os::test_handler::test_runner)]
 
-
-
-
-
-
 //mod vga;
-use bootloader::boot_info::{BootInfo, MemoryRegionKind};
-
 use owo_colors::OwoColorize;
+use bootloader::boot_info::{BootInfo, MemoryRegionKind};
+use bootloader::entry_point;
 
 use quantum_os::arch_x86_64::idt::{interrupt_tester, set_quiet_interrupt, InterruptFrame};
 use quantum_os::arch_x86_64::isr::general_isr;
@@ -50,8 +45,8 @@ use quantum_os::serial::SERIAL1;
 use quantum_os::vga::low_level::FBuffer;
 use quantum_os::{attach_interrupt};
 use quantum_os::{debug_print, debug_println};
-use bootloader::entry_point;
 use quantum_os::memory::physical_memory::{PhyRegionKind, PhyRegion, PhyRegionMap};
+use quantum_os::memory_utils::resizeable_buffer::something_test;
 use quantum_os::memory_utils::safe_ptr::test;
 
 fn debug_output_char(char: u8) {
@@ -162,6 +157,7 @@ fn main(boot_info: &'static mut BootInfo) -> ! {
     }
 
     test();
+    something_test();
 
     let kernel_buffer = FBuffer::new(&boot_info.framebuffer);
 
