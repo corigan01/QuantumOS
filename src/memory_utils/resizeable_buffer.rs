@@ -102,7 +102,7 @@ impl<T> BufferComponent<T> {
         }
 
         let buffer_size = buffer.len();
-        let self_size = self.get_each_allocation_size();
+        let self_size = self.get_bytes_per_element();
         let fitting_allocations = buffer_size / self_size;
         let is_enough_bytes = fitting_allocations > 0;
 
@@ -120,7 +120,7 @@ impl<T> BufferComponent<T> {
         Ok(())
     }
 
-    pub fn get_each_allocation_size(&self) -> usize {
+    pub fn get_bytes_per_element(&self) -> usize {
         size_of::<(T, Option<usize>)>()
     }
 
@@ -233,7 +233,7 @@ impl<T> ResizeableBuffer<T> {
         self.to_free_percentage = 60;
     }
 
-    fn add_fitting_allocations_to_buffer(&mut self, buffer: &mut [u8]) -> Result<(), &str> {
+    fn add_byte_array_to_free_component(&mut self, buffer: &mut [u8]) -> Result<(), &str> {
         // make sure our buffer is defined
         if self.internal_buffer.is_none() {
             self.init_to_zero();
@@ -277,7 +277,7 @@ impl<T> ResizeableBuffer<T> {
         let fitting_allocations = allocation_size / our_size;
         let does_perfect_fit = allocation_size % our_size == 0;
 
-        self.add_fitting_allocations_to_buffer(bytes).unwrap();
+        self.add_byte_array_to_free_component(bytes).unwrap();
 
         self.total_allocations += 1;
         self.total_capacity += fitting_allocations;
@@ -285,7 +285,7 @@ impl<T> ResizeableBuffer<T> {
         return (does_perfect_fit, fitting_allocations);
     }
 
-    fn get_buffer_comp(&mut self, element_index: usize) -> Option<&mut BufferComponent<T>> {
+    fn get_buffer_component_with(&mut self, element_index: usize) -> Option<&mut BufferComponent<T>> {
         if let Some(vector) = &mut self.internal_buffer {
             for i in vector {
                 if i.does_contain_element(element_index) {
@@ -298,7 +298,7 @@ impl<T> ResizeableBuffer<T> {
     }
 
     pub fn get_element(&mut self, index: usize) -> Option<&mut T> {
-        if let Some(comp) = self.get_buffer_comp(index) {
+        if let Some(comp) = self.get_buffer_component_with(index) {
             if let Some(element) = comp.get_element_with_key(index) {
                 return Some(element);
             }
@@ -308,7 +308,7 @@ impl<T> ResizeableBuffer<T> {
     }
 
     pub fn set_element(&mut self, index: usize, element: T) -> Result<(), &str> {
-        if let Some(comp) = self.get_buffer_comp(index) {
+        if let Some(comp) = self.get_buffer_component_with(index) {
             if let Some(mut comp) = comp.get_element_with_key(index) {
                 *comp = element;
 
@@ -397,8 +397,8 @@ mod test {
             assert_eq!(test_component.used, 1);
         }
 
+        serial_print!("  [SIZE: {}]  ", test_component.get_bytes_per_element());
         serial_print!("  [MAX: {}]  ", test_component.max_elements().unwrap());
-
 
         // Test if the buffer expands
         for i in 0..(test_component.max_elements().unwrap() as u8) {
@@ -429,6 +429,7 @@ mod test {
             assert_eq!(test_component.used, 1);
         }
 
+        serial_print!("  [SIZE: {}]  ", test_component.get_bytes_per_element());
         serial_print!("  [MAX: {}]  ", test_component.max_elements().unwrap());
 
         // Test if the buffer expands
@@ -462,7 +463,7 @@ mod test {
             assert_eq!(test_component.used, 1);
         }
 
-        serial_print!("  [SIZE: {}]  ", test_component.get_each_allocation_size());
+        serial_print!("  [SIZE: {}]  ", test_component.get_bytes_per_element());
         serial_print!("  [MAX: {}]  ", test_component.max_elements().unwrap());
 
         // Test if the buffer expands
@@ -490,7 +491,7 @@ mod test {
     }
 
     #[test_case]
-    fn full_buffer_setting_allocation() {
+    fn resizeable_buffer_setting_allocation() {
         let mut raw_vector_limited_lifetime = [0_u8; 4096];
         let mut vector: ResizeableBuffer<u8> = ResizeableBuffer::new();
 
@@ -502,6 +503,13 @@ mod test {
             assert_eq!(vector.len(), i as usize + 1);
             assert_eq!(*vector.get_element(i as usize)
                            .expect("Unable to get element"), i);
+        }
+
+        for i in 0..50 {
+            let element = *vector.get_element(i)
+                .expect("Unable to get element!");
+
+            assert_eq!(element - (i as u8), 0);
         }
     }
 
