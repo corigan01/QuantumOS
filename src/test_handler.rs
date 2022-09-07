@@ -27,6 +27,7 @@ Quantum OS Lib file, documentation coming soon!
 */
 
 use core::panic::PanicInfo;
+use owo_colors::OwoColorize;
 use crate::qemu::{exit_qemu, QemuExitCode};
 use crate::{serial_print, serial_println};
 
@@ -42,9 +43,9 @@ impl<T> Testable for T
         T: Fn(),
 {
     fn run(&self) {
-        serial_print!("{}...", core::any::type_name::<T>());
+        serial_print!("{}...", core::any::type_name::<T>().blue().bold());
         self();
-        serial_println!("[OK]");
+        serial_println!(" {}", "[OK]".bright_green().bold());
     }
 }
 
@@ -54,13 +55,13 @@ pub fn test_runner(tests: &[&dyn Testable]) {
         test.run();
     }
 
-    serial_println!("\nAll tests passed! Exiting Qemu...");
+    serial_println!("\n{}", "All tests passed! Exiting Qemu...".bright_green().bold());
 
     exit_qemu(QemuExitCode::Success);
 }
 
 pub fn test_panic_handler(info: &PanicInfo) -> ! {
-    serial_println!("[Failed]\n");
+    serial_println!("{}\n", "[Failed]".bright_red().bold());
     serial_println!("Error: {}\n", info);
 
     exit_qemu(QemuExitCode::Failed);
