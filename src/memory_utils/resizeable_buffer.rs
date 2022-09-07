@@ -77,17 +77,7 @@ impl<T> BufferComponent<T> {
     }
 
     pub fn does_contain_element(&self, key: usize) -> bool {
-        if let Some(ptr) = self.ptr.as_ptr() {
-            let id = unsafe { (*ptr).1 };
-
-            if let Some(valid_id) = id {
-                if valid_id == key {
-                    return true;
-                }
-            }
-        }
-
-       false
+        self.get_element_with_key(key).is_some()
     }
 
     pub fn get_element_with_key(&self, key: usize) -> Option<&mut T> {
@@ -102,12 +92,7 @@ impl<T> BufferComponent<T> {
                     }
                 }
             }
-
-        } else {
-            return None;
         }
-
-
         return None;
     }
 
@@ -117,7 +102,7 @@ impl<T> BufferComponent<T> {
         }
 
         let buffer_size = buffer.len();
-        let self_size = size_of::<(T, Option<usize>)>();
+        let self_size = self.get_each_allocation_size();
         let fitting_allocations = buffer_size / self_size;
         let is_enough_bytes = fitting_allocations > 0;
 
@@ -125,7 +110,6 @@ impl<T> BufferComponent<T> {
             return Err("Not enough bytes for even 1 allocation, please pass more bytes");
         }
 
-        serial_print!(" [SIZE: {}] ", self_size);
 
         self.capacity = SafeSize::from_usize(fitting_allocations);
         self.used = 0;
@@ -134,6 +118,10 @@ impl<T> BufferComponent<T> {
         };
 
         Ok(())
+    }
+
+    pub fn get_each_allocation_size(&self) -> usize {
+        size_of::<(T, Option<usize>)>()
     }
 
     pub fn has_space_for_new_alloc(&self) -> bool {
@@ -155,6 +143,7 @@ impl<T> BufferComponent<T> {
     pub fn max_elements(&self) -> Option<usize> {
         self.capacity.get()
     }
+
 }
 
 pub struct ResizeableBuffer<T> {
@@ -266,7 +255,6 @@ impl<T> ResizeableBuffer<T> {
                     return Err("Unable to push element");
                 }
 
-                debug_println!("Had to add the first BufferComponent");
             }
 
             // Finally add the allocation to the pool
@@ -274,7 +262,6 @@ impl<T> ResizeableBuffer<T> {
                 let is_not_allocated = !i.is_allocated();
 
                 if is_not_allocated {
-                    debug_println!("Set BufferComponent to given byte vector");
                     return i.set_allocation(buffer);
                 }
             }
@@ -302,7 +289,7 @@ impl<T> ResizeableBuffer<T> {
         if let Some(vector) = &mut self.internal_buffer {
             for i in vector {
                 if i.does_contain_element(element_index) {
-                    Some(i);
+                    return Some(i);
                 }
             }
         }
@@ -358,12 +345,20 @@ impl<T> ResizeableBuffer<T> {
     pub fn push(&mut self, element: T) -> Result<(), &str> {
         self.set_element(self.used_elements, element)
     }
+
+    pub fn len(&self) -> usize {
+        self.used_elements
+    }
+
+    pub fn free_allocations(&self) -> usize {
+        self.total_capacity - self.used_elements
+    }
 }
 
 #[cfg(test)]
 mod test {
     use crate::{debug_println, serial_print, serial_println};
-    use crate::memory_utils::resizeable_buffer::BufferComponent;
+    use crate::memory_utils::resizeable_buffer::{BufferComponent, ResizeableBuffer};
     use crate::test_handler::test_runner;
 
     #[test_case]
@@ -467,6 +462,7 @@ mod test {
             assert_eq!(test_component.used, 1);
         }
 
+        serial_print!("  [SIZE: {}]  ", test_component.get_each_allocation_size());
         serial_print!("  [MAX: {}]  ", test_component.max_elements().unwrap());
 
         // Test if the buffer expands
@@ -474,6 +470,7 @@ mod test {
             test_component.set_element([i; AMOUNT_OF_BYTES_TO_TEST], i as usize)
                 .expect("Unable to push element into the Buffer");
 
+            assert_eq!(test_component.does_contain_element(i as usize), true);
             assert_eq!(*test_component.get_element_with_key(i as usize)
                 .expect("Could not get element with that key!"), [i; AMOUNT_OF_BYTES_TO_TEST]);
             assert_eq!(test_component.used, i as usize + 1);
@@ -490,6 +487,22 @@ mod test {
         let result = test_component.set_allocation(&mut raw_vector_limited_lifetime);
         assert_eq!(result.is_err(), true);
 
+    }
+
+    #[test_case]
+    fn full_buffer_setting_allocation() {
+        let mut raw_vector_limited_lifetime = [0_u8; 4096];
+        let mut vector: ResizeableBuffer<u8> = ResizeableBuffer::new();
+
+        unsafe { vector.add_allocation(&mut raw_vector_limited_lifetime) };
+
+        for i in 0..50 {
+            vector.push(i).expect("Unable to add element to Buffer");
+
+            assert_eq!(vector.len(), i as usize + 1);
+            assert_eq!(*vector.get_element(i as usize)
+                           .expect("Unable to get element"), i);
+        }
     }
 
 
