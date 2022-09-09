@@ -945,11 +945,10 @@ mod test_case {
 
         i -= 101;
 
-        unsafe {
-            let d = i == intn;
+        let d = i == intn;
 
-            serial_print!("[{}]  ", d);
-        }
+        serial_print!("[{}]  ", d);
+
     }
 
     lazy_static! {

@@ -10,9 +10,9 @@ members = [
 
 [features]
 default = [ "nightly", "instructions" ]
-instructions = []
 nightly = [ "const_fn", "abi_x86_interrupt" ]
 abi_x86_interrupt = []
+instructions = []
 const_fn = []
 
 [profile.dev]
@@ -21,14 +21,13 @@ panic = "unwind"
 [dependencies]
 bootloader = "0.10.12"
 no-std-compat = "0.4.1"
-volatile = "0.2.6"
-spin = "0.5.2"
+volatile = "0.4.5"
+spin = "0.9.4"
 
 # Should be implmented in Quantum down the line
 x86_64 = "0.14.9"
 owo-colors = "3.4.0"
 heapless = "0.7.16"
-
 
 [dependencies.lazy_static]
 version = "1.0"

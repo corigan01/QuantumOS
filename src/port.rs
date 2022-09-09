@@ -47,25 +47,25 @@ would assure the operation is safe and checks input and outputs.
 
 ## List of IO Ports commonly used (https://wiki.osdev.org/I/O_Ports)
 ```text
-Port range	    Summary
-0x0000-0x001F	The first legacy DMA controller
-0x0020-0x0021	The first PIC
-0x0022-0x0023	Access to the Model-Specific Registers of Cyrix processors.
-0x0040-0x0047	The PIT
-0x0060-0x0064	The "8042" PS/2 Controller or its predecessors, dealing with keyboards and mice.
-0x0070-0x0071	The CMOS and RTC registers
-0x0080-0x008F	The DMA (Page registers)
-0x0092	        The location of the fast A20 gate register
-0x00A0-0x00A1	The second PIC
-0x00C0-0x00DF	The second DMA controller, often used for SoundBlasters
-0x00E9	        Home of the Port E9 Hack. Used on some emulators to directly send text to the hosts' console.
-0x0170-0x0177	The secondary ATA hard disk controller.
-0x01F0-0x01F7	The primary ATA hard disk controller.
-0x0278-0x027A	Parallel port
-0x02F8-0x02FF	Second serial port
-0x03B0-0x03DF	The range used for the IBM VGA, its direct predecessors, as well as any modern video card in legacy mode.
-0x03F0-0x03F7	Floppy disk controller
-0x03F8-0x03FF	First serial port
+Port range      Summary
+0x0000-0x001F    The first legacy DMA controller
+0x0020-0x0021    The first PIC
+0x0022-0x0023    Access to the Model-Specific Registers of Cyrix processors.
+0x0040-0x0047    The PIT
+0x0060-0x0064    The "8042" PS/2 Controller or its predecessors, dealing with keyboards and mice.
+0x0070-0x0071    The CMOS and RTC registers
+0x0080-0x008F    The DMA (Page registers)
+0x0092           The location of the fast A20 gate register
+0x00A0-0x00A1    The second PIC
+0x00C0-0x00DF    The second DMA controller, often used for SoundBlasters
+0x00E9           Home of the Port E9 Hack. Used on some emulators to directly send text to the hosts' console.
+0x0170-0x0177    The secondary ATA hard disk controller.
+0x01F0-0x01F7    The primary ATA hard disk controller.
+0x0278-0x027A    Parallel port
+0x02F8-0x02FF    Second serial port
+0x03B0-0x03DF    The range used for the IBM VGA, its direct predecessors, as well as any modern video card in legacy mode.
+0x03F0-0x03F7    Floppy disk controller
+0x03F8-0x03FF    First serial port
 ```
 */
 
