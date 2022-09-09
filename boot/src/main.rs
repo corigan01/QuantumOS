@@ -4,6 +4,7 @@ use std::{
 };
 // "--no-reboot"
 const RUN_ARGS: &[&str] = &[
+    "-enable-kvm",
     "-m",
     "256M",
     "--no-reboot",
