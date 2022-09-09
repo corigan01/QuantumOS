@@ -32,13 +32,13 @@ use crate::memory_utils::safe_ptr::SafePtr;
 use crate::memory_utils::safe_size::SafeSize;
 
 #[derive(Debug)]
-struct BufferComponent<'a, T> {
+struct BufferComponent<T> {
     ptr: SafePtr<(T, Option<usize>)>,
     capacity: SafeSize,
     used: usize,
 }
 
-impl<'a, T> BufferComponent<'a, T> {
+impl<T> BufferComponent<T> {
     pub fn new() -> Self {
         Self {
             ptr: SafePtr::new(),
@@ -109,7 +109,7 @@ impl<'a, T> BufferComponent<'a, T> {
         return None;
     }
 
-    pub unsafe fn set_allocation(&mut self, buffer: &'a mut [u8]) -> Result<(), &str> {
+    pub unsafe fn set_allocation(&mut self, buffer: &mut [u8]) -> Result<(), &str> {
         if self.ptr.is_valid() {
             return Err("Allocation already set, cannot set a new allocation!");
         }
@@ -126,7 +126,7 @@ impl<'a, T> BufferComponent<'a, T> {
 
         self.capacity = SafeSize::from_usize(fitting_allocations);
         self.used = 0;
-        self.ptr = SafePtr::unsafe_from_address(VirtualAddress::from_ptr(&'a buffer));
+        self.ptr = SafePtr::unsafe_from_address(VirtualAddress::from_ptr(buffer.as_ptr()));
 
         Ok(())
     }
@@ -157,7 +157,7 @@ impl<'a, T> BufferComponent<'a, T> {
 
 }
 
-pub struct ResizeableBuffer<'a, T> {
+pub struct ResizeableBuffer<T> {
     /// # Internal Buffer
     /// We can store up to 255 pointers with differing sizes before we overflow, but that should
     /// be more then enough because each pointer can store tons of memory at a time.
@@ -187,7 +187,7 @@ pub struct ResizeableBuffer<'a, T> {
     ///
     /// This gives us the most efficiency with not allocating / freeing too much memory at for small
     /// changes to the vector.
-    internal_buffer: Option<Vec<BufferComponent<'a, T>, 255>>,
+    internal_buffer: Option<Vec<BufferComponent<T>, 255>>,
 
     /// # Total Capacity
     /// This is the capacity in elements that can be pushed into the current size of the buffer.
@@ -223,7 +223,7 @@ pub struct ResizeableBuffer<'a, T> {
     should_manually_allocate: bool,
 }
 
-impl<'a, T> ResizeableBuffer<'a, T> {
+impl<T> ResizeableBuffer<T> {
     pub fn new() -> Self {
         Self {
             internal_buffer: None,
@@ -244,7 +244,7 @@ impl<'a, T> ResizeableBuffer<'a, T> {
         self.to_free_percentage = 60;
     }
 
-    unsafe fn add_byte_array_to_free_component(&mut self, buffer: &'a mut [u8]) -> Result<(), &str> {
+    unsafe fn add_byte_array_to_free_component(&mut self, buffer: &mut [u8]) -> Result<(), &str> {
         // make sure our buffer is defined
         if self.internal_buffer.is_none() {
             self.init_to_zero();
@@ -289,7 +289,7 @@ impl<'a, T> ResizeableBuffer<'a, T> {
         Ok(())
     }
 
-    pub unsafe fn add_allocation(&mut self, bytes: &'a mut [u8]) -> Result<(), &str> {
+    pub unsafe fn add_allocation(&mut self, bytes: &mut [u8]) -> Result<(), &str> {
 
         self.add_byte_array_to_free_component(bytes)?;
 
@@ -509,7 +509,6 @@ mod test_case {
 
         let result = unsafe {
             test_component.set_allocation(&mut raw_vector_limited_lifetime)
-                .expect("Unable to set raw bytes to BufferComponent");
         };
         assert_eq!(result.is_err(), true);
 
