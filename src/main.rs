@@ -135,7 +135,7 @@ fn main(boot_info: &'static mut BootInfo) -> ! {
                     memory_region.start, memory_region.end, memory_region.kind.red())
             }
 
-
+            
             region_map.add_entry(memory_entry);
         }
 
