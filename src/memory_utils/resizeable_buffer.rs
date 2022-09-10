@@ -30,12 +30,14 @@ use crate::{debug_println, serial_print, serial_println};
 use crate::memory::VirtualAddress;
 use crate::memory_utils::safe_ptr::SafePtr;
 use crate::memory_utils::safe_size::SafeSize;
+use crate::error_utils::QuantumError;
 
 #[derive(Debug)]
 struct BufferComponent<T> {
     ptr: SafePtr<(T, Option<usize>)>,
     capacity: SafeSize,
     used: usize,
+    key_offset: usize,
 }
 
 impl<T> BufferComponent<T> {
@@ -43,37 +45,56 @@ impl<T> BufferComponent<T> {
         Self {
             ptr: SafePtr::new(),
             capacity: SafeSize::new(),
-            used: 0
+            used: 0,
+            key_offset: 0
         }
     }
 
-    pub fn set_element(&mut self, element: T, key: usize) -> Result<(), &str> {
-        if let Some(capacity) = self.capacity.get() {
-            if self.used >= capacity {
-                return Err("Can not allocate to a full buffer");
-            }
-        } else {
-            return Err("Capacity is not defined, and no elements can be added");
+    pub fn set_element(&mut self, element: T, key: usize) -> Result<(), QuantumError> {
+        // Check if the key is valid within our range
+        if key < self.key_offset {
+            return Err(QuantumError::NoItem)
         }
 
         // check if we already have an element defined with the given key
         if let Some(value) = self.get_element_with_key(key) {
             *value = element;
         } else if let Some(pointer) = self.ptr.as_ptr() {
+            // Check if the capacity allows us to set a new element
+            if let Some(capacity) = self.capacity.get() {
+                if self.used >= capacity {
+                    return Err(QuantumError::BufferFull);
+                }
+            } else {
+                return Err(QuantumError::UndefinedValue);
+            }
+
             // Finally if we know we *dont* have an element with the same key, and we have space
             // for another allocation, then we can append the element and key to the buffer
             let real_pointer = unsafe {
-                pointer.add(self.used)
+                pointer.add(key)
             };
 
             unsafe { *real_pointer = (element, Some(key)) };
             self.used += 1;
 
         } else {
-            return Err("Pointer is not defined to add any elements");
+            return Err(QuantumError::NoItem);
         }
 
         Ok(())
+    }
+
+    pub fn remove_element(&mut self, key: usize) -> Result<T, QuantumError> {
+        if let Some(existing_element) = self.get_element_with_key(key) {
+            if let Some(self_ptr) = self.ptr.as_ptr() {
+
+            }
+
+
+        }
+
+        Err(QuantumError::NoItem)
     }
 
     pub fn does_contain_element(&self, key: usize) -> bool {
@@ -85,8 +106,6 @@ impl<T> BufferComponent<T> {
             if self.used > capacity || key > self.used {
                 return None;
             }
-        } else {
-            return None;
         }
 
         if let Some(ptr) = self.ptr.as_ptr() {
@@ -109,9 +128,9 @@ impl<T> BufferComponent<T> {
         return None;
     }
 
-    pub unsafe fn set_allocation(&mut self, buffer: &mut [u8]) -> Result<(), &str> {
+    pub unsafe fn set_allocation(&mut self, buffer: &mut [u8], key_offset: usize) -> Result<(), QuantumError> {
         if self.ptr.is_valid() {
-            return Err("Allocation already set, cannot set a new allocation!");
+            return Err(QuantumError::AlreadySetValue);
         }
 
         let buffer_size = buffer.len();
@@ -120,10 +139,11 @@ impl<T> BufferComponent<T> {
         let is_enough_bytes = fitting_allocations > 0;
 
         if !is_enough_bytes {
-            return Err("Not enough bytes for even 1 allocation, please pass more bytes");
+            return Err(QuantumError::NoSpaceRemaining);
         }
 
 
+        self.key_offset = key_offset;
         self.capacity = SafeSize::from_usize(fitting_allocations);
         self.used = 0;
         self.ptr = SafePtr::unsafe_from_address(VirtualAddress::from_ptr(buffer.as_ptr()));
@@ -187,7 +207,7 @@ pub struct ResizeableBuffer<T> {
     ///
     /// This gives us the most efficiency with not allocating / freeing too much memory at for small
     /// changes to the vector.
-    internal_buffer: Option<Vec<BufferComponent<T>, 255>>,
+    internal_buffer: Option<Vec<SafePtr<BufferComponent <T>>, 255>>,
 
     /// # Total Capacity
     /// This is the capacity in elements that can be pushed into the current size of the buffer.
@@ -244,7 +264,7 @@ impl<T> ResizeableBuffer<T> {
         self.to_free_percentage = 60;
     }
 
-    unsafe fn add_byte_array_to_free_component(&mut self, buffer: &mut [u8]) -> Result<(), &str> {
+    unsafe fn add_byte_array_to_free_component(&mut self, buffer: &mut [u8]) -> Result<(), QuantumError> {
         // make sure our buffer is defined
         if self.internal_buffer.is_none() {
             self.init_to_zero();
@@ -255,52 +275,83 @@ impl<T> ResizeableBuffer<T> {
             // First check if the buffer is full
             let remaining_size = internal_buffer.capacity() - internal_buffer.len();
             if remaining_size == 0 {
-                return Err("No more room for additional allocations in resizeable buffer");
+                return Err(QuantumError::NoSpaceRemaining);
             }
 
             // Second check if we are pushing the first allocation
             if internal_buffer.len() == 0 {
-                let output = internal_buffer.push(BufferComponent::new());
+                if !internal_buffer.is_full() {
+                    if buffer.len() <= size_of::<BufferComponent<T>>() {
+                        return Err(QuantumError::NoSpaceRemaining);
+                    }
 
-                if output.is_err() {
-                    return Err("Unable to push element");
+                    let new_component: BufferComponent<T> = BufferComponent::new();
+                    let translated_buffer_type =
+                        SafePtr::<BufferComponent<T>>::unsafe_from_address(VirtualAddress::new(buffer.as_ptr() as u64));
+
+                    if let Some(ptr) = translated_buffer_type.as_ptr() {
+                        *ptr = new_component;
+                        let resl = internal_buffer.push(translated_buffer_type);
+
+                        if resl.is_err() {
+                            return Err(QuantumError::NoSpaceRemaining);
+                        }
+                    }
+
+                } else {
+                    return Err(QuantumError::BufferFull)
                 }
-
             }
 
             // Finally add the allocation to the pool
             for i in internal_buffer {
-                let is_not_allocated = !i.is_allocated();
+                if let Some(ptr) = i.as_ptr() {
+                    let buffer_comp = &mut *ptr;
 
-                if is_not_allocated {
-                    i.set_allocation(buffer)?;
+                    let is_not_allocated = !buffer_comp.is_allocated();
 
-                    let allocation_size = buffer.len();
-                    let our_size = size_of::<(T, usize)>();
+                    if is_not_allocated {
+                        let offset_size = size_of::<BufferComponent<T>>();
+                        let buff = buffer.as_mut_ptr().add(offset_size);
+                        let allocation_size = buffer.len() - offset_size;
+                        let array = core::slice::from_raw_parts_mut(buff, allocation_size);
 
-                    let fitting_allocations = allocation_size / our_size;
+                        buffer_comp.set_allocation(array, self.total_capacity)?;
 
-                    self.total_allocations += 1;
-                    self.total_capacity += fitting_allocations;
+                        let our_size = size_of::<(T, usize)>();
+
+                        let fitting_allocations = allocation_size / our_size;
+
+                        self.total_allocations += 1;
+                        self.total_capacity += fitting_allocations;
+
+                        return Ok(());
+                    }
                 }
             }
+            return Err(QuantumError::NoItem);
         }
 
-        Ok(())
+        Err(QuantumError::UndefinedValue)
     }
 
-    pub unsafe fn add_allocation(&mut self, bytes: &mut [u8]) -> Result<(), &str> {
+    pub unsafe fn add_allocation(&mut self, bytes: &mut [u8]) -> Result<(), QuantumError> {
+        // TODO: Ensure that the byte array does not go out of scope
 
         self.add_byte_array_to_free_component(bytes)?;
 
         Ok(())
     }
 
-    fn get_buffer_component_with(&mut self, element_index: usize) -> Option<&mut BufferComponent<T>> {
+    fn get_buffer_component_with_key(&mut self, element_index: usize) -> Option<&mut BufferComponent<T>> {
         if let Some(vector) = &mut self.internal_buffer {
             for i in vector {
-                if i.does_contain_element(element_index) {
-                    return Some(i);
+                if let Some(ptr) = i.as_ptr() {
+                    let buffer_comp = unsafe { &mut *ptr };
+
+                    if buffer_comp.does_contain_element(element_index) {
+                        return Some(buffer_comp);
+                    }
                 }
             }
         }
@@ -309,7 +360,7 @@ impl<T> ResizeableBuffer<T> {
     }
 
     pub fn get_element(&mut self, index: usize) -> Option<&mut T> {
-        if let Some(comp) = self.get_buffer_component_with(index) {
+        if let Some(comp) = self.get_buffer_component_with_key(index) {
             if let Some(element) = comp.get_element_with_key(index) {
                 return Some(element);
             }
@@ -318,8 +369,8 @@ impl<T> ResizeableBuffer<T> {
         None
     }
 
-    pub fn set_element(&mut self, index: usize, element: T) -> Result<(), &str> {
-        if let Some(comp) = self.get_buffer_component_with(index) {
+    pub fn set_element(&mut self, index: usize, element: T) -> Result<(), QuantumError> {
+        if let Some(comp) = self.get_buffer_component_with_key(index) {
             if let Some(mut comp) = comp.get_element_with_key(index) {
                 *comp = element;
 
@@ -331,29 +382,24 @@ impl<T> ResizeableBuffer<T> {
 
         if let Some(vector) = &mut self.internal_buffer {
             for i in vector {
-                if i.has_space_for_new_alloc() {
-                    debug_println!("Found a free BufferComponent!");
-                    let res = i.set_element(element, index);
+                if let Some(ptr) = i.as_ptr() {
+                    let buffer_comp = unsafe { &mut *ptr };
 
-                    if res.is_ok() {
-                        debug_println!("Successfully pushed new element to Buffer");
+                    if buffer_comp.has_space_for_new_alloc() {
+                        buffer_comp.set_element(element, index)?;
+
                         self.used_elements += 1;
 
-                        debug_println!("Buffer Status SizeUsed: {}, SizeFree: {}", self.used_elements, self.total_capacity);
+                        return Ok(());
                     }
-
-                    return res;
                 }
             }
-        } else {
-            return Err("Unable to open internal_buffer");
         }
 
-
-        Ok(())
+        Err(QuantumError::UndefinedValue)
     }
 
-    pub fn push(&mut self, element: T) -> Result<(), &str> {
+    pub fn push(&mut self, element: T) -> Result<(), QuantumError> {
         self.set_element(self.used_elements, element)
     }
 
@@ -361,8 +407,12 @@ impl<T> ResizeableBuffer<T> {
         self.used_elements
     }
 
-    pub fn free_allocations(&self) -> usize {
+    pub fn total_free_allocations(&self) -> usize {
         self.total_capacity - self.used_elements
+    }
+
+    pub fn pop(&mut self, key: usize) -> Result<(), QuantumError> {
+        Ok(())
     }
 }
 
@@ -379,7 +429,7 @@ mod test_case {
         let mut test_component : BufferComponent<u8> = BufferComponent::new();
 
         unsafe {
-            test_component.set_allocation(&mut raw_vector_limited_lifetime)
+            test_component.set_allocation(&mut raw_vector_limited_lifetime, 0)
                 .expect("Unable to set raw bytes to BufferComponent");
         }
     }
@@ -390,7 +440,7 @@ mod test_case {
         let mut test_component : BufferComponent<u64> = BufferComponent::new();
 
         unsafe {
-            test_component.set_allocation(&mut raw_vector_limited_lifetime)
+            test_component.set_allocation(&mut raw_vector_limited_lifetime, 0)
                 .expect("Unable to set raw bytes to BufferComponent");
         }
     }
@@ -401,7 +451,7 @@ mod test_case {
         let mut test_component : BufferComponent<u8> = BufferComponent::new();
 
         unsafe {
-            test_component.set_allocation(&mut raw_vector_limited_lifetime)
+            test_component.set_allocation(&mut raw_vector_limited_lifetime, 0)
                 .expect("Unable to set raw bytes to BufferComponent");
         }
 
@@ -435,7 +485,7 @@ mod test_case {
         let mut test_component : BufferComponent<u64> = BufferComponent::new();
 
         unsafe {
-            test_component.set_allocation(&mut raw_vector_limited_lifetime)
+            test_component.set_allocation(&mut raw_vector_limited_lifetime, 0)
                 .expect("Unable to set raw bytes to BufferComponent");
         }
 
@@ -471,7 +521,7 @@ mod test_case {
         let mut test_component : BufferComponent<[u8; AMOUNT_OF_BYTES_TO_TEST]> = BufferComponent::new();
 
         unsafe {
-            test_component.set_allocation(&mut raw_vector_limited_lifetime)
+            test_component.set_allocation(&mut raw_vector_limited_lifetime, 0)
                 .expect("Unable to set raw bytes to BufferComponent");
         }
 
@@ -508,7 +558,7 @@ mod test_case {
         let mut test_component : BufferComponent<[u8; AMOUNT_OF_BYTES_TO_TEST]> = BufferComponent::new();
 
         let result = unsafe {
-            test_component.set_allocation(&mut raw_vector_limited_lifetime)
+            test_component.set_allocation(&mut raw_vector_limited_lifetime, 0)
         };
         assert_eq!(result.is_err(), true);
 
@@ -550,30 +600,15 @@ mod test_case {
     }
 
     #[test_case]
-    fn out_of_scope_raw_bytes() {
+    fn removing_and_adding_elements() {
+        let mut raw_vector_limited_lifetime = [0_u8; 4096];
         let mut vector: ResizeableBuffer<u8> = ResizeableBuffer::new();
 
-        {
-            let mut raw_vector_limited_lifetime = [0_u8; 4096];
-            unsafe {
-                vector.add_allocation(&mut raw_vector_limited_lifetime).unwrap();
-            }
-        } // The raw_vector_limited_lifetime goes out of scope here, but is still used
-
-        for i in 0..50 {
-            vector.push(i).expect("Unable to add element to Buffer");
-
-            assert_eq!(vector.len(), i as usize + 1);
-            assert_eq!(*vector.get_element(i as usize)
-                .expect("Unable to get element"), i);
+        unsafe {
+            vector.add_allocation(&mut raw_vector_limited_lifetime).unwrap();
         }
 
-        for i in 0..50 {
-            let element = *vector.get_element(i)
-                .expect("Unable to get element!");
 
-            assert_eq!(element - (i as u8), 0);
-        }
     }
 
 
