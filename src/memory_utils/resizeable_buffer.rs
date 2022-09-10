@@ -581,6 +581,7 @@ mod test_case {
                            .expect("Unable to get element"), i);
         }
 
+        // Now re-check each item to make sure they have stayed the same
         for i in 0..50 {
             let element = *vector.get_element(i)
                 .expect("Unable to get element!");
