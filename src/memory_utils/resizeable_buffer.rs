@@ -85,16 +85,25 @@ impl<T> BufferComponent<T> {
         Ok(())
     }
 
-    pub fn remove_element(&mut self, key: usize) -> Result<T, QuantumError> {
-        if let Some(existing_element) = self.get_element_with_key(key) {
-            if let Some(self_ptr) = self.ptr.as_ptr() {
+    fn remove_element(&mut self, key: usize) -> Result<(), QuantumError> {
+        if let Some(ptr) = self.ptr.as_ptr() {
+            for i in (key + 1)..self.used {
+                let mut non_shifted_ptr = unsafe { ptr.add(i) };
+                let mut shifted_ptr = unsafe { ptr.add(i - 1) };
 
+
+                unsafe {
+                    *shifted_ptr = ((*non_shifted_ptr).0, Some(i - 1));
+                    (*non_shifted_ptr).1 = None;
+                }
             }
 
+            self.used -= 1;
 
+            return Ok(());
         }
 
-        Err(QuantumError::NoItem)
+        Err(QuantumError::UndefinedValue)
     }
 
     pub fn does_contain_element(&self, key: usize) -> bool {
@@ -173,6 +182,18 @@ impl<T> BufferComponent<T> {
 
     pub fn max_elements(&self) -> Option<usize> {
         self.capacity.get()
+    }
+
+    pub fn pop(&mut self) {
+
+    }
+
+    pub fn remove(&mut self, index: usize) {
+
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.used == 0
     }
 
 }
@@ -312,11 +333,12 @@ impl<T> ResizeableBuffer<T> {
 
                     if is_not_allocated {
                         let offset_size = size_of::<BufferComponent<T>>();
-                        let buff = buffer.as_mut_ptr().add(offset_size);
                         let allocation_size = buffer.len() - offset_size;
-                        let array = core::slice::from_raw_parts_mut(buff, allocation_size);
 
-                        buffer_comp.set_allocation(array, self.total_capacity)?;
+                        let buff = buffer.as_mut_ptr().add(offset_size);
+                        let buff = core::slice::from_raw_parts_mut(buff, allocation_size);
+
+                        buffer_comp.set_allocation(buff, self.total_capacity)?;
 
                         let our_size = size_of::<(T, usize)>();
 
@@ -343,7 +365,7 @@ impl<T> ResizeableBuffer<T> {
         Ok(())
     }
 
-    fn get_buffer_component_with_key(&mut self, element_index: usize) -> Option<&mut BufferComponent<T>> {
+    fn get_buffer_component_containing_key(&mut self, element_index: usize) -> Option<&mut BufferComponent<T>> {
         if let Some(vector) = &mut self.internal_buffer {
             for i in vector {
                 if let Some(ptr) = i.as_ptr() {
@@ -360,7 +382,7 @@ impl<T> ResizeableBuffer<T> {
     }
 
     pub fn get_element(&mut self, index: usize) -> Option<&mut T> {
-        if let Some(comp) = self.get_buffer_component_with_key(index) {
+        if let Some(comp) = self.get_buffer_component_containing_key(index) {
             if let Some(element) = comp.get_element_with_key(index) {
                 return Some(element);
             }
@@ -370,7 +392,7 @@ impl<T> ResizeableBuffer<T> {
     }
 
     pub fn set_element(&mut self, index: usize, element: T) -> Result<(), QuantumError> {
-        if let Some(comp) = self.get_buffer_component_with_key(index) {
+        if let Some(comp) = self.get_buffer_component_containing_key(index) {
             if let Some(mut comp) = comp.get_element_with_key(index) {
                 *comp = element;
 
@@ -419,8 +441,12 @@ impl<T> ResizeableBuffer<T> {
 #[cfg(test)]
 mod test_case {
     use core::mem::size_of;
+    use heapless::Vec;
+    use owo_colors::OwoColorize;
     use crate::{debug_println, serial_print, serial_println};
+    use crate::memory::VirtualAddress;
     use crate::memory_utils::resizeable_buffer::{BufferComponent, ResizeableBuffer};
+    use crate::memory_utils::safe_ptr::SafePtr;
     use crate::test_handler::test_runner;
 
     #[test_case]
@@ -476,6 +502,35 @@ mod test_case {
             assert_eq!(*test_component.get_element_with_key(i as usize)
                 .expect("Could not get element with that key!"), i);
             assert_eq!(test_component.used, i as usize + 1);
+        }
+    }
+
+    #[test_case]
+    fn buffer_component_adding_element_u8() {
+        let mut raw_vector_limited_lifetime = [0_u8; 4096];
+        let mut test_component : BufferComponent<u8> = BufferComponent::new();
+
+        unsafe {
+            test_component.set_allocation(&mut raw_vector_limited_lifetime, 0)
+                .expect("Unable to set raw bytes to BufferComponent");
+        }
+
+        // Test if the buffer expands
+        for i in 0..(test_component.max_elements().unwrap() as u8) {
+            test_component.set_element(i, i as usize)
+                .expect("Unable to push element into the Buffer");
+
+            assert_eq!(*test_component.get_element_with_key(i as usize)
+                .expect("Could not get element with that key!"), i);
+            assert_eq!(test_component.used, i as usize + 1);
+        }
+
+        loop {
+            if test_component.is_empty() {
+                break;
+            }
+
+            test_component.remove_element(0).unwrap();
         }
     }
 
@@ -603,12 +658,27 @@ mod test_case {
     #[test_case]
     fn removing_and_adding_elements() {
         let mut raw_vector_limited_lifetime = [0_u8; 4096];
-        let mut vector: ResizeableBuffer<u8> = ResizeableBuffer::new();
+        let mut vector: Vec<u8, 11> = Vec::new();
 
-        unsafe {
-            vector.add_allocation(&mut raw_vector_limited_lifetime).unwrap();
+        for i in 0..=10 {
+            vector.push(i).expect("Unable to push element");
         }
 
+        vector.remove(0);
+        vector.remove(2);
+        vector.remove(3);
+        vector.pop();
+
+        vector.push(100).expect("Unable to push element");
+
+        assert_eq!(*vector.get(0).unwrap(), 1);
+        assert_eq!(*vector.get(1).unwrap(), 2);
+        assert_eq!(*vector.get(2).unwrap(), 4);
+        assert_eq!(*vector.get(3).unwrap(), 6);
+        assert_eq!(*vector.get(4).unwrap(), 7);
+        assert_eq!(*vector.get(5).unwrap(), 8);
+        assert_eq!(*vector.get(6).unwrap(), 9);
+        assert_eq!(*vector.get(7).unwrap(), 100);
 
     }
 

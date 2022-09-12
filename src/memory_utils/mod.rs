@@ -26,5 +26,6 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 pub mod safe_ptr;
 pub mod safe_size;
-pub mod resizeable_buffer;
+//pub mod resizeable_buffer;
 pub mod unknown_type;
+pub mod resize_vec;
