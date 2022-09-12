@@ -171,6 +171,18 @@ impl<'a, T> RecursiveComponent<'a, T> {
         next_info.ptr.as_ptr() as u64 > 0
     }
 
+    pub fn get_child(&mut self) -> Option<&mut Self> {
+        if self.is_parent() {
+            let mut next_comp = self.get_buffer_info().next_ptr as *mut Self;
+            let mut child = unsafe { &mut *next_comp };
+
+
+            return Some(child);
+        }
+
+        None
+    }
+
 }
 
 #[cfg(test)]
@@ -273,6 +285,11 @@ mod test {
         component.recurse_next_component(child);
 
         assert_eq!(component.is_parent(), true);
+
+        let test_child = component.get_child().unwrap();
+
+        test_child.push(123).unwrap();
+        assert_eq!(*test_child.get(0).unwrap(), 123);
     }
 
 }
