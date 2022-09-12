@@ -42,7 +42,7 @@ struct ComponentInformation<'a,  T> {
     data_ptr: *const T,
     total: usize,
     used: usize,
-    next_ptr: SafePtr<RecursiveComponent<'a, T>>
+    next_ptr: *const RecursiveComponent<'a, T>
 }
 
 // Data stored in beginning of ptr
@@ -52,7 +52,7 @@ struct ComponentInformation<'a,  T> {
 impl<'a, T> RecursiveComponent<'a, T> {
     pub fn new(bytes: &'a mut [u8]) -> Result<Self, QuantumError> {
         let total_bytes_size = bytes.len();
-        let size_of_overhead = size_of::<(u64, usize)>();
+        let size_of_overhead = size_of::<(Self, usize)>();
         let data_section_size = total_bytes_size - size_of_overhead;
 
         if total_bytes_size <= size_of_overhead && data_section_size <= size_of::<T>() {
@@ -70,12 +70,14 @@ impl<'a, T> RecursiveComponent<'a, T> {
     pub fn get_buffer_info(&mut self) -> ComponentInformation<T> {
         let ptr = self.ptr.as_mut_ptr() as *mut u8;
         let total_size_of_buffer= self.ptr.len();
-        let size_of_over_head = size_of::<(u64, usize)>();
+        let size_of_over_head = size_of::<(Self, usize)>();
+
         let size_of_data_section = total_size_of_buffer - size_of_over_head;
         let total_fitting_allocations = size_of_data_section / size_of::<T>();
 
+        let next_vector_ptr = ptr as *mut Self;
+
         let info_ptr = ptr as *mut u64;
-        let next_rbuff = VirtualAddress::new(unsafe { *info_ptr });
         let used_data = unsafe { *(info_ptr.add(1)) };
 
         let shifted_ptr = unsafe { info_ptr.add(2) };
@@ -85,7 +87,7 @@ impl<'a, T> RecursiveComponent<'a, T> {
             data_ptr,
             total: total_fitting_allocations,
             used: used_data as usize,
-            next_ptr: unsafe { SafePtr::unsafe_from_address(next_rbuff) }
+            next_ptr: next_vector_ptr
         }
     }
 
@@ -156,6 +158,17 @@ impl<'a, T> RecursiveComponent<'a, T> {
         let info = self.get_buffer_info();
 
         info.used >= info.total
+    }
+
+    pub fn recurse_next_component(&mut self, component: Self) {
+        let mut self_ptr = self.ptr.as_mut_ptr() as *mut Self;
+        unsafe { *self_ptr = component  };
+    }
+
+    pub fn is_parent(&mut self) -> bool {
+        let mut next_comp = self.get_buffer_info().next_ptr as *mut Self;
+        let next_info = unsafe { &mut *next_comp };
+        next_info.ptr.as_ptr() as u64 > 0
     }
 
 }
@@ -241,6 +254,25 @@ mod test {
         }
 
         assert_eq!(component.is_full(), true);
+    }
+
+    #[test_case]
+    fn test_recursive_element() {
+        let mut limited_lifetime_value = [0_u8; 4096];
+        let mut component =
+            RecursiveComponent::<u64>::new(&mut limited_lifetime_value)
+                .expect("Could not construct ");
+
+        let mut child_buffer = [0_u8; 4096];
+        let mut child =
+            RecursiveComponent::<u64>::new(&mut child_buffer)
+                .expect("Could not construct ");
+
+        assert_eq!(component.is_parent(), false);
+
+        component.recurse_next_component(child);
+
+        assert_eq!(component.is_parent(), true);
     }
 
 }
