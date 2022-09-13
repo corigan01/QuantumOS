@@ -32,5 +32,5 @@ pub enum QuantumError {
     AlreadySetValue,
     RequiredValueReturnedErr,
     OverflowValue,
-
+    ExistingValue,
 }

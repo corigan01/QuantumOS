@@ -160,9 +160,15 @@ impl<'a, T> RecursiveComponent<'a, T> {
         info.used >= info.total
     }
 
-    pub fn recurse_next_component(&mut self, component: Self) {
+    pub fn recurse_next_component(&mut self, component: Self) -> Result<(), QuantumError> {
+        if self.is_parent() {
+            return Err(QuantumError::ExistingValue);
+        }
+
         let mut self_ptr = self.ptr.as_mut_ptr() as *mut Self;
         unsafe { *self_ptr = component  };
+
+        Ok(())
     }
 
     pub fn is_parent(&mut self) -> bool {
@@ -182,7 +188,49 @@ impl<'a, T> RecursiveComponent<'a, T> {
 
         None
     }
+}
 
+pub struct ByteVec<'a, T> {
+    parent: Option<RecursiveComponent<'a, T>>
+}
+
+impl<'a, T> ByteVec<'a, T> {
+    pub fn new() -> Self {
+        Self {
+            parent: None
+        }
+    }
+
+    pub fn add_bytes(&mut self, bytes: &'a mut [u8]) -> Result<(), QuantumError> {
+        if self.parent.is_none() {
+            let mut component = RecursiveComponent::<T>::new(bytes)?;
+            self.parent = Some(component);
+
+            return Ok(());
+        }
+
+        if let Some(comp) = &mut self.parent {
+            let mut parent = comp;
+            loop {
+                // Loop until we find an element without children
+                if let Some(child) = parent.get_child() {
+                    parent = child;
+
+                } else {
+                    break;
+                }
+            }
+
+            // finally we found a parent without a child, so lets add one
+            let child = RecursiveComponent::<T>::new(bytes)?;
+
+            parent.recurse_next_component(child)?;
+
+            return Ok(());
+        }
+
+        Err(QuantumError::UndefinedValue)
+    }
 }
 
 #[cfg(test)]
@@ -282,7 +330,7 @@ mod test {
 
         assert_eq!(component.is_parent(), false);
 
-        component.recurse_next_component(child);
+        component.recurse_next_component(child).unwrap();
 
         assert_eq!(component.is_parent(), true);
 
@@ -291,5 +339,7 @@ mod test {
         test_child.push(123).unwrap();
         assert_eq!(*test_child.get(0).unwrap(), 123);
     }
+
+
 
 }
