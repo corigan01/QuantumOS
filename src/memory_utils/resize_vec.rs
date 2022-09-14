@@ -173,20 +173,33 @@ impl<'a, T> RecursiveComponent<'a, T> {
 
     pub fn is_parent(&mut self) -> bool {
         let mut next_comp = self.get_buffer_info().next_ptr as *mut Self;
-        let next_info = unsafe { &mut *next_comp };
-        next_info.ptr.as_ptr() as u64 > 0
+        let address = next_comp as u64;
+
+        if address > 0 {
+            let next_info = unsafe { &mut *next_comp };
+            return next_info.ptr.as_ptr() as u64 > 0;
+        }
+
+        false
     }
 
-    pub fn get_child(&mut self) -> Option<&mut Self> {
+    pub fn get_child(&mut self) -> Option<*mut Self> {
         if self.is_parent() {
             let mut next_comp = self.get_buffer_info().next_ptr as *mut Self;
-            let mut child = unsafe { &mut *next_comp };
-
+            let mut child = unsafe { next_comp };
 
             return Some(child);
         }
 
         None
+    }
+
+    pub fn get_bottom(&mut self) -> *mut Self {
+        if let Some(mut child) = self.get_child() {
+            return unsafe { &mut *child }.get_bottom();
+        }
+
+        self
     }
 }
 
@@ -209,22 +222,12 @@ impl<'a, T> ByteVec<'a, T> {
             return Ok(());
         }
 
-        if let Some(comp) = &mut self.parent {
-            let mut parent = comp;
-            loop {
-                // Loop until we find an element without children
-                if let Some(child) = parent.get_child() {
-                    parent = child;
-
-                } else {
-                    break;
-                }
-            }
-
+        if let Some(parent) = &mut self.parent {
             // finally we found a parent without a child, so lets add one
             let child = RecursiveComponent::<T>::new(bytes)?;
+            let bottom_ref = unsafe { &mut *parent.get_bottom() };
 
-            parent.recurse_next_component(child)?;
+            bottom_ref.recurse_next_component(child)?;
 
             return Ok(());
         }
@@ -235,7 +238,7 @@ impl<'a, T> ByteVec<'a, T> {
 
 #[cfg(test)]
 mod test {
-    use crate::memory_utils::resize_vec::RecursiveComponent;
+    use crate::memory_utils::resize_vec::{ByteVec, RecursiveComponent};
 
     #[test_case]
     fn test_constructing_component() {
@@ -334,12 +337,25 @@ mod test {
 
         assert_eq!(component.is_parent(), true);
 
-        let test_child = component.get_child().unwrap();
+        let mut test_child = component.get_child().unwrap();
 
-        test_child.push(123).unwrap();
-        assert_eq!(*test_child.get(0).unwrap(), 123);
+        unsafe { &mut *test_child }.push(123).unwrap();
+        assert_eq!(*(unsafe { &mut *test_child}).get(0).unwrap(), 123);
     }
 
+    #[test_case]
+    fn test_full_system() {
+        let mut vector = ByteVec::<u8>::new();
+
+        let mut limited_lifetime_value0 = [0_u8; 4096];
+        let mut limited_lifetime_value1 = [0_u8; 4096];
+        let mut limited_lifetime_value2 = [0_u8; 4096];
+
+        vector.add_bytes(&mut limited_lifetime_value0).expect("Could not add bytes");
+        vector.add_bytes(&mut limited_lifetime_value1).expect("Could not add bytes");
+        vector.add_bytes(&mut limited_lifetime_value2).expect("Could not add bytes");
+
+    }
 
 
 }
