@@ -201,6 +201,17 @@ impl<'a, T> RecursiveComponent<'a, T> {
 
         self
     }
+
+    /// self = 1
+    /// self + self = 2
+    /// will never return 0
+    pub fn get_num_of_elements(&mut self) -> usize {
+
+    }
+
+    pub fn get_element_num(&mut self, element: usize) -> Option<*mut Self> {
+
+    }
 }
 
 pub struct ByteVec<'a, T> {
@@ -344,7 +355,7 @@ mod test {
     }
 
     #[test_case]
-    fn test_full_system() {
+    fn test_adding_bytes() {
         let mut vector = ByteVec::<u8>::new();
 
         let mut limited_lifetime_value0 = [0_u8; 4096];
@@ -354,6 +365,20 @@ mod test {
         vector.add_bytes(&mut limited_lifetime_value0).expect("Could not add bytes");
         vector.add_bytes(&mut limited_lifetime_value1).expect("Could not add bytes");
         vector.add_bytes(&mut limited_lifetime_value2).expect("Could not add bytes");
+
+    }
+
+    #[test_case]
+    fn test_adding_elements_to_recurse_elements() {
+        let mut vector = ByteVec::<u8>::new();
+
+        let mut limited_lifetime_value0 = [0_u8; 196];
+        let mut limited_lifetime_value1 = [0_u8; 196];
+
+        vector.add_bytes(&mut limited_lifetime_value0).expect("Could not add bytes");
+        vector.add_bytes(&mut limited_lifetime_value1).expect("Could not add bytes");
+
+
 
     }
 
