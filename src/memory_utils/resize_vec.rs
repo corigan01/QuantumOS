@@ -202,15 +202,40 @@ impl<'a, T> RecursiveComponent<'a, T> {
         self
     }
 
-    /// self = 1
-    /// self + self = 2
-    /// will never return 0
     pub fn get_num_of_elements(&mut self) -> usize {
+        let mut parent = self as *mut Self;
+        let mut num = 1_usize;
+        loop {
+            if let Some(child) = unsafe { &mut *parent }.get_child() {
+                parent = child;
 
+                num += 1;
+            } else {
+                break;
+            }
+        }
+
+        num
     }
 
-    pub fn get_element_num(&mut self, element: usize) -> Option<*mut Self> {
+    pub fn get_element(&mut self, element: usize) -> Option<*mut Self> {
+        let mut parent = self as *mut Self;
+        let mut num_remaining = element;
 
+        loop {
+            if num_remaining == 0 {
+                return Some(parent);
+            }
+
+            if let Some(child) = unsafe { &mut *parent }.get_child() {
+                parent = child;
+                num_remaining -= 1;
+            } else {
+                break;
+            }
+        }
+
+        None
     }
 }
 
@@ -245,6 +270,9 @@ impl<'a, T> ByteVec<'a, T> {
 
         Err(QuantumError::UndefinedValue)
     }
+
+
+
 }
 
 #[cfg(test)]
@@ -377,6 +405,24 @@ mod test {
 
         vector.add_bytes(&mut limited_lifetime_value0).expect("Could not add bytes");
         vector.add_bytes(&mut limited_lifetime_value1).expect("Could not add bytes");
+
+
+        // TODO : Add MAX elements and then remove them
+    }
+
+    #[test_case]
+    fn test_getting_recurse_elements() {
+        let mut vector = ByteVec::<u8>::new();
+
+        let mut limited_lifetime_value0 = [0_u8; 4096];
+        let mut limited_lifetime_value1 = [0_u8; 4096];
+        let mut limited_lifetime_value2 = [0_u8; 4096];
+
+        vector.add_bytes(&mut limited_lifetime_value0).expect("Could not add bytes");
+        vector.add_bytes(&mut limited_lifetime_value1).expect("Could not add bytes");
+        vector.add_bytes(&mut limited_lifetime_value2).expect("Could not add bytes");
+
+
 
 
 
