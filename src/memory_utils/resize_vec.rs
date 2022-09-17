@@ -27,7 +27,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 use core::marker::PhantomData;
 use core::mem::size_of;
 use core::ptr;
-use crate::{debug_println, debug_print};
+use crate::{debug_println, debug_print, serial_println};
 use crate::error_utils::QuantumError;
 use crate::memory::VirtualAddress;
 use crate::memory_utils::safe_ptr::SafePtr;
@@ -109,6 +109,23 @@ impl<'a, T> RecursiveComponent<'a, T> {
         // add the data to the buffer
         unsafe { *(data_ptr.add(self_info.used)) = element };
         self.modify_used(1);
+
+        Ok(())
+    }
+
+    pub fn set(&mut self, index: usize, element: T) -> Result<(), QuantumError> {
+        let buffer_info = self.get_buffer_info();
+        let data_ptr = buffer_info.data_ptr as *mut T;
+
+        // check if the index is within already allocated range, we cant have an element placed
+        // in the middle of the vector (e.g [N, N, N, 0, N])
+        if index > buffer_info.used {
+            return Err(QuantumError::OverflowValue);
+        } else if index == buffer_info.used {
+            self.modify_used(1);
+        }
+
+        unsafe { *(data_ptr.add(index)) = element  };
 
         Ok(())
     }
@@ -202,9 +219,9 @@ impl<'a, T> RecursiveComponent<'a, T> {
         self
     }
 
-    pub fn get_num_of_elements(&mut self) -> usize {
+    pub fn get_num_of_recurse_components(&mut self) -> usize {
         let mut parent = self as *mut Self;
-        let mut num = 1_usize;
+        let mut num = 0_usize;
         loop {
             if let Some(child) = unsafe { &mut *parent }.get_child() {
                 parent = child;
@@ -271,8 +288,95 @@ impl<'a, T> ByteVec<'a, T> {
         Err(QuantumError::UndefinedValue)
     }
 
+    pub fn push(&mut self, element: T) -> Result<(), QuantumError> {
+        if let Some(parent) = &mut self.parent {
+            let mut iteration_ref = parent as *mut RecursiveComponent<T>;
+
+            while unsafe { &mut *iteration_ref }.is_full() {
+                if let Some(child) = unsafe { &mut *iteration_ref }.get_child(){
+                    iteration_ref = child;
+                } else {
+                    return Err(QuantumError::BufferFull);
+                }
+            }
+
+            return unsafe { &mut *iteration_ref }.push(element);
+        }
 
 
+        Err(QuantumError::UndefinedValue)
+    }
+
+    pub fn get(&mut self, index: usize) -> Result<&mut T, QuantumError> {
+        if let Some(parent) = &mut self.parent {
+            let mut iteration_ref = parent as *mut RecursiveComponent<T>;
+            let mut total_elements = unsafe { &mut *iteration_ref }.len();
+
+
+            // here we are trying to get the component that contains the element we are looking for
+            // this is important because our parent element is likely the component of the element.
+            while index > total_elements {
+                if let Some(child) = unsafe { &mut *iteration_ref }.get_child(){
+                    iteration_ref = child;
+                    total_elements += unsafe { &mut *iteration_ref }.len();
+                } else {
+                    return Err(QuantumError::NoItem);
+                }
+            }
+
+            serial_println!("{} = {}", index, total_elements);
+
+            if index > total_elements {
+                return Err(QuantumError::NoItem);
+            }
+
+            return unsafe { &mut *iteration_ref }.get(index);
+        }
+
+        Err(QuantumError::UndefinedValue)
+    }
+
+    pub fn total_size(&mut self) -> usize {
+        if let Some(parent) = &mut self.parent {
+            let mut iteration_ref = parent as *mut RecursiveComponent<T>;
+            let mut total_size = parent.total_size();
+
+            loop {
+                if let Some(child) = unsafe {&mut *iteration_ref}.get_child() {
+                    iteration_ref = child;
+
+                    total_size += unsafe { &mut *child }.total_size()
+                } else {
+                    break;
+                }
+            }
+
+            return total_size;
+        }
+
+        0
+    }
+
+    pub fn size(&mut self) -> usize {
+        if let Some(parent) = &mut self.parent {
+            let mut iteration_ref = parent as *mut RecursiveComponent<T>;
+            let mut elements_num = parent.len();
+
+            loop {
+                if let Some(child) = unsafe {&mut *iteration_ref}.get_child() {
+                    iteration_ref = child;
+
+                    elements_num += unsafe { &mut *child }.len()
+                } else {
+                    break;
+                }
+            }
+
+            return elements_num;
+        }
+
+        0
+    }
 }
 
 #[cfg(test)]
@@ -323,6 +427,7 @@ mod test {
             RecursiveComponent::<u8>::new(&mut limited_lifetime_value)
                 .expect("Could not construct ");
 
+        assert_eq!(component.get_num_of_recurse_components(), 0);
 
         for i in 0..10 {
             component.push(i as u8).expect("Unable to push element!");
@@ -406,8 +511,9 @@ mod test {
         vector.add_bytes(&mut limited_lifetime_value0).expect("Could not add bytes");
         vector.add_bytes(&mut limited_lifetime_value1).expect("Could not add bytes");
 
+        vector.push(10).expect("Unable to push element to vector!");
+        assert_eq!(*vector.get(0).expect("Unable to get element!"), 10);
 
-        // TODO : Add MAX elements and then remove them
     }
 
     #[test_case]
@@ -421,9 +527,6 @@ mod test {
         vector.add_bytes(&mut limited_lifetime_value0).expect("Could not add bytes");
         vector.add_bytes(&mut limited_lifetime_value1).expect("Could not add bytes");
         vector.add_bytes(&mut limited_lifetime_value2).expect("Could not add bytes");
-
-
-
 
 
     }
