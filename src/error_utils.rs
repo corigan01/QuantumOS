@@ -33,4 +33,5 @@ pub enum QuantumError {
     RequiredValueReturnedErr,
     OverflowValue,
     ExistingValue,
+    Test,
 }

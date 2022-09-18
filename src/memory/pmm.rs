@@ -28,15 +28,15 @@ use heapless::Vec;
 use crate::bitset::BitSet;
 use crate::memory::{PhysicalAddress, UsedMemoryKind};
 use crate::memory_utils::safe_ptr::SafePtr;
+use crate::memory_utils::resize_vec;
 
 pub struct PhyMM {
-    page_vector: SafePtr<PhySection>
+
 }
 
 impl PhyMM {
     pub fn new() -> Self {
         PhyMM {
-            page_vector: SafePtr::new(),
         }
     }
     

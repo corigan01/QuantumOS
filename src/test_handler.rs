@@ -43,29 +43,29 @@ impl<T> Testable for T
         T: Fn(),
 {
     fn run(&self) {
-        serial_print!("{}...", core::any::type_name::<T>().blue().bold());
+        serial_print!("{:120} ", core::any::type_name::<T>().blue().bold());
         self();
-        serial_println!(" {}", "[OK]".bright_green().bold());
+        serial_println!("{}", "OK".bright_green().bold());
     }
 }
 
 pub fn test_runner(tests: &[&dyn Testable]) {
     serial_println!("Running {} tests...", tests.len());
+
     for test in tests {
         test.run();
     }
 
-    serial_println!("\n{}", "All tests passed! Exiting Qemu...".bright_green().bold());
+    serial_println!("\n{}", "All tests passed! Exiting...".bright_green().bold());
 
     exit_qemu(QemuExitCode::Success);
 }
 
 pub fn test_panic_handler(info: &PanicInfo) -> ! {
-    serial_println!("{}\n", "[Failed]".bright_red().bold());
+    serial_println!("{}\n", "Failed".bright_red().bold());
     serial_println!("Error: {}\n", info);
 
     exit_qemu(QemuExitCode::Failed);
-
     loop {}
 }
 

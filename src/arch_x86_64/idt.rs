@@ -916,9 +916,7 @@ macro_rules! remove_interrupt {
 // These are to ensure the system is working as intended.
 
 #[cfg(test)]
-fn missing_handler(i_frame: InterruptFrame, interrupt: u8, error: Option<u64>) {
-    serial_print!("  [MS0 CALLED]  ");
-}
+fn missing_handler(_i_frame: InterruptFrame, _interrupt: u8, _error: Option<u64>) { }
 
 #[cfg(test)]
 mod test_case {
@@ -933,8 +931,6 @@ mod test_case {
     use crate::arch_x86_64::idt::Idt;
 
     fn dv0_handler(i_frame: InterruptFrame, intn: u8, error: Option<u64>) {
-        serial_print!("  [DV0 CALLED]  ");
-
         // We want this to be called and returned!
 
         // Do some random stuff to make sure the stack is returned correctly!
@@ -946,8 +942,6 @@ mod test_case {
         i -= 101;
 
         let d = i == intn;
-
-        serial_print!("[{}]  ", d);
 
     }
 

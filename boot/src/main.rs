@@ -2,6 +2,8 @@ use std::{
     path::{Path, PathBuf},
     process::Command,
 };
+use std::process::{exit, ExitCode};
+
 // "--no-reboot"
 const RUN_ARGS: &[&str] = &[
     "-enable-kvm",
@@ -17,7 +19,7 @@ const RUN_ARGS: &[&str] = &[
     "isa-debug-exit,iobase=0xf4,iosize=0x04",
 ];
 
-fn main() {
+fn main() -> ExitCode {
     let mut args = std::env::args().skip(1); // skip executable name
 
     let kernel_binary_path = {
@@ -37,7 +39,7 @@ fn main() {
 
     if no_boot {
         println!("Created disk image at `{}`", bios.display());
-        return;
+        return ExitCode::SUCCESS;
     }
 
     let mut run_cmd = Command::new("qemu-system-x86_64");
@@ -46,10 +48,14 @@ fn main() {
         .arg(format!("format=raw,file={}", bios.display()));
     run_cmd.args(RUN_ARGS);
 
-    let exit_status = run_cmd.status().unwrap();
-    if !exit_status.success() {
-        std::process::exit(exit_status.code().unwrap_or(1));
+    let exit_status = run_cmd.status().expect("Failed to launch QuantumOS");
+    let code = exit_status.code().unwrap_or(0);
+
+    if code != 0  { // I WANT TO EXIT 0 IF QEMU EXITS WITH 33
+        exit(exit_status.code().unwrap_or(1));
     }
+
+    ExitCode::SUCCESS
 }
 
 pub fn create_disk_images(kernel_binary_path: &Path) -> PathBuf {
