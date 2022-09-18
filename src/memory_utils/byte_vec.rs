@@ -27,6 +27,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 use core::marker::PhantomData;
 use core::mem::size_of;
 use core::ptr;
+
 use crate::{debug_println, debug_print, serial_println};
 use crate::error_utils::QuantumError;
 use crate::memory::VirtualAddress;
@@ -427,7 +428,7 @@ impl<'a, T> ByteVec<'a, T> {
 
 #[cfg(test)]
 mod test_case {
-    use crate::memory_utils::resize_vec::{ByteVec, RecursiveComponent};
+    use crate::memory_utils::byte_vec::{ByteVec, RecursiveComponent};
 
     #[test_case]
     fn test_constructing_component() {
