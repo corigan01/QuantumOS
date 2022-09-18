@@ -28,10 +28,11 @@ use heapless::Vec;
 use crate::bitset::BitSet;
 use crate::memory::{PhysicalAddress, UsedMemoryKind};
 use crate::memory_utils::safe_ptr::SafePtr;
-use crate::memory_utils::resize_vec;
+use crate::memory_utils::byte_vec::ByteVec;
+
+
 
 pub struct PhyMM {
-
 }
 
 impl PhyMM {

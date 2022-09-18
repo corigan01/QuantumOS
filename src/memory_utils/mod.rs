@@ -28,4 +28,4 @@ pub mod safe_ptr;
 pub mod safe_size;
 //pub mod resizeable_buffer;
 pub mod unknown_type;
-pub mod resize_vec;
+pub mod byte_vec;
