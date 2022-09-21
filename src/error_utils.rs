@@ -34,4 +34,5 @@ pub enum QuantumError {
     OverflowValue,
     ExistingValue,
     Test,
+    NotIncrementalSize
 }

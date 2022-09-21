@@ -24,9 +24,20 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 */
 
-//pub mod resizeable_buffer;
-pub mod safe_ptr;
-pub mod safe_size;
-pub mod unknown_type;
-pub mod byte_vec;
-pub mod bool_vec;
+use crate::error_utils::QuantumError;
+
+pub struct BoolVec<'a> {
+    buffer: &'a mut [u8]
+}
+
+impl<'a> BoolVec<'a> {
+    pub fn new(buffer: &'a mut [u8]) -> Self {
+        Self {
+            buffer
+        }
+    }
+
+    pub fn expand(&self, buffer: &'a mut [u8]) -> Result<(), QuantumError> {
+        Err(QuantumError::Test)
+    }
+}
