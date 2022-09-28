@@ -26,59 +26,40 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 use heapless::Vec;
 use crate::bitset::BitSet;
-use crate::memory::{PhysicalAddress, UsedMemoryKind};
+use crate::memory::{PAGE_SIZE, PhysicalAddress, UsedMemoryKind};
+use crate::memory::physical_memory::PhyRegion;
 use crate::memory_utils::safe_ptr::SafePtr;
-use crate::memory_utils::byte_vec::ByteVec;
+use crate::memory_utils::bool_vec::BoolVec;
 
 
-
-pub struct PhyMM {
+pub struct PhyMM<'a> {
+    phy_region: PhyRegion,
+    buffer: BoolVec<'a>,
+    used: usize,
 }
 
-impl PhyMM {
-    pub fn new() -> Self {
-        PhyMM {
-        }
-    }
-    
-
-}
-
-struct PhySection {
-    page_vector: Vec<PhyPage, 1024>,
-    address_offset: PhysicalAddress,
-}
-
-
-/// # Physical Page
-/// A page is normally a 4k section of memory that is aligned to the next 4k section of memory.
-/// This will allow us to calculate the address from a vector of address conversion stored in the
-/// PhyMM. This makes this struct incredibly small and memory dense. We want to store all we can
-/// in the smalled amount of memory because as total memory grows, the amount of pages does too.
-#[derive(Debug, Clone, Copy)]
-pub struct PhyPage(u8);
-
-impl PhyPage {
-    pub fn new() -> Self {
-        PhyPage {
-            0: 0
+impl<'a> PhyMM<'a> {
+    pub fn new(region: PhyRegion, buffer: &'a mut [u8]) -> Self {
+        Self {
+            phy_region: region,
+            buffer: BoolVec::new(buffer),
+            used: 0
         }
     }
 
-    pub fn set_used(&mut self, used: bool) {
-        self.0.set_bit(7, used);
+    pub fn allocate_page(&mut self) -> Option<PhysicalPageInformation> {
+        if self.used < self.buffer.len() {
+
+
+        }
+
+        None
     }
 
-    pub fn is_free(&self) -> bool {
-        self.0.get_bit(7)
-    }
+}
 
-    pub fn set_type(&mut self, kind: UsedMemoryKind) {
-        self.0.set_bits(0..4, kind as u64);
-    }
-
-    pub fn get_type(&self) -> UsedMemoryKind {
-        UsedMemoryKind::from_u8(self.0.get_bits(0..4))
-    }
+pub struct PhysicalPageInformation {
+    pub start_address: PhysicalAddress,
+    pub end_address: PhysicalAddress
 }
 
