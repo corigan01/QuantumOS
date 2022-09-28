@@ -48,12 +48,10 @@ entry_point!(test_main);
 fn test_main(boot_info: &'static mut BootInfo) -> ! {
     serial_println!("\n\n== QuantumOS in Test Mode == \n");
 
-
     run_test();
 
     loop {};
 }
-
 
 pub mod test_handler;
 

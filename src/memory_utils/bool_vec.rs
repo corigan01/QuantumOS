@@ -24,6 +24,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 */
 
+use crate::bitset::BitSet;
 use crate::error_utils::QuantumError;
 
 pub struct BoolVec<'a> {
@@ -37,7 +38,31 @@ impl<'a> BoolVec<'a> {
         }
     }
 
-    pub fn expand(&self, buffer: &'a mut [u8]) -> Result<(), QuantumError> {
-        Err(QuantumError::Test)
+    pub fn transfer_expand(&mut self, buffer: &'a mut [u8]) -> Result<(), QuantumError> {
+        if buffer.len() >= self.buffer.len() {
+
+            // transfer all bytes to new buffer
+            for i in 0..self.buffer.len() {
+                buffer[i] = self.buffer[i];
+            }
+
+            self.buffer = buffer;
+
+            return Ok(());
+        }
+
+        Err(QuantumError::NoSpaceRemaining)
+    }
+
+    pub fn set_bit(&mut self, bit_id: usize, value: bool) -> Result<(), QuantumError> {
+        if (bit_id / 8) > self.buffer.len() {
+            self.buffer[bit_id / 8].set_bit((bit_id % 8) as u8, value);
+        }
+
+        Err(QuantumError::IndexOutOfRange)
+    }
+
+    pub fn len(&self) -> usize {
+        self.buffer.len() * 8
     }
 }

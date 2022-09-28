@@ -88,6 +88,7 @@ fn main(boot_info: &'static mut BootInfo) -> ! {
         debug_println!("{}", "FAIL".bright_red().bold());
     }
 
+
     // init the cpu
     {
         // init the cpu, we just need to wake up the lazy_statics for them to init
@@ -160,6 +161,8 @@ fn main(boot_info: &'static mut BootInfo) -> ! {
     kernel_buffer.draw_rec((000, 000), (100, 100), 0xFF0000);
     kernel_buffer.draw_rec((100, 100), (100, 100), 0x00FF00);
     kernel_buffer.draw_rec((200, 200), (100, 100), 0x0000FF);
+
+
 
 
     debug_println!("\n\n\n==== KERNEL MAIN FINISHED ==== ");

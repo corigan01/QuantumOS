@@ -125,6 +125,7 @@ impl<'a, T> RecursiveComponent<'a, T> {
         } else if index == buffer_info.used {
             self.modify_used(1);
         }
+        
 
         unsafe { *(data_ptr.add(index)) = element  };
 
