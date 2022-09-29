@@ -2,7 +2,7 @@ use std::{
     path::{Path, PathBuf},
     process::Command,
 };
-use std::process::{exit, ExitCode};
+use std::process::{exit};
 
 // "--no-reboot"
 const RUN_ARGS: &[&str] = &[
@@ -19,7 +19,7 @@ const RUN_ARGS: &[&str] = &[
     "isa-debug-exit,iobase=0xf4,iosize=0x04",
 ];
 
-fn main() -> ExitCode {
+fn main() {
     let mut args = std::env::args().skip(1); // skip executable name
 
     let kernel_binary_path = {
@@ -39,7 +39,6 @@ fn main() -> ExitCode {
 
     if no_boot {
         println!("Created disk image at `{}`", bios.display());
-        return ExitCode::SUCCESS;
     }
 
     let mut run_cmd = Command::new("qemu-system-x86_64");
@@ -55,7 +54,6 @@ fn main() -> ExitCode {
         exit(exit_status.code().unwrap_or(1));
     }
 
-    ExitCode::SUCCESS
 }
 
 pub fn create_disk_images(kernel_binary_path: &Path) -> PathBuf {

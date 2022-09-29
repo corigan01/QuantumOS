@@ -26,19 +26,20 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 use heapless::Vec;
 use crate::bitset::BitSet;
+use crate::error_utils::QuantumError;
 use crate::memory::{PAGE_SIZE, PhysicalAddress, UsedMemoryKind};
 use crate::memory::physical_memory::PhyRegion;
 use crate::memory_utils::safe_ptr::SafePtr;
 use crate::memory_utils::bool_vec::BoolVec;
 
 
-pub struct PhyMM<'a> {
+struct PhyMemoryManagerComponent<'a> {
     phy_region: PhyRegion,
     buffer: BoolVec<'a>,
     used: usize,
 }
 
-impl<'a> PhyMM<'a> {
+impl<'a> PhyMemoryManagerComponent<'a> {
     pub fn new(region: PhyRegion, buffer: &'a mut [u8]) -> Self {
         Self {
             phy_region: region,
@@ -49,17 +50,45 @@ impl<'a> PhyMM<'a> {
 
     pub fn allocate_page(&mut self) -> Option<PhysicalPageInformation> {
         if self.used < self.buffer.len() {
+            let free_page = self.buffer.find_first_free()?;
+            let starting_address_of_region = self.phy_region.start;
+            let offset = free_page * PAGE_SIZE;
 
+            let start = starting_address_of_region.as_u64() + offset as u64;
+            let end = start + PAGE_SIZE as u64;
 
+            return Some(PhysicalPageInformation {
+                uid: free_page,
+                start_address: PhysicalAddress::new(start),
+                end_address: PhysicalAddress::new(end)
+            });
         }
 
         None
     }
 
+    pub fn free_page(&mut self, uid: usize) -> Result<(), QuantumError> {
+        if uid < self.buffer.len() {
+            self.buffer.set_bit(uid, false)?;
+
+            Ok(())
+        } else {
+            Err(QuantumError::NoItem)
+        }
+    }
+
+
+
 }
 
 pub struct PhysicalPageInformation {
+    pub uid: usize,
     pub start_address: PhysicalAddress,
     pub end_address: PhysicalAddress
+}
+
+
+pub struct PhyMemoryManager {
+    components: Vec<PhyMemoryManagerComponent<'static>, 255>,
 }
 
