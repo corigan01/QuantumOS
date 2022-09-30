@@ -84,6 +84,12 @@ impl<'a> BoolVec<'a> {
         None
     }
 
+    pub fn clear_entries(&mut self) {
+        for i in &mut *self.buffer {
+            *i = 0_u8;
+        }
+    }
+
     pub fn find_first_free(&self) -> Option<usize> {
         self.find_first_of(false)
     }
@@ -99,6 +105,7 @@ impl<'a> BoolVec<'a> {
 
 #[cfg(test)]
 mod test_case {
+    use owo_colors::OwoColorize;
     use crate::memory_utils::bool_vec::BoolVec;
 
     #[test_case]
@@ -170,6 +177,31 @@ mod test_case {
 
         assert_eq!(vector.find_first_free().unwrap(), 0);
         assert_eq!(vector.find_first_set().unwrap(), 1);
+    }
+
+    #[test_case]
+    pub fn test_finding_free_and_set() {
+        let mut limited_lifetime_buffer = [0_u8; 1024];
+        let mut vector = BoolVec::new(&mut limited_lifetime_buffer);
+
+        for i in 0..100 {
+            vector.set_bit(i, true).unwrap();
+
+            assert_eq!(vector.find_first_free().unwrap(), i + 1);
+            assert_eq!(vector.find_first_set().unwrap(), 0);
+        }
+
+        vector.clear_entries();
+
+        vector.set_bit(100, true).unwrap();
+
+        assert_eq!(vector.find_first_set().unwrap(), 100);
+
+        for i in 100..0 {
+            vector.set_bit(i, false).unwrap();
+            assert_eq!(vector.find_first_set().unwrap(), i);
+        }
+
     }
 
 }

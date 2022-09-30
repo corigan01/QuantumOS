@@ -51,6 +51,8 @@ impl<'a> PhyMemoryManagerComponent<'a> {
     pub fn allocate_page(&mut self) -> Option<PhysicalPageInformation> {
         if self.used < self.buffer.len() {
             let free_page = self.buffer.find_first_free()?;
+            self.buffer.set_bit(free_page, true).unwrap_or(());
+
             let starting_address_of_region = self.phy_region.start;
             let offset = free_page * PAGE_SIZE;
 
@@ -198,8 +200,77 @@ mod test_case {
 
         // caller must ensure that the page is no longer used
         unsafe { comp.free_page(0) }.unwrap();
-
     }
+
+    #[test_case]
+    pub fn attempt_to_allocate_many_items() {
+        let mut region = PhyRegion::new();
+
+        let dummy_size = 1000 * PAGE_SIZE;
+        let dummy_buffer_size = (dummy_size / PAGE_SIZE) / 8;
+
+        // dummy region
+        region.start = PhysicalAddress::new(0);
+        region.end = PhysicalAddress::new(dummy_size as u64);
+        region.kind = PhyRegionKind::Usable;
+
+        let mut limited_lifetime_buffer = [0_u8; 196];
+
+        let mut comp =
+            PhyMemoryManagerComponent::new(region, &mut limited_lifetime_buffer);
+
+        assert_eq!(comp.has_buf_storage_for_pages(), true);
+
+        for i in 0_u64..100 {
+            let alloc = comp.allocate_page().unwrap();
+
+            assert_eq!(alloc.uid as u64, i);
+            assert_eq!(alloc.start_address.as_u64(), i * (PAGE_SIZE as u64));
+            assert_eq!(alloc.end_address.as_u64(), i * (PAGE_SIZE as u64) + (PAGE_SIZE as u64));
+        }
+
+        // caller must ensure that the page is no longer used
+        unsafe { comp.free_page(0) }.unwrap();
+    }
+
+    #[test_case]
+    pub fn test_reallocating_buffer() {
+        let mut region = PhyRegion::new();
+
+        let dummy_size = 1000 * PAGE_SIZE;
+        let dummy_buffer_size = (dummy_size / PAGE_SIZE) / 8;
+
+        // dummy region
+        region.start = PhysicalAddress::new(0);
+        region.end = PhysicalAddress::new(dummy_size as u64);
+        region.kind = PhyRegionKind::Usable;
+
+        let mut limited_lifetime_buffer = [0_u8; 196];
+
+        let mut comp =
+            PhyMemoryManagerComponent::new(region, &mut limited_lifetime_buffer);
+
+        assert_eq!(comp.has_buf_storage_for_pages(), true);
+
+        let alloc = comp.allocate_page().unwrap();
+
+        assert_eq!(alloc.uid, 0);
+        assert_eq!(alloc.start_address.as_u64(), 0);
+        assert_eq!(alloc.end_address.as_u64(), 0 + PAGE_SIZE as u64);
+
+        let mut second_limited_lifetime_buffer = [0_u8; 200];
+
+        comp.expand_buffer(&mut second_limited_lifetime_buffer).unwrap();
+
+        assert_eq!(comp.has_buf_storage_for_pages(), true);
+
+        let page = comp.allocate_page().unwrap();
+
+        assert_eq!(page.uid, 1);
+        assert_eq!(page.start_address.as_u64(), PAGE_SIZE as u64);
+        assert_eq!(page.end_address.as_u64(), 2 * PAGE_SIZE as u64);
+    }
+
 
 
 }
