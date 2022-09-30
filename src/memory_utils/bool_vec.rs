@@ -24,6 +24,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 */
 
+use core::ptr;
 use crate::bitset::BitSet;
 use crate::error_utils::QuantumError;
 

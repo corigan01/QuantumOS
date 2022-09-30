@@ -67,7 +67,7 @@ impl<'a> PhyMemoryManagerComponent<'a> {
         None
     }
 
-    pub fn free_page(&mut self, uid: usize) -> Result<(), QuantumError> {
+    pub unsafe fn free_page(&mut self, uid: usize) -> Result<(), QuantumError> {
         if uid < self.buffer.len() {
             self.buffer.set_bit(uid, false)?;
 
@@ -77,7 +77,26 @@ impl<'a> PhyMemoryManagerComponent<'a> {
         }
     }
 
+    pub fn expand_buffer(&mut self, buffer: &'a mut [u8]) -> Result<(), QuantumError> {
+        self.buffer.transfer_expand(buffer)
+    }
 
+    pub fn recommended_internal_buffer_size(&self) -> usize {
+        let start = self.phy_region.start.as_u64();
+        let end = self.phy_region.end.as_u64();
+
+        let total_bytes = end - start;
+        let total_pages = total_bytes / PAGE_SIZE as u64;
+
+        (total_pages / 8) as usize
+    }
+
+    pub fn has_buf_storage_for_pages(&self) -> bool {
+        let should_bytes = self.recommended_internal_buffer_size();
+        let our_bytes = self.buffer.len();
+
+        (should_bytes * 8) <= our_bytes
+    }
 
 }
 
@@ -87,8 +106,100 @@ pub struct PhysicalPageInformation {
     pub end_address: PhysicalAddress
 }
 
-
 pub struct PhyMemoryManager {
     components: Vec<PhyMemoryManagerComponent<'static>, 255>,
 }
 
+impl PhyMemoryManager {
+    pub fn new() -> Self {
+        Self {
+            components: Vec::new()
+        }
+    }
+
+    pub fn recommended_bytes_to_store_allocation(region: PhyRegion) -> usize {
+        let start = region.start.as_u64();
+        let end = region.end.as_u64();
+
+        let total_bytes = end - start;
+        let total_pages = total_bytes / PAGE_SIZE as u64;
+        let bytes = total_pages / 8;
+
+
+        bytes as usize
+    }
+
+    pub fn insert_new_region(&mut self, region: PhyRegion, allocation: &'static mut [u8] ) -> Result<(), QuantumError> {
+        let res = self.components.push(PhyMemoryManagerComponent::new(
+            region,
+            allocation
+        ));
+
+        if res.is_err() {
+            Err(QuantumError::BufferFull)
+        } else {
+            Ok(())
+        }
+    }
+
+}
+
+#[cfg(test)]
+mod test_case {
+    use crate::memory::physical_memory::{PhyRegion, PhyRegionKind};
+    use crate::memory::{PAGE_SIZE, PhysicalAddress};
+    use crate::memory::pmm::PhyMemoryManagerComponent;
+
+    #[test_case]
+    pub fn construct_a_component() {
+        let mut region = PhyRegion::new();
+
+        let dummy_size = 0x10000;
+        let dummy_buffer_size = (dummy_size / PAGE_SIZE) / 8;
+
+        // dummy region
+        region.start = PhysicalAddress::new(0);
+        region.end = PhysicalAddress::new(dummy_size as u64);
+        region.kind = PhyRegionKind::Usable;
+
+        let mut limited_lifetime_buffer = [0_u8; 196];
+
+        let comp =
+            PhyMemoryManagerComponent::new(region, &mut limited_lifetime_buffer);
+
+        assert_eq!(comp.recommended_internal_buffer_size(), dummy_buffer_size);
+        assert_eq!(comp.has_buf_storage_for_pages(), true);
+    }
+
+    #[test_case]
+    pub fn try_allocating_and_freeing_pages() {
+        let mut region = PhyRegion::new();
+
+        let dummy_size = 1000 * PAGE_SIZE;
+        let dummy_buffer_size = (dummy_size / PAGE_SIZE) / 8;
+
+        // dummy region
+        region.start = PhysicalAddress::new(0);
+        region.end = PhysicalAddress::new(dummy_size as u64);
+        region.kind = PhyRegionKind::Usable;
+
+        let mut limited_lifetime_buffer = [0_u8; 196];
+
+        let mut comp =
+            PhyMemoryManagerComponent::new(region, &mut limited_lifetime_buffer);
+
+        assert_eq!(comp.has_buf_storage_for_pages(), true);
+
+        let alloc = comp.allocate_page().unwrap();
+
+        assert_eq!(alloc.uid, 0);
+        assert_eq!(alloc.start_address.as_u64(), 0);
+        assert_eq!(alloc.end_address.as_u64(), 0 + PAGE_SIZE as u64);
+
+        // caller must ensure that the page is no longer used
+        unsafe { comp.free_page(0) }.unwrap();
+
+    }
+
+
+}
