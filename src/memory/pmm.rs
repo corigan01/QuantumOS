@@ -108,11 +108,11 @@ pub struct PhysicalPageInformation {
     pub end_address: PhysicalAddress
 }
 
-pub struct PhyMemoryManager {
-    components: Vec<PhyMemoryManagerComponent<'static>, 255>,
+pub struct PhyMemoryManager<'a> {
+    components: Vec<PhyMemoryManagerComponent<'a>, 20>,
 }
 
-impl PhyMemoryManager {
+impl<'a> PhyMemoryManager<'a> {
     pub fn new() -> Self {
         Self {
             components: Vec::new()
@@ -131,7 +131,7 @@ impl PhyMemoryManager {
         bytes as usize
     }
 
-    pub fn insert_new_region(&mut self, region: PhyRegion, allocation: &'static mut [u8] ) -> Result<(), QuantumError> {
+    pub fn insert_new_region(&mut self, region: PhyRegion, allocation: &'a mut [u8] ) -> Result<(), QuantumError> {
         let res = self.components.push(PhyMemoryManagerComponent::new(
             region,
             allocation
@@ -142,6 +142,20 @@ impl PhyMemoryManager {
         } else {
             Ok(())
         }
+    }
+
+    pub fn allocate(&mut self) -> Option<PhysicalPageInformation> {
+        for mut i in 0..self.components.len() {
+            let mut component = &mut self.components[i];
+
+            if let Some(mut page) = component.allocate_page() {
+                page.uid += 100 * i;
+                
+                return Some(page);
+            }
+        }
+
+        None
     }
 
 }

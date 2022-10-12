@@ -3,6 +3,8 @@ name = "quantum_os"
 version = "0.1.0"
 edition = "2021"
 
+
+
 [workspace]
 members = [
     "boot",
@@ -29,6 +31,8 @@ x86_64 = "0.14.9"
 owo-colors = "3.4.0"
 heapless = "0.7.16"
 
+[package.metadata.bootloader]
+kernel-stack-size = 204800
 
 [dependencies.lazy_static]
 version = "1.0"
