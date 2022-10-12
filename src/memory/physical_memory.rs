@@ -37,7 +37,7 @@ pub enum PhyRegionKind {
 
 #[derive(Debug)]
 pub struct PhyRegionMap {
-    regions: [PhyRegion; 255],
+    regions: [PhyRegion; 20],
     size: usize
 }
 
@@ -82,7 +82,7 @@ impl PhyRegion {
 impl PhyRegionMap {
     pub fn new() -> Self {
         Self {
-            regions: [PhyRegion::new(); 255],
+            regions: [PhyRegion::new(); 20],
             size: 0
         }
     }
@@ -107,8 +107,8 @@ impl PhyRegionMap {
         false
     }
 
-    pub fn get_regions(&self, kind: PhyRegionKind) -> Option<Vec<PhyRegion, 255>> {
-        let mut regions : Vec<PhyRegion, 255> = Vec::new();
+    pub fn get_regions(&self, kind: PhyRegionKind) -> Option<Vec<PhyRegion, 20>> {
+        let mut regions : Vec<PhyRegion, 20> = Vec::new();
 
         for i in 0..self.size {
             let region = self.regions[i];

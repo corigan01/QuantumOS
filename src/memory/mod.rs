@@ -29,6 +29,7 @@ pub mod paging;
 pub mod physical_memory;
 pub mod pmm;
 pub mod heap;
+pub mod init_alloc;
 
 const PAGE_SIZE: usize = 4096;
 
