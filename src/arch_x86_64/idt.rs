@@ -64,7 +64,7 @@ pub type GeneralHandlerFunc = fn(InterruptFrame, u8, Option<u64>);
 /// ```rust
 /// use quantum_os::arch_x86_64::idt::Idt;
 /// use quantum_os::arch_x86_64::idt::InterruptFrame;
-/// use quantum_os::{attach_interrupt, serial_println};
+/// use quantum_os::{attach_interrupt, debug_println, serial_println};
 /// use lazy_static::lazy_static;
 ///
 /// // This is the handler that gets called whenever `#DE` is called

@@ -25,6 +25,8 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 
+use crate::bitset::BitSet;
+
 pub mod paging;
 pub mod physical_memory;
 pub mod pmm;
@@ -66,7 +68,7 @@ pub struct PhysicalAddress(u64);
 pub struct NotValidAddress(u64);
 
 impl NotValidAddress {
-    pub fn get_ptr(self) -> u64 {
+    pub fn get_address(self) -> u64 {
         self.0
     }
 }
@@ -81,7 +83,12 @@ impl VirtualAddress {
 
     #[inline]
     pub fn try_new(address: u64) -> Result<VirtualAddress, NotValidAddress> {
-        Ok(VirtualAddress(address))
+        if address.get_bits(48..64) == u64::MAX.get_bits(48..64) ||
+            address.get_bits(48..64) == 0 {
+            return Ok(VirtualAddress(address));
+        }
+
+        Err(NotValidAddress(address))
     }
 
     #[inline]
@@ -172,4 +179,39 @@ impl PhysicalAddress {
     /// that the user must ensure that the address contains a valid address that will not cause a
     /// fault!
     pub unsafe fn new_unsafe(address: u64) -> PhysicalAddress { PhysicalAddress(address) }
+}
+
+
+#[cfg(test)]
+mod test_case {
+    use crate::bitset::BitSet;
+    use crate::memory::VirtualAddress;
+
+    #[test_case]
+    fn test_virtual_address() {
+        let address_number = 1002040_u64;
+        let address = VirtualAddress::new(address_number);
+
+        assert_eq!(address.as_u64(), address_number);
+        assert_eq!(address.is_null(), false);
+        assert_eq!(address.is_some(), true);
+    }
+
+    #[test_case]
+    fn try_fail_creation() {
+        let address_number = u64::MAX;
+        let address = VirtualAddress::try_new(address_number);
+
+        assert_eq!(address.is_ok(), true);
+        assert_eq!(address.unwrap().as_u64(), address_number);
+
+        let address_number = u64::MAX.set_bit(49, false);
+        let address = VirtualAddress::try_new(address_number);
+
+        assert_eq!(address.is_ok(), false);
+        assert_eq!(address.is_err(), true);
+        assert_eq!(address.err().unwrap().get_address(), address_number);
+    }
+
+
 }
