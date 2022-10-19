@@ -60,7 +60,6 @@ impl<'a> PhyMemoryManagerComponent<'a> {
             let end = start + PAGE_SIZE as u64;
 
             return Some(PhysicalPageInformation {
-                uid: free_page,
                 start_address: PhysicalAddress::new(start),
                 end_address: PhysicalAddress::new(end)
             });
@@ -103,7 +102,6 @@ impl<'a> PhyMemoryManagerComponent<'a> {
 }
 
 pub struct PhysicalPageInformation {
-    pub uid: usize,
     pub start_address: PhysicalAddress,
     pub end_address: PhysicalAddress
 }
@@ -149,13 +147,29 @@ impl<'a> PhyMemoryManager<'a> {
             let mut component = &mut self.components[i];
 
             if let Some(mut page) = component.allocate_page() {
-                page.uid += 100 * i;
-                
+
                 return Some(page);
             }
         }
 
         None
+    }
+
+    pub fn unallocate(&mut self, starting_address: PhysicalAddress) -> Result<(), QuantumError> {
+        for mut i in 0..self.components.len() {
+            let component = &mut self.components[i];
+            let region_start = component.phy_region.start.as_u64();
+            let region_end = component.phy_region.end.as_u64();
+
+            if starting_address.as_u64() > region_start && starting_address.as_u64() < region_end {
+                let page_id = (starting_address.as_u64() as usize) / PAGE_SIZE;
+
+                unsafe { component.free_page(page_id) };
+                return Ok(());
+            }
+        }
+
+        Err(QuantumError::NoItem)
     }
 
 }
@@ -164,7 +178,7 @@ impl<'a> PhyMemoryManager<'a> {
 mod test_case {
     use crate::memory::physical_memory::{PhyRegion, PhyRegionKind};
     use crate::memory::{PAGE_SIZE, PhysicalAddress};
-    use crate::memory::pmm::PhyMemoryManagerComponent;
+    use crate::memory::pmm::{PhyMemoryManager, PhyMemoryManagerComponent};
 
     #[test_case]
     pub fn construct_a_component() {
@@ -208,7 +222,6 @@ mod test_case {
 
         let alloc = comp.allocate_page().unwrap();
 
-        assert_eq!(alloc.uid, 0);
         assert_eq!(alloc.start_address.as_u64(), 0);
         assert_eq!(alloc.end_address.as_u64(), 0 + PAGE_SIZE as u64);
 
@@ -238,7 +251,6 @@ mod test_case {
         for i in 0_u64..100 {
             let alloc = comp.allocate_page().unwrap();
 
-            assert_eq!(alloc.uid as u64, i);
             assert_eq!(alloc.start_address.as_u64(), i * (PAGE_SIZE as u64));
             assert_eq!(alloc.end_address.as_u64(), i * (PAGE_SIZE as u64) + (PAGE_SIZE as u64));
         }
@@ -268,7 +280,6 @@ mod test_case {
 
         let alloc = comp.allocate_page().unwrap();
 
-        assert_eq!(alloc.uid, 0);
         assert_eq!(alloc.start_address.as_u64(), 0);
         assert_eq!(alloc.end_address.as_u64(), 0 + PAGE_SIZE as u64);
 
@@ -280,11 +291,35 @@ mod test_case {
 
         let page = comp.allocate_page().unwrap();
 
-        assert_eq!(page.uid, 1);
         assert_eq!(page.start_address.as_u64(), PAGE_SIZE as u64);
         assert_eq!(page.end_address.as_u64(), 2 * PAGE_SIZE as u64);
     }
 
+    #[test_case]
+    pub fn test_manager() {
+        let mut limited_lifetime_buffer = [0_u8; 196];
+
+        let mut pmm = PhyMemoryManager::new();
+        let mut region = PhyRegion::new();
+
+        let dummy_size = 1000 * PAGE_SIZE;
+        let dummy_buffer_size = (dummy_size / PAGE_SIZE) / 8;
+
+        // dummy region
+        region.start = PhysicalAddress::new(0);
+        region.end = PhysicalAddress::new(dummy_size as u64);
+        region.kind = PhyRegionKind::Usable;
+        
+        pmm.insert_new_region(region, &mut limited_lifetime_buffer).unwrap();
+
+        let allocation = pmm.allocate().unwrap();
+
+        pmm.unallocate(allocation.start_address).unwrap();
+
+        let re_allocation = pmm.allocate().unwrap();
+
+        assert_eq!(allocation.start_address.as_u64(), re_allocation.start_address.as_u64());
+    }
 
 
 }

@@ -53,13 +53,13 @@ lazy_static! {
     pub static ref GLOBAL_DT: GlobalDescriptorTable = {
         let gdt = GlobalDescriptorTable::new();
 
-        serial_print!("Checking GDT ... ");
+        debug_print!("Checking GDT ... ");
 
         //gdt.add_entry(GdtEntry::new()).unwrap();
         //gdt.add_entry(GdtEntry::new_raw(0, 0xFFFFFFFF, 0x9A, 0xCF)).unwrap();
         //gdt.add_entry(GdtEntry::new_raw(0, 0xFFFFFFFF, 0x92, 0xCF)).unwrap();
 
-        serial_println!("OK");
+        debug_println!("OK");
 
         gdt
     };

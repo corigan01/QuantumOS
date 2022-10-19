@@ -105,7 +105,7 @@ fn main(boot_info: &'static mut BootInfo) -> ! {
         // init the cpu, we just need to wake up the lazy_statics for them to init
         let mut idt = INTERRUPT_DT.lock();
 
-        //attach_interrupt!(idt, general_isr, 0..32);
+        attach_interrupt!(idt, general_isr, 0..32);
 
         set_quiet_interrupt(1, true);
 
@@ -181,11 +181,9 @@ fn main(boot_info: &'static mut BootInfo) -> ! {
             pmm.insert_new_region(i, unsafe { &mut *alloc })
                 .expect("Unable to add region to PMM");
         }
-
-
-
-
     }
+
+
 
     let kernel_buffer = FBuffer::new(&boot_info.framebuffer);
 
