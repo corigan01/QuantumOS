@@ -59,4 +59,6 @@ impl SimpleAllocator {
 
         Ok(ptr::slice_from_raw_parts_mut(self.buffer.as_mut_ptr(), self.used))
     }
+
+
 }
