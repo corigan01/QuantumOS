@@ -161,10 +161,10 @@ impl<'a> PhyMemoryManager<'a> {
             let region_start = component.phy_region.start.as_u64();
             let region_end = component.phy_region.end.as_u64();
 
-            if starting_address.as_u64() > region_start && starting_address.as_u64() < region_end {
+            if starting_address.as_u64() >= region_start && starting_address.as_u64() <= region_end {
                 let page_id = (starting_address.as_u64() as usize) / PAGE_SIZE;
 
-                unsafe { component.free_page(page_id) };
+                unsafe { component.free_page(page_id) }?;
                 return Ok(());
             }
         }

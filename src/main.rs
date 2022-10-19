@@ -183,8 +183,6 @@ fn main(boot_info: &'static mut BootInfo) -> ! {
         }
     }
 
-
-
     let kernel_buffer = FBuffer::new(&boot_info.framebuffer);
 
     kernel_buffer.draw_rec((000, 000), (100, 100), 0xFF0000);

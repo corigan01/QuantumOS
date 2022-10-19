@@ -37,31 +37,55 @@ use bootloader::{BootInfo, entry_point};
 use lazy_static::lazy_static;
 
 struct RuntimeInfo {
-    run_count: usize
+    success_count: usize,
+    failed_count: usize
 }
 
 impl RuntimeInfo {
     pub fn new() -> Self {
         Self {
-            run_count: 0
+            success_count: 0,
+            failed_count: 0,
         }
     }
 
     pub fn get_run_count(&self) -> usize {
-        self.run_count
+        self.success_count + self.failed_count
     }
 
-    pub fn add_run(&mut self) {
-        self.run_count += 1
+    pub fn add_success(&mut self) {
+        self.success_count += 1;
+
+        self.run_next_test();
+    }
+
+    pub fn has_failed(&self) -> bool {
+        self.failed_count > 0
+    }
+
+    pub fn add_failed(&mut self) {
+        self.failed_count += 1;
+
+        self.run_next_test();
+    }
+
+    pub fn get_failed(&self) -> usize {
+        self.failed_count
+    }
+
+    pub fn run_next_test(&self) {
+        if let Some(tests) = unsafe { SYSTEM_TESTS } {
+            if self.get_run_count() >= tests.len() {
+                return;
+            }
+
+            tests[self.get_run_count()].run();
+        }
     }
 }
 
-
-lazy_static! {
-    static ref CURRENT_RUN : Mutex<RuntimeInfo> = {
-        Mutex::new(RuntimeInfo::new())
-    };
-}
+static mut CURRENT_RUN : RuntimeInfo = RuntimeInfo { success_count: 0, failed_count: 0};
+static mut SYSTEM_TESTS: Option<&[&dyn Testable]> = None;
 
 pub trait Testable {
     fn run(&self) -> ();
@@ -72,35 +96,51 @@ impl<T> Testable for T
         T: Fn(),
 {
     fn run(&self) {
-        let mut current_run = CURRENT_RUN.lock();
+        let mut current_run = unsafe { &mut CURRENT_RUN };
 
-        debug_print!("{:#4}: {:120} ", current_run.get_run_count(), core::any::type_name::<T>().blue().bold());
+        debug_print!("{:#4}: {:120} ", current_run.get_run_count() + 1, core::any::type_name::<T>().blue().bold());
         self();
         debug_println!("{}", "OK".bright_green().bold());
 
-        current_run.add_run();
+        current_run.add_success();
+    }
+}
+pub fn end_tests() {
+    let current_run = unsafe { &CURRENT_RUN };
+
+    if !current_run.has_failed() {
+        debug_println!("\n{}\n\n", "All tests passed! Exiting...".bright_green().bold());
+
+        exit_qemu(QemuExitCode::Success);
+    } else {
+        debug_println!("\n{}/{} {}\n\n",
+            current_run.get_failed(),
+            current_run.get_run_count(),
+            "tests have failed!".red());
+
+        exit_qemu(QemuExitCode::Failed);
     }
 }
 
-pub fn test_runner(tests: &[&dyn Testable]) {
+
+pub fn test_runner(tests: &'static [&dyn Testable]) {
     debug_println!("Running {} tests...", tests.len());
 
-    for test in tests {
-        test.run();
-    }
+    unsafe { SYSTEM_TESTS = Some(tests) };
 
-    debug_println!("\n{}", "All tests passed! Exiting...".bright_green().bold());
+    unsafe { &CURRENT_RUN }.run_next_test();
 
-    exit_qemu(QemuExitCode::Success);
+    end_tests();
 }
 
 pub fn test_panic_handler(info: &PanicInfo) -> ! {
     debug_println!("{}\n", "Failed".bright_red().bold());
-    debug_println!("{}", info.red());
-    debug_println!("\n\n-------------------------------");
+    debug_println!("{}\n", info.red());
 
+    unsafe { &mut CURRENT_RUN }.add_failed();
 
-    exit_qemu(QemuExitCode::Failed);
+    end_tests();
+
     loop {}
 }
 
