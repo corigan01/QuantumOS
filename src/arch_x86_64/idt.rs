@@ -34,7 +34,7 @@ use x86_64::instructions::segmentation;
 use x86_64::PrivilegeLevel;
 use x86_64::structures::gdt::SegmentSelector;
 
-use crate::{serial_print, serial_println};
+use crate::{debug_println, serial_print, serial_println};
 use crate::arch_x86_64::CpuPrivilegeLevel;
 use crate::bitset::BitSet;
 use crate::memory::VirtualAddress;
@@ -69,7 +69,7 @@ pub type GeneralHandlerFunc = fn(InterruptFrame, u8, Option<u64>);
 ///
 /// // This is the handler that gets called whenever `#DE` is called
 /// fn divide_by_zero_handler(i_frame: InterruptFrame, int_n: u8, error_code: Option<u64>) {
-///     serial_println!("EXCEPTION: DIVIDE BY ZERO {}", int_n);
+///     debug_println!("EXCEPTION: DIVIDE BY ZERO {}", int_n);
 /// }
 ///
 /// // We want our IDT to be in a lazy_static to make sure it has infinite lifetime
@@ -357,7 +357,7 @@ impl Idt {
             // There was no errors with this idt, so loading it should be safe :)
             valid
         } else {
-            serial_println!("Detected 1 or more Errors with IDT, loading this IDT can lead to undefined behavior!");
+            debug_println!("Detected 1 or more Errors with IDT, loading this IDT can lead to undefined behavior!");
 
             // Do as the master said, and submit anyway!
             IdtTablePointer {

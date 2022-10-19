@@ -491,8 +491,8 @@ mod test_case {
             assert_eq!(test_component.used, 1);
         }
 
-        serial_print!("  [SIZE: {}]  ", test_component.get_bytes_per_element());
-        serial_print!("  [MAX: {}]  ", test_component.max_elements().unwrap());
+        debug_print!("  [SIZE: {}]  ", test_component.get_bytes_per_element());
+        debug_print!("  [MAX: {}]  ", test_component.max_elements().unwrap());
 
         // Test if the buffer expands
         for i in 0..(test_component.max_elements().unwrap() as u8) {
@@ -554,8 +554,8 @@ mod test_case {
             assert_eq!(test_component.used, 1);
         }
 
-        serial_print!("  [SIZE: {}]  ", test_component.get_bytes_per_element());
-        serial_print!("  [MAX: {}]  ", test_component.max_elements().unwrap());
+        debug_print!("  [SIZE: {}]  ", test_component.get_bytes_per_element());
+        debug_print!("  [MAX: {}]  ", test_component.max_elements().unwrap());
 
         // Test if the buffer expands
         for i in 0..(test_component.max_elements().unwrap() as u64) {
@@ -590,8 +590,8 @@ mod test_case {
             assert_eq!(test_component.used, 1);
         }
 
-        serial_print!("  [SIZE: {}]  ", test_component.get_bytes_per_element());
-        serial_print!("  [MAX: {}]  ", test_component.max_elements().unwrap());
+        debug_print!("  [SIZE: {}]  ", test_component.get_bytes_per_element());
+        debug_print!("  [MAX: {}]  ", test_component.max_elements().unwrap());
 
         // Test if the buffer expands
         for i in 0..(test_component.max_elements().unwrap() as u8) {
@@ -647,12 +647,12 @@ mod test_case {
 
     #[test_case]
     fn get_total_buffer_component_overhead() {
-        serial_print!(" [Overhead for u8: {}] ", size_of::<BufferComponent<u8>>());
+        debug_print!(" [Overhead for u8: {}] ", size_of::<BufferComponent<u8>>());
     }
 
     #[test_case]
     fn get_total_buffer_overhead() {
-        serial_print!(" [Overhead for u8: {}] ", size_of::<ResizeableBuffer<u8>>());
+        debug_print!(" [Overhead for u8: {}] ", size_of::<ResizeableBuffer<u8>>());
     }
 
     #[test_case]

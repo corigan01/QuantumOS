@@ -39,14 +39,40 @@ Quantum OS Lib file, documentation coming soon!
 
 #[cfg(test)]
 use bootloader::{BootInfo, entry_point};
+use owo_colors::OwoColorize;
+use crate::debug_output::{set_debug_stream, StreamInfo};
+use crate::serial::SERIAL1;
 
 #[cfg(test)]
 entry_point!(test_main);
 
 #[cfg(test)]
+fn debug_output_char(char: u8) {
+    if let Some(serial_info) = SERIAL1.lock().as_ref() {
+        serial_info.write_byte(char);
+    }
+}
+
+#[cfg(test)]
 /// Entry point for `cargo test`
 fn test_main(boot_info: &'static mut BootInfo) -> ! {
-    serial_println!("\n\n== QuantumOS in Test Mode == \n");
+    let baud_rate = if let Some(serial) = SERIAL1.lock().as_ref() {
+        serial.get_baud()
+    } else {
+        0
+    };
+
+    set_debug_stream(StreamInfo {
+        output_stream: Some(debug_output_char),
+        name: Some("Serial"),
+        speed: Some(baud_rate as u64),
+        color: true,
+        message_header: false,
+    });
+
+    debug_println!("\n\n{} {}\n",
+        "                                                     ",
+        "QuantumOS in Test Mode".bright_green().bold());
 
     run_test();
 

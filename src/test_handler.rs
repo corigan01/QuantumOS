@@ -29,10 +29,39 @@ Quantum OS Lib file, documentation coming soon!
 use core::panic::PanicInfo;
 use owo_colors::OwoColorize;
 use crate::qemu::{exit_qemu, QemuExitCode};
-use crate::{serial_print, serial_println};
+use crate::{debug_print, debug_println, serial_print, serial_println};
+use spin::Mutex;
 
 #[cfg(test)]
 use bootloader::{BootInfo, entry_point};
+use lazy_static::lazy_static;
+
+struct RuntimeInfo {
+    run_count: usize
+}
+
+impl RuntimeInfo {
+    pub fn new() -> Self {
+        Self {
+            run_count: 0
+        }
+    }
+
+    pub fn get_run_count(&self) -> usize {
+        self.run_count
+    }
+
+    pub fn add_run(&mut self) {
+        self.run_count += 1
+    }
+}
+
+
+lazy_static! {
+    static ref CURRENT_RUN : Mutex<RuntimeInfo> = {
+        Mutex::new(RuntimeInfo::new())
+    };
+}
 
 pub trait Testable {
     fn run(&self) -> ();
@@ -43,27 +72,33 @@ impl<T> Testable for T
         T: Fn(),
 {
     fn run(&self) {
-        serial_print!("{:120} ", core::any::type_name::<T>().blue().bold());
+        let mut current_run = CURRENT_RUN.lock();
+
+        debug_print!("{:#4}: {:120} ", current_run.get_run_count(), core::any::type_name::<T>().blue().bold());
         self();
-        serial_println!("{}", "OK".bright_green().bold());
+        debug_println!("{}", "OK".bright_green().bold());
+
+        current_run.add_run();
     }
 }
 
 pub fn test_runner(tests: &[&dyn Testable]) {
-    serial_println!("Running {} tests...", tests.len());
+    debug_println!("Running {} tests...", tests.len());
 
     for test in tests {
         test.run();
     }
 
-    serial_println!("\n{}", "All tests passed! Exiting...".bright_green().bold());
+    debug_println!("\n{}", "All tests passed! Exiting...".bright_green().bold());
 
     exit_qemu(QemuExitCode::Success);
 }
 
 pub fn test_panic_handler(info: &PanicInfo) -> ! {
-    serial_println!("{}\n", "Failed".bright_red().bold());
-    serial_println!("Error: {}\n", info);
+    debug_println!("{}\n", "Failed".bright_red().bold());
+    debug_println!("{}", info.red());
+    debug_println!("\n\n-------------------------------");
+
 
     exit_qemu(QemuExitCode::Failed);
     loop {}
