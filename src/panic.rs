@@ -26,9 +26,12 @@ Quantum OS Lib file, documentation coming soon!
 
 */
 
+#[cfg(not(test))]
 use core::panic::PanicInfo;
+#[cfg(not(test))]
 use owo_colors::OwoColorize;
-use crate::{debug_println, serial_println};
+#[cfg(not(test))]
+use crate::debug_println;
 
 /// This function is called on panic.
 #[panic_handler]

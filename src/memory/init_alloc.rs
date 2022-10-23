@@ -28,37 +28,47 @@ use core::ptr;
 use lazy_static::lazy_static;
 use spin::Mutex;
 use crate::error_utils::QuantumError;
+use crate::memory::VirtualAddress;
 
-const TOTAL_BYTES: usize = 1024 * 10;
+const TOTAL_BYTES: usize = 1024 * 50; // 50Kib for preliminary allocations
+static BYTES: [u8; TOTAL_BYTES] = [0; TOTAL_BYTES];
 
 pub struct SimpleAllocator {
-    buffer: [u8; TOTAL_BYTES],
+    buffer: VirtualAddress,
+    total_size: usize,
     used: usize
 }
 
 lazy_static! {
     pub static ref INIT_ALLOC: Mutex<SimpleAllocator> = {
-        Mutex::new(SimpleAllocator::new())
+        Mutex::new(
+            SimpleAllocator::new(VirtualAddress::from_ptr(BYTES.as_ptr()), BYTES.len())
+        )
     };
 }
 
 impl SimpleAllocator {
-    pub fn new() -> Self {
+    pub fn new(buffer: VirtualAddress, size: usize) -> Self {
         Self {
-            buffer: [0_u8; TOTAL_BYTES],
+            buffer,
+            total_size: size,
             used: 0
         }
     }
 
     pub fn alloc(&mut self, bytes: usize) -> Result<*mut [u8], QuantumError> {
-        self.used += bytes;
-
-        if self.used >= TOTAL_BYTES {
+        if self.used >= self.total_size {
             return Err(QuantumError::NoSpaceRemaining);
         }
 
-        Ok(ptr::slice_from_raw_parts_mut(self.buffer.as_mut_ptr(), self.used))
+        let ptr = unsafe { (self.buffer.as_mut_ptr() as *mut u8).add(self.used) };
+
+        self.used += bytes;
+
+        Ok(ptr::slice_from_raw_parts_mut(ptr, bytes))
     }
 
-
+    pub fn remaining_capacity(&self) -> usize {
+        self.total_size - self.used
+    }
 }

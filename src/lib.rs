@@ -39,8 +39,14 @@ Quantum OS Lib file, documentation coming soon!
 
 #[cfg(test)]
 use bootloader::{BootInfo, entry_point};
+
+#[cfg(test)]
 use owo_colors::OwoColorize;
+
+#[cfg(test)]
 use crate::debug_output::{set_debug_stream, StreamInfo};
+
+#[cfg(test)]
 use crate::serial::SERIAL1;
 
 #[cfg(test)]

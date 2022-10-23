@@ -108,13 +108,23 @@ pub struct PhysicalPageInformation {
 
 pub struct PhyMemoryManager<'a> {
     components: Vec<PhyMemoryManagerComponent<'a>, 20>,
+    kernel: Option<PhyRegion>
 }
 
 impl<'a> PhyMemoryManager<'a> {
     pub fn new() -> Self {
         Self {
-            components: Vec::new()
+            components: Vec::new(),
+            kernel: None
         }
+    }
+
+    pub fn set_kernel_region(&mut self, kernel: PhyRegion) {
+        self.kernel = Some(kernel);
+    }
+
+    pub fn get_kernel_region(&self) -> Option<PhyRegion> {
+        self.kernel
     }
 
     pub fn recommended_bytes_to_store_allocation(region: PhyRegion) -> usize {
