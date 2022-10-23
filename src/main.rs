@@ -31,11 +31,13 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #![feature(abi_x86_interrupt)]
 #![test_runner(quantum_os::test_handler::test_runner)]
 
-use core::borrow::BorrowMut;
-use core::{ptr, slice};
+
+
 //mod vga;
 use owo_colors::OwoColorize;
 use bootloader::boot_info::{BootInfo, MemoryRegionKind};
+
+#[cfg(not(test))]
 use bootloader::entry_point;
 
 use quantum_os::arch_x86_64::idt::{interrupt_tester, set_quiet_interrupt, InterruptFrame};
@@ -49,7 +51,6 @@ use quantum_os::{attach_interrupt};
 use quantum_os::{debug_print, debug_println};
 use quantum_os::memory::physical_memory::{PhyRegionKind, PhyRegion, PhyRegionMap};
 use quantum_os::memory::pmm::PhyMemoryManager;
-use quantum_os::memory::init_alloc;
 use quantum_os::memory::init_alloc::INIT_ALLOC;
 
 fn debug_output_char(char: u8) {
@@ -63,6 +64,7 @@ entry_point!(main);
 
 //#[cfg(not(test))]
 fn main(boot_info: &'static mut BootInfo) -> ! {
+
     // safely get the baud rate
     let baud_rate = if let Some(serial) = SERIAL1.lock().as_ref() {
         serial.get_baud()
@@ -79,6 +81,7 @@ fn main(boot_info: &'static mut BootInfo) -> ! {
         message_header: true,
     });
 
+    debug_println!("\nQuantum Hello!");
     debug_println!("\n{:#x?}\n", boot_info);
     debug_print!("{}", "Checking the framebuffer ... ".white());
 
@@ -111,11 +114,11 @@ fn main(boot_info: &'static mut BootInfo) -> ! {
 
         idt.submit_entries().expect("Failed to load IDT!").load();
 
-        debug_print!("Testing Interrupts ... ");
+        debug_print!("{}", "Testing Interrupts ... ".white());
 
         interrupt_tester();
 
-        debug_println!("OK");
+        debug_println!("{}", "OK".bright_green().bold());
     }
 
     let mut pmm = PhyMemoryManager::new();
@@ -126,6 +129,8 @@ fn main(boot_info: &'static mut BootInfo) -> ! {
 
         let memory_info = &boot_info.memory_regions;
         let mut region_map = PhyRegionMap::new();
+
+        let kernel_ptr = INIT_ALLOC.lock().alloc(1).unwrap() as *const u8 as u64;
 
         debug_println!("|      START      |       END       |         KIND       |");
         debug_println!("|-----------------|-----------------|--------------------|");
@@ -138,17 +143,28 @@ fn main(boot_info: &'static mut BootInfo) -> ! {
                     { PhyRegionKind::Usable} else { PhyRegionKind::NotUsable})
                 .set_address_range(memory_region.start..memory_region.end);
 
-            if memory_region.kind == MemoryRegionKind::Usable {
-                debug_println!("| {:#15X} | {:#15X} | \t{:?}  \t |",
-                    memory_region.start, memory_region.end, memory_region.kind.bold().green());
-            } else if memory_region.kind == MemoryRegionKind::Bootloader {
-                debug_println!("| {:#15X} | {:#15X} | \t{:?}\t |",
-                    memory_region.start, memory_region.end, memory_region.kind.yellow())
-            } else {
-                debug_println!("| {:#15X} | {:#15X} | \t{:?}\t |",
-                    memory_region.start, memory_region.end, memory_region.kind.red())
+            match memory_region.kind {
+                MemoryRegionKind::Usable => {
+                    debug_print!("| {:#15X} | {:#15X} | \t{:?}  \t |",
+                        memory_region.start, memory_region.end, memory_region.kind.bold().green());
+                }
+                MemoryRegionKind::Bootloader => {
+                    debug_print!("| {:#15X} | {:#15X} | \t{:?}\t |",
+                        memory_region.start, memory_region.end, memory_region.kind.yellow());
+                }
+                _ => {
+                    debug_print!("| {:#15X} | {:#15X} | \t{:?}\t |",
+                        memory_region.start, memory_region.end, memory_region.kind.red());
+                }
             }
 
+            if memory_region.start <= kernel_ptr && memory_region.end >= kernel_ptr {
+                debug_println!("  <-- Kernel");
+
+                pmm.set_kernel_region(memory_entry);
+            } else {
+                debug_print!("\n");
+            }
 
             region_map.add_entry(memory_entry);
         }
@@ -188,7 +204,6 @@ fn main(boot_info: &'static mut BootInfo) -> ! {
     kernel_buffer.draw_rec((000, 000), (100, 100), 0xFF0000);
     kernel_buffer.draw_rec((100, 100), (100, 100), 0x00FF00);
     kernel_buffer.draw_rec((200, 200), (100, 100), 0x0000FF);
-
 
     debug_println!("\n\n\n==== KERNEL MAIN FINISHED ==== ");
     debug_println!("In later versions of this kernel, the kernel should not finish!");

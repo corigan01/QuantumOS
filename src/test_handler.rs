@@ -29,12 +29,7 @@ Quantum OS Lib file, documentation coming soon!
 use core::panic::PanicInfo;
 use owo_colors::OwoColorize;
 use crate::qemu::{exit_qemu, QemuExitCode};
-use crate::{debug_print, debug_println, serial_print, serial_println};
-use spin::Mutex;
-
-#[cfg(test)]
-use bootloader::{BootInfo, entry_point};
-use lazy_static::lazy_static;
+use crate::{debug_print, debug_println};
 
 struct RuntimeInfo {
     success_count: usize,
@@ -127,7 +122,6 @@ pub fn test_runner(tests: &'static [&dyn Testable]) {
     debug_println!("Running {} tests...", tests.len());
 
     unsafe { SYSTEM_TESTS = Some(tests) };
-
     unsafe { &CURRENT_RUN }.run_next_test();
 
     end_tests();

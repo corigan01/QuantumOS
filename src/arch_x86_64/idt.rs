@@ -185,7 +185,7 @@ extern "x86-interrupt" fn fallback_missing_handler(i_frame: InterruptFrame) -> !
 /// the user forgot to add a handler for that interrupt. It does not really provide much info, but
 /// it causes the system to crash to make sure undefined behavior or a protection fault occurred.
 #[cfg(not(test))]
-fn missing_handler(i_frame: InterruptFrame, interrupt: u8, error: Option<u64>) {
+fn missing_handler(i_frame: InterruptFrame, interrupt: u8, _error: Option<u64>) {
     panic!("Missing Interrupt ({}) handler was called!\n {:#x?}", interrupt, i_frame);
 }
 

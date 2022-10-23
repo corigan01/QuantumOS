@@ -26,6 +26,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 use core::arch::asm;
 
+use owo_colors::OwoColorize;
 use lazy_static::lazy_static;
 use spin::Mutex;
 
@@ -69,12 +70,12 @@ lazy_static! {
     pub static ref INTERRUPT_DT: Mutex<idt::Idt> = {
         let mut idt = idt::Idt::new();
 
-        debug_print!("Checking IDT ... ");
+        debug_print!("{}", "Checking IDT ... ".white());
 
 
         // Our little test handler to make sure it gets called when we cause a Divide by Zero
-        fn test_interrupt_dev0(iframe: InterruptFrame, interrupt: u8, error: Option<u64>) {
-            debug_println!("OK");
+        fn test_interrupt_dev0(_iframe: InterruptFrame, _interrupt: u8, _error: Option<u64>) {
+            debug_println!("{}", "OK".bright_green().bold());
         }
 
         attach_interrupt!(idt, test_interrupt_dev0, 0);
