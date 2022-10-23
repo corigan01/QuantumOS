@@ -205,7 +205,7 @@ mod test_case {
         assert_eq!(address.is_ok(), true);
         assert_eq!(address.unwrap().as_u64(), address_number);
 
-        let address_number = u64::MAX.set_bit(49, false);
+        let address_number = 0.set_bit(49, true);
         let address = VirtualAddress::try_new(address_number);
 
         assert_eq!(address.is_ok(), false);
