@@ -26,12 +26,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 use core::marker::PhantomData;
 use core::mem::size_of;
-use core::ptr;
-
-use crate::{debug_println, debug_print, serial_println};
 use crate::error_utils::QuantumError;
-use crate::memory::VirtualAddress;
-use crate::memory_utils::safe_ptr::SafePtr;
 
 #[derive(Debug)]
 struct RecursiveComponent<'a, T> {
@@ -94,13 +89,13 @@ impl<'a, T> RecursiveComponent<'a, T> {
 
     fn modify_used(&mut self, modify: isize) {
         let ptr = self.ptr.as_mut_ptr() as *mut u64;
-        let mut size_ref = unsafe  { &mut *(ptr.add(2)) };
+        let size_ref = unsafe  { &mut *(ptr.add(2)) };
         *size_ref = (*size_ref as isize + modify) as u64;
     }
 
     pub fn push(&mut self, element: T) -> Result<(), QuantumError> {
         let self_info = self.get_buffer_info();
-        let mut data_ptr = self_info.data_ptr as *mut T;
+        let data_ptr = self_info.data_ptr as *mut T;
 
         // check if new data fits
         if self_info.total <= self_info.used {
@@ -139,7 +134,7 @@ impl<'a, T> RecursiveComponent<'a, T> {
             return Err(QuantumError::NoItem);
         }
 
-        let mut data_ptr = self_info.data_ptr as *mut T;
+        let data_ptr = self_info.data_ptr as *mut T;
 
         let value = unsafe {
             &mut *data_ptr.add(key)
@@ -154,8 +149,8 @@ impl<'a, T> RecursiveComponent<'a, T> {
 
         for i in (key + 1)..self_info.used {
             let prev_index = i - 1;
-            let mut prev_ptr = unsafe { data_ptr.add(prev_index) as *mut T };
-            let mut current_ptr = unsafe { data_ptr.add(i) as *mut T };
+            let prev_ptr = unsafe { data_ptr.add(prev_index) as *mut T };
+            let current_ptr = unsafe { data_ptr.add(i) as *mut T };
 
             unsafe {
                 *prev_ptr = core::ptr::read(current_ptr);
@@ -184,14 +179,14 @@ impl<'a, T> RecursiveComponent<'a, T> {
             return Err(QuantumError::ExistingValue);
         }
 
-        let mut self_ptr = self.ptr.as_mut_ptr() as *mut Self;
+        let self_ptr = self.ptr.as_mut_ptr() as *mut Self;
         unsafe { *self_ptr = component  };
 
         Ok(())
     }
 
     pub fn is_parent(&mut self) -> bool {
-        let mut next_comp = self.get_buffer_info().next_ptr as *mut Self;
+        let next_comp = self.get_buffer_info().next_ptr as *mut Self;
         let address = next_comp as u64;
 
         if address > 0 {
@@ -204,8 +199,8 @@ impl<'a, T> RecursiveComponent<'a, T> {
 
     pub fn get_child(&mut self) -> Option<*mut Self> {
         if self.is_parent() {
-            let mut next_comp = self.get_buffer_info().next_ptr as *mut Self;
-            let mut child = unsafe { next_comp };
+            let next_comp = self.get_buffer_info().next_ptr as *mut Self;
+            let child = next_comp ;
 
             return Some(child);
         }
@@ -214,7 +209,7 @@ impl<'a, T> RecursiveComponent<'a, T> {
     }
 
     pub fn get_bottom(&mut self) -> *mut Self {
-        if let Some(mut child) = self.get_child() {
+        if let Some(child) = self.get_child() {
             return unsafe { &mut *child }.get_bottom();
         }
 
@@ -271,7 +266,7 @@ impl<'a, T> ByteVec<'a, T> {
 
     pub fn add_bytes(&mut self, bytes: &'a mut [u8]) -> Result<(), QuantumError> {
         if self.parent.is_none() {
-            let mut component = RecursiveComponent::<T>::new(bytes)?;
+            let component = RecursiveComponent::<T>::new(bytes)?;
             self.parent = Some(component);
 
             return Ok(());
@@ -434,7 +429,7 @@ mod test_case {
     #[test_case]
     fn test_constructing_component() {
         let mut limited_lifetime_value = [0_u8; 4096];
-        let component =
+        let _component =
             RecursiveComponent::<u8>::new(&mut limited_lifetime_value)
                 .expect("Could not construct vector!");
     }
@@ -523,7 +518,7 @@ mod test_case {
                 .expect("Could not construct ");
 
         let mut child_buffer = [0_u8; 4096];
-        let mut child =
+        let child =
             RecursiveComponent::<u64>::new(&mut child_buffer)
                 .expect("Could not construct ");
 
@@ -539,7 +534,7 @@ mod test_case {
 
         assert_eq!(component.is_parent(), true);
 
-        let mut test_child = component.get_child().unwrap();
+        let test_child = component.get_child().unwrap();
 
         for i in 0..unsafe {&mut *test_child}.total_size() {
             unsafe { &mut *test_child }.push(i as u64).unwrap();
@@ -602,7 +597,7 @@ mod test_case {
             assert_eq!(*vector.get(i).expect("Unable to get element"), i);
         }
 
-        for i in 0..vector.total_size() {
+        for _i in 0..vector.total_size() {
             vector.remove(0).expect("Unable to remove element from vector");
         }
 
