@@ -1,4 +1,5 @@
-/*
+/*!
+```text
   ____                 __               __ __                 __
  / __ \__ _____ ____  / /___ ____ _    / //_/__ _______  ___ / /
 / /_/ / // / _ `/ _ \/ __/ // /  ' \  / ,< / -_) __/ _ \/ -_) /
@@ -21,9 +22,16 @@ NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPO
 NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
 DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
+```
 */
 
 
 use crate::debug_println;
 
+
+
+// | Execute Disable | Available | Reserved (0) | Bits 12 - (m - 1) of address | Available |
+struct PageMapLevel4(u64);
+struct PageDirPointerTable(u64);
+struct PageDir(u64);
+struct PageTable(u64);
