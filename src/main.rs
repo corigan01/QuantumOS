@@ -39,6 +39,7 @@ use bootloader::boot_info::{BootInfo, MemoryRegionKind};
 
 #[cfg(not(test))]
 use bootloader::entry_point;
+use lazy_static::lazy_static;
 
 use quantum_os::arch_x86_64::idt::{interrupt_tester, set_quiet_interrupt, InterruptFrame};
 use quantum_os::arch_x86_64::isr::general_isr;
@@ -52,6 +53,7 @@ use quantum_os::{debug_print, debug_println};
 use quantum_os::memory::physical_memory::{PhyRegionKind, PhyRegion, PhyRegionMap};
 use quantum_os::memory::pmm::PhyMemoryManager;
 use quantum_os::memory::init_alloc::INIT_ALLOC;
+use quantum_os::vga::framebuffer::RawColor;
 
 fn debug_output_char(char: u8) {
     if let Some(serial_info) = SERIAL1.lock().as_ref() {
@@ -101,6 +103,10 @@ fn main(boot_info: &'static mut BootInfo) -> ! {
     else {
         debug_println!("{}", "FAIL".bright_red().bold());
     }
+
+    debug_println!("Translating framebuffer...");
+
+
 
 
     // init the cpu
@@ -171,20 +177,36 @@ fn main(boot_info: &'static mut BootInfo) -> ! {
 
         debug_println!("|-----------------|-----------------|--------------------|");
 
-        debug_println!("Does the memory overlap    : {}", region_map.do_regions_overlap());
+        debug_println!("Does the memory overlap       : {}", region_map.do_regions_overlap());
 
         let free_bytes = region_map.get_total_bytes(PhyRegionKind::Usable);
         let free_pages = region_map.get_usable_pages();
 
-        debug_println!("Total Free Physical Memory : {} {} ({} MB)",
+        let total_size: u64 = if let Some(regions) = region_map.get_regions(PhyRegionKind::Usable) {
+            let mut end_of_map: u64 = 0;
+            for i in regions {
+                if i.end.as_u64() > end_of_map {
+                    end_of_map = i.end.as_u64();
+                }
+            }
+
+            end_of_map
+        } else { 0 };
+
+        debug_println!("Total Free Physical Memory    : {} {} ({} MB)",
             free_pages.green().bold(),
             "Pages".green().bold(),
             free_bytes / (1024 * 1024));
 
+        debug_println!("Recovered Memory Information  : {} MB Usable / {} MB Total -- {}% Usable",
+            (free_bytes / (1024 * 1024)).white().bold(),
+            (total_size / (1024 * 1024)).white().bold(),
+            (((free_bytes as f64 / total_size as f64) * 100 as f64) as u64));
+
         let free_regions = region_map.get_regions(PhyRegionKind::Usable)
             .expect("Unable to find any free memory regions! Unable to boot!");
 
-        debug_println!("Amount of free elements {}/{} ", free_regions.len(), free_regions.capacity());
+        debug_println!("Amount of free elements       : {}/{} ", free_regions.len(), free_regions.capacity());
 
 
         for i in free_regions {
