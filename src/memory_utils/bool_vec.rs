@@ -61,7 +61,7 @@ impl<'a> BoolVec<'a> {
 
             Ok(())
         } else {
-            Err(QuantumError::IndexOutOfRange)
+            Err(QuantumError::OutOfRange)
         }
 
     }
