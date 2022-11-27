@@ -28,10 +28,64 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 use crate::debug_println;
 
-
-
-// | Execute Disable | Available | Reserved (0) | Bits 12 - (m - 1) of address | Available |
+/// # Page Map Level 4 (PML4)
+/// Page map level 4 is the second highest possible page table. It stores entries of
+/// `Page Directory Pointer Tables` to help abstract the memory layout of x64.
+///
+///
 struct PageMapLevel4(u64);
 struct PageDirPointerTable(u64);
 struct PageDir(u64);
 struct PageTable(u64);
+
+pub fn page_align(address: u64) -> u64 {
+
+}
+
+impl PageMapLevel4 {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn default() -> Self {
+        Self {
+            0: 0,
+        }
+    }
+}
+
+impl PageDirPointerTable {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn default() -> Self {
+        Self {
+            0: 0,
+        }
+    }
+}
+
+impl PageDir {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn default() -> Self {
+        Self {
+            0: 0,
+        }
+    }
+}
+
+impl PageTable {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn default() -> Self {
+        Self {
+            0: 0,
+        }
+    }
+}
