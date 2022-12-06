@@ -27,6 +27,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 
 use crate::debug_println;
+use crate::memory::PAGE_SIZE;
 
 /// # Page Map Level 4 (PML4)
 /// Page map level 4 is the second highest possible page table. It stores entries of
@@ -39,7 +40,7 @@ struct PageDir(u64);
 struct PageTable(u64);
 
 pub fn page_align(address: u64) -> u64 {
-
+    ( address / PAGE_SIZE as u64) * PAGE_SIZE as u64
 }
 
 impl PageMapLevel4 {
@@ -87,5 +88,19 @@ impl PageTable {
         Self {
             0: 0,
         }
+    }
+}
+
+
+#[cfg(test)]
+mod test_case {
+    use crate::debug_println;
+    use crate::memory::PAGE_SIZE;
+    use crate::memory::paging::page_align;
+
+    #[test_case]
+    pub fn page_align_test() {
+        assert_eq!(1 * PAGE_SIZE as u64, page_align(1 * PAGE_SIZE as u64 + 102));
+
     }
 }
