@@ -87,6 +87,7 @@ fn test_main(boot_info: &'static mut BootInfo) -> ! {
 
 pub mod test_handler;
 
+pub mod clock;
 pub mod memory_utils;
 pub mod serial;
 pub mod vga;

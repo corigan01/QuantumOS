@@ -36,5 +36,7 @@ pub enum QuantumError {
     OutOfRange,
     Test,
     NotIncrementalSize,
-    NoStream
+    NoStream,
+    InvalidOption
 }
+
