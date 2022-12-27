@@ -1,5 +1,4 @@
-/*!
-```text
+/*
   ____                 __               __ __                 __
  / __ \__ _____ ____  / /___ ____ _    / //_/__ _______  ___ / /
 / /_/ / // / _ `/ _ \/ __/ // /  ' \  / ,< / -_) __/ _ \/ -_) /
@@ -12,7 +11,7 @@ Permission is hereby granted, free of charge, to any person obtaining a copy of 
 associated documentation files (the "Software"), to deal in the Software without restriction,
 including without limitation the rights to use, copy, modify, merge, publish, distribute,
 sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+furnished to do so, subject to the following conditions
 
 The above copyright notice and this permission notice shall be included in all copies or substantial
 portions of the Software.
@@ -22,16 +21,8 @@ NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPO
 NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
 DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-```
+
 */
 
-
-use crate::debug_println;
-
-
-
-// | Execute Disable | Available | Reserved (0) | Bits 12 - (m - 1) of address | Available |
-struct PageMapLevel4(u64);
-struct PageDirPointerTable(u64);
-struct PageDir(u64);
-struct PageTable(u64);
+pub mod page_structures;
+pub mod page_flags;

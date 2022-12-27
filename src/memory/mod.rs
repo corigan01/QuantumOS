@@ -27,12 +27,13 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 use crate::bitset::BitSet;
 
-pub mod paging;
 pub mod physical_memory;
 pub mod pmm;
 pub mod heap;
 pub mod init_alloc;
+mod paging;
 
+const ADDRESS_SIZE: u8 = 48;
 const PAGE_SIZE: usize = 4096;
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
@@ -83,8 +84,8 @@ impl VirtualAddress {
 
     #[inline]
     pub fn try_new(address: u64) -> Result<VirtualAddress, NotValidAddress> {
-        if address.get_bits(48..64) == u64::MAX.get_bits(48..64) ||
-            address.get_bits(48..64) == 0 {
+        if address.get_bits(ADDRESS_SIZE..64) == u64::MAX.get_bits(ADDRESS_SIZE..64) ||
+            address.get_bits(ADDRESS_SIZE..64) == 0 {
             return Ok(VirtualAddress(address));
         }
 
