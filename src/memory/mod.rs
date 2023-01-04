@@ -125,6 +125,10 @@ impl VirtualAddress {
         self.as_u64() as *mut T
     }
 
+    pub fn is_aligned(&self) -> bool {
+        self.0 & (0x1000 - 1) == 0
+    }
+
     /// # Safety
     /// Using this function means that the user must ensure that the input is valid and doesnt
     /// cause fault.

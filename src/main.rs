@@ -55,7 +55,7 @@ use quantum_os::memory::pmm::PhyMemoryManager;
 use quantum_os::memory::init_alloc::INIT_ALLOC;
 use quantum_os::vga::framebuffer::RawColor;
 use quantum_os::clock::rtc;
-use quantum_os::clock::rtc::update_and_get_time;
+use quantum_os::clock::rtc::{set_time_zone, update_and_get_time};
 
 fn debug_output_char(char: u8) {
     if let Some(serial_info) = SERIAL1.lock().as_ref() {
@@ -87,7 +87,9 @@ fn main(boot_info: &'static mut BootInfo) -> ! {
 
     debug_println!("\nQuantum Hello!");
 
-    debug_println!("Quantum Time: {:?}", update_and_get_time());
+    set_time_zone(-6);
+
+    debug_println!("Time: {}", update_and_get_time());
 
     debug_println!("\n{:#x?}\n", boot_info);
     debug_print!("{}", "Checking the framebuffer ... ".white());

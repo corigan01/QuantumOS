@@ -25,6 +25,9 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 use crate::bitset;
+use crate::bitset::BitSet;
+use crate::error_utils::QuantumError;
+use crate::memory::VirtualAddress;
 
 #[repr(u64)]
 #[derive(PartialEq)]
@@ -56,6 +59,7 @@ pub enum PageFlagOptions {
 }
 
 #[repr(packed)]
+#[derive(Clone, Copy, PartialEq, Default)]
 pub struct PageFlags(u64);
 
 impl PageFlags {
@@ -85,12 +89,28 @@ impl PageFlags {
         self.0
     }
 
+    pub fn paste_address(&mut self, address: VirtualAddress) -> Result<(), QuantumError> {
+        if !address.is_aligned() {
+            return Err(QuantumError::NotAligned);
+        }
+
+        let address_shifted = address.as_u64() >> 12;
+
+        self.0 = self.as_u64().set_bits(12..51, address_shifted);
+
+        Ok(())
+
+    }
+
+
 }
 
 
 #[cfg(test)]
 pub mod test_case {
+    use crate::bitset::BitSet;
     use crate::memory::paging::page_flags::{PageFlagOptions, PageFlags};
+    use crate::memory::VirtualAddress;
 
     #[test_case]
     pub fn page_flags_enable_disable_test() {
@@ -121,5 +141,18 @@ pub mod test_case {
         flags.disable_all();
 
         assert_eq!(flags.as_u64(), 0);
+    }
+
+    #[test_case]
+    pub fn page_flags_add_address() {
+        let mut page_flag = PageFlags::new();
+        let address = VirtualAddress::new(0x2000);
+
+        assert_eq!(page_flag.as_u64(), 0);
+
+        page_flag.paste_address(address).unwrap();
+
+        assert_eq!(page_flag.as_u64().get_bit(13), true);
+        assert_eq!(page_flag.as_u64().get_bit(12), false);
     }
 }
