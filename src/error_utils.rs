@@ -37,6 +37,7 @@ pub enum QuantumError {
     Test,
     NotIncrementalSize,
     NoStream,
+    NotAligned,
     InvalidOption
 }
 

@@ -32,7 +32,8 @@ use crate::clock::Time;
 const CURRENT_CENTURY: u16 = 2000;
 
 pub struct RealTimeClock {
-    time: Time
+    time: Time,
+    time_zone_modification: i32
 }
 
 lazy_static! {
@@ -49,18 +50,24 @@ pub fn get_time() -> Time {
     REAL_TIME_CLOCK.lock().time()
 }
 
-impl RealTimeClock {
+pub fn set_time_zone(zone: i32) {
+    REAL_TIME_CLOCK.lock().set_time_zone(zone);
+}
 
+impl RealTimeClock {
     const CMOS_ADDRESS: u16 = 0x70;
     const CMOS_DATA: u16 = 0x71;
 
-
     pub fn new() -> Self {
         Self {
-            time: Time::new()
+            time: Time::new(),
+            time_zone_modification: 0,
         }
     }
 
+    pub fn set_time_zone(&mut self, zone: i32) {
+        self.time_zone_modification = zone;
+    }
 
     /// # Time
     /// Does not update the time, just returns the last updated time!
@@ -97,26 +104,26 @@ impl RealTimeClock {
 
             current_rtc_time.second = RealTimeClock::get_register(0x00) as u16;
             current_rtc_time.minute = RealTimeClock::get_register(0x02) as u16;
-            current_rtc_time.hour = RealTimeClock::get_register(0x04) as u16;
-            current_rtc_time.day = RealTimeClock::get_register(0x07) as u16;
-            current_rtc_time.month = RealTimeClock::get_register(0x08) as u16;
-            current_rtc_time.year = RealTimeClock::get_register(0x09) as u16;
+            current_rtc_time.hour   = RealTimeClock::get_register(0x04) as u16;
+            current_rtc_time.day    = RealTimeClock::get_register(0x07) as u16;
+            current_rtc_time.month  = RealTimeClock::get_register(0x08) as u16;
+            current_rtc_time.year   = RealTimeClock::get_register(0x09) as u16;
         }
 
         let reg_b = RealTimeClock::get_register(0x0B);
 
         if reg_b & 0x04 == 0 {
-            current_rtc_time.second = (current_rtc_time.second & 0x0F) + ((current_rtc_time.second / 16) * 10);
-            current_rtc_time.minute = (current_rtc_time.minute & 0x0F) + ((current_rtc_time.minute / 16) * 10);
-            current_rtc_time.hour   = (((current_rtc_time.hour & 0x0F) + (((current_rtc_time.hour & 0x70) / 16) * 10) ) | (current_rtc_time.hour & 0x80));
-            current_rtc_time.day    = (current_rtc_time.day & 0x0F)    + ((current_rtc_time.day / 16) * 10);
-            current_rtc_time.month  = (current_rtc_time.month & 0x0F)  + ((current_rtc_time.month / 16) * 10);
-            current_rtc_time.year   = (current_rtc_time.year & 0x0F)   + ((current_rtc_time.year / 16) * 10) + CURRENT_CENTURY;
+            current_rtc_time.second = (current_rtc_time.second  & 0x0F) + ((current_rtc_time.second / 16) * 10);
+            current_rtc_time.minute = (current_rtc_time.minute  & 0x0F) + ((current_rtc_time.minute / 16) * 10);
+            current_rtc_time.hour   = ((current_rtc_time.hour   & 0x0F) + (((current_rtc_time.hour & 0x70) / 16) * 10) ) | (current_rtc_time.hour & 0x80);
+            current_rtc_time.day    = (current_rtc_time.day     & 0x0F) + ((current_rtc_time.day / 16) * 10);
+            current_rtc_time.month  = (current_rtc_time.month   & 0x0F) + ((current_rtc_time.month / 16) * 10);
+            current_rtc_time.year   = (current_rtc_time.year    & 0x0F) + ((current_rtc_time.year / 16) * 10) + CURRENT_CENTURY;
         }
 
-        if current_rtc_time.hour > 12  {
-            current_rtc_time.hour = ((current_rtc_time.hour & 0x7F) + 12) % 24 - 6;
-        }
+
+        current_rtc_time.hour = (((current_rtc_time.hour & 0x7F) % 24) as i32 + self.time_zone_modification) as u16;
+        current_rtc_time.hour = current_rtc_time.hour % 24;
 
         self.time = current_rtc_time;
     }
@@ -128,7 +135,7 @@ impl RealTimeClock {
 
     fn get_update_flag() -> u8 {
         unsafe { port::byte_out(RealTimeClock::CMOS_ADDRESS, 0x0A); };
-        unsafe { (port::byte_in(RealTimeClock::CMOS_DATA) & 0x80 )}
+        unsafe { port::byte_in(RealTimeClock::CMOS_DATA) & 0x80 }
     }
 
     fn wait_for_update_flag() {
@@ -136,4 +143,24 @@ impl RealTimeClock {
     }
 }
 
+#[cfg(test)]
+pub mod test_case {
+    use crate::clock::rtc::{get_time, update_and_get_time};
 
+    #[test_case]
+    pub fn test_not_updated_time() {
+        let time = get_time();
+
+        let not_zero_time =
+            time.second + time.minute + time.hour + time.day + time.month + time.year;
+
+        assert_eq!(not_zero_time, 0);
+    }
+
+    #[test_case]
+    pub fn updated_time() {
+        let time = update_and_get_time();
+
+        // TODO!
+    }
+}

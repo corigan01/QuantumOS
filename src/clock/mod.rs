@@ -24,6 +24,9 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 */
 
+use core::fmt;
+use core::fmt::Formatter;
+
 pub mod rtc;
 
 #[derive(Clone, Copy, Debug, Ord, PartialOrd, Eq, PartialEq)]
@@ -63,6 +66,13 @@ impl Time {
             month: month as u16,
             year: year as u16,
         }
+    }
+}
+
+impl fmt::Display for Time {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "{:#02}:{:#02}:{:#02} {:#02}/{:#02}/{:#04}",
+               self.hour, self.minute, self.second, self.month, self.day, self.year)
     }
 }
 

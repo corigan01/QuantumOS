@@ -30,88 +30,80 @@ use crate::error_utils::QuantumError;
 use crate::memory::paging::page_flags::{PageFlagOptions, PageFlags};
 use crate::memory::VirtualAddress;
 
-struct PageMapLevel4(PageFlags);
-struct PageDirPointerTable(PageFlags);
-struct PageDir(PageFlags);
-struct PageTable(PageFlags);
+#[repr(align(4096))]
+struct PageMapLevel4 {
+    entries: [PageFlags; 512]
+}
 
-impl PageMapLevel4 {
-    const INVALID_OPTIONS: [PageFlagOptions; 1] = [PageFlagOptions::Present];
+#[repr(align(4096))]
+struct PageDirPointerTable {
+    entries: [PageFlags; 512]
+}
 
-    pub fn new() -> Self {
-        Self::valid_default()
-    }
+#[repr(align(4096))]
+struct PageDir {
+    entries: [PageFlags; 512]
+}
 
-    pub fn valid_default() -> Self {
-        Self {
-            0: PageFlags::new()
-        }
-    }
+#[repr(align(4096))]
+struct PageTable {
+    entries: [PageFlags; 512]
+}
 
-    pub fn delete_all_flags(&mut self) {
-        self.0.disable_all();
-    }
+macro_rules! map_impl {
+    ($($t:ty)*) => ($(
+        impl $t {
+             pub fn new() -> Self {
+                Self {
+                    entries: [PageFlags::new(); 512]
+                }
+            }
 
-    pub fn enable_flag(&mut self, option: PageFlagOptions) -> Result<(), QuantumError> {
+            pub fn get_entry(&mut self, index: usize) -> Option<&mut PageFlags> {
+                if self.entries.len() < index {
+                    return None;
+                }
 
-        // Make sure that option is valid for this paging structure
-        for i in Self::INVALID_OPTIONS {
-            if option == i {
-                return Err(QuantumError::InvalidOption);
+                Some(&mut self.entries[index])
+            }
+
+            pub fn remove_entry(&mut self, index: usize) {
+                if self.entries.len() < index {
+                    return;
+                }
+
+                self.entries[index].disable_all();
+            }
+
+            pub fn recurse_next_entry(&mut self, index: usize, address: VirtualAddress) -> Result<(), QuantumError> {
+                if index >= 512 {
+                    return Err(QuantumError::OutOfRange);
+                }
+
+                self.entries[index].paste_address(address)
             }
         }
-
-        // Enable the page
-        self.0.enable(option);
-
-        Ok(())
-    }
-
-    pub fn set_address(&self, address: VirtualAddress) {
-
-
-    }
-
-
-    pub fn compile_out(&self) -> u64 {
-        // TODO: Implement checking to make sure that the structure is valid
-
-        self.0.as_u64()
-    }
+    )*)
 }
 
-impl PageDirPointerTable {
-    pub fn new() -> Self {
-        Self::valid_default()
+map_impl! { PageMapLevel4 PageDirPointerTable PageDir PageTable}
+
+#[cfg(test)]
+pub mod test_case {
+    use crate::debug_println;
+    use crate::memory::paging::page_structures::{PageDirPointerTable, PageMapLevel4};
+    use crate::memory::VirtualAddress;
+
+    #[test_case]
+    pub fn test_page_map_addressing() {
+        let mut plm4 = PageMapLevel4::new();
+        let plm3 = PageDirPointerTable::new();
+
+        let ptr = plm3.entries.as_ptr();
+        let address = VirtualAddress::from_ptr(ptr);
+
+        plm4.recurse_next_entry(2, address).unwrap();
+
     }
 
-    pub fn valid_default() -> Self {
-        Self {
-            0: PageFlags::new()
-        }
-    }
-}
-
-impl PageDir {
-    pub fn new() -> Self {
-        Self::valid_default()
-    }
-
-    pub fn valid_default() -> Self {
-        Self {
-            0: PageFlags::new()
-        }
-    }
-}
-
-impl PageTable {
-    pub fn new() -> Self {
-        Self::valid_default()
-    }
-
-    pub fn valid_default() -> Self {
-        Self {
-            0: PageFlags::new()
-        }
-    }
 }
