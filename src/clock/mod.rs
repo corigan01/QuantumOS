@@ -52,11 +52,11 @@ impl Time {
     }
 
     fn from_seconds(mut seconds: u64) -> Self {
-        let year  = seconds / 31_536_000;   seconds -= year * 31_536_000;
-        let month = seconds / 2_628_288;    seconds -= month * 2_628_288;
-        let day   = seconds / 86400;        seconds -= day * 86400;
-        let hour  = seconds / 3600;         seconds -= hour * 3600;
-        let minute= seconds / 60;           seconds -= minute * 60;
+        let year  = seconds / 31_536_000;   seconds -= year     * 31_536_000;
+        let month = seconds / 2_628_288;    seconds -= month    * 2_628_288;
+        let day   = seconds / 86400;        seconds -= day      * 86400;
+        let hour  = seconds / 3600;         seconds -= hour     * 3600;
+        let minute= seconds / 60;           seconds -= minute   * 60;
 
         Self {
             second: seconds as u16,
