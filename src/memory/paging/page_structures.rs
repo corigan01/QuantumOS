@@ -82,11 +82,19 @@ macro_rules! map_impl {
 
                 self.entries[index].paste_address(address)
             }
+
+            pub fn get_address(&self) -> VirtualAddress {
+                 VirtualAddress::from_ptr(self.entries.as_ptr())
+            }
+
+            pub fn get_next_entry(&mut self, index: usize) -> Result<VirtualAddress, QuantumError> {
+
+            }
         }
     )*)
 }
 
-map_impl! { PageMapLevel4 PageDirPointerTable PageDir PageTable}
+map_impl! { PageMapLevel4 PageDirPointerTable PageDir PageTable }
 
 #[cfg(test)]
 pub mod test_case {
@@ -99,10 +107,8 @@ pub mod test_case {
         let mut plm4 = PageMapLevel4::new();
         let plm3 = PageDirPointerTable::new();
 
-        let ptr = plm3.entries.as_ptr();
-        let address = VirtualAddress::from_ptr(ptr);
+        plm4.recurse_next_entry(2, plm3.get_address()).unwrap();
 
-        plm4.recurse_next_entry(2, address).unwrap();
 
     }
 

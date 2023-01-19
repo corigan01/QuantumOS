@@ -40,6 +40,7 @@ pub mod isr;
 pub mod gdt;
 pub mod tables;
 pub mod idt;
+pub mod cpuid;
 
 #[derive(Clone, Copy, Debug)]
 #[repr(u8)]
