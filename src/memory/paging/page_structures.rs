@@ -60,7 +60,7 @@ macro_rules! map_impl {
             }
 
             pub fn get_entry(&mut self, index: usize) -> Option<&mut PageFlags> {
-                if self.entries.len() < index {
+                if self.entries.len() <= index {
                     return None;
                 }
 
@@ -76,7 +76,7 @@ macro_rules! map_impl {
             }
 
             pub fn recurse_next_entry(&mut self, index: usize, address: VirtualAddress) -> Result<(), QuantumError> {
-                if index >= 512 {
+                if index >= self.entries.len() {
                     return Err(QuantumError::OutOfRange);
                 }
 
@@ -87,9 +87,6 @@ macro_rules! map_impl {
                  VirtualAddress::from_ptr(self.entries.as_ptr())
             }
 
-            pub fn get_next_entry(&mut self, index: usize) -> Result<VirtualAddress, QuantumError> {
-
-            }
         }
     )*)
 }
@@ -99,7 +96,7 @@ map_impl! { PageMapLevel4 PageDirPointerTable PageDir PageTable }
 #[cfg(test)]
 pub mod test_case {
     use crate::debug_println;
-    use crate::memory::paging::page_structures::{PageDirPointerTable, PageMapLevel4};
+    use crate::memory::paging::page_structures::{PageDir, PageDirPointerTable, PageMapLevel4, PageTable};
     use crate::memory::VirtualAddress;
 
     #[test_case]
@@ -108,8 +105,39 @@ pub mod test_case {
         let plm3 = PageDirPointerTable::new();
 
         plm4.recurse_next_entry(2, plm3.get_address()).unwrap();
+    }
 
+    #[test_case]
+    pub fn test_page_recursion() {
+        let mut plm4 = PageMapLevel4::new();
+        let mut plm3 = PageDirPointerTable::new();
+        let mut plm2 = PageDir::new();
+        let mut plm1 = PageTable::new();
 
+        plm2.recurse_next_entry(2, plm1.get_address()).unwrap();
+        plm3.recurse_next_entry(2, plm2.get_address()).unwrap();
+        plm4.recurse_next_entry(2, plm3.get_address()).unwrap();
+
+        debug_println!("Attempting to recover address");
+
+        let plm3_address = plm4.get_entry(2)
+            .unwrap()
+            .get_address()
+            .unwrap();
+
+        debug_println!("Attempting to recover value!");
+
+        let mut recovered_plm3= unsafe {
+            &mut *(plm3_address.as_ptr::<PageDirPointerTable>() as *mut PageDirPointerTable)
+        };
+
+        debug_println!("Asserting Value! {:?} {:?}", plm3_address, (&plm3 as *const _) as u64);
+
+        assert_ne!(
+            recovered_plm3.get_entry(2).unwrap().as_u64(), 0_u64
+        );
+
+        debug_println!("Done!");
     }
 
 }
