@@ -81,7 +81,7 @@ impl PageFlags {
         self
     }
 
-    pub fn disable_all(&mut self) {
+    pub fn reset(&mut self) {
         self.0 = 0;
     }
 
@@ -103,7 +103,7 @@ impl PageFlags {
     }
 
     pub fn get_address(&mut self) -> Result<VirtualAddress, QuantumError> {
-        let v_address = self.as_u64().get_bits(12..51);
+        let v_address = self.as_u64().get_bits(12..51) << 12;
 
         if v_address == 0 {
             return Err(QuantumError::NoItem);
@@ -148,7 +148,7 @@ pub mod test_case {
         flags.enable(PageFlagOptions::Present);
         flags.enable(PageFlagOptions::UserAccessible);
 
-        flags.disable_all();
+        flags.reset();
 
         assert_eq!(flags.as_u64(), 0);
     }
