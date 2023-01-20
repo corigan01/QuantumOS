@@ -153,7 +153,7 @@ impl<'a, T> RecursiveComponent<'a, T> {
             let current_ptr = unsafe { data_ptr.add(i) as *mut T };
 
             unsafe {
-                *prev_ptr = core::ptr::read(current_ptr);
+                *prev_ptr = core::ptr::read_unaligned(current_ptr);
             }
         }
 
@@ -219,6 +219,7 @@ impl<'a, T> RecursiveComponent<'a, T> {
     pub fn get_num_of_recurse_components(&mut self) -> usize {
         let mut parent = self as *mut Self;
         let mut num = 0_usize;
+
         loop {
             if let Some(child) = unsafe { &mut *parent }.get_child() {
                 parent = child;
@@ -331,8 +332,9 @@ impl<'a, T> ByteVec<'a, T> {
             while unsafe { &mut *iteration_ref }.is_parent() {
                 if let Some(child) = unsafe { &mut *iteration_ref }.get_child() {
                     if let Ok(value) = unsafe { &mut *child }.get(0) {
+
                         let value = unsafe {
-                            core::ptr::read(value)
+                            core::ptr::read_unaligned(value)
                         };
 
                         unsafe { &mut *child }.remove_element(0);

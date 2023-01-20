@@ -102,6 +102,16 @@ impl PageFlags {
 
     }
 
+    pub fn get_address(&mut self) -> Result<VirtualAddress, QuantumError> {
+        let v_address = self.as_u64().get_bits(12..51);
+
+        if v_address == 0 {
+            return Err(QuantumError::NoItem);
+        }
+
+        Ok(VirtualAddress::new(v_address))
+    }
+
 
 }
 
@@ -154,5 +164,6 @@ pub mod test_case {
 
         assert_eq!(page_flag.as_u64().get_bit(13), true);
         assert_eq!(page_flag.as_u64().get_bit(12), false);
+        assert_eq!(page_flag.get_address().unwrap().as_u64(), 0x2000);
     }
 }
