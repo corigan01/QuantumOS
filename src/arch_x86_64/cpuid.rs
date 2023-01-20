@@ -24,11 +24,9 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 */
 
-
-
 type CpuidVendorId = u16;
 
-#[derive(Copy, Clone, PartialEq)]
+#[derive(Copy, Clone, PartialEq, Debug)]
 enum CpuidVendor {
     // Real CPUs
     AMD,
@@ -68,7 +66,7 @@ enum CpuidVendor {
 }
 
 impl CpuidVendor {
-    const STRING_WITH_VENDOR: [(&str, CpuidVendor); 29] = [
+    const STRING_WITH_VENDOR: [(&'static str, CpuidVendor); 29] = [
         // Real
         ("AuthenticAMD", CpuidVendor::AMD),
         ("AMDisbetter!", CpuidVendor::AMDOld),
@@ -135,4 +133,39 @@ impl CpuidVendor {
             &("Error In Val", CpuidVendor::Unknown)
         ).0
     }
+}
+
+#[cfg(test)]
+pub mod test_case {
+    use crate::arch_x86_64::cpuid::CpuidVendor;
+
+    #[test_case]
+    pub fn test_conversion_between_strings() {
+        // To enum
+        assert_eq!(
+            CpuidVendor::convert_from_string("TCGTCGTCGTCG"),
+            CpuidVendor::Qemu);
+
+        assert_ne!(
+            CpuidVendor::convert_from_string("Shanghai"),
+            CpuidVendor::Zhaoxin);
+
+        assert_eq!(
+            CpuidVendor::convert_from_string("AuthenticAMD"),
+            CpuidVendor::AMD);
+
+        // To String
+        assert_eq!(
+            "TCGTCGTCGTCG",
+            CpuidVendor::Qemu.get_string());
+
+        assert_ne!(
+            "Shanghai",
+            CpuidVendor::Zhaoxin.get_string());
+
+        assert_eq!(
+            "AuthenticAMD",
+            CpuidVendor::AMD.get_string());
+    }
+
 }

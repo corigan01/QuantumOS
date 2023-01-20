@@ -50,6 +50,11 @@ struct PageTable {
     entries: [PageFlags; 512]
 }
 
+type PLM4 = PageMapLevel4;
+type PLM3 = PageDirPointerTable;
+type PLM2 = PageDir;
+type PLM1 = PageTable;
+
 macro_rules! map_impl {
     ($($t:ty)*) => ($(
         impl $t {
@@ -118,26 +123,19 @@ pub mod test_case {
         plm3.recurse_next_entry(2, plm2.get_address()).unwrap();
         plm4.recurse_next_entry(2, plm3.get_address()).unwrap();
 
-        debug_println!("Attempting to recover address");
-
         let plm3_address = plm4.get_entry(2)
             .unwrap()
             .get_address()
             .unwrap();
 
-        debug_println!("Attempting to recover value!");
-
         let mut recovered_plm3= unsafe {
             &mut *(plm3_address.as_ptr::<PageDirPointerTable>() as *mut PageDirPointerTable)
         };
-
-        debug_println!("Asserting Value! {:?} {:?}", plm3_address, (&plm3 as *const _) as u64);
 
         assert_ne!(
             recovered_plm3.get_entry(2).unwrap().as_u64(), 0_u64
         );
 
-        debug_println!("Done!");
     }
 
 }
