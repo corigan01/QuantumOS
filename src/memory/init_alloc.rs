@@ -73,6 +73,10 @@ impl SimpleAllocator {
         let alignment_offset = (ptr & (u64::MAX - (0x1000 - 1))) + 0x1000;
         let offset_before_ptr = (alignment_offset - ptr) as usize;
 
+        if self.used + offset_before_ptr >= self.total_size {
+            return Err(QuantumError::NoSpaceRemaining);
+        }
+
         let ptr = unsafe {
             (self.buffer.as_mut_ptr() as *mut u8)
                 .add(offset_before_ptr)
@@ -86,5 +90,33 @@ impl SimpleAllocator {
 
     pub fn remaining_capacity(&self) -> usize {
         self.total_size - self.used
+    }
+}
+
+#[cfg(test)]
+pub mod test {
+    use crate::memory::init_alloc::INIT_ALLOC;
+    use crate::memory::VirtualAddress;
+
+    #[test_case]
+    pub fn test_case_alloc() {
+        let mut alloc = INIT_ALLOC.lock();
+
+        assert_eq!(alloc.buffer.as_u64(), 0);
+        assert_ne!(VirtualAddress::from_ptr(alloc.alloc(10).unwrap()).as_u64(), 0);
+        assert_eq!(alloc.used, 10);
+    }
+
+    #[test_case]
+    pub fn test_case_alloc_aligned() {
+        let mut alloc = INIT_ALLOC.lock();
+
+        assert_eq!(alloc.buffer.as_u64(), 0);
+        assert_ne!(VirtualAddress::from_ptr(alloc.alloc(10).unwrap()).as_u64(), 0);
+        assert_eq!(alloc.used, 10);
+
+        assert!(
+            (VirtualAddress::from_ptr(alloc.alloc_aligned(4096).unwrap()).as_u64()) & (0x1000 - 1) > 0
+        );
     }
 }
