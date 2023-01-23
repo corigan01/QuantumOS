@@ -24,13 +24,19 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 */
 
+pub trait EnumIntoIterator {
+    type IntoIter;
+
+    fn into_iter() -> Self::IntoIter;
+}
+
 #[macro_export]
 macro_rules! enum_list {
     () => {};
 
     (
         $(#[$m:meta])*
-        $visa:vis enum $name:ident {
+        $visa:vis enum $name:ident($itr:ident) {
             $($val:ident $(= $epr:expr)?),*
         }
 
@@ -41,38 +47,43 @@ macro_rules! enum_list {
             $($val $(= $epr)?),*
         }
 
-        impl Iterator for $name {
-            type Item = $name;
+        impl EnumIntoIterator for $name {
+            type IntoIter = $itr;
 
-            fn next(&mut self) -> Option<Self::Item>{
-                for i in 0..($name::ITEMS.len() - 1) {
-                    let val = $name::ITEMS[i];
-
-                    if *self == val {
-                        return Some($name::ITEMS[i+1]);
-                    }
+            fn into_iter() -> Self::IntoIter {
+                $itr {
+                    index: 0
                 }
-
-                None
-            }
-
-            fn size_hint(&self) -> (usize, Option<usize>) {
-                (Self::ITEMS.len(), Some(Self::ITEMS.len()))
             }
         }
 
-        /*impl IntoIterator for $name {
-            type Item = $name;
-            type IntoIter = dyn Iterator<Item = Self::Item>;
+        $visa struct $itr {
+            index: usize
+        }
 
-            fn into_iter(self) -> Self::IntoIter {
-                Self::ITEMS.into_iter()
+        impl Iterator for $itr {
+            type Item = $name;
+
+            fn next(&mut self) -> Option<Self::Item>{
+                let value = *($name::ITEMS.get(self.index)?);
+                self.index += 1;
+
+                Some(value)
             }
-        }*/
+
+            fn size_hint(&self) -> (usize, Option<usize>) {
+                ($name::ITEMS.len(), Some($name::ITEMS.len()))
+            }
+
+            fn nth(&mut self, n: usize) -> Option<Self::Item> {
+                Some(*($name::ITEMS.get(n)?))
+            }
+        }
 
         impl $name {
             const ITEMS: [$name; <[$name]>::len(&[$($name::$val),*])] =
                 [$($name::$val),*];
+
         }
 
     }

@@ -29,11 +29,12 @@ use crate::{bitset, enum_list};
 use crate::bitset::BitSet;
 use crate::error_utils::QuantumError;
 use crate::memory::VirtualAddress;
+use crate::enum_list::EnumIntoIterator;
 
 enum_list! {
     #[repr(u64)]
     #[derive(PartialEq, Debug, Clone, Copy)]
-    pub enum PageFlagOptions {
+    pub enum PageFlagOptions(PageFlagOptionsIter) {
         Present         = 1 << 0,
         Writable        = 1 << 1,
         UserAccessible  = 1 << 2,
@@ -57,12 +58,9 @@ enum_list! {
         UnusedBit60     = 1 << 60,
         UnusedBit61     = 1 << 61,
         UnusedBit62     = 1 << 62,
-        NoExecute       = 1 << 63,
-        None
+        NoExecute       = 1 << 63
     }
 }
-
-
 
 #[repr(packed)]
 #[derive(Clone, Copy, PartialEq, Default)]
