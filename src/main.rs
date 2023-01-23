@@ -212,7 +212,6 @@ fn main(boot_info: &'static mut BootInfo) -> ! {
 
         debug_println!("Amount of free elements       : {}/{} ", free_regions.len(), free_regions.capacity());
 
-
         for i in free_regions {
             let recommended_size =
                 PhyMemoryManager::recommended_bytes_to_store_allocation(i);
@@ -224,6 +223,9 @@ fn main(boot_info: &'static mut BootInfo) -> ! {
                 .expect("Unable to add region to PMM");
         }
     }
+
+    debug_println!("Remaining InitAlloc           : {} Bytes",
+        INIT_ALLOC.lock().remaining_capacity().white().bold());
 
     let kernel_buffer = FBuffer::new(&boot_info.framebuffer);
 

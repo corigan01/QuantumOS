@@ -27,28 +27,28 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 use crate::{debug_print, debug_println, to_giga_bytes, to_kilo_bytes, to_mega_bytes};
 use crate::error_utils::QuantumError;
-use crate::memory::paging::page_flags::{PageFlagOptions, PageFlags};
+use crate::memory::paging::page_flags::{TableFlagOptions, TableFlags};
 use crate::memory::VirtualAddress;
 use owo_colors::OwoColorize;
 
 #[repr(align(4096))]
 struct PageMapLevel4 {
-    entries: [PageFlags; 512]
+    entries: [TableFlags; 512]
 }
 
 #[repr(align(4096))]
 struct PageDirPointerTable {
-    entries: [PageFlags; 512]
+    entries: [TableFlags; 512]
 }
 
 #[repr(align(4096))]
 struct PageDir {
-    entries: [PageFlags; 512]
+    entries: [TableFlags; 512]
 }
 
 #[repr(align(4096))]
 struct PageTable {
-    entries: [PageFlags; 512]
+    entries: [TableFlags; 512]
 }
 
 type PLM4 = PageMapLevel4;
@@ -61,11 +61,11 @@ macro_rules! map_impl {
         impl $t {
              pub fn new() -> Self {
                 Self {
-                    entries: [PageFlags::new(); 512]
+                    entries: [TableFlags::new(); 512]
                 }
             }
 
-            pub fn get_entry(&mut self, index: usize) -> Option<&mut PageFlags> {
+            pub fn get_entry(&mut self, index: usize) -> Option<&mut TableFlags> {
                 if self.entries.len() <= index {
                     return None;
                 }
@@ -93,26 +93,26 @@ macro_rules! map_impl {
                  VirtualAddress::from_ptr(self.entries.as_ptr())
             }
 
-            pub fn print_structure(&self, entry: Option<&mut PageFlags>) {
-                debug_print!("{}{:016X} {}{:016X} \t\t\t\t\t\t\t\t\t\t\t\t\t   {}",
+            pub fn print_structure(&self, entry: Option<&mut TableFlags>) {
+                debug_print!("{} -- {}{:016X} {}{:016X} ",
+                    Self::TABLE_NAME.blue().bold().underline(),
                     "A:".white(),
                     (self.entries.as_ptr() as u64).white(),
                     "S:".white(),
-                    Self::ADDRESS_SPACE.white(),
-                    Self::TABLE_NAME.blue().bold().underline());
+                    Self::ADDRESS_SPACE.white());
 
                 if let Some(entry) = entry {
-                    debug_print!("({:?})", entry);
+                    debug_print!(" -- Table Flags: {:?}", entry.bold().underline());
                 }
 
                 for i in 0..self.entries.len() {
                     let entry = self.entries[i];
 
-                    if i % 14 == 0 {
+                    if i % 16 == 0 {
                         debug_println!("");
                     }
 
-                    if entry.is_set(PageFlagOptions::Present) {
+                    if entry.is_set(TableFlagOptions::Present) {
                         debug_print!("{}{:016X} ", "0x".bright_green(), entry.as_u64().bright_green());
                     }
                     else if entry.as_u64() > 0 {
@@ -165,7 +165,8 @@ impl PageMapAddressOptions for PageTable {
 #[cfg(test)]
 pub mod test_case {
     use crate::debug_println;
-    use crate::memory::paging::page_flags::PageFlagOptions;
+    use crate::memory::init_alloc::INIT_ALLOC;
+    use crate::memory::paging::page_flags::TableFlagOptions;
     use crate::memory::paging::page_structures::{PageDir, PageDirPointerTable, PageMapLevel4, PageTable, PLM4};
     use crate::memory::VirtualAddress;
 
@@ -184,11 +185,11 @@ pub mod test_case {
         let mut plm2 = PageDir::new();
         let mut plm1 = PageTable::new();
 
-        plm4.get_entry(2).unwrap().enable(PageFlagOptions::Present);
-        plm4.get_entry(4).unwrap().enable(PageFlagOptions::NoExecute);
+        plm4.get_entry(2).unwrap().enable(TableFlagOptions::Present);
+        plm4.get_entry(4).unwrap().enable(TableFlagOptions::NoExecute);
 
-        plm3.get_entry(2).unwrap().enable(PageFlagOptions::Present);
-        plm2.get_entry(2).unwrap().enable(PageFlagOptions::Present);
+        plm3.get_entry(2).unwrap().enable(TableFlagOptions::Present);
+        plm2.get_entry(2).unwrap().enable(TableFlagOptions::Present);
 
         plm2.recurse_next_entry(2, plm1.get_address()).unwrap();
         plm3.recurse_next_entry(2, plm2.get_address()).unwrap();
@@ -212,9 +213,11 @@ pub mod test_case {
         plm3.print_structure(plm4.get_entry(2));
         plm2.print_structure(plm3.get_entry(2));
         plm1.print_structure(plm2.get_entry(2));
+    }
 
-
-
+    #[test_case]
+    pub fn test_allocating_pages_live() {
+        INIT_ALLOC.lock().alloc_aligned(4096);
     }
 
 }
