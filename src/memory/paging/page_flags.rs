@@ -126,7 +126,7 @@ impl PageFlags {
 impl Debug for PageFlags {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         write!(f, "PageFlags(")?;
-        for i in PageFlagOptions::ITEMS {
+        for i in PageFlagOptions::into_iter() {
             if !self.is_set(i) { continue; }
             write!(f, "{:?}", i)?;
         }

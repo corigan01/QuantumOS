@@ -42,7 +42,7 @@ macro_rules! enum_list {
         }
 
         impl Iterator for $name {
-            type Item = $name
+            type Item = $name;
 
             fn next(&mut self) -> Option<Self::Item>{
                 for i in 0..($name::ITEMS.len() - 1) {
@@ -55,7 +55,20 @@ macro_rules! enum_list {
 
                 None
             }
+
+            fn size_hint(&self) -> (usize, Option<usize>) {
+                (Self::ITEMS.len(), Some(Self::ITEMS.len()))
+            }
         }
+
+        /*impl IntoIterator for $name {
+            type Item = $name;
+            type IntoIter = dyn Iterator<Item = Self::Item>;
+
+            fn into_iter(self) -> Self::IntoIter {
+                Self::ITEMS.into_iter()
+            }
+        }*/
 
         impl $name {
             const ITEMS: [$name; <[$name]>::len(&[$($name::$val),*])] =
