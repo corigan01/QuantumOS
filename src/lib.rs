@@ -34,6 +34,7 @@ Quantum OS Lib file, documentation coming soon!
 #![feature(custom_test_frameworks)]
 #![test_runner(crate::test_handler::test_runner)]
 #![feature(abi_x86_interrupt)]
+#![feature(inherent_associated_types)]
 
 #![reexport_test_harness_main = "run_test"]
 
@@ -100,3 +101,4 @@ pub mod qemu;
 pub mod post_hal;
 pub mod debug_output;
 pub mod error_utils;
+pub mod enum_list;
