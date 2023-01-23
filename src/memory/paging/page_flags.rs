@@ -24,39 +24,45 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 */
 
-use crate::bitset;
+use core::fmt::{Debug, Formatter};
+use crate::{bitset, enum_list};
 use crate::bitset::BitSet;
 use crate::error_utils::QuantumError;
 use crate::memory::VirtualAddress;
 
-#[repr(u64)]
-#[derive(PartialEq)]
-pub enum PageFlagOptions {
-    Present         = 1 << 0,
-    Writable        = 1 << 1,
-    UserAccessible  = 1 << 2,
-    WriteThrough    = 1 << 3,
-    NoCache         = 1 << 4,
-    Accessed        = 1 << 5,
-    Dirty           = 1 << 6,
-    HugePage        = 1 << 7,
-    Global          = 1 << 8,
-    UnusedBit9      = 1 << 9,
-    UnusedBit10     = 1 << 10,
-    UnusedBit11     = 1 << 11,
-    UnusedBit52     = 1 << 52,
-    UnusedBit53     = 1 << 53,
-    UnusedBit54     = 1 << 54,
-    UnusedBit55     = 1 << 55,
-    UnusedBit56     = 1 << 56,
-    UnusedBit57     = 1 << 57,
-    UnusedBit58     = 1 << 58,
-    UnusedBit59     = 1 << 59,
-    UnusedBit60     = 1 << 60,
-    UnusedBit61     = 1 << 61,
-    UnusedBit62     = 1 << 62,
-    NoExecute       = 1 << 63
+enum_list! {
+    #[repr(u64)]
+    #[derive(PartialEq, Debug, Clone, Copy)]
+    pub enum PageFlagOptions {
+        Present         = 1 << 0,
+        Writable        = 1 << 1,
+        UserAccessible  = 1 << 2,
+        WriteThrough    = 1 << 3,
+        NoCache         = 1 << 4,
+        Accessed        = 1 << 5,
+        Dirty           = 1 << 6,
+        HugePage        = 1 << 7,
+        Global          = 1 << 8,
+        UnusedBit9      = 1 << 9,
+        UnusedBit10     = 1 << 10,
+        UnusedBit11     = 1 << 11,
+        UnusedBit52     = 1 << 52,
+        UnusedBit53     = 1 << 53,
+        UnusedBit54     = 1 << 54,
+        UnusedBit55     = 1 << 55,
+        UnusedBit56     = 1 << 56,
+        UnusedBit57     = 1 << 57,
+        UnusedBit58     = 1 << 58,
+        UnusedBit59     = 1 << 59,
+        UnusedBit60     = 1 << 60,
+        UnusedBit61     = 1 << 61,
+        UnusedBit62     = 1 << 62,
+        NoExecute       = 1 << 63,
+        None
+    }
 }
+
+
 
 #[repr(packed)]
 #[derive(Clone, Copy, PartialEq, Default)]
@@ -112,7 +118,22 @@ impl PageFlags {
         Ok(VirtualAddress::new(v_address))
     }
 
+    pub fn is_set(&self, flag: PageFlagOptions) -> bool {
+        self.0 & (flag as u64) > 0
+    }
+}
 
+impl Debug for PageFlags {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        write!(f, "PageFlags(")?;
+        for i in PageFlagOptions::ITEMS {
+            if !self.is_set(i) { continue; }
+            write!(f, "{:?}", i)?;
+        }
+        write!(f, ")")?;
+
+        Ok(())
+    }
 }
 
 

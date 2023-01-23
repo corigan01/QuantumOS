@@ -32,6 +32,7 @@ pub mod pmm;
 pub mod heap;
 pub mod init_alloc;
 mod paging;
+mod memory_sizes;
 
 const ADDRESS_SIZE: u8 = 48;
 const PAGE_SIZE: usize = 4096;

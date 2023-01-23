@@ -25,10 +25,11 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 ```
 */
 
-use crate::debug_println;
+use crate::{debug_print, debug_println, to_giga_bytes, to_kilo_bytes, to_mega_bytes};
 use crate::error_utils::QuantumError;
 use crate::memory::paging::page_flags::{PageFlagOptions, PageFlags};
 use crate::memory::VirtualAddress;
+use owo_colors::OwoColorize;
 
 #[repr(align(4096))]
 struct PageMapLevel4 {
@@ -77,7 +78,7 @@ macro_rules! map_impl {
                     return;
                 }
 
-                self.entries[index].disable_all();
+                self.entries[index].reset();
             }
 
             pub fn recurse_next_entry(&mut self, index: usize, address: VirtualAddress) -> Result<(), QuantumError> {
@@ -92,16 +93,80 @@ macro_rules! map_impl {
                  VirtualAddress::from_ptr(self.entries.as_ptr())
             }
 
+            pub fn print_structure(&self, entry: Option<&mut PageFlags>) {
+                debug_print!("{}{:016X} {}{:016X} \t\t\t\t\t\t\t\t\t\t\t\t\t   {}",
+                    "A:".white(),
+                    (self.entries.as_ptr() as u64).white(),
+                    "S:".white(),
+                    Self::ADDRESS_SPACE.white(),
+                    Self::TABLE_NAME.blue().bold().underline());
+
+                if let Some(entry) = entry {
+                    debug_print!("({:?})", entry);
+                }
+
+                for i in 0..self.entries.len() {
+                    let entry = self.entries[i];
+
+                    if i % 14 == 0 {
+                        debug_println!("");
+                    }
+
+                    if entry.is_set(PageFlagOptions::Present) {
+                        debug_print!("{}{:016X} ", "0x".bright_green(), entry.as_u64().bright_green());
+                    }
+                    else if entry.as_u64() > 0 {
+                        debug_print!("{}{:016X} ", "0x".yellow(), entry.as_u64().yellow());
+                    }
+                    else {
+                      debug_print!("{}{:016X} ", "0x".white().dimmed(), entry.as_u64().white().dimmed());
+                    }
+                }
+
+                 debug_println!("\n");
+            }
+
         }
     )*)
 }
 
 map_impl! { PageMapLevel4 PageDirPointerTable PageDir PageTable }
 
+trait PageMapAddressOptions {
+    type NextTableType;
+    const TABLE_NAME: &'static str;
+    const ADDRESS_SPACE: u64;
+}
+
+impl PageMapAddressOptions for PageMapLevel4 {
+    type NextTableType = PageDirPointerTable;
+    const TABLE_NAME: &'static str = "(PLM4)";
+    const ADDRESS_SPACE: u64 = to_giga_bytes!(512);
+}
+
+impl PageMapAddressOptions for PageDirPointerTable {
+    type NextTableType = PageDir;
+    const TABLE_NAME: &'static str = "(PLM3)";
+    const ADDRESS_SPACE: u64 = to_giga_bytes!(1);
+}
+
+impl PageMapAddressOptions for PageDir {
+    type NextTableType = PageTable;
+    const TABLE_NAME: &'static str = "(PLM2)";
+    const ADDRESS_SPACE: u64 = to_mega_bytes!(2);
+}
+
+impl PageMapAddressOptions for PageTable {
+    type NextTableType = ();
+    const TABLE_NAME: &'static str = "(PLM1)";
+    const ADDRESS_SPACE: u64 = to_kilo_bytes!(4);
+}
+
 #[cfg(test)]
 pub mod test_case {
     use crate::debug_println;
-    use crate::memory::paging::page_structures::{PageDir, PageDirPointerTable, PageMapLevel4, PageTable};
+    use crate::memory::paging::page_flags::PageFlagOptions;
+    use crate::memory::paging::page_structures::{PageDir, PageDirPointerTable, PageMapLevel4, PageTable, PLM4};
     use crate::memory::VirtualAddress;
 
     #[test_case]
@@ -119,6 +184,12 @@ pub mod test_case {
         let mut plm2 = PageDir::new();
         let mut plm1 = PageTable::new();
 
+        plm4.get_entry(2).unwrap().enable(PageFlagOptions::Present);
+        plm4.get_entry(4).unwrap().enable(PageFlagOptions::NoExecute);
+
+        plm3.get_entry(2).unwrap().enable(PageFlagOptions::Present);
+        plm2.get_entry(2).unwrap().enable(PageFlagOptions::Present);
+
         plm2.recurse_next_entry(2, plm1.get_address()).unwrap();
         plm3.recurse_next_entry(2, plm2.get_address()).unwrap();
         plm4.recurse_next_entry(2, plm3.get_address()).unwrap();
@@ -135,6 +206,14 @@ pub mod test_case {
         assert_ne!(
             recovered_plm3.get_entry(2).unwrap().as_u64(), 0_u64
         );
+
+        debug_println!("");
+        plm4.print_structure(None);
+        plm3.print_structure(plm4.get_entry(2));
+        plm2.print_structure(plm3.get_entry(2));
+        plm1.print_structure(plm2.get_entry(2));
+
+
 
     }
 
