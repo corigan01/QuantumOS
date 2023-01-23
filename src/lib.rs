@@ -101,4 +101,4 @@ pub mod qemu;
 pub mod post_hal;
 pub mod debug_output;
 pub mod error_utils;
-pub mod enum_list;
+pub mod enum_iterator;

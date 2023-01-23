@@ -27,11 +27,46 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 pub trait EnumIntoIterator {
     type IntoIter;
 
-    fn into_iter() -> Self::IntoIter;
+    fn iter() -> Self::IntoIter;
 }
 
+/**!
+# enum iterator
+
+enum_iterator! is used to add iterators to your enums without having to construct large
+arrays that hold each element of the enum. This is accomplished by adding an iterator type
+to your enum that contains the auto-generated array structure made at compile time from your
+enum. This is then used by the user with the `::iter()` type given by `EnumIntoIterator`.
+
+### Example Usage
+```rust
+use quantum_os::enum_iterator;
+use quantum_os::enum_iterator::EnumIntoIterator;
+
+enum_iterator! {
+    // The extra () in my enum is to define the Iterator for your enum!
+    // This is due to Rust's hygiene that makes it such that macros cannot construct new types
+    // with concat_ident!(). Note: `concat_ident!()` is a nightly feature and was emitted
+    pub enum MyEnum(MyEnumIter) {
+        SomeVal,
+        SomeOtherVal,
+        MoreOptions
+    }
+}
+
+fn main() {
+    println!("All of the possible values in MyEnum are: ");
+
+    for i in MyEnum::iter() {
+        println!("\t{}", i);
+    }
+}
+```
+
+ */
+
 #[macro_export]
-macro_rules! enum_list {
+macro_rules! enum_iterator {
     () => {};
 
     (
@@ -50,7 +85,7 @@ macro_rules! enum_list {
         impl EnumIntoIterator for $name {
             type IntoIter = $itr;
 
-            fn into_iter() -> Self::IntoIter {
+            fn iter() -> Self::IntoIter {
                 $itr {
                     index: 0
                 }

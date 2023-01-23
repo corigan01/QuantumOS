@@ -68,6 +68,22 @@ impl SimpleAllocator {
         Ok(ptr::slice_from_raw_parts_mut(ptr, bytes))
     }
 
+    pub fn alloc_aligned(&mut self, bytes: usize) -> Result<*mut [u8], QuantumError> {
+        let ptr = self.buffer.as_u64();
+        let alignment_offset = (ptr & (u64::MAX - (0x1000 - 1))) + 0x1000;
+        let offset_before_ptr = (alignment_offset - ptr) as usize;
+
+        let ptr = unsafe {
+            (self.buffer.as_mut_ptr() as *mut u8)
+                .add(offset_before_ptr)
+                .add(self.used)
+        };
+
+        self.used += bytes + offset_before_ptr;
+
+        Ok(ptr::slice_from_raw_parts_mut(ptr, bytes))
+    }
+
     pub fn remaining_capacity(&self) -> usize {
         self.total_size - self.used
     }

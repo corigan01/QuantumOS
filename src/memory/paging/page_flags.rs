@@ -25,25 +25,24 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 use core::fmt::{Debug, Formatter};
-use crate::{bitset, enum_list};
+use crate::{bitset, enum_iterator};
 use crate::bitset::BitSet;
 use crate::error_utils::QuantumError;
 use crate::memory::VirtualAddress;
-use crate::enum_list::EnumIntoIterator;
+use crate::enum_iterator::EnumIntoIterator;
 
-enum_list! {
+enum_iterator! {
     #[repr(u64)]
     #[derive(PartialEq, Debug, Clone, Copy)]
-    pub enum PageFlagOptions(PageFlagOptionsIter) {
+    pub enum TableFlagOptions(TableFlagOptionsIter) {
         Present         = 1 << 0,
         Writable        = 1 << 1,
         UserAccessible  = 1 << 2,
         WriteThrough    = 1 << 3,
         NoCache         = 1 << 4,
         Accessed        = 1 << 5,
-        Dirty           = 1 << 6,
-        HugePage        = 1 << 7,
-        Global          = 1 << 8,
+        UnusedBit6      = 1 << 6,
+        UnusedBit8      = 1 << 8,
         UnusedBit9      = 1 << 9,
         UnusedBit10     = 1 << 10,
         UnusedBit11     = 1 << 11,
@@ -62,24 +61,51 @@ enum_list! {
     }
 }
 
+enum_iterator! {
+    #[repr(u64)]
+    #[derive(PartialEq, Debug, Clone, Copy)]
+    pub enum PageFlagOptions(PageFlagOptionsIter) {
+        Present         = 1 << 0,
+        Writable        = 1 << 1,
+        UserAccessible  = 1 << 2,
+        WriteThrough    = 1 << 3,
+        NoCache         = 1 << 4,
+        Accessed        = 1 << 5,
+        Dirty           = 1 << 6,
+        PageAttribute   = 1 << 7,
+        Global          = 1 << 8,
+        UnusedBit9      = 1 << 9,
+        UnusedBit10     = 1 << 10,
+        UnusedBit11     = 1 << 11,
+        UnusedBit52     = 1 << 52,
+        UnusedBit53     = 1 << 53,
+        UnusedBit54     = 1 << 54,
+        UnusedBit55     = 1 << 55,
+        UnusedBit56     = 1 << 56,
+        UnusedBit57     = 1 << 57,
+        UnusedBit58     = 1 << 58,
+        NoExecute       = 1 << 63
+    }
+}
+
 #[repr(packed)]
 #[derive(Clone, Copy, PartialEq, Default)]
-pub struct PageFlags(u64);
+pub struct TableFlags(u64);
 
-impl PageFlags {
+impl TableFlags {
     pub fn new() -> Self {
         Self {
             0: 0
         }
     }
 
-    pub fn enable(&mut self, flag: PageFlagOptions) -> &mut Self {
+    pub fn enable(&mut self, flag: TableFlagOptions) -> &mut Self {
         self.0 |= flag as u64;
 
         self
     }
 
-    pub fn disable(&mut self, flag: PageFlagOptions) -> &mut Self {
+    pub fn disable(&mut self, flag: TableFlagOptions) -> &mut Self {
         self.0 = self.0 & !( flag as u64 );
 
         self
@@ -116,15 +142,15 @@ impl PageFlags {
         Ok(VirtualAddress::new(v_address))
     }
 
-    pub fn is_set(&self, flag: PageFlagOptions) -> bool {
+    pub fn is_set(&self, flag: TableFlagOptions) -> bool {
         self.0 & (flag as u64) > 0
     }
 }
 
-impl Debug for PageFlags {
+impl Debug for TableFlags {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         write!(f, "PageFlags(")?;
-        for i in PageFlagOptions::into_iter() {
+        for i in TableFlagOptions::iter() {
             if !self.is_set(i) { continue; }
             write!(f, "{:?}", i)?;
         }
@@ -138,34 +164,34 @@ impl Debug for PageFlags {
 #[cfg(test)]
 pub mod test_case {
     use crate::bitset::BitSet;
-    use crate::memory::paging::page_flags::{PageFlagOptions, PageFlags};
+    use crate::memory::paging::page_flags::{TableFlagOptions, TableFlags};
     use crate::memory::VirtualAddress;
 
     #[test_case]
-    pub fn page_flags_enable_disable_test() {
-        let mut flags = PageFlags::new();
+    pub fn table_flags_enable_disable_test() {
+        let mut flags = TableFlags::new();
 
-        flags.enable(PageFlagOptions::Writable);
+        flags.enable(TableFlagOptions::Writable);
 
-        assert_eq!(flags.as_u64(), PageFlagOptions::Writable as u64);
+        assert_eq!(flags.as_u64(), TableFlagOptions::Writable as u64);
 
-        flags.disable(PageFlagOptions::Writable);
-        flags.enable(PageFlagOptions::Present);
+        flags.disable(TableFlagOptions::Writable);
+        flags.enable(TableFlagOptions::Present);
 
-        assert_eq!(flags.as_u64(), PageFlagOptions::Present as u64);
+        assert_eq!(flags.as_u64(), TableFlagOptions::Present as u64);
 
-        flags.disable(PageFlagOptions::Present);
-        flags.enable(PageFlagOptions::Dirty);
+        flags.disable(TableFlagOptions::Present);
+        flags.enable(TableFlagOptions::NoCache);
 
-        assert_eq!(flags.as_u64(), PageFlagOptions::Dirty as u64);
+        assert_eq!(flags.as_u64(), TableFlagOptions::NoCache as u64);
 
-        flags.disable(PageFlagOptions::Dirty);
+        flags.disable(TableFlagOptions::NoCache);
 
         assert_eq!(flags.as_u64(), 0);
 
-        flags.enable(PageFlagOptions::HugePage);
-        flags.enable(PageFlagOptions::Present);
-        flags.enable(PageFlagOptions::UserAccessible);
+        flags.enable(TableFlagOptions::NoExecute);
+        flags.enable(TableFlagOptions::Present);
+        flags.enable(TableFlagOptions::UserAccessible);
 
         flags.reset();
 
@@ -173,8 +199,8 @@ pub mod test_case {
     }
 
     #[test_case]
-    pub fn page_flags_add_address() {
-        let mut page_flag = PageFlags::new();
+    pub fn table_flags_add_address() {
+        let mut page_flag = TableFlags::new();
         let address = VirtualAddress::new(0x2000);
 
         assert_eq!(page_flag.as_u64(), 0);
