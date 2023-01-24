@@ -73,7 +73,7 @@ pub fn create_disk_images(kernel_binary_path: &Path) -> PathBuf {
     build_cmd
         .arg("--out-dir")
         .arg(kernel_binary_path.parent().unwrap());
-    build_cmd.arg("--quiet");
+    //build_cmd.arg("--quiet");
 
     if !build_cmd.status().unwrap().success() {
         panic!("build failed");
