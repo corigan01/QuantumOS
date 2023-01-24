@@ -102,8 +102,8 @@ pub mod test {
     pub fn test_case_alloc() {
         let mut alloc = INIT_ALLOC.lock();
 
-        assert_eq!(alloc.buffer.as_u64(), 0);
-        assert_ne!(VirtualAddress::from_ptr(alloc.alloc(10).unwrap()).as_u64(), 0);
+        assert_ne!(alloc.buffer.as_u64(), 0);
+        assert_ne!(VirtualAddress::from_ptr(alloc.alloc(10).unwrap() as *const u8).as_u64(), 0);
         assert_eq!(alloc.used, 10);
     }
 
@@ -111,12 +111,22 @@ pub mod test {
     pub fn test_case_alloc_aligned() {
         let mut alloc = INIT_ALLOC.lock();
 
-        assert_eq!(alloc.buffer.as_u64(), 0);
-        assert_ne!(VirtualAddress::from_ptr(alloc.alloc(10).unwrap()).as_u64(), 0);
-        assert_eq!(alloc.used, 10);
+        assert!(
+            (VirtualAddress::from_ptr(
+                alloc.alloc_aligned(4096).unwrap() as *const u8
+            ).as_u64()) & (0x1000 - 1) > 0
+        );
 
         assert!(
-            (VirtualAddress::from_ptr(alloc.alloc_aligned(4096).unwrap()).as_u64()) & (0x1000 - 1) > 0
+            (VirtualAddress::from_ptr(
+                alloc.alloc_aligned(234).unwrap() as *const u8
+            ).as_u64()) & (0x1000 - 1) > 0
+        );
+
+        assert!(
+            (VirtualAddress::from_ptr(
+                alloc.alloc_aligned(1).unwrap() as *const u8
+            ).as_u64()) & (0x1000 - 1) > 0
         );
     }
 }

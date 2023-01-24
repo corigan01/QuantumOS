@@ -162,6 +162,7 @@ impl PageMapAddressOptions for PageTable {
     const ADDRESS_SPACE: u64 = to_kilo_bytes!(4);
 }
 
+
 #[cfg(test)]
 pub mod test_case {
     use crate::debug_println;
@@ -169,6 +170,11 @@ pub mod test_case {
     use crate::memory::paging::page_flags::TableFlagOptions;
     use crate::memory::paging::page_structures::{PageDir, PageDirPointerTable, PageMapLevel4, PageTable, PLM4};
     use crate::memory::VirtualAddress;
+
+    #[test_case]
+    pub fn test_new_structures() {
+
+    }
 
     #[test_case]
     pub fn test_page_map_addressing() {
