@@ -24,6 +24,3 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 */
 
-pub mod page_structure_entry;
-pub mod page_tables;
-pub mod page_flags;

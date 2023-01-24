@@ -32,183 +32,141 @@ use crate::memory::VirtualAddress;
 use crate::enum_iterator::EnumIntoIterator;
 
 enum_iterator! {
-    #[repr(u64)]
-    #[derive(PartialEq, Debug, Clone, Copy)]
-    pub enum TableFlagOptions(TableFlagOptionsIter) {
-        Present         = 1 << 0,
-        Writable        = 1 << 1,
-        UserAccessible  = 1 << 2,
-        WriteThrough    = 1 << 3,
-        NoCache         = 1 << 4,
-        Accessed        = 1 << 5,
-        UnusedBit6      = 1 << 6,
-        UnusedBit8      = 1 << 8,
-        UnusedBit9      = 1 << 9,
-        UnusedBit10     = 1 << 10,
-        UnusedBit11     = 1 << 11,
-        UnusedBit52     = 1 << 52,
-        UnusedBit53     = 1 << 53,
-        UnusedBit54     = 1 << 54,
-        UnusedBit55     = 1 << 55,
-        UnusedBit56     = 1 << 56,
-        UnusedBit57     = 1 << 57,
-        UnusedBit58     = 1 << 58,
-        UnusedBit59     = 1 << 59,
-        UnusedBit60     = 1 << 60,
-        UnusedBit61     = 1 << 61,
-        UnusedBit62     = 1 << 62,
-        NoExecute       = 1 << 63
+    #[repr(u8)]
+    #[derive(Copy, Clone, PartialEq)]
+    pub enum EntryType(EntryTypeIter) {
+        EntryPageMapLevel5 = 0b000,
+        EntryPageMapLevel4 = 0b001,
+        EntryPageMapLevel3 = 0b010,
+        EntryPageMapLevel2 = 0b011,
+        EntryPageMapLevel1 = 0b100,
+        PageEntryLevel2    = 0b101,
+        PageEntryLevel1    = 0b110,
+        PageEntryLevel0    = 0b111
     }
 }
 
 enum_iterator! {
-    #[repr(u64)]
     #[derive(PartialEq, Debug, Clone, Copy)]
-    pub enum PageFlagOptions(PageFlagOptionsIter) {
-        Present         = 1 << 0,
-        Writable        = 1 << 1,
-        UserAccessible  = 1 << 2,
-        WriteThrough    = 1 << 3,
-        NoCache         = 1 << 4,
-        Accessed        = 1 << 5,
-        Dirty           = 1 << 6,
-        PageAttribute   = 1 << 7,
-        Global          = 1 << 8,
-        UnusedBit9      = 1 << 9,
-        UnusedBit10     = 1 << 10,
-        UnusedBit11     = 1 << 11,
-        UnusedBit52     = 1 << 52,
-        UnusedBit53     = 1 << 53,
-        UnusedBit54     = 1 << 54,
-        UnusedBit55     = 1 << 55,
-        UnusedBit56     = 1 << 56,
-        UnusedBit57     = 1 << 57,
-        UnusedBit58     = 1 << 58,
-        NoExecute       = 1 << 63
+    pub enum PageEntryOptions(PageEntryOptionsIter) {
+        Present,
+        Writable,
+        UserAccessible,
+        WriteThrough,
+        Accessed,
+        NoCache,
+        NoExecute,
+        PageSize,
+        PageAttributeTable,
+        Dirty,
+        Global,
+        ProtectionKeyBit0,
+        ProtectionKeyBit1,
+        ProtectionKeyBit2,
+        ProtectionKeyBit3
     }
 }
 
-#[repr(packed)]
-#[derive(Clone, Copy, PartialEq, Default)]
-pub struct TableFlags(u64);
-
-impl TableFlags {
-    pub fn new() -> Self {
-        Self {
-            0: 0
+impl EntryType {
+    pub fn from_u64(num: u64) -> Option<Self> {
+        match num {
+            0 => Some(EntryType::EntryPageMapLevel5),
+            1 => Some(EntryType::EntryPageMapLevel4),
+            2 => Some(EntryType::EntryPageMapLevel3),
+            3 => Some(EntryType::EntryPageMapLevel2),
+            4 => Some(EntryType::EntryPageMapLevel1),
+            5 => Some(EntryType::PageEntryLevel2),
+            6 => Some(EntryType::PageEntryLevel1),
+            7 => Some(EntryType::PageEntryLevel0),
+            _ => None
         }
     }
 
-    pub fn enable(&mut self, flag: TableFlagOptions) -> &mut Self {
-        self.0 |= flag as u64;
-
-        self
+    pub fn is_table(&self) -> bool {
+        (*self as u8) <= 4
     }
 
-    pub fn disable(&mut self, flag: TableFlagOptions) -> &mut Self {
-        self.0 = self.0 & !( flag as u64 );
-
-        self
-    }
-
-    pub fn reset(&mut self) {
-        self.0 = 0;
-    }
-
-    pub fn as_u64(&self) -> u64 {
-        self.0
-    }
-
-    pub fn paste_address(&mut self, address: VirtualAddress) -> Result<(), QuantumError> {
-        if !address.is_aligned() {
-            return Err(QuantumError::NotAligned);
-        }
-
-        let address_shifted = address.as_u64() >> 12;
-
-        self.0 = self.as_u64().set_bits(12..51, address_shifted);
-
-        Ok(())
-
-    }
-
-    pub fn get_address(&mut self) -> Result<VirtualAddress, QuantumError> {
-        let v_address = self.as_u64().get_bits(12..51) << 12;
-
-        if v_address == 0 {
-            return Err(QuantumError::NoItem);
-        }
-
-        Ok(VirtualAddress::new(v_address))
-    }
-
-    pub fn is_set(&self, flag: TableFlagOptions) -> bool {
-        self.0 & (flag as u64) > 0
+    pub fn is_entry(&self) -> bool {
+        !self.is_table()
     }
 }
 
-impl Debug for TableFlags {
-    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
-        write!(f, "PageFlags(")?;
-        for i in TableFlagOptions::iter() {
-            if !self.is_set(i) { continue; }
-            write!(f, "{:?}", i)?;
+macro_rules! shift {
+    ($epr:literal) => {
+        (1_u64 << ($epr as u64)) as u64
+    };
+}
+
+macro_rules! all_same {
+    ($epr:expr) => { [$epr, $epr, $epr, $epr, $epr, $epr, $epr] };
+}
+
+macro_rules! zero_tables {
+    ($epr:expr) => { [0_u64, 0_u64, 0_u64, 0_u64, $epr, $epr, $epr] };
+}
+
+impl PageEntryOptions {
+    // [0, 0, 0, 0,  0,  0,  0 ]
+    //  4  3  2  1  =2= =1= =0=
+    //
+    // ------------ Table ----------------
+    // 4: Page Map Level 5 Entry
+    // 3: Page Map Level 4 Entry
+    // 2: Page Directory Pointer Table Entry
+    // 1: Page Directory Entry
+    // ------------ Entry ---------------
+    //=2: Page Directory Pointer Table Entry
+    //=1: Page Directory Entry
+    //=0: Page Table Entry
+
+    const CONV_TABLE: [(PageEntryOptions, [u64; 7]); 15] = [
+        (PageEntryOptions::Present, all_same!(shift!(0))),
+        (PageEntryOptions::Writable, all_same!(shift!(1))),
+        (PageEntryOptions::UserAccessible, all_same!(shift!(2))),
+        (PageEntryOptions::WriteThrough, all_same!(shift!(3))),
+        (PageEntryOptions::NoCache, all_same!(shift!(4))),
+        (PageEntryOptions::Accessed, all_same!(shift!(5))),
+        (PageEntryOptions::Dirty, zero_tables!(shift!(6))),
+        (PageEntryOptions::PageSize, [0_u64, 0_u64, shift!(7), shift!(7), shift!(7), shift!(7), 0_u64]),
+        (PageEntryOptions::PageAttributeTable, [0_u64, 0_u64, 0_u64, 0_u64, shift!(12), shift!(12), shift!(7)]),
+        (PageEntryOptions::Global, zero_tables!(shift!(1))),
+        (PageEntryOptions::ProtectionKeyBit0, zero_tables!(shift!(59))),
+        (PageEntryOptions::ProtectionKeyBit1, zero_tables!(shift!(60))),
+        (PageEntryOptions::ProtectionKeyBit2, zero_tables!(shift!(61))),
+        (PageEntryOptions::ProtectionKeyBit3, zero_tables!(shift!(62))),
+        (PageEntryOptions::NoExecute, all_same!(shift!(63))),
+    ];
+
+    pub fn to_u64(self, entry_type: EntryType) -> Option<u64> {
+        for (option, values) in &Self::CONV_TABLE {
+            if *option == self {
+                let entry_idx = entry_type as usize;
+                let value = values[entry_idx];
+
+                if value > 0 {
+                    return Some(value);
+                }
+            }
         }
-        write!(f, ")")?;
 
-        Ok(())
+        None
+    }
+
+    pub fn from_64(entry_type: EntryType, num: u64) -> Option<Self> {
+        if num == 0 {
+            return None;
+        }
+
+        for (option, values) in &Self::CONV_TABLE {
+            let entry_idx = entry_type as usize;
+            let value = values[entry_idx];
+
+            if value == num {
+                return Some(*option);
+            }
+        }
+
+        None
     }
 }
 
-
-#[cfg(test)]
-pub mod test_case {
-    use crate::bitset::BitSet;
-    use crate::memory::paging::page_flags::{TableFlagOptions, TableFlags};
-    use crate::memory::VirtualAddress;
-
-    #[test_case]
-    pub fn table_flags_enable_disable_test() {
-        let mut flags = TableFlags::new();
-
-        flags.enable(TableFlagOptions::Writable);
-
-        assert_eq!(flags.as_u64(), TableFlagOptions::Writable as u64);
-
-        flags.disable(TableFlagOptions::Writable);
-        flags.enable(TableFlagOptions::Present);
-
-        assert_eq!(flags.as_u64(), TableFlagOptions::Present as u64);
-
-        flags.disable(TableFlagOptions::Present);
-        flags.enable(TableFlagOptions::NoCache);
-
-        assert_eq!(flags.as_u64(), TableFlagOptions::NoCache as u64);
-
-        flags.disable(TableFlagOptions::NoCache);
-
-        assert_eq!(flags.as_u64(), 0);
-
-        flags.enable(TableFlagOptions::NoExecute);
-        flags.enable(TableFlagOptions::Present);
-        flags.enable(TableFlagOptions::UserAccessible);
-
-        flags.reset();
-
-        assert_eq!(flags.as_u64(), 0);
-    }
-
-    #[test_case]
-    pub fn table_flags_add_address() {
-        let mut page_flag = TableFlags::new();
-        let address = VirtualAddress::new(0x2000);
-
-        assert_eq!(page_flag.as_u64(), 0);
-
-        page_flag.paste_address(address).unwrap();
-
-        assert_eq!(page_flag.as_u64().get_bit(13), true);
-        assert_eq!(page_flag.as_u64().get_bit(12), false);
-        assert_eq!(page_flag.get_address().unwrap().as_u64(), 0x2000);
-    }
-}

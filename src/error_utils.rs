@@ -34,6 +34,7 @@ pub enum QuantumError {
     OverflowValue,
     ExistingValue,
     OutOfRange,
+    NotValid,
     Test,
     NotIncrementalSize,
     NoStream,
