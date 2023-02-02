@@ -35,6 +35,7 @@ Quantum OS Lib file, documentation coming soon!
 #![test_runner(crate::test_handler::test_runner)]
 #![feature(abi_x86_interrupt)]
 #![feature(inherent_associated_types)]
+#![feature(exclusive_range_pattern)]
 
 #![reexport_test_harness_main = "run_test"]
 
