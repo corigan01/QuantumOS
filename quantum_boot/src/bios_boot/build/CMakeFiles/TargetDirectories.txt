@@ -1,0 +1,7 @@
+/home/corigan01/CLionProjects/quantum_os/quantum_boot/src/bios_boot/build/CMakeFiles/quantumbiosboot.bin.dir
+/home/corigan01/CLionProjects/quantum_os/quantum_boot/src/bios_boot/build/CMakeFiles/mbr.dir
+/home/corigan01/CLionProjects/quantum_os/quantum_boot/src/bios_boot/build/CMakeFiles/offsetloader.dir
+/home/corigan01/CLionProjects/quantum_os/quantum_boot/src/bios_boot/build/CMakeFiles/QuantumBiosBoot.dir
+/home/corigan01/CLionProjects/quantum_os/quantum_boot/src/bios_boot/build/CMakeFiles/run.dir
+/home/corigan01/CLionProjects/quantum_os/quantum_boot/src/bios_boot/build/CMakeFiles/edit_cache.dir
+/home/corigan01/CLionProjects/quantum_os/quantum_boot/src/bios_boot/build/CMakeFiles/rebuild_cache.dir

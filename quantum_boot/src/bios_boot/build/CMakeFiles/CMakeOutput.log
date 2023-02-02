@@ -1,0 +1,195 @@
+The target system is: Generic -  - i386
+The host system is: Linux - 6.1.6-arch1-3 - x86_64
+Compiling the CXX compiler identification source file "CMakeCXXCompilerId.cpp" succeeded.
+Compiler: /usr/bin/clang++ 
+Build flags: 
+Id flags: -c;--target=i386 
+
+The output was:
+0
+
+
+Compilation of the CXX compiler identification source "CMakeCXXCompilerId.cpp" produced "CMakeCXXCompilerId.o"
+
+The CXX compiler identification is Clang, found in "/home/corigan01/CLionProjects/quantum_os/quantum_boot/src/bios_boot/build/CMakeFiles/3.25.2/CompilerIdCXX/CMakeCXXCompilerId.o"
+
+Compiling the C compiler identification source file "CMakeCCompilerId.c" succeeded.
+Compiler: /usr/bin/clang 
+Build flags: 
+Id flags: -c;--target=elf32-i386 
+
+The output was:
+0
+
+
+Compilation of the C compiler identification source "CMakeCCompilerId.c" produced "CMakeCCompilerId.o"
+
+The C compiler identification is Clang, found in "/home/corigan01/CLionProjects/quantum_os/quantum_boot/src/bios_boot/build/CMakeFiles/3.25.2/CompilerIdC/CMakeCCompilerId.o"
+
+Checking whether the ASM_NASM compiler is NASM using "-v" matched "(NASM version)":
+NASM version 2.15.05 compiled on Sep 24 2020
+Checking whether the ASM compiler is Clang using "--version" matched "(clang version)":
+clang version 15.0.7
+Target: x86_64-pc-linux-gnu
+Thread model: posix
+InstalledDir: /usr/bin
+Detecting CXX compiler ABI info compiled with the following output:
+Change Dir: /home/corigan01/CLionProjects/quantum_os/quantum_boot/src/bios_boot/build/CMakeFiles/CMakeScratch/TryCompile-h5C7TL
+
+Run Build Command(s):/usr/bin/ninja cmTC_c3e51 && [1/2] Building CXX object CMakeFiles/cmTC_c3e51.dir/CMakeCXXCompilerABI.cpp.obj
+clang version 15.0.7
+Target: i386
+Thread model: posix
+InstalledDir: /usr/bin
+ (in-process)
+ "/usr/bin/clang-15" -cc1 -triple i386 -emit-obj -mrelax-all --mrelax-relocations -disable-free -clear-ast-before-backend -disable-llvm-verifier -discard-value-names -main-file-name CMakeCXXCompilerABI.cpp -mrelocation-model static -mframe-pointer=all -fmath-errno -ffp-contract=on -fno-rounding-math -mconstructor-aliases -funwind-tables=2 -target-cpu pentium4 -tune-cpu generic -mllvm -treat-scalable-fixed-error-as-warning -debugger-tuning=gdb -v -fcoverage-compilation-dir=/home/corigan01/CLionProjects/quantum_os/quantum_boot/src/bios_boot/build/CMakeFiles/CMakeScratch/TryCompile-h5C7TL -resource-dir /usr/lib/clang/15.0.7 -dependency-file CMakeFiles/cmTC_c3e51.dir/CMakeCXXCompilerABI.cpp.obj.d -MT CMakeFiles/cmTC_c3e51.dir/CMakeCXXCompilerABI.cpp.obj -sys-header-deps -fdeprecated-macro -fdebug-compilation-dir=/home/corigan01/CLionProjects/quantum_os/quantum_boot/src/bios_boot/build/CMakeFiles/CMakeScratch/TryCompile-h5C7TL -ferror-limit 19 -fgnuc-version=4.2.1 -fcxx-exceptions -fexceptions -faddrsig -D__GCC_HAVE_DWARF2_CFI_ASM=1 -o CMakeFiles/cmTC_c3e51.dir/CMakeCXXCompilerABI.cpp.obj -x c++ /usr/share/cmake/Modules/CMakeCXXCompilerABI.cpp
+clang -cc1 version 15.0.7 based upon LLVM 15.0.7 default target x86_64-pc-linux-gnu
+#include "..." search starts here:
+#include <...> search starts here:
+ /usr/local/include
+ /usr/lib/clang/15.0.7/include
+ /usr/include
+End of search list.
+[2/2] Linking CXX executable cmTC_c3e51
+clang version 15.0.7
+Target: i386
+Thread model: posix
+InstalledDir: /usr/bin
+ "/usr/bin/g++" -m32 -o cmTC_c3e51 CMakeFiles/cmTC_c3e51.dir/CMakeCXXCompilerABI.cpp.obj
+/usr/bin/ld: CMakeFiles/cmTC_c3e51.dir/CMakeCXXCompilerABI.cpp.obj: warning: relocation in read-only section `.text'
+/usr/bin/ld: warning: creating DT_TEXTREL in a PIE
+
+
+
+Parsed CXX implicit include dir info from above output: rv=done
+  found start of include info
+  found start of implicit include info
+    add: [/usr/local/include]
+    add: [/usr/lib/clang/15.0.7/include]
+    add: [/usr/include]
+  end of search list found
+  collapse include dir [/usr/local/include] ==> [/usr/local/include]
+  collapse include dir [/usr/lib/clang/15.0.7/include] ==> [/usr/lib/clang/15.0.7/include]
+  collapse include dir [/usr/include] ==> [/usr/include]
+  implicit include dirs: [/usr/local/include;/usr/lib/clang/15.0.7/include;/usr/include]
+
+
+Parsed CXX implicit link information from above output:
+  link line regex: [^( *|.*[/\])(ld|CMAKE_LINK_STARTFILE-NOTFOUND|([^/\]+-)?ld|collect2)[^/\]*( |$)]
+  ignore line: [Change Dir: /home/corigan01/CLionProjects/quantum_os/quantum_boot/src/bios_boot/build/CMakeFiles/CMakeScratch/TryCompile-h5C7TL]
+  ignore line: []
+  ignore line: [Run Build Command(s):/usr/bin/ninja cmTC_c3e51 && [1/2] Building CXX object CMakeFiles/cmTC_c3e51.dir/CMakeCXXCompilerABI.cpp.obj]
+  ignore line: [clang version 15.0.7]
+  ignore line: [Target: i386]
+  ignore line: [Thread model: posix]
+  ignore line: [InstalledDir: /usr/bin]
+  ignore line: [ (in-process)]
+  ignore line: [ "/usr/bin/clang-15" -cc1 -triple i386 -emit-obj -mrelax-all --mrelax-relocations -disable-free -clear-ast-before-backend -disable-llvm-verifier -discard-value-names -main-file-name CMakeCXXCompilerABI.cpp -mrelocation-model static -mframe-pointer=all -fmath-errno -ffp-contract=on -fno-rounding-math -mconstructor-aliases -funwind-tables=2 -target-cpu pentium4 -tune-cpu generic -mllvm -treat-scalable-fixed-error-as-warning -debugger-tuning=gdb -v -fcoverage-compilation-dir=/home/corigan01/CLionProjects/quantum_os/quantum_boot/src/bios_boot/build/CMakeFiles/CMakeScratch/TryCompile-h5C7TL -resource-dir /usr/lib/clang/15.0.7 -dependency-file CMakeFiles/cmTC_c3e51.dir/CMakeCXXCompilerABI.cpp.obj.d -MT CMakeFiles/cmTC_c3e51.dir/CMakeCXXCompilerABI.cpp.obj -sys-header-deps -fdeprecated-macro -fdebug-compilation-dir=/home/corigan01/CLionProjects/quantum_os/quantum_boot/src/bios_boot/build/CMakeFiles/CMakeScratch/TryCompile-h5C7TL -ferror-limit 19 -fgnuc-version=4.2.1 -fcxx-exceptions -fexceptions -faddrsig -D__GCC_HAVE_DWARF2_CFI_ASM=1 -o CMakeFiles/cmTC_c3e51.dir/CMakeCXXCompilerABI.cpp.obj -x c++ /usr/share/cmake/Modules/CMakeCXXCompilerABI.cpp]
+  ignore line: [clang -cc1 version 15.0.7 based upon LLVM 15.0.7 default target x86_64-pc-linux-gnu]
+  ignore line: [#include "..." search starts here:]
+  ignore line: [#include <...> search starts here:]
+  ignore line: [ /usr/local/include]
+  ignore line: [ /usr/lib/clang/15.0.7/include]
+  ignore line: [ /usr/include]
+  ignore line: [End of search list.]
+  ignore line: [[2/2] Linking CXX executable cmTC_c3e51]
+  ignore line: [clang version 15.0.7]
+  ignore line: [Target: i386]
+  ignore line: [Thread model: posix]
+  ignore line: [InstalledDir: /usr/bin]
+  ignore line: [ "/usr/bin/g++" -m32 -o cmTC_c3e51 CMakeFiles/cmTC_c3e51.dir/CMakeCXXCompilerABI.cpp.obj]
+  link line: [/usr/bin/ld: CMakeFiles/cmTC_c3e51.dir/CMakeCXXCompilerABI.cpp.obj: warning: relocation in read-only section `.text']
+    arg [/usr/bin/ld:] ==> ignore
+    arg [CMakeFiles/cmTC_c3e51.dir/CMakeCXXCompilerABI.cpp.obj:] ==> ignore
+    arg [warning:] ==> ignore
+    arg [relocation] ==> ignore
+    arg [in] ==> ignore
+    arg [read-only] ==> ignore
+    arg [section] ==> ignore
+    arg [`.text] ==> ignore
+  implicit libs: []
+  implicit objs: []
+  implicit dirs: []
+  implicit fwks: []
+
+
+Detecting C compiler ABI info compiled with the following output:
+Change Dir: /home/corigan01/CLionProjects/quantum_os/quantum_boot/src/bios_boot/build/CMakeFiles/CMakeScratch/TryCompile-2o3EQu
+
+Run Build Command(s):/usr/bin/ninja cmTC_64c0e && [1/2] Building C object CMakeFiles/cmTC_64c0e.dir/CMakeCCompilerABI.c.obj
+clang version 15.0.7
+Target: i386-elf32
+Thread model: posix
+InstalledDir: /usr/bin
+ (in-process)
+ "/usr/bin/clang-15" -cc1 -triple i386-elf32 -emit-obj -mrelax-all --mrelax-relocations -disable-free -clear-ast-before-backend -disable-llvm-verifier -discard-value-names -main-file-name CMakeCCompilerABI.c -mrelocation-model static -mframe-pointer=all -fmath-errno -ffp-contract=on -fno-rounding-math -mconstructor-aliases -funwind-tables=2 -target-cpu pentium4 -tune-cpu generic -mllvm -treat-scalable-fixed-error-as-warning -debugger-tuning=gdb -v -fcoverage-compilation-dir=/home/corigan01/CLionProjects/quantum_os/quantum_boot/src/bios_boot/build/CMakeFiles/CMakeScratch/TryCompile-2o3EQu -resource-dir /usr/lib/clang/15.0.7 -dependency-file CMakeFiles/cmTC_64c0e.dir/CMakeCCompilerABI.c.obj.d -MT CMakeFiles/cmTC_64c0e.dir/CMakeCCompilerABI.c.obj -sys-header-deps -fdebug-compilation-dir=/home/corigan01/CLionProjects/quantum_os/quantum_boot/src/bios_boot/build/CMakeFiles/CMakeScratch/TryCompile-2o3EQu -ferror-limit 19 -fgnuc-version=4.2.1 -faddrsig -D__GCC_HAVE_DWARF2_CFI_ASM=1 -o CMakeFiles/cmTC_64c0e.dir/CMakeCCompilerABI.c.obj -x c /usr/share/cmake/Modules/CMakeCCompilerABI.c
+clang -cc1 version 15.0.7 based upon LLVM 15.0.7 default target x86_64-pc-linux-gnu
+#include "..." search starts here:
+#include <...> search starts here:
+ /usr/local/include
+ /usr/lib/clang/15.0.7/include
+ /usr/include
+End of search list.
+[2/2] Linking C executable cmTC_64c0e
+clang version 15.0.7
+Target: i386-elf32
+Thread model: posix
+InstalledDir: /usr/bin
+ "/usr/bin/gcc" -m32 -o cmTC_64c0e CMakeFiles/cmTC_64c0e.dir/CMakeCCompilerABI.c.obj
+/usr/bin/ld: CMakeFiles/cmTC_64c0e.dir/CMakeCCompilerABI.c.obj: warning: relocation in read-only section `.text'
+/usr/bin/ld: warning: creating DT_TEXTREL in a PIE
+
+
+
+Parsed C implicit include dir info from above output: rv=done
+  found start of include info
+  found start of implicit include info
+    add: [/usr/local/include]
+    add: [/usr/lib/clang/15.0.7/include]
+    add: [/usr/include]
+  end of search list found
+  collapse include dir [/usr/local/include] ==> [/usr/local/include]
+  collapse include dir [/usr/lib/clang/15.0.7/include] ==> [/usr/lib/clang/15.0.7/include]
+  collapse include dir [/usr/include] ==> [/usr/include]
+  implicit include dirs: [/usr/local/include;/usr/lib/clang/15.0.7/include;/usr/include]
+
+
+Parsed C implicit link information from above output:
+  link line regex: [^( *|.*[/\])(ld|CMAKE_LINK_STARTFILE-NOTFOUND|([^/\]+-)?ld|collect2)[^/\]*( |$)]
+  ignore line: [Change Dir: /home/corigan01/CLionProjects/quantum_os/quantum_boot/src/bios_boot/build/CMakeFiles/CMakeScratch/TryCompile-2o3EQu]
+  ignore line: []
+  ignore line: [Run Build Command(s):/usr/bin/ninja cmTC_64c0e && [1/2] Building C object CMakeFiles/cmTC_64c0e.dir/CMakeCCompilerABI.c.obj]
+  ignore line: [clang version 15.0.7]
+  ignore line: [Target: i386-elf32]
+  ignore line: [Thread model: posix]
+  ignore line: [InstalledDir: /usr/bin]
+  ignore line: [ (in-process)]
+  ignore line: [ "/usr/bin/clang-15" -cc1 -triple i386-elf32 -emit-obj -mrelax-all --mrelax-relocations -disable-free -clear-ast-before-backend -disable-llvm-verifier -discard-value-names -main-file-name CMakeCCompilerABI.c -mrelocation-model static -mframe-pointer=all -fmath-errno -ffp-contract=on -fno-rounding-math -mconstructor-aliases -funwind-tables=2 -target-cpu pentium4 -tune-cpu generic -mllvm -treat-scalable-fixed-error-as-warning -debugger-tuning=gdb -v -fcoverage-compilation-dir=/home/corigan01/CLionProjects/quantum_os/quantum_boot/src/bios_boot/build/CMakeFiles/CMakeScratch/TryCompile-2o3EQu -resource-dir /usr/lib/clang/15.0.7 -dependency-file CMakeFiles/cmTC_64c0e.dir/CMakeCCompilerABI.c.obj.d -MT CMakeFiles/cmTC_64c0e.dir/CMakeCCompilerABI.c.obj -sys-header-deps -fdebug-compilation-dir=/home/corigan01/CLionProjects/quantum_os/quantum_boot/src/bios_boot/build/CMakeFiles/CMakeScratch/TryCompile-2o3EQu -ferror-limit 19 -fgnuc-version=4.2.1 -faddrsig -D__GCC_HAVE_DWARF2_CFI_ASM=1 -o CMakeFiles/cmTC_64c0e.dir/CMakeCCompilerABI.c.obj -x c /usr/share/cmake/Modules/CMakeCCompilerABI.c]
+  ignore line: [clang -cc1 version 15.0.7 based upon LLVM 15.0.7 default target x86_64-pc-linux-gnu]
+  ignore line: [#include "..." search starts here:]
+  ignore line: [#include <...> search starts here:]
+  ignore line: [ /usr/local/include]
+  ignore line: [ /usr/lib/clang/15.0.7/include]
+  ignore line: [ /usr/include]
+  ignore line: [End of search list.]
+  ignore line: [[2/2] Linking C executable cmTC_64c0e]
+  ignore line: [clang version 15.0.7]
+  ignore line: [Target: i386-elf32]
+  ignore line: [Thread model: posix]
+  ignore line: [InstalledDir: /usr/bin]
+  ignore line: [ "/usr/bin/gcc" -m32 -o cmTC_64c0e CMakeFiles/cmTC_64c0e.dir/CMakeCCompilerABI.c.obj]
+  link line: [/usr/bin/ld: CMakeFiles/cmTC_64c0e.dir/CMakeCCompilerABI.c.obj: warning: relocation in read-only section `.text']
+    arg [/usr/bin/ld:] ==> ignore
+    arg [CMakeFiles/cmTC_64c0e.dir/CMakeCCompilerABI.c.obj:] ==> ignore
+    arg [warning:] ==> ignore
+    arg [relocation] ==> ignore
+    arg [in] ==> ignore
+    arg [read-only] ==> ignore
+    arg [section] ==> ignore
+    arg [`.text] ==> ignore
+  implicit libs: []
+  implicit objs: []
+  implicit dirs: []
+  implicit fwks: []
+
+

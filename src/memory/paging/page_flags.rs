@@ -70,14 +70,7 @@ enum_iterator! {
 impl EntryType {
     pub fn from_u64(num: u64) -> Option<Self> {
         match num {
-            0 => Some(EntryType::EntryPageMapLevel5),
-            1 => Some(EntryType::EntryPageMapLevel4),
-            2 => Some(EntryType::EntryPageMapLevel3),
-            3 => Some(EntryType::EntryPageMapLevel2),
-            4 => Some(EntryType::EntryPageMapLevel1),
-            5 => Some(EntryType::PageEntryLevel2),
-            6 => Some(EntryType::PageEntryLevel1),
-            7 => Some(EntryType::PageEntryLevel0),
+            0..=7 => EntryType::iter().nth(num as usize),
             _ => None
         }
     }
