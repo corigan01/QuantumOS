@@ -61,16 +61,15 @@ target_compile_options(quantumbiosboot.bin PRIVATE $<$<COMPILE_LANGUAGE:C>:${CMA
 target_compile_options(quantumbiosboot.bin PRIVATE $<$<COMPILE_LANGUAGE:CXX>:${CMAKE_CXX_COMPILE_FEATURES}>)
 
 add_custom_target(offsetloader
-        COMMAND dd if=quantumbiosboot.bin skip=4096 iflag=skip_bytes,count_bytes of=loader.bin
-        COMMENT "Packaged Loader"
+        COMMAND rm loader.bin && dd if=quantumbiosboot.bin skip=512 bs=1 iflag=skip_bytes,count_bytes of=loader.bin
+        COMMENT "Packaging Loader"
         DEPENDS quantumbiosboot.bin
         BYPRODUCTS loader.bin
 )
 
-
 add_custom_target(${PROJECT_NAME} ALL
-        COMMAND touch QuantumBiosBoot.sys && cat $<TARGET_OBJECTS:mbr> loader.bin > QuantumBiosBoot.sys
-        COMMENT "Created QuantumBiosBoot.sys"
+        COMMAND rm QuantumBiosBoot.sys && touch QuantumBiosBoot.sys && cat $<TARGET_OBJECTS:mbr> loader.bin > QuantumBiosBoot.sys
+        COMMENT "Creating QuantumBiosBoot.sys"
         DEPENDS mbr loader.bin
         BYPRODUCTS QuantumBiosBoot.sys
 )
