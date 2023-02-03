@@ -2,7 +2,7 @@
 [org 0x7c00]
 
 ; where to load the kernel to
-KERNEL_OFFSET equ 0x00000FFF
+KERNEL_OFFSET equ 0x1000
 
 ; BIOS sets boot drive in 'dl'; store for later use
 mov [BOOT_DRIVE], dl

@@ -1,3 +1,4 @@
-/build
-/builddir
-/iso
+/build/
+/builddir/
+/iso/
+/biosboot/cmake-build*/
