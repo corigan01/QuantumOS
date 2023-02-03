@@ -21,15 +21,15 @@ project(QuantumBiosBoot LANGUAGES CXX C ASM_NASM ASM)
 
 
 set( BOOT_NASM
-        mbr.asm
+        src/asm/mbr.asm
         )
 
 set( NASM
-        runc.asm
+        src/asm/runc.asm
         )
 
 set( C
-        start.c
+        src/c/start.c
         )
 
 
@@ -54,21 +54,21 @@ add_link_options(
 add_executable(quantumbiosboot.bin ${NASM} ${C})
 add_library(mbr OBJECT ${BOOT_NASM})
 
-target_include_directories(quantumbiosboot.bin PUBLIC .)
-target_include_directories(mbr PUBLIC .)
+target_include_directories(quantumbiosboot.bin PUBLIC src/c)
+target_include_directories(mbr PUBLIC src/asm)
 
 target_compile_options(quantumbiosboot.bin PRIVATE $<$<COMPILE_LANGUAGE:C>:${CMAKE_C_COMPILE_FEATURES}>)
 target_compile_options(quantumbiosboot.bin PRIVATE $<$<COMPILE_LANGUAGE:CXX>:${CMAKE_CXX_COMPILE_FEATURES}>)
 
 add_custom_target(offsetloader
-        COMMAND rm loader.bin && dd if=quantumbiosboot.bin skip=512 bs=1 iflag=skip_bytes,count_bytes of=loader.bin
+        COMMAND dd if=quantumbiosboot.bin skip=512 bs=1 iflag=skip_bytes,count_bytes of=loader.bin
         COMMENT "Packaging Loader"
         DEPENDS quantumbiosboot.bin
         BYPRODUCTS loader.bin
 )
 
 add_custom_target(${PROJECT_NAME} ALL
-        COMMAND rm QuantumBiosBoot.sys && touch QuantumBiosBoot.sys && cat $<TARGET_OBJECTS:mbr> loader.bin > QuantumBiosBoot.sys
+        COMMAND touch QuantumBiosBoot.sys && rm QuantumBiosBoot.sys && cat $<TARGET_OBJECTS:mbr> loader.bin > QuantumBiosBoot.sys
         COMMENT "Creating QuantumBiosBoot.sys"
         DEPENDS mbr loader.bin
         BYPRODUCTS QuantumBiosBoot.sys
@@ -78,3 +78,8 @@ add_custom_target(run USES_TERMINAL
         COMMAND qemu-system-i386 -d cpu_reset --no-reboot -fda QuantumBiosBoot.sys
         DEPENDS ${PROJECT_NAME}
 )
+
+add_custom_target(debug USES_TERMINAL
+        COMMAND qemu-system-i386 -S -s -d cpu_reset --no-reboot -fda QuantumBiosBoot.sys
+        DEPENDS ${PROJECT_NAME}
+        )
