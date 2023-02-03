@@ -66,7 +66,7 @@ load_stage:
 
 [bits 32]
 BEGIN_32BIT:
-    call STAGE_OFFSET ; give control to the kernel
+    call STAGE_OFFSET ; give control to the loader
 
     mov eax, 0xb8000
     mov byte [eax + 0], 'Q'
