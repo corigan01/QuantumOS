@@ -40,7 +40,7 @@ set_source_files_properties(${BOOT_NASM} PROPERTIES COMPILE_FLAGS "-f bin")
 
 set(CMAKE_C_COMPILE_FEATURES
         -g -m32 -nostdinc -nostdlib
-        -fPIE  -Wall -Werror -Wextra
+        -fPIE  -Wall -Werror -Wextra -O2
 
         -fno-builtin)
 

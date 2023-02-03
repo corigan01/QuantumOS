@@ -94,7 +94,7 @@ set_video_mode40:
     ret
 
 set_video_mode80:
-   ; Set video mode to text 40x25
+   ; Set video mode to text 80x25
    mov ah, 0x00
    mov al, 0x03
    int 0x10
