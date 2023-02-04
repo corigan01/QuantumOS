@@ -29,6 +29,21 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #![no_main] // disable all Rust-level entry points
 #![allow(dead_code)]
 
-fn main() {
-    println!("Hello, world!");
+
+#[no_mangle]
+#[link_section = ".start"]
+pub extern "C" fn _start() -> ! {
+    let mut i = 0xdead;
+    i += 1;
+
+    panic!("test() quit! {}", i);
+}
+
+
+use core::arch::global_asm;
+use core::panic::PanicInfo;
+
+#[panic_handler]
+fn panic(_info: &PanicInfo) -> ! {
+    loop {}
 }

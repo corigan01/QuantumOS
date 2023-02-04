@@ -24,29 +24,121 @@
 ;*/
 
 
-disk_load:
-    pusha
-    push dx
+; bx -> destination to put the stage (given to us by mbr)
+; dl -> disk (given to us by mbr)
+; ah -> function to operate (0x02 is read)
+; dh -> the number of sectors to read
 
+perform_read:
+    pusha
+
+    push dx
     mov ah, 0x02 ; read mode
     mov al, dh   ; read dh number of sectors
-    mov cl, 0x02 ; start from sector 2
-                 ; (as sector 1 is our boot sector)
+    mov cl, 0x02 ; start from sector 2 (1st sector is us)
     mov ch, 0x00 ; cylinder 0
     mov dh, 0x00 ; head 0
-
-    ; dl = drive number is set as input to disk_load
-    ; es:bx = buffer pointer is set as input as well
 
     int 0x13      ; BIOS interrupt
     jc disk_error ; check carry bit for error
 
     pop dx     ; get back original number of sectors to read
-    cmp al, dh ; BIOS sets 'al' to the # of sectors actually read
-               ; compare it to 'dh' and error out if they are !=
+    cmp al, dh ; BIOS sets 'al' to the # of sectors read, so we can compare to see if the read was successful
+
     jne sectors_error
     popa
+
     ret
+
+disk_load:
+    ; we are given the following:
+    ; bx -> destination to load
+    ; dl -> disk to be read
+
+
+    mov dh, [SECTORS]   ; Try and read sectors (512 bytes) and see if the loader's end byte is in it
+    call perform_read   ; will return if the read was successful
+
+    jmp .look_for_beef  ; Load until we load the entire file!
+
+    ret
+
+.look_for_beef:
+    pusha
+
+    ; Find how many bytes we have to read
+    mov  ax, [SECTORS]   ; Get the sectors read
+    imul ax, 512         ; Multiply by 512 to get bytes
+    add  ax, bx          ; add to the offset
+    mov  dx, ax
+
+    ; dx now contains the pointer where we should stop
+
+    push bx
+    .a:
+        ; Check for the magic word
+        mov ax, MAGIC_END
+        cmp [bx], ax
+        je .loaded           ; Jump if we find it
+
+        ; Check if we are at the end of the loaded section
+        cmp bx, dx
+        je .c
+
+        ; Move to the next byte and check again
+        add bx, 1
+        jmp .a
+
+    .c:
+        ; add one more sector
+        mov ax, [SECTORS]
+        inc ax
+        mov dx, 10
+        cmp ax, dx         ; Make sure we dont read too many sectors
+        je sectors_error
+        mov [SECTORS], ax
+
+        pop bx
+
+        ; Try loading again with (sectors + 1)
+        popa
+        jmp disk_load
+
+.loaded:
+    ; bx should contain the destination for our stage, so we will use that as a reference point
+    pop bx
+
+    ; Find how many bytes we have to read
+    mov  ax, [SECTORS]   ; Get the sectors read
+    imul ax, 512         ; Multiply by 512 to get bytes
+    add  ax, bx          ; add to the offset
+    mov  dx, ax
+
+    .d:
+        ; Check for the magic word
+        mov ax, MAGIC_START
+        cmp [bx], ax
+        je .e           ; Jump if we find it
+
+        ; Check if we are at the end of the loaded section
+        cmp bx, dx
+        je disk_error
+
+        ; Move to the next byte and check again
+        add bx, 1
+        jmp .d
+
+    .e:
+        add bx, 4
+        mov [STAGE_ADDRS], bx
+        popa
+        ret
+
+
+SECTORS     db 1
+MAGIC_END   equ 0xbeef
+MAGIC_START equ 0x2173
+
 
 disk_error:
     call print_err

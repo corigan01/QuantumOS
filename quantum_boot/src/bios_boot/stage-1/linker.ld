@@ -1,4 +1,4 @@
-ENTRY (cmain)
+ENTRY (_start)
 
 SECTIONS
 {
@@ -22,5 +22,4 @@ SECTIONS
         *(.bss)
         *(.bootstrap_stack)
     }
-
 }

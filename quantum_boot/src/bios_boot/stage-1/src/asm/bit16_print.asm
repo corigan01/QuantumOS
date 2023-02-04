@@ -34,7 +34,7 @@ qos_intro:
     call screen_conf
 
     mov si, quantum_inr
-    jmp print_string
+    call print_string
 
     ret
 
@@ -43,7 +43,7 @@ print_err:
     call screen_conf
 
     mov si, quantum_err
-    jmp print_string
+    call print_string
     jmp $
 
 screen_conf:
