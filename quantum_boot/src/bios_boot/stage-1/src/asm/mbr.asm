@@ -31,6 +31,7 @@
 ; where to load the kernel to
 STAGE_OFFSET equ 0x1000
 
+
 ; BIOS sets boot drive in 'dl'; store for later use
 mov [BOOT_DRIVE], dl
 
@@ -58,16 +59,15 @@ _start:
 
 [bits 16]
 load_stage:
-    mov bx, STAGE_OFFSET  ; bx -> destination
-    mov dh, 8             ; dh -> num sectors (only 4kib)
+    mov bx, STAGE_OFFSET  ; bx -> destination to put the stage
     mov dl, [BOOT_DRIVE]  ; dl -> disk
+
     call disk_load
+
     ret
 
 [bits 32]
 BEGIN_32BIT:
-    call STAGE_OFFSET ; give control to the loader
-
     mov eax, 0xb8000
     mov byte [eax + 0], 'Q'
     mov byte [eax + 2], ' '
@@ -75,10 +75,15 @@ BEGIN_32BIT:
     mov byte [eax + 6], 'S'
     mov eax, 0x00
 
+
+
+    call [STAGE_ADDRS] ; give control to the loader
+
     jmp $
 
 ; boot drive variable
 BOOT_DRIVE db 0
+STAGE_ADDRS  db 0
 
 ; padding
 times 510 - ($-$$) db 0

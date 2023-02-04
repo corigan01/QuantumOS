@@ -24,7 +24,7 @@
 ;*/
 
 ; Stages magic number so the pre-bootloader knows where to find exactly where its entry point is
-dd 0x21736f71 ; QOS! in ascii
+dd 0x2173 ; QO in ascii
 
 [bits 32]
 [extern cmain]

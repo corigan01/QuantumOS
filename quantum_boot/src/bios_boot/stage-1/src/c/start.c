@@ -24,7 +24,13 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 */
 
+extern void rust_main();
+
 void cmain() {
+    rust_main();
+}
+
+void test() {
     char* video_memory = (char*) 0xb8000;
 
     for (int i = 0; i < 80 * 25; i++) {
@@ -33,5 +39,5 @@ void cmain() {
         video_memory += 2;
     }
 
-
+    while(1);
 }

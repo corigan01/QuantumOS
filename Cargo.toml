@@ -8,6 +8,7 @@ build="build.rs"
 members = [
     "boot",
     "quantum_boot/src/bios_boot/bios",
+    "quantum_boot/src/bios_boot/stage-1",
     "quantum_boot/src/bios_boot/stage-2",
 ]
 
