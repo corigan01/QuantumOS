@@ -68,14 +68,8 @@ load_stage:
 
 [bits 32]
 BEGIN_32BIT:
-    mov eax, 0xb8000
-    mov byte [eax + 0], 'Q'
-    mov byte [eax + 2], ' '
-    mov byte [eax + 4], 'O'
-    mov byte [eax + 6], 'S'
-    mov eax, 0x00
-
-
+    push STAGE_OFFSET
+    push [BOOT_DRIVE]
 
     call [STAGE_ADDRS] ; give control to the loader
 

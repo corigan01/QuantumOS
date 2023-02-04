@@ -1,10 +1,8 @@
 cmake_minimum_required(VERSION 3.10)
 
-set(CMAKE_C_COMPILER clang)
-set(CMAKE_CXX_COMPILER clang++)
-
 set(CMAKE_SYSTEM_NAME Generic)
 set(CMAKE_SYSTEM_PROCESSOR i386)
+
 
 # C support
 set(triple i386)
@@ -55,7 +53,7 @@ set(CMAKE_C_COMPILE_FEATURES
         -fno-builtin)
 
 add_link_options(
-        -T ../linker.ld -m32 -latomic
+        -T ${CMAKE_CURRENT_LIST_DIR}/linker.ld -m32 -latomic
         -g -Wall -Werror -Wextra -fPIE -nodefaultlibs
         -fno-stack-protector -fno-exceptions -nostartfiles
         -Wno-undef -nostdlib -ffreestanding -fno-rtti )
