@@ -4,13 +4,7 @@ version = "0.1.0"
 edition = "2021"
 build="build.rs"
 
-[workspace]
-members = [
-    "boot",
-    "quantum_boot/src/bios_boot/bios",
-    "quantum_boot/src/bios_boot/stage-1/rust",
-    "quantum_boot/src/bios_boot/stage-2",
-]
+
 
 [features]
 default = [ "nightly", "instructions" ]
