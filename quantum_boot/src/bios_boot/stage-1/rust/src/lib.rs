@@ -31,8 +31,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 
 #[no_mangle]
-#[link_section = ".start"]
-pub extern "C" fn _start() -> ! {
+pub extern "C" fn rust_main() -> ! {
     let mut i = 0xdead;
     i += 1;
 
