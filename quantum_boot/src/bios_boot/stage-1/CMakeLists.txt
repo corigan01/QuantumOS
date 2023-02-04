@@ -19,6 +19,17 @@ set(CMAKE_ASM_NASM_COMPILE_OBJECT "<CMAKE_ASM_NASM_COMPILER> <INCLUDES> <FLAGS> 
 
 project(QuantumBiosBoot LANGUAGES CXX C ASM_NASM ASM)
 
+include(FetchContent)
+
+FetchContent_Declare(
+        Corrosion
+        GIT_REPOSITORY https://github.com/corrosion-rs/corrosion.git
+)
+
+set( Rust_CARGO_TARGET ${CMAKE_CURRENT_LIST_DIR}/x86_64-quantum_os.json )
+set( Rust_TOOL_CHAIN rust-nightly )
+
+FetchContent_MakeAvailable(Corrosion)
 
 set( BOOT_NASM
         src/asm/mbr.asm
@@ -44,7 +55,7 @@ set(CMAKE_C_COMPILE_FEATURES
         -fno-builtin)
 
 add_link_options(
-        -T ../linker.ld -m32
+        -T ../linker.ld -m32 -latomic
         -g -Wall -Werror -Wextra -fPIE -nodefaultlibs
         -fno-stack-protector -fno-exceptions -nostartfiles
         -Wno-undef -nostdlib -ffreestanding -fno-rtti )
@@ -59,17 +70,8 @@ target_include_directories(mbr PUBLIC src/asm)
 target_compile_options(quantumbiosboot.bin PRIVATE $<$<COMPILE_LANGUAGE:C>:${CMAKE_C_COMPILE_FEATURES}>)
 target_compile_options(quantumbiosboot.bin PRIVATE $<$<COMPILE_LANGUAGE:CXX>:${CMAKE_CXX_COMPILE_FEATURES}>)
 
-add_library(libstage-1 STATIC IMPORTED GLOBAL)
-add_dependencies(libstage-1 rust)
-set_target_properties(libstage-1  PROPERTIES IMPORTED_LOCATION libstage_1.o)
-target_link_libraries(quantumbiosboot.bin PUBLIC libstage-1)
-
-add_custom_target(rust USES_TERMINAL
-        COMMAND sh build_rust.sh ${CMAKE_CURRENT_BINARY_DIR} ${CMAKE_CURRENT_LIST_DIR}
-        WORKING_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}
-        COMMENT "Building Rust"
-        BYPRODUCTS libstage_1.o
-        )
+corrosion_import_crate(MANIFEST_PATH ${CMAKE_CURRENT_LIST_DIR}/rust/Cargo.toml NO_STD PROFILE release FLAGS -Zbuild-std=core,panic_abort -Zbuild-std-features=compiler-builtins-mem,panic_immediate_abort)
+target_link_libraries(quantumbiosboot.bin PUBLIC stage-1)
 
 add_custom_target(offsetloader
         COMMAND dd if=quantumbiosboot.bin skip=512 bs=1 iflag=skip_bytes,count_bytes of=loader.bin && echo -n -e \\\\xef\\\\xbe >> loader.bin

@@ -1,4 +1,4 @@
-ENTRY (_start)
+ENTRY (cmain)
 
 SECTIONS
 {
@@ -22,4 +22,12 @@ SECTIONS
         *(.bss)
         *(.bootstrap_stack)
     }
+    .eh_frame : {
+        *(.eh_frame .eh_frame.*)
+    }
+    .eh_frame_hdr : {
+        *(.eh_frame_hdr .eh_frame_hdr.*)
+    }
+
+
 }
