@@ -30,14 +30,3 @@ void cmain() {
     rust_main();
 }
 
-void test() {
-    char* video_memory = (char*) 0xb8000;
-
-    for (int i = 0; i < 80 * 25; i++) {
-        *(video_memory) = 'X';
-
-        video_memory += 2;
-    }
-
-    while(1);
-}

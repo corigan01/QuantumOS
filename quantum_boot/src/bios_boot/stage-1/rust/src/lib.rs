@@ -29,13 +29,16 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #![no_main] // disable all Rust-level entry points
 #![allow(dead_code)]
 
+extern "C" { fn test(); }
 
 #[no_mangle]
 pub extern "C" fn rust_main() -> ! {
     let mut i = 0xdead;
     i += 1;
 
-    panic!("test() quit! {}", i);
+    unsafe { test(); }
+
+    loop {}
 }
 
 
