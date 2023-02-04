@@ -29,14 +29,14 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #![no_main] // disable all Rust-level entry points
 #![allow(dead_code)]
 
-extern "C" { fn test(); }
+const VGA_ADDRESS: *mut u8 = unsafe {0xb8000 as *mut u8};
 
 #[no_mangle]
 pub extern "C" fn rust_main() -> ! {
     let mut i = 0xdead;
     i += 1;
 
-    unsafe { test(); }
+    unsafe { *VGA_ADDRESS = 'a' as u8; }
 
     loop {}
 }
