@@ -46,6 +46,7 @@ call _start
 %include "disk.asm"
 %include "gdt.asm"
 %include "protected.asm"
+%include "real.asm"
 
 [bits 16]
 _start:
@@ -68,9 +69,9 @@ load_stage:
 
 [bits 32]
 BEGIN_32BIT:
-    push STAGE_OFFSET
-    push [BOOT_DRIVE]
+    call Entry16
 
+    push long STAGE_ADDRS
     call [STAGE_ADDRS] ; give control to the loader
 
     jmp $

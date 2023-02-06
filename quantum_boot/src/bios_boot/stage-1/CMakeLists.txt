@@ -39,6 +39,8 @@ set( NASM
 
 set( C
         src/c/start.c
+        src/c/rustcall.c
+        src/c/core_ops.c
         )
 
 
@@ -49,7 +51,7 @@ set_source_files_properties(${BOOT_NASM} PROPERTIES COMPILE_FLAGS "-f bin")
 
 set(CMAKE_C_COMPILE_FEATURES
         -g -m32 -nostdinc -nostdlib -c
-        -fPIE  -Wall -Werror -Wextra -O2
+        -fPIE  -Wall -Werror -Wextra
         -fno-builtin)
 
 add_link_options(

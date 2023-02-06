@@ -2,6 +2,7 @@ ENTRY (cmain)
 
 SECTIONS
 {
+
     . = 0x1000;
 
     .text ALIGN (4K) : AT (ADDR (.text))
@@ -22,12 +23,4 @@ SECTIONS
         *(.bss)
         *(.bootstrap_stack)
     }
-    .eh_frame : {
-        *(.eh_frame .eh_frame.*)
-    }
-    .eh_frame_hdr : {
-        *(.eh_frame_hdr .eh_frame_hdr.*)
-    }
-
-
 }

@@ -24,9 +24,99 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 */
 
-extern void rust_main();
+#include "core_ops.h"
+#include "rustcall.h"
+#include "types.h"
 
-void cmain() {
-    rust_main();
+char* vga_address = (char*)0xb8000;
+
+
+void test() {
+    *(vga_address++) = 'q';
+}
+
+void cmain(u32 addr) {
+
+    char num_str[32];
+    memset(num_str, 0, 32);
+    itoa((u32)addr, num_str);
+    for (u32 i = 0; i < strlen(num_str); i ++) {
+        *(vga_address+=2) = num_str[i];
+    }
+
+    u8* our_ptr = (u8*)0x0;
+
+    u32 loader_start = 0;
+    u32 loader_end = 0;
+
+    for (u32 i = 0;; i++) {
+
+        if ((our_ptr[i] == 0x21 && our_ptr[i + 1] == 0x73) || (our_ptr[i] == 0x73 && our_ptr[i + 1] == 0x21)) {
+            loader_start = i;
+
+        }
+        if ((our_ptr[i] == 0xbe && our_ptr[i + 1] == 0xef) || (our_ptr[i] == 0xef && our_ptr[i + 1] == 0xbe)) {
+            loader_end = i;
+
+            break;
+        }
+
+
+
+        if (i >= 0xFFFF) {
+            *(vga_address+=2) = 'P';
+            *(vga_address+=2) = 'o';
+            *(vga_address+=2) = 'o';
+            *(vga_address+=2) = 'p';
+            break;
+        }
+    }
+
+
+    *(vga_address+=2) = 'S';
+    *(vga_address+=2) = ':';
+    *(vga_address+=2) = ' ';
+
+    memset(num_str, 0, 32);
+    itoa((u32)loader_start, num_str);
+    for (u32 i = 0; i < strlen(num_str); i ++) {
+        *(vga_address+=2) = num_str[i];
+    }
+
+    *(vga_address+=2) = ' ';
+    *(vga_address+=2) = ' ';
+
+    *(vga_address+=2) = 'E';
+    *(vga_address+=2) = ':';
+    *(vga_address+=2) = ' ';
+
+    memset(num_str, 0, 32);
+    itoa((u32)loader_end, num_str);
+    for (u32 i = 0; i < strlen(num_str); i ++) {
+        *(vga_address+=2) = num_str[i];
+    }
+
+    *(vga_address+=2) = ' ';
+    *(vga_address+=2) = ' ';
+
+    u32 loader_size = loader_end - loader_start;
+    u32 offset = 0x10000;
+
+    memcpy((void*)(offset + loader_start), (void*)loader_start, loader_size);
+
+    void (*test_ptr)() = &test;
+    test_ptr += offset;
+
+    (*test_ptr)();
+
+    switch_to_rust(offset);
+
+
+
+    //int32_test();
+    while(1);
+
+
+
 }
 
