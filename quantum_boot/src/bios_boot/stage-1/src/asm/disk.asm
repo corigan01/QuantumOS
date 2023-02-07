@@ -136,8 +136,9 @@ disk_load:
 
 
 SECTORS     db 1
-MAGIC_END   equ 0xbeef
+
 MAGIC_START equ 0x2173
+MAGIC_END   equ 0xbeef
 
 
 disk_error:

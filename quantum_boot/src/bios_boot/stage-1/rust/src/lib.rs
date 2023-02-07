@@ -29,7 +29,6 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #![no_main] // disable all Rust-level entry points
 #![allow(dead_code)]
 
-mod v8086;
 
 const VGA_ADDRESS: *mut u8 = unsafe {0xb8000 as *mut u8};
 
