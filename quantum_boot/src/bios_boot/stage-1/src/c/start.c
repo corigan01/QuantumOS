@@ -37,7 +37,7 @@ void test() {
 
 void cmain(u32 addr) {
 
-    char num_str[32];
+    /*char num_str[32];
     memset(num_str, 0, 32);
     itoa((u32)addr, num_str);
     for (u32 i = 0; i < strlen(num_str); i ++) {
@@ -107,9 +107,9 @@ void cmain(u32 addr) {
     void (*test_ptr)() = &test;
     test_ptr += offset;
 
-    (*test_ptr)();
+    (*test_ptr)();*/
 
-    switch_to_rust(offset);
+    switch_to_rust(0);
 
 
 
