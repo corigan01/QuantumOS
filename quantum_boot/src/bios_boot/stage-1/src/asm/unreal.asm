@@ -23,28 +23,40 @@
 ; OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ;*/
 
-
 [bits 16]
-switch_to_32bit:
-    cli                     ; 1. disable interrupts
-    lgdt [gdt_descriptor]   ; 2. load GDT descriptor
 
-    mov eax, cr0
-    or eax, 0x1             ; 3. enable protected mode
-    mov cr0, eax
+enter_unreal:
+   cli                    ; no interrupts
+   push ds                ; save real mode
+   push ss
 
-    jmp CODE_SEG:init_32bit ; 4. far jump
+   lgdt [gdtinfo]         ; load gdt register
 
-[bits 32]
-init_32bit:
-    mov ax, DATA_SEG        ; 5. update segment registers
-    mov ds, ax
-    mov ss, ax
-    mov es, ax
-    mov fs, ax
-    mov gs, ax
+   mov  eax, cr0          ; switch to pmode by
+   or al,1                ; set pmode bit
+   mov  cr0, eax
+   jmp 0x8:.pmode
 
-    mov ebp, 0x90000        ; 6. setup stack
-    mov esp, ebp
+.pmode:
+   mov  bx, 0x10          ; select descriptor 2
+   mov  ds, bx            ; 10h = 10000b
 
-    call BEGIN_32BIT        ; 7. move back to mbr.asm
+   and al, 0xFE           ; back to realmode
+   mov  cr0, eax          ; by toggling bit again
+   jmp 0x0:.unreal
+
+.unreal:
+   pop ss
+   pop ds                 ; get back old segment
+   sti
+
+   ret
+
+gdtinfo:
+   dw gdt_end - gdt - 1   ;last byte in table
+   dd gdt                 ;start of table
+
+gdt:         dd 0,0        ; entry 0 is always unused
+flatcode:    db 0xff, 0xff, 0, 0, 0, 10011010b, 10001111b, 0
+flatdesc:    db 0xff, 0xff, 0, 0, 0, 10010010b, 11001111b, 0
+gdt_end:

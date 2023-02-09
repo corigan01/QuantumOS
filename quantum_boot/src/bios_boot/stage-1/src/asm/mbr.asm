@@ -28,15 +28,15 @@
 [bits 16]
 [org 0x7c00]
 
-; where to load the kernel to
-STAGE_OFFSET equ 0x1000
-
+; where to load the stage to
+STAGE_OFFSET equ 0x07F00
+;                0x10000
 
 ; BIOS sets boot drive in 'dl'; store for later use
 mov [BOOT_DRIVE], dl
 
 ; setup stack
-mov bp, 0x9000
+mov bp, 0x9c00
 mov sp, bp
 
 call _start
@@ -44,17 +44,16 @@ call _start
 %include "bit16_print.asm"
 %include "initmem.asm"
 %include "disk.asm"
-%include "gdt.asm"
-%include "protected.asm"
-%include "real.asm"
+%include "unreal.asm"
 
 [bits 16]
 _start:
     call qos_intro
     call init_a20
+    call enter_unreal
     call load_stage
     call reset_display
-    call switch_to_32bit
+    call begin_stage
 
     jmp $
 
@@ -67,11 +66,8 @@ load_stage:
 
     ret
 
-[bits 32]
-BEGIN_32BIT:
-    call Entry16
-
-    push long STAGE_ADDRS
+[bits 16]
+begin_stage:
     call [STAGE_ADDRS] ; give control to the loader
 
     jmp $

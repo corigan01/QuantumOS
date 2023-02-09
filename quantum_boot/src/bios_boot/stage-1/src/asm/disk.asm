@@ -35,7 +35,7 @@ perform_read:
     push dx
     mov ah, 0x02 ; read mode
     mov al, dh   ; read dh number of sectors
-    mov cl, 0x02 ; start from sector 2 (1st sector is us)
+    mov cl, 0x08 ; start from sector 2 (1st sector is us)
     mov ch, 0x00 ; cylinder 0
     mov dh, 0x00 ; head 0
 
@@ -68,7 +68,7 @@ disk_load:
 
     ; Find how many bytes we have to read
     mov  ax, [SECTORS]   ; Get the sectors read
-    imul ax, 512         ; Multiply by 512 to get bytes
+    imul ax, 0x200       ; Multiply by 512 to get bytes
     add  ax, bx          ; add to the offset
     mov  dx, ax
 
@@ -110,7 +110,7 @@ disk_load:
 
     ; Find how many bytes we have to read
     mov  ax, [SECTORS]   ; Get the sectors read
-    imul ax, 512         ; Multiply by 512 to get bytes
+    imul ax, 0x200       ; Multiply by 512 to get bytes
     add  ax, bx          ; add to the offset
     mov  dx, ax
 
@@ -135,9 +135,9 @@ disk_load:
         ret
 
 
-SECTORS     db 1
+SECTORS     db 4
 
-MAGIC_START equ 0x2173
+MAGIC_START equ 0xdead
 MAGIC_END   equ 0xbeef
 
 

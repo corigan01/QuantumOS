@@ -24,17 +24,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 */
 
-#ifndef QUANTUM_OS_CORE_OPS_H
-#define QUANTUM_OS_CORE_OPS_H
 
-#include "types.h"
-
-void    memcpy      (void *dest, void *src, size_t n);
-void*   memset      (void *dst,char val, int n);
-
-void    itoa        (u32 num, char *number);
-u32     strlen      (const char* str);
-
-
-
-#endif //QUANTUM_OS_CORE_OPS_H
+pub fn main() {
+    println!("cargo:rustc-link-arg=-Crelocation-model=pic");
+}

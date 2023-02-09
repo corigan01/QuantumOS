@@ -2,13 +2,15 @@
 name = "stage-1"
 version = "0.1.0"
 edition = "2021"
+build = "build.rs"
 
 [profile.release]
 strip = true
-opt-level = "z"
 lto = true
+opt-level = "s"
 codegen-units = 1
 panic = "abort"
 
 [lib]
 crate-type = ["staticlib"]
+
