@@ -34,13 +34,11 @@ set( BOOT_NASM
         )
 
 set( NASM
-        src/asm/runc.asm
+        src/asm/run_rust.asm
         )
 
 set( C
-        src/c/start.c
-        src/c/rustcall.c
-        src/c/core_ops.c
+        src/test.c
         )
 
 
@@ -55,10 +53,12 @@ set(CMAKE_C_COMPILE_FEATURES
         -fno-builtin)
 
 add_link_options(
-        -T ${CMAKE_CURRENT_LIST_DIR}/linker.ld -m32 -latomic
-        -g -Wall -Werror -Wextra -fPIE -nodefaultlibs
-        -fno-stack-protector -fno-exceptions -nostartfiles
-        -Wno-undef -nostdlib -ffreestanding -fno-rtti )
+        -T ${CMAKE_CURRENT_LIST_DIR}/linker.ld
+        -m32 -g -Wno-undef -nostdlib -ffreestanding -nodefaultlibs
+        -fno-builtin -fPIC)
+        #-g -Wall -Werror -Wextra -fPIE -nodefaultlibs
+        #-fno-stack-protector -fno-exceptions -nostartfiles
+        #-Wno-undef -nostdlib -ffreestanding -fno-rtti )
 
 
 add_executable(quantumbiosboot.bin ${NASM} ${C})
@@ -70,11 +70,11 @@ target_include_directories(mbr PUBLIC src/asm)
 target_compile_options(quantumbiosboot.bin PRIVATE $<$<COMPILE_LANGUAGE:C>:${CMAKE_C_COMPILE_FEATURES}>)
 target_compile_options(quantumbiosboot.bin PRIVATE $<$<COMPILE_LANGUAGE:CXX>:${CMAKE_CXX_COMPILE_FEATURES}>)
 
-corrosion_import_crate(MANIFEST_PATH ${CMAKE_CURRENT_LIST_DIR}/rust/Cargo.toml NO_STD PROFILE release FLAGS -Zbuild-std=core,panic_abort -Zbuild-std-features=compiler-builtins-mem,panic_immediate_abort)
+corrosion_import_crate(MANIFEST_PATH ${CMAKE_CURRENT_LIST_DIR}/rust/Cargo.toml NO_STD PROFILE release FLAGS -Zbuild-std=core -Zbuild-std-features=compiler-builtins-mem)
 target_link_libraries(quantumbiosboot.bin PUBLIC stage-1)
 
 add_custom_target(offsetloader
-        COMMAND dd if=quantumbiosboot.bin skip=512 bs=1 iflag=skip_bytes,count_bytes of=loader.bin && echo -n -e \\\\xef\\\\xbe >> loader.bin
+        COMMAND dd if=quantumbiosboot.bin skip=0 bs=1 iflag=skip_bytes,count_bytes of=loader.bin && echo -n -e \\\\xef\\\\xbe >> loader.bin
         COMMENT "Packaging Loader"
         DEPENDS quantumbiosboot.bin
         BYPRODUCTS loader.bin
@@ -88,7 +88,7 @@ add_custom_target(${PROJECT_NAME} ALL
 )
 
 add_custom_target(run USES_TERMINAL
-        COMMAND qemu-system-i386 -d cpu_reset --no-shutdown -fda QuantumBiosBoot.sys
+        COMMAND qemu-system-i386 -d cpu_reset --no-shutdown -drive format=raw,file=QuantumBiosBoot.sys
         DEPENDS ${PROJECT_NAME}
 )
 

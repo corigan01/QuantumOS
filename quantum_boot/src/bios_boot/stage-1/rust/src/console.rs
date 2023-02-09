@@ -24,27 +24,10 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 */
 
-#ifndef QUANTUM_OS_TYPES_H
-#define QUANTUM_OS_TYPES_H
+use crate::bios_ints::TextModeColor;
+use crate::bios_ints::BiosInt;
 
-// types
-typedef unsigned char       uint8_t;
-typedef unsigned short      uint16_t;
-typedef unsigned int        uint32_t;
-typedef unsigned int        size_t;
-
-typedef unsigned char       uint8;
-typedef unsigned short      uint16;
-typedef unsigned int        uint32;
-typedef unsigned long long  uint64;
-typedef uint32              uintmax_t;
-
-typedef uint8               u8;
-typedef uint16              u16;
-typedef uint32              u32;
-typedef uint32              time_t;
-
-// Storage sizes
-#define MB 1048576
-
-#endif //QUANTUM_OS_TYPES_H
+pub trait GlobalPrint {
+    fn print_str(str: &str);
+    fn print_bytes(bytes: &[u8]);
+}
