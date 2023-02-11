@@ -62,6 +62,7 @@ pub extern "C" fn rust_main() -> ! {
 
 fn main() {
     BiosVideo::print_str("This is a super super duper long test of string or thing idk!");
+    Biosvideo::print_str("This is a super test!");
 
     bios_println!("This is a test!");
 }

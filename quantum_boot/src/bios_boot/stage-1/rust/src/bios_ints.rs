@@ -148,8 +148,6 @@ impl BiosInt {
             return BiosIntStatus::CommandFailed;
         }
 
-
-
         if res == 0x80 {
             return BiosIntStatus::InvalidCommand;
         }
