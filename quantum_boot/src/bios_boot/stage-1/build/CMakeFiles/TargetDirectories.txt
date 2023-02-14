@@ -1,0 +1,5 @@
+/home/corigan01/CLionProjects/quantum_os/quantum_boot/src/bios_boot/stage-1/build/CMakeFiles/stage-1.dir
+/home/corigan01/CLionProjects/quantum_os/quantum_boot/src/bios_boot/stage-1/build/CMakeFiles/flat-stage-1.dir
+/home/corigan01/CLionProjects/quantum_os/quantum_boot/src/bios_boot/stage-1/build/CMakeFiles/run.dir
+/home/corigan01/CLionProjects/quantum_os/quantum_boot/src/bios_boot/stage-1/build/CMakeFiles/edit_cache.dir
+/home/corigan01/CLionProjects/quantum_os/quantum_boot/src/bios_boot/stage-1/build/CMakeFiles/rebuild_cache.dir
