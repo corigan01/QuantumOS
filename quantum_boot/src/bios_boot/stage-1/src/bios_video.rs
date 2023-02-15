@@ -57,8 +57,8 @@ impl BiosVideo {
     fn print_int_bytes(&self, str: &[u8]) {
         for i in str {
             match *i  {
+                b'\n' => unsafe { self.print_int_char(0xd); self.print_int_char(0xa); },
                 c if c.is_ascii() => unsafe { self.print_int_char(c); },
-                b'\n' => unsafe { self.print_int_char(b'\r'); },
 
                 _ => unsafe { self.print_int_char(b'?'); }
             }
@@ -69,8 +69,8 @@ impl BiosVideo {
     fn print_int_string(&self, str: &str) {
         for i in str.as_bytes() {
             match *i  {
+                b'\n' => unsafe { self.print_int_char(0xd); self.print_int_char(0xa); },
                 c if c.is_ascii() => unsafe { self.print_int_char(c); },
-                b'\n' => unsafe { self.print_int_char(b'\r'); },
 
                 _ => unsafe { self.print_int_char(b'?'); }
             }
