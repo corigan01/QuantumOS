@@ -41,7 +41,6 @@ begin:
 
     # This will load rust into memory, this way we can keep the bootloader section small and just load
     # it into memory. This allows us to do way more in one binary then we would otherwise be able to.
-    mov dh, [_stage_1_end_sectors + 0x7c01]
     call load_legs
 
     # Finally call rust! :)
@@ -80,50 +79,53 @@ init_a20:
     ret
 
 # FIXME: Tell the user this is unsupported!
-
 .activation_failed:
-    jmp .activation_failed
+    mov al, 0x25
+    call print_err
+    jmp spin
 .not_supported:
-    jmp .not_supported
+    mov al, 0x27
+    call print_err
+    jmp spin
 
 load_legs:
-    # We are unsure if the 13h extension is enabled here, but we should be able to load the rest
-    # of the bootloader without it.
-    # FIXME: This should be fixed in future versions as the loader becomes bigger, but should do just fine for now.
+    # We are unsure if the 13h extension is enabled here
+    # FIXME: Check if DAP is supported (for now this works fine)
     pusha
 
-    push dx
-
-    mov bx, 0x7e00                      # destination to put stage
-    mov ah, 0x02                        # read mode
-    mov al, dh                          # read dh number of sectors
-    mov cl, 0x02                        # start from sector 2 (1st sector is us)
-
-    # FIXME: Should set these appropriately
-    mov ch, 0x00                        # cylinder 0
-    mov dh, 0x00                        # head 0
+    mov si, 0x7c80
+    mov ah, 0x42
 
     int 0x13                            # BIOS interrupt
     jc disk_error                       # check carry bit for error
 
-    pop dx                              # get back original number of sectors to read
-    cmp al, dh                          # BIOS sets 'al' to the # of sectors read, so we can compare to see if the read was successful
-
-    jne disk_error
     popa
 
     ret
 
+
 # we couldn't read the rest of the bootloader
 # TODO: Add a message so the user can see if this fails
 disk_error:
-    call set_video_mode40
-    jmp disk_error
+    mov al, 0x23
+    call print_err
+    jmp spin
 
-set_video_mode40:
-    # Set video mode to text 40x25
-    mov ah, 0x00
-    mov al, 0x01
+print_err:
+    mov ah, 0x0e
     int 0x10
 
     ret
+
+
+.align 16
+DATAPACKET:
+    .byte    0x10                           # Size of packet
+    .byte    0x00                           # Always 0
+    .byte    _stage_1_end_sectors           # Sectors to read
+    .byte    0x00                           # Always 0
+    .2byte   0x0000                         # Load address
+    .2byte   0x07e0                         # Load segment
+    .4byte   0x0001                         # Starting LBA
+    .4byte   0x0000
+    .4byte   0x0000
