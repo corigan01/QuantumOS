@@ -68,7 +68,7 @@ include CMakeFiles/stage-1.dir/progress.make
 
 CMakeFiles/stage-1:
 	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --blue --bold --progress-dir=/home/corigan01/CLionProjects/quantum_os/quantum_boot/src/bios_boot/stage-1/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_1) "building rust"
-	cargo build --target /home/corigan01/CLionProjects/quantum_os/quantum_boot/src/bios_boot/stage-1/i386-quantum_loader.json --release
+	cargo build --release --target /home/corigan01/CLionProjects/quantum_os/quantum_boot/src/bios_boot/stage-1/i386-quantum_loader.json
 
 stage-1: CMakeFiles/stage-1
 stage-1: CMakeFiles/stage-1.dir/build.make

@@ -3,7 +3,7 @@ project(STAGE-1)
 
 
 add_custom_target(stage-1
-        COMMAND cargo build --target ${CMAKE_CURRENT_LIST_DIR}/i386-quantum_loader.json --release
+        COMMAND cargo build --release --target ${CMAKE_CURRENT_LIST_DIR}/i386-quantum_loader.json
         COMMENT "building rust"
         BYPRODUCTS ${CMAKE_CURRENT_LIST_DIR}/target/i386-quantum_loader/release/stage-1
 )
