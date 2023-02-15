@@ -24,7 +24,10 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 */
 
+use core::arch::asm;
 use crate::bios_ints::BiosInt;
+
+
 
 #[repr(packed, C)]
 #[derive(Debug)]
@@ -51,13 +54,48 @@ impl BasicVesaInfo {
 
     pub fn new() -> Self {
         let mut info = Self::new_zero();
+        let info_ptr = &mut info as *mut BasicVesaInfo as *mut u8;
 
         unsafe {
-            BiosInt::read_vbe_info(&mut info as *mut BasicVesaInfo as *mut u8)
+            BiosInt::read_vbe_info(info_ptr)
                 .execute_interrupt();
         }
 
+        if info_ptr as u16 == 0 {
+            panic!("vbe null ptr");
+        }
+
+        if !info.validate_signature() {
+            panic!("invalid Signature");
+        }
 
         info
+    }
+
+    pub fn validate_signature(&self) -> bool {
+        self.signature[0] == b'V' &&
+        self.signature[1] == b'E' &&
+        self.signature[2] == b'S' &&
+        self.signature[3] == b'A'
+    }
+
+    pub fn get_version_number(&self) -> u16 {
+        self.version
+    }
+
+
+
+    // FIXME: Get the oem string
+    pub fn get_oem_string(&self) -> [u8; 16] {
+        let offset = self.oem_string_ptr[0];
+        let segment = self.oem_string_ptr[1];
+
+        let temp_buffer = [0_u8; 16];
+
+        unsafe {
+
+        }
+
+        temp_buffer
     }
 }

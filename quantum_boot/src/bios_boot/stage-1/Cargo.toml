@@ -7,8 +7,8 @@ build = "build.rs"
 
 [profile.release]
 opt-level = "z"
-#lto = true
-#codegen-units = 1
+lto = true
+codegen-units = 1
 debug = false
 overflow-checks = false
 
