@@ -41,21 +41,21 @@ extern "C" fn bit16_entry() {
     let disk: u16 = 0;
 
     enter_rust(disk);
-
-
+    panic!("Stage should not return!");
 }
 fn enter_rust(disk: u16) {
     bios_println!("Your mom!");
 
-    loop {
-
-    }
 }
 
 
 
 
 #[panic_handler]
-fn panic(_info: &PanicInfo) -> ! {
-    loop {};
+fn panic(info: &PanicInfo) -> ! {
+    bios_println!("PANIC: {:#?}", info);
+
+
+
+    loop {}
 }
