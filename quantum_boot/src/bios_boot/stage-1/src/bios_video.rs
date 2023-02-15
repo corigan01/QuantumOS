@@ -30,12 +30,12 @@ use core::fmt::Write;
 use crate::bios_ints::{BiosInt, TextModeColor};
 use crate::console::{GlobalPrint};
 
-pub struct BiosVideo {
+pub struct BiosTextMode {
     background_color: TextModeColor,
     foreground_color: TextModeColor,
 }
 
-impl BiosVideo {
+impl BiosTextMode {
     pub fn new() -> Self {
         Self {
             background_color: TextModeColor::Black,
@@ -65,28 +65,20 @@ impl BiosVideo {
         }
     }
 
-
     fn print_int_string(&self, str: &str) {
-        for i in str.as_bytes() {
-            match *i  {
-                b'\n' => unsafe { self.print_int_char(0xd); self.print_int_char(0xa); },
-                c if c.is_ascii() => unsafe { self.print_int_char(c); },
-
-                _ => unsafe { self.print_int_char(b'?'); }
-            }
-        }
+        self.print_int_bytes(str.as_bytes());
     }
 }
 
 
-impl GlobalPrint for BiosVideo {
+impl GlobalPrint for BiosTextMode {
     fn print_str(str: &str) {
-        BiosVideo::new().print_int_string(str);
+        BiosTextMode::new().print_int_string(str);
     }
-    fn print_bytes(bytes: &[u8]) {BiosVideo::new().print_int_bytes(bytes); }
+    fn print_bytes(bytes: &[u8]) { BiosTextMode::new().print_int_bytes(bytes); }
 }
 
-impl fmt::Write for BiosVideo {
+impl fmt::Write for BiosTextMode {
     fn write_str(&mut self, s: &str) -> fmt::Result {
         self.print_int_string(s);
 
@@ -97,7 +89,7 @@ impl fmt::Write for BiosVideo {
 #[doc(hidden)]
 pub fn _print(args: ::core::fmt::Arguments) {
     use core::fmt::Write;
-    BiosVideo::new().write_fmt(args).unwrap();
+    BiosTextMode::new().write_fmt(args).unwrap();
 }
 
 /// Prints to the host through the bios int.

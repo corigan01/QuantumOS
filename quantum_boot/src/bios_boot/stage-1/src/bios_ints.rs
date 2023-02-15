@@ -118,6 +118,19 @@ impl BiosInt {
         }
     }
 
+    pub fn read_vbe_info(struct_ptr: *mut u8) -> Self {
+        let mut regs = Regs16::new();
+
+        regs.di = struct_ptr as u16;
+
+        Self {
+            interrupt_number: 0x10,
+            command: 0x4F,
+            flags: regs,
+            ..Self::blank()
+        }
+    }
+
     unsafe fn x10_int_dispatcher(&self) -> u8 {
         let res;
 
@@ -128,6 +141,7 @@ impl BiosInt {
             in("bh") self.flags.bh,
             in("cx") self.flags.cx,
             in("al") self.flags.al,
+            in("di") self.flags.di,
             clobber_abi("system")
         );
 
@@ -145,14 +159,14 @@ impl BiosInt {
 
         if eflags.check_flag_status(EFlagsStates::Carry) {
             return BiosIntStatus::CommandFailed;
-        }
+        }*/
 
         if res == 0x80 {
             return BiosIntStatus::InvalidCommand;
         }
         if res == 0x86 {
             return BiosIntStatus::UnsupportedFunction;
-        }*/
+        }
 
         BiosIntStatus::SuccessfulCommand
     }

@@ -21,44 +21,43 @@ NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPO
 NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
 DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
 */
 
-#![no_main]
-#![no_std]
+use crate::bios_ints::BiosInt;
 
-use core::panic::PanicInfo;
-use core::arch::{asm, global_asm};
-use stage_1::bios_println;
-use stage_1::bios_video::BiosTextMode;
-use stage_1::console::GlobalPrint;
-use stage_1::vesa::BasicVesaInfo;
-
-
-global_asm!(include_str!("init.s"));
-
-
-#[no_mangle]
-extern "C" fn bit16_entry() {
-    let disk: u16 = 0;
-
-    enter_rust(disk);
-    panic!("Stage should not return!");
-}
-fn enter_rust(disk: u16) {
-    bios_println!("Your mom!");
-
-    bios_println!("\nVBE INFO = {:#?}", BasicVesaInfo::new());
-
+#[repr(packed, C)]
+#[derive(Debug)]
+pub struct BasicVesaInfo {
+    signature: [u8; 4],
+    version: u16,
+    oem_string_ptr: [u16; 2],
+    capabilities: [u8; 4],
+    video_mode_ptr: [u16; 2],
+    size_64k_blocks: u16
 }
 
+impl BasicVesaInfo {
+    fn new_zero() -> Self {
+        Self {
+            signature: [0_u8; 4],
+            version: 0,
+            oem_string_ptr: [0_u16; 2],
+            capabilities: [0_u8; 4],
+            video_mode_ptr: [0_u16; 2],
+            size_64k_blocks: 0,
+        }
+    }
+
+    pub fn new() -> Self {
+        let mut info = Self::new_zero();
+
+        unsafe {
+            BiosInt::read_vbe_info(&mut info as *mut BasicVesaInfo as *mut u8)
+                .execute_interrupt();
+        }
 
 
-
-#[panic_handler]
-fn panic(info: &PanicInfo) -> ! {
-    bios_println!("PANIC: {:#?}", info);
-
-
-
-    loop {}
+        info
+    }
 }
