@@ -47,6 +47,6 @@ SECTIONS {
         LONG(0xdeadbeef)
     }
 
-    _stage_1_end_sectors = . / 512;
+    _stage_1_end_sectors = ((. - 0x7c00) / 512);
 
 }
