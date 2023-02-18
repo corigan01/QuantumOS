@@ -24,6 +24,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 use core::arch::asm;
+use crate::bios_println;
 use crate::cpu_regs::{EFlags, EFlagsStates, Regs16};
 
 #[repr(u8)]
@@ -65,12 +66,12 @@ impl BiosIntStatus {
         *self != BiosIntStatus::SuccessfulCommand
     }
 
-    pub fn panic_on_fail(&self) {
+    pub fn unwrap(&self) {
         if self.did_succeed() {
             return;
         }
 
-        panic!("BiosIntStatus Failed!");
+        panic!("unwrap() BiosInt Failed to execute command successfully!");
     }
 
     pub fn run_on_fail<F: Fn()>(&self, runnable: F) {
@@ -131,6 +132,34 @@ impl BiosInt {
         }
     }
 
+    pub fn read_disk_with_packet(drive_number: u8, disk_packet: *mut u8) -> Self {
+        let mut regs = Regs16::new();
+
+        regs.dx = drive_number as u16;
+        regs.si = disk_packet as u16;
+
+        Self {
+            interrupt_number: 0x13,
+            command: 0x42,
+            flags: regs,
+            ..Self::blank()
+        }
+    }
+
+    pub fn write_disk_with_packet(drive_number: u8, disk_packet: *mut u8) -> Self {
+        let mut regs = Regs16::new();
+
+        regs.dx = drive_number as u16;
+        regs.si = disk_packet as u16;
+
+        Self {
+            interrupt_number: 0x13,
+            command: 0x43,
+            flags: regs,
+            ..Self::blank()
+        }
+    }
+
     unsafe fn x10_int_dispatcher(&self) -> u8 {
         let res;
 
@@ -148,12 +177,33 @@ impl BiosInt {
         res
     }
 
+    unsafe fn x13_int_dispatcher(&self) -> u8 {
+        let res;
+
+        asm!(
+            "push si",
+            "mov si, {x:x}",
+            "int 0x13",
+            "pop si",
+            x = in(reg) self.flags.si,
+            inout("ah") self.command => res,
+            in("dx") self.flags.dx,
+            clobber_abi("system")
+        );
+        bios_println!("Res = 0x{:X}", res);
+
+
+        res
+    }
+
     pub unsafe fn execute_interrupt(&self) -> BiosIntStatus {
         let res = match self.interrupt_number {
             0x10 => self.x10_int_dispatcher(),
+            0x13 => self.x13_int_dispatcher(),
 
             _ => BiosIntStatus::InvalidCommand as u8,
         };
+
 
         /*let eflags = EFlags::new();
 
@@ -166,6 +216,9 @@ impl BiosInt {
         }
         if res == 0x86 {
             return BiosIntStatus::UnsupportedFunction;
+        }
+        if res == 1 {
+            return BiosIntStatus::CommandFailed;
         }
 
         BiosIntStatus::SuccessfulCommand

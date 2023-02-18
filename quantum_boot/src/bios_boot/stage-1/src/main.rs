@@ -28,6 +28,8 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 use core::panic::PanicInfo;
 use core::arch::{asm, global_asm};
+use stage_1::bios_disk::BiosDisk;
+
 use stage_1::bios_println;
 use stage_1::bios_video::BiosTextMode;
 use stage_1::console::GlobalPrint;
@@ -38,17 +40,25 @@ global_asm!(include_str!("init.s"));
 
 
 #[no_mangle]
-extern "C" fn bit16_entry() {
-    let disk: u16 = 0;
+extern "C" fn bit16_entry(disk_number: u16) {
 
-    enter_rust(disk);
+    enter_rust(disk_number);
     panic!("Stage should not return!");
 }
+
+
 fn enter_rust(disk: u16) {
-    bios_println!("Your mom!");
+    let boot_disk = BiosDisk::new(disk as u8);
 
     bios_println!("\nVBE INFO = {:#?}", BasicVesaInfo::new());
+    bios_println!("DiskID = 0x{:X}", disk);
 
+    unsafe { boot_disk.read_from_disk(0x7c00 as *mut u8, 0..1); }
+
+    bios_println!("Read bootsector 0x{:02X}", unsafe { *(0x7c00 as *mut u8) } );
+
+
+    loop {};
 }
 
 

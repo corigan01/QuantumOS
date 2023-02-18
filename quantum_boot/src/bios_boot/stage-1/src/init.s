@@ -44,6 +44,7 @@ begin:
     call load_legs
 
     # Finally call rust! :)
+    push dx
     call bit16_entry
 
 spin:
