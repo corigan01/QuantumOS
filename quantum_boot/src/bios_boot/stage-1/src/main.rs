@@ -28,11 +28,9 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 use core::panic::PanicInfo;
 use core::arch::{asm, global_asm};
-use stage_1::bios_disk::BiosDisk;
 
+use stage_1::bios_disk::BiosDisk;
 use stage_1::bios_println;
-use stage_1::bios_video::BiosTextMode;
-use stage_1::console::GlobalPrint;
 use stage_1::vesa::BasicVesaInfo;
 
 
@@ -55,7 +53,7 @@ fn enter_rust(disk: u16) {
 
     unsafe { boot_disk.read_from_disk(0x7c00 as *mut u8, 0..1); }
 
-    bios_println!("Read bootsector 0x{:02X}", unsafe { *(0x7c00 as *mut u8) } );
+    bios_println!("Read boot-sector 0x{:02X}", unsafe { *(0x7c00 as *mut u128) } );
 
 
     loop {};

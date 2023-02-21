@@ -68,7 +68,7 @@ include CMakeFiles/run.dir/progress.make
 
 CMakeFiles/run:
 	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --blue --bold --progress-dir=/home/corigan01/CLionProjects/quantum_os/quantum_boot/src/bios_boot/stage-1/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_1) QEMU
-	qemu-system-i386 -d cpu_reset --no-shutdown -drive format=raw,file=/home/corigan01/CLionProjects/quantum_os/quantum_boot/src/bios_boot/stage-1/target/i386-quantum_loader/release/stage-1
+	qemu-system-i386 -d cpu_reset -d int --no-shutdown -drive format=raw,file=/home/corigan01/CLionProjects/quantum_os/quantum_boot/src/bios_boot/stage-1/target/i386-quantum_loader/release/stage-1
 
 run: CMakeFiles/run
 run: CMakeFiles/run.dir/build.make

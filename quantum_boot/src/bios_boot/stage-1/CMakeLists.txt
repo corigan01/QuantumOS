@@ -16,7 +16,7 @@ add_custom_target(flat-stage-1
 )
 
 add_custom_target(run USES_TERMINAL
-        COMMAND qemu-system-i386 -d cpu_reset --no-shutdown -drive format=raw,file=${CMAKE_CURRENT_LIST_DIR}/target/i386-quantum_loader/release/stage-1
+        COMMAND qemu-system-i386 -d cpu_reset -d int --no-shutdown -drive format=raw,file=${CMAKE_CURRENT_LIST_DIR}/target/i386-quantum_loader/release/stage-1
         COMMENT Running QEMU
         DEPENDS flat-stage-1
         )
