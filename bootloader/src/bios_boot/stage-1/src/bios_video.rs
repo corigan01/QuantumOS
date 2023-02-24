@@ -103,7 +103,8 @@ macro_rules! bios_print {
 #[macro_export]
 macro_rules! bios_println {
     () => ($crate::bios_print!("\n"));
-    ($fmt:expr) => ($crate::bios_print!(concat!($fmt, "\n")));
-    ($fmt:expr, $($arg:tt)*) => ($crate::bios_print!(
-        concat!($fmt, "\n"), $($arg)*));
+    ($($arg:tt)*) => {
+        $crate::bios_video::_print(format_args!($($arg)*));
+        $crate::bios_print!("\n");
+    }
 }

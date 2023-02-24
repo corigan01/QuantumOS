@@ -11,7 +11,3 @@ lto = true
 codegen-units = 1
 debug = false
 overflow-checks = false
-
-
-[build-dependencies]
-nasm-rs = "0.2.4"

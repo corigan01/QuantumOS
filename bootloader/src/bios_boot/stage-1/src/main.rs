@@ -57,7 +57,6 @@ fn enter_rust(disk: u16) {
         bios_print!("{:x}", unsafe {*((tmp_buf.as_mut_ptr() as u32 + i) as *mut u8)});
     }
 
-
     loop {};
 }
 

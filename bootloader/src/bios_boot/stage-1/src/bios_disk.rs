@@ -52,12 +52,16 @@ impl DiskAccessPacket {
     }
 
     unsafe fn read(&mut self, disk_id: u8) {
-        BiosInt::read_disk_with_packet(disk_id, self as *mut Self as *mut u8)
+        BiosInt::read_disk_with_packet(
+            disk_id,
+            self as *mut Self as *mut u8)
             .execute_interrupt().unwrap();
     }
 
     unsafe fn write(&mut self, disk_id: u8) {
-        BiosInt::write_disk_with_packet(disk_id, self as *mut Self as *mut u8)
+        BiosInt::write_disk_with_packet(
+            disk_id,
+            self as *mut Self as *mut u8)
             .execute_interrupt().unwrap();
     }
 
