@@ -1,0 +1,9 @@
+{
+    "configurations": [
+        {
+            "type": "cargo",
+            "name": "RUN",
+            "cargoArgs": ["krun"],
+        },
+    ]
+}

@@ -31,3 +31,6 @@ pub mod bios_video;
 pub mod bios_ints;
 pub mod console;
 pub mod vesa;
+pub mod bios_disk;
+pub mod fat;
+

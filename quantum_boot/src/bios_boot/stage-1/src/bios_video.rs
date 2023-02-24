@@ -26,7 +26,6 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 
 use core::fmt;
-use core::fmt::Write;
 use crate::bios_ints::{BiosInt, TextModeColor};
 use crate::console::{GlobalPrint};
 

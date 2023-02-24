@@ -24,9 +24,6 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 */
 
-use crate::bios_ints::TextModeColor;
-use crate::bios_ints::BiosInt;
-
 pub trait GlobalPrint {
     fn print_str(str: &str);
     fn print_bytes(bytes: &[u8]);

@@ -24,10 +24,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 */
 
-use core::arch::asm;
 use crate::bios_ints::BiosInt;
-
-
 
 #[repr(packed, C)]
 #[derive(Debug)]
