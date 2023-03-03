@@ -25,7 +25,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 use core::arch::asm;
 use crate::bios_println;
-use crate::cpu_regs::{EFlags, EFlagsStates, Regs16};
+use crate::cpu_regs::{Regs16};
 
 #[repr(u8)]
 #[derive(Copy, Clone)]
@@ -190,8 +190,6 @@ impl BiosInt {
             in("dx") self.flags.dx,
             clobber_abi("system")
         );
-        bios_println!("Res = 0x{:X}", res);
-
 
         res
     }
@@ -201,27 +199,16 @@ impl BiosInt {
             0x10 => self.x10_int_dispatcher(),
             0x13 => self.x13_int_dispatcher(),
 
-            _ => BiosIntStatus::InvalidCommand as u8,
+            _ => panic!("TODO: Not implemented bios int called!"),
         };
 
+        match res {
+            0x80 => BiosIntStatus::InvalidCommand,
+            0x86 => BiosIntStatus::UnsupportedFunction,
+            0x01 => BiosIntStatus::CommandFailed,
 
-        /*let eflags = EFlags::new();
-
-        if eflags.check_flag_status(EFlagsStates::Carry) {
-            return BiosIntStatus::CommandFailed;
-        }*/
-
-        if res == 0x80 {
-            return BiosIntStatus::InvalidCommand;
+            _    => BiosIntStatus::SuccessfulCommand
         }
-        if res == 0x86 {
-            return BiosIntStatus::UnsupportedFunction;
-        }
-        if res == 1 {
-            return BiosIntStatus::CommandFailed;
-        }
-
-        BiosIntStatus::SuccessfulCommand
     }
 
 

@@ -33,4 +33,5 @@ pub mod console;
 pub mod vesa;
 pub mod bios_disk;
 pub mod fat;
+pub mod mbr;
 

@@ -31,8 +31,6 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #![feature(abi_x86_interrupt)]
 #![test_runner(quantum_os::test_handler::test_runner)]
 
-
-
 //mod vga;
 use owo_colors::OwoColorize;
 use bootloader::boot_info::{BootInfo, MemoryRegionKind};
@@ -110,7 +108,6 @@ fn main(boot_info: &'static mut BootInfo) -> ! {
     else {
         debug_println!("{}", "FAIL".bright_red().bold());
     }
-
 
 
     // init the cpu

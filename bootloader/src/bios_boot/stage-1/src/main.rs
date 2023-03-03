@@ -27,35 +27,42 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #![no_std]
 
 use core::panic::PanicInfo;
-use core::arch::{asm, global_asm};
+use core::arch::{global_asm};
 
 use stage_1::bios_disk::BiosDisk;
 use stage_1::{bios_print, bios_println};
+use stage_1::bios_ints::{BiosInt, TextModeColor};
+use stage_1::fat::FAT;
+use stage_1::mbr::{MasterBootRecord, PartitionEntry};
 use stage_1::vesa::BasicVesaInfo;
 
 global_asm!(include_str!("init.s"));
 
 #[no_mangle]
 extern "C" fn bit16_entry(disk_number: u16) {
-
     enter_rust(disk_number);
     panic!("Stage should not return!");
 }
 
 
 fn enter_rust(disk: u16) {
-    let mut tmp_buf = [0_u8; 512];
-    let boot_disk = BiosDisk::new(disk as u8);
+    bios_println!("\n --- Quantum Boot loader 16 ---\n");
 
-    bios_println!("\nVBE INFO = {:#?}", BasicVesaInfo::new());
-    bios_println!("DiskID = 0x{:X}", disk);
+    let mbr = unsafe { MasterBootRecord::read_from_disk(disk as u8) };
 
-    unsafe { boot_disk.read_from_disk(tmp_buf.as_mut_ptr(), 0..1); }
+    bios_println!("Found {} partitions on boot disk {:x}!", mbr.total_valid_partitions(), disk);
 
-    bios_println!("Read boot-sector:");
-    for i in 0..512 {
-        bios_print!("{:x}", unsafe {*((tmp_buf.as_mut_ptr() as u32 + i) as *mut u8)});
+    if let Some(entry_id) = mbr.get_bootable_partition() {
+        bios_println!("Partition {:?} is bootable and has partition type of {:x?}",
+            entry_id, mbr.get_partition_entry(entry_id).get_partition_type());
+
+    } else {
+        bios_println!(" | Could not find valid partition!");
+        panic!("No bootable partitions found, I dont know how we even booted!");
     }
+
+    let fat = FAT::new_from_disk(disk as u8)
+        .expect("TODO: Implement more bootable filesystems!");
 
     loop {};
 }
@@ -63,9 +70,7 @@ fn enter_rust(disk: u16) {
 
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
-    bios_println!("PANIC: {:#?}", info);
-
-
+    bios_println!("{}", info);
 
     loop {}
 }

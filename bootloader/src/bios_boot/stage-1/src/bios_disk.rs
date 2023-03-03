@@ -23,10 +23,10 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use core::arch::asm;
-use core::ops::{Range, RangeBounds};
+
+use core::ops::{Range};
 use crate::bios_ints::BiosInt;
-use crate::bios_println;
+
 
 #[repr(packed(2), C)]
 #[derive(Debug)]
