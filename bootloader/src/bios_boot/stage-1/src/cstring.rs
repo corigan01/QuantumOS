@@ -27,12 +27,37 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 use core::fmt;
 use core::fmt::Formatter;
 
-pub struct CString<'a> {
+pub struct CStringOwned {
+    owned_data_ptr: *const u8,
+    len: usize
+}
+
+impl CStringOwned {
+    pub unsafe fn from_ptr(bytes: *const u8, len: usize) -> Self {
+        Self {
+            owned_data_ptr: bytes,
+            len
+        }
+    }
+}
+
+impl Default for CStringOwned {
+    fn default() -> Self {
+        Self {
+            owned_data_ptr: &[0u8; 0] as *const u8,
+            len: 0
+        }
+    }
+}
+
+#[derive(Copy, Clone)]
+pub struct CStringRef<'a> {
     contents: &'a[u8],
     len: usize
 }
 
-impl<'a> CString<'a> {
+impl<'a> CStringRef<'a> {
+
     pub fn from_bytes(bytes: &'a[u8]) -> Self {
         Self {
             contents: bytes,
@@ -61,10 +86,21 @@ impl<'a> CString<'a> {
     }
 }
 
-impl<'a> fmt::Display for CString<'a> {
+impl<'a> fmt::Display for CStringRef<'a> {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         for i in self.contents {
             write!(f, "{}", *i as char)?;
+        }
+
+        Ok(())
+    }
+}
+
+impl fmt::Display for CStringOwned {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        for i in 0..self.len {
+            let data = unsafe { *self.owned_data_ptr.add(i) };
+            write!(f, "{}", data as char)?;
         }
 
         Ok(())

@@ -25,17 +25,17 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 use crate::bios_disk::BiosDisk;
 use crate::bios_println;
-use crate::cstring::CString;
+use crate::cstring::{CStringRef, CStringOwned};
 use crate::fat::bpb::BiosParametersBlock;
 use crate::fat::fat_32::Extended32;
 use crate::mbr::{MasterBootRecord, PartitionEntry};
 
-mod fat_32;
-mod bpb;
+pub mod fat_32;
+pub mod bpb;
 
 pub trait FatExtCluster{
     fn is_valid_sig(&self) -> bool;
-    fn get_vol_string(&self) -> CString;
+    fn get_vol_string(&self) -> Option<CStringRef>;
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -53,7 +53,7 @@ pub struct FAT {
     disk: BiosDisk,
     sector_info: PartitionEntry,
     fat_type: Option<FatType>,
-    bpb: Option<BiosParametersBlock>,
+    pub bpb: Option<BiosParametersBlock>,
 }
 
 impl FAT {
@@ -71,10 +71,6 @@ impl FAT {
         self.bpb = Some(unsafe {
             *(&mut sector_temp_buffer as *mut u8 as *mut BiosParametersBlock)
         });
-    }
-
-    pub fn get_disk_label(&self) -> Option<CString> {
-        Some(unsafe { self.bpb?.get_ext_bpb::<Extended32>()? }.get_vol_name())
     }
 
     pub fn get_fat_type(&self) -> FatType {
@@ -103,6 +99,17 @@ impl FAT {
         }
 
         FatType::NotFat
+    }
+
+    pub fn get_vol_label(&self) -> Option<CStringOwned> {
+        let bpb_ref = &self.bpb?;
+        let ext_bpb = unsafe {
+            bpb_ref.get_ext_bpb::<Extended32>()?
+        };
+
+        let vol_label = &ext_bpb.vol_label;
+
+        Some(unsafe { CStringOwned::from_ptr(vol_label as *const u8, vol_label.len()) } )
     }
 
     pub fn new_from_disk(disk_id: u8) -> Option<Self> {

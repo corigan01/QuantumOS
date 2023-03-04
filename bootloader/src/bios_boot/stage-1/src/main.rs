@@ -32,7 +32,8 @@ use core::arch::{global_asm};
 use stage_1::bios_disk::BiosDisk;
 use stage_1::{bios_print, bios_println};
 use stage_1::bios_ints::{BiosInt, TextModeColor};
-use stage_1::fat::{Extended32, FAT};
+use stage_1::cstring::CStringRef;
+use stage_1::fat::{FAT, fat_32::Extended32, FatExtCluster};
 use stage_1::mbr::{MasterBootRecord, PartitionEntry};
 use stage_1::vesa::BasicVesaInfo;
 
@@ -67,7 +68,7 @@ fn enter_rust(disk: u16) {
     bios_println!("Detected {:?} type on disk {:x} -- \'{}\' ",
         fat.get_fat_type(),
         disk,
-        fat.get_disk_label().unwrap()
+        fat.get_vol_label().unwrap_or_default()
     );
 
     loop {};
