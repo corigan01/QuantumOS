@@ -21,18 +21,52 @@ NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPO
 NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
 DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
 */
 
-#![no_main]
-#![no_std]
+use core::fmt;
+use core::fmt::Formatter;
 
-pub mod cpu_regs;
-pub mod bios_video;
-pub mod bios_ints;
-pub mod console;
-pub mod vesa;
-pub mod bios_disk;
-pub mod fat;
-pub mod mbr;
-pub mod cstring;
+pub struct CString<'a> {
+    contents: &'a[u8],
+    len: usize
+}
 
+impl<'a> CString<'a> {
+    pub fn from_bytes(bytes: &'a[u8]) -> Self {
+        Self {
+            contents: bytes,
+            len: bytes.len()
+        }
+    }
+
+    pub unsafe fn from_ptr(ptr: *mut u8) -> Self {
+        let mut size = 0;
+        loop {
+            let ptr_value = *ptr.add(size);
+
+            if ptr_value == b'\0' || !ptr_value.is_ascii() {
+                break;
+            }
+
+            size += 1;
+        }
+
+        let array = core::slice::from_raw_parts(ptr, size);
+
+        Self {
+            contents: array,
+            len: size,
+        }
+    }
+}
+
+impl<'a> fmt::Display for CString<'a> {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        for i in self.contents {
+            write!(f, "{}", *i as char)?;
+        }
+
+        Ok(())
+    }
+}

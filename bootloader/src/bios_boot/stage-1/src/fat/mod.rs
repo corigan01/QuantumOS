@@ -25,34 +25,28 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 use crate::bios_disk::BiosDisk;
 use crate::bios_println;
+use crate::cstring::CString;
+use crate::fat::bpb::BiosParametersBlock;
+use crate::fat::fat_32::Extended32;
 use crate::mbr::{MasterBootRecord, PartitionEntry};
 
+mod fat_32;
+mod bpb;
+
+pub trait FatExtCluster{
+    fn is_valid_sig(&self) -> bool;
+    fn get_vol_string(&self) -> CString;
+}
+
+#[derive(Copy, Clone, Debug)]
 pub enum FatType {
     Fat16,
     Fat32,
     ExFat,
     VFat,
 
+    NotImplemented,
     NotFat
-}
-
-#[repr(C, packed)]
-#[derive(Debug, Clone, Copy)]
-pub struct BiosParametersBlock {
-    jmp_bytes: [u8; 3],
-    oem_id: u64,
-    bytes_per_sector: u16,
-    sectors_per_cluster: u8,
-    reserved_sectors: u16,
-    num_of_fats: u8,
-    root_entries: u16,
-    low_sectors: u16,
-    media_descriptor_type: u8,
-    sectors_per_fat: u16,
-    sectors_per_track: u16,
-    heads_on_media: u16,
-    hidden_sectors: u32,
-    high_sectors: u32
 }
 
 pub struct FAT {
@@ -79,21 +73,32 @@ impl FAT {
         });
     }
 
-    pub fn validate_fat(&self) -> FatType {
+    pub fn get_disk_label(&self) -> Option<CString> {
+        Some(unsafe { self.bpb?.get_ext_bpb::<Extended32>()? }.get_vol_name())
+    }
 
+    pub fn get_fat_type(&self) -> FatType {
+        self.fat_type.unwrap_or(FatType::NotFat)
+    }
+
+    pub fn validate_fat(&self) -> FatType {
         // FIXME: make a better fat checker
         if let Some(bpb) = &self.bpb {
 
             // check if we understand this bpb (checking if this partition is fat)
-            if  bpb.jmp_bytes[0] != 0xeb        ||
-                bpb.bytes_per_sector != 512     ||
-                bpb.oem_id == 0x00              ||
-                bpb.media_descriptor_type == 0  ||
-                !( bpb.low_sectors == 0 && bpb.high_sectors > 0 || bpb.low_sectors > 0)
-            {
+            if !bpb.validate_fat() {
                 return FatType::NotFat;
             }
 
+            let fat_32_test = unsafe { bpb.get_ext_bpb::<Extended32>() };
+            if let Some(fat32) = fat_32_test {
+                if fat32.is_valid_sig() {
+                    return FatType::Fat32;
+                }
+            }
+
+            // TODO: Implement more fat filesystem types
+            return FatType::NotImplemented;
 
         }
 
@@ -115,12 +120,15 @@ impl FAT {
         };
 
         data.populate_bpb();
+        let fat_type = data.validate_fat();
+        data.fat_type = Some(fat_type);
 
-        bios_println!("\n{:#x?}", &data.bpb);
+        match fat_type {
+            FatType::Fat32 => Some(data),
+            FatType::NotFat => None,
 
-        data.validate_fat();
-
-        None
+            _ => None // TODO: Unsupported fat type
+        }
     }
 
 }

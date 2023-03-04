@@ -23,16 +23,50 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-#![no_main]
-#![no_std]
+use crate::fat::FatExtCluster;
 
-pub mod cpu_regs;
-pub mod bios_video;
-pub mod bios_ints;
-pub mod console;
-pub mod vesa;
-pub mod bios_disk;
-pub mod fat;
-pub mod mbr;
-pub mod cstring;
+#[repr(C, packed)]
+#[derive(Debug, Clone, Copy)]
+pub struct BiosParametersBlock {
+    pub jmp_bytes: [u8; 3],
+    pub oem_id: u64,
+    pub bytes_per_sector: u16,
+    pub sectors_per_cluster: u8,
+    pub reserved_sectors: u16,
+    pub num_of_fats: u8,
+    pub root_entries: u16,
+    pub low_sectors: u16,
+    pub media_descriptor_type: u8,
+    pub sectors_per_fat: u16,
+    pub sectors_per_track: u16,
+    pub heads_on_media: u16,
+    pub hidden_sectors: u32,
+    pub high_sectors: u32,
+    ex_block: [u8; 54],
+}
 
+impl BiosParametersBlock {
+    pub fn validate_fat(&self) -> bool {
+            self.jmp_bytes[0] == 0xeb        &&
+            self.bytes_per_sector == 512     &&
+            self.oem_id != 0x00              &&
+            self.media_descriptor_type != 0  &&
+            ((self.low_sectors == 0 && self.high_sectors > 0) || self.low_sectors > 0)
+    }
+
+    pub unsafe fn get_ext_bpb<T>(&self) -> Option<&T>
+        where T: FatExtCluster
+    {
+        let data = unsafe {
+            &*(&self.ex_block as *const u8 as *const T)
+        };
+
+        if !data.is_valid_sig() {
+            return None
+        }
+
+        return Some(data);
+
+        None
+    }
+}

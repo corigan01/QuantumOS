@@ -32,7 +32,7 @@ use core::arch::{global_asm};
 use stage_1::bios_disk::BiosDisk;
 use stage_1::{bios_print, bios_println};
 use stage_1::bios_ints::{BiosInt, TextModeColor};
-use stage_1::fat::FAT;
+use stage_1::fat::{Extended32, FAT};
 use stage_1::mbr::{MasterBootRecord, PartitionEntry};
 use stage_1::vesa::BasicVesaInfo;
 
@@ -62,7 +62,13 @@ fn enter_rust(disk: u16) {
     }
 
     let fat = FAT::new_from_disk(disk as u8)
-        .expect("TODO: Implement more bootable filesystems!");
+        .expect("No valid bootable partitions with FAT32 found!");
+
+    bios_println!("Detected {:?} type on disk {:x} -- \'{}\' ",
+        fat.get_fat_type(),
+        disk,
+        fat.get_disk_label().unwrap()
+    );
 
     loop {};
 }
