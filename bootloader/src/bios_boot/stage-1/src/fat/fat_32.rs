@@ -35,7 +35,7 @@ pub struct Extended32 {
     pub root_cluster_number: u32,
     pub fs_info_structure: u16,
     pub backup_boot_sector: u16,
-    pub reserved: [u8; 12],
+    reserved: [u8; 12],
     pub drive_number: u8,
     pub win_nt_flags: u8,
     pub signature: u8,
@@ -45,6 +45,7 @@ pub struct Extended32 {
 }
 
 impl Extended32 {
+
 }
 
 impl FatExtCluster for Extended32 {
@@ -58,21 +59,21 @@ impl FatExtCluster for Extended32 {
 }
 
 
-#[repr(C, packed)]
+#[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub struct DirectoryEntry32 {
-    file_name: [u8; 8],
-    file_extension: [u8; 3],
-    file_attributes: u8,
+    pub file_name: [u8; 8],
+    pub file_extension: [u8; 3],
+    pub file_attributes: u8,
     reserved_win_nt: u8,
-    creation_time_tens_of_second: u8,
-    creation_time: u16,
-    creation_date: u16,
-    last_accessed_byte: u16,
-    high_entry_bytes: u16,
-    modification_time: u16,
-    modification_date: u16,
-    low_entry_bytes: u16,
-    file_bytes: u32
+    pub creation_time_tens_of_second: u8,
+    pub creation_time: u16,
+    pub creation_date: u16,
+    pub last_accessed_byte: u16,
+    pub high_entry_bytes: u16,
+    pub modification_time: u16,
+    pub modification_date: u16,
+    pub low_entry_bytes: u16,
+    pub file_bytes: u32
 }
 

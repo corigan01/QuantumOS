@@ -59,7 +59,11 @@ impl BiosTextMode {
                 b'\n' => unsafe { self.print_int_char(0xd); self.print_int_char(0xa); },
                 c if c.is_ascii() => unsafe { self.print_int_char(c); },
 
-                _ => unsafe { self.print_int_char(b'?'); }
+                _ =>  {
+                    unsafe { self.print_int_char(b'?') };
+
+                    break;
+                }
             }
         }
     }

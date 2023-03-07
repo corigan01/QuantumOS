@@ -71,6 +71,10 @@ fn enter_rust(disk: u16) {
         fat.get_vol_label().unwrap_or_default()
     );
 
+    bios_println!("Root {:#?}",
+        fat.read_root_dir()
+    );
+
     loop {};
 }
 

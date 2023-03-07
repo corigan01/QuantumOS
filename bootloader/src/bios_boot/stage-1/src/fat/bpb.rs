@@ -43,6 +43,7 @@ pub struct BiosParametersBlock {
     pub heads_on_media: u16,
     pub hidden_sectors: u32,
     pub high_sectors: u32,
+
     ex_block: [u8; 54],
 }
 

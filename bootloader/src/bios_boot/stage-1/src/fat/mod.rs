@@ -24,10 +24,10 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 use crate::bios_disk::BiosDisk;
-use crate::bios_println;
+use crate::{bios_print, bios_println};
 use crate::cstring::{CStringRef, CStringOwned};
 use crate::fat::bpb::BiosParametersBlock;
-use crate::fat::fat_32::Extended32;
+use crate::fat::fat_32::{DirectoryEntry32, Extended32};
 use crate::mbr::{MasterBootRecord, PartitionEntry};
 
 pub mod fat_32;
@@ -53,7 +53,7 @@ pub struct FAT {
     disk: BiosDisk,
     sector_info: PartitionEntry,
     fat_type: Option<FatType>,
-    pub bpb: Option<BiosParametersBlock>,
+    bpb: Option<BiosParametersBlock>,
 }
 
 impl FAT {
@@ -75,6 +75,38 @@ impl FAT {
 
     pub fn get_fat_type(&self) -> FatType {
         self.fat_type.unwrap_or(FatType::NotFat)
+    }
+
+    pub fn get_root_cluster_number(&self) -> Option<usize> {
+        Some(match self.fat_type? {
+                FatType::Fat32 => unsafe { self.bpb?.get_ext_bpb::<Extended32>()? }.root_cluster_number as usize,
+                _ => return None
+        })
+    }
+
+    pub unsafe fn get_fat_table_sector(&self, sector_offset: usize) -> Option<[u32; 128]> {
+        let sector = sector_offset +
+            self.bpb?.reserved_sectors as usize +
+            self.sector_info.get_sector_start();
+
+        let mut sector_tmp = [0u32; 128];
+        unsafe {
+            self.disk.read_from_disk(&mut sector_tmp as *mut u32 as *mut u8,
+                                     (sector as u16)..(sector as u16 + 1) );
+        };
+
+        Some(sector_tmp)
+    }
+
+    pub fn read_root_dir(&self) -> Option<DirectoryEntry32>{
+        let fat_table_zero = unsafe { self.get_fat_table_sector(0)? };
+        let cluster_number = fat_table_zero[self.get_root_cluster_number()?];
+
+        bios_println!("Cluster number {:x?}", cluster_number);
+
+
+
+        None
     }
 
     pub fn validate_fat(&self) -> FatType {
@@ -103,11 +135,12 @@ impl FAT {
 
     pub fn get_vol_label(&self) -> Option<CStringOwned> {
         let bpb_ref = &self.bpb?;
-        let ext_bpb = unsafe {
-            bpb_ref.get_ext_bpb::<Extended32>()?
-        };
 
-        let vol_label = &ext_bpb.vol_label;
+        let vol_label = match self.fat_type? {
+            FatType::Fat32 => &unsafe { bpb_ref.get_ext_bpb::<Extended32>()? }.vol_label,
+
+            _ => return None,
+        };
 
         Some(unsafe { CStringOwned::from_ptr(vol_label as *const u8, vol_label.len()) } )
     }
@@ -127,12 +160,12 @@ impl FAT {
         };
 
         data.populate_bpb();
+
         let fat_type = data.validate_fat();
         data.fat_type = Some(fat_type);
 
         match fat_type {
             FatType::Fat32 => Some(data),
-            FatType::NotFat => None,
 
             _ => None // TODO: Unsupported fat type
         }

@@ -33,6 +33,9 @@ mkdir fs/boot
 mkdir fs/root
 
 sudo mount /dev/loop0p1 fs/boot
-sudo mount /dev/loop0p2 fs/root
+#sudo mount /dev/loop0p2 fs/root
+
+sudo touch myfile.txt fs/boot
+sudo dd if=/dev/random of=fs/boot/myfile.txt count=10 bs=10
 
 
