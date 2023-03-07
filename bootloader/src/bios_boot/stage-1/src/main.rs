@@ -75,6 +75,8 @@ fn enter_rust(disk: u16) {
         fat.read_root_dir()
     );
 
+
+
     loop {};
 }
 

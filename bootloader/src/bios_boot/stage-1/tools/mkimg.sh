@@ -1,6 +1,6 @@
 #!/bin/bash
 
-sh rmimg.sh
+sudo sh rmimg.sh
 
 dd if=/dev/zero of=disk.img bs=512 count=1048510
 

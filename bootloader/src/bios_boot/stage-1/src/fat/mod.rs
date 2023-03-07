@@ -84,10 +84,66 @@ impl FAT {
         })
     }
 
+    pub fn get_first_fat_sector(&self) -> Option<usize> {
+        Some(
+            (self.bpb?.reserved_sectors as usize) + (self.sector_info.get_sector_start() as usize)
+        )
+    }
+
+    pub fn get_fat_size(&self) -> Option<usize> {
+        match self.fat_type? {
+            FatType::Fat32 =>
+                Some(
+                    unsafe { self.bpb?.get_ext_bpb::<Extended32>()? }
+                        .sectors_per_fat as usize
+                ),
+
+            _ => None
+        }
+    }
+
+    pub fn get_total_sectors(&self) -> Option<usize> {
+        if self.bpb?.low_sectors == 0 {
+            Some(
+                self.bpb?.high_sectors as usize
+            )
+        } else {
+            Some(
+                self.bpb?.low_sectors as usize
+            )
+        }
+    }
+
+    pub fn get_data_sector_count(&self) -> Option<usize> {
+        let table_sectors =
+            (self.bpb?.reserved_sectors as usize * self.get_fat_size()?)
+                + self.get_root_dir_sector_count()?;
+        let s_count = self.bpb?.reserved_sectors as usize + table_sectors;
+
+        Some(
+            self.get_total_sectors()? - s_count
+        )
+    }
+
+    pub fn get_root_dir_sector_count(&self) -> Option<usize> {
+        Some(
+            (((self.bpb?.root_entries * 32) + (self.bpb?.bytes_per_sector - 1)) /
+                (self.bpb?.bytes_per_sector)) as usize
+        )
+    }
+
+    pub fn get_first_data_sector(&self) -> Option<usize> {
+        let number_of_fat = self.bpb?.num_of_fats as usize;
+        let fat_size = self.get_fat_size()?;
+        let root_dir_sectors = self.get_root_dir_sector_count()?;
+
+        Some(
+            (number_of_fat * fat_size) + root_dir_sectors
+        )
+    }
+
     pub unsafe fn get_fat_table_sector(&self, sector_offset: usize) -> Option<[u32; 128]> {
-        let sector = sector_offset +
-            self.bpb?.reserved_sectors as usize +
-            self.sector_info.get_sector_start();
+        let sector = sector_offset + self.get_first_fat_sector()?;
 
         let mut sector_tmp = [0u32; 128];
         unsafe {
@@ -98,13 +154,25 @@ impl FAT {
         Some(sector_tmp)
     }
 
+    pub fn get_first_sector_of_cluster(&self, cluster: usize) -> Option<usize> {
+        let rel_cluster = cluster - 2;
+
+        Some(
+            (self.bpb?.sectors_per_cluster as usize * rel_cluster) + self.get_first_data_sector()?
+        )
+    }
+
     pub fn read_root_dir(&self) -> Option<DirectoryEntry32>{
-        let fat_table_zero = unsafe { self.get_fat_table_sector(0)? };
-        let cluster_number = fat_table_zero[self.get_root_cluster_number()?];
+        let root_cluster_number = self.get_root_cluster_number()?;
+        let root_sector = self.get_first_sector_of_cluster(root_cluster_number)?;
 
-        bios_println!("Cluster number {:x?}", cluster_number);
+        let mut sector_tmp = [0u8; 512];
+        unsafe {
+            self.disk.read_from_disk(&mut sector_tmp as *mut u8,
+                                     (root_sector as u16)..(root_sector as u16 + 1) );
+        };
 
-
+        bios_println!("test: {:?}",  sector_tmp);
 
         None
     }
