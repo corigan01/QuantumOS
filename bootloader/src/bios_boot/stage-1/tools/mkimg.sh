@@ -4,7 +4,9 @@ sudo sh rmimg.sh
 
 dd if=/dev/zero of=disk.img bs=512 count=1048510
 
-sed -e 's/\s*\([\+0-9a-zA-Z]*\).*/\1/' << EOF | sudo fdisk disk.img
+chmod 777 disk.img
+
+sed -e 's/\s*\([\+0-9a-zA-Z]*\).*/\1/' << EOF | fdisk disk.img
   o     # clear the in memory partition table
   n     # new partition
   p     # primary partition
@@ -24,18 +26,23 @@ sed -e 's/\s*\([\+0-9a-zA-Z]*\).*/\1/' << EOF | sudo fdisk disk.img
 EOF
 
 sudo losetup -P --show -v /dev/loop0 disk.img
+sudo chmod 777 /dev/loop0*
 
-sudo mkfs.fat -F 32 /dev/loop0p1
+sudo mkdosfs /dev/loop0p1
 sudo mkfs.ext2 /dev/loop0p2
 
 mkdir fs
 mkdir fs/boot
 mkdir fs/root
+mkdir "fs/boot/DISK NOT MOUNTED"
+mkdir "fs/root/DISK NOT MOUNTED"
 
 sudo mount /dev/loop0p1 fs/boot
-#sudo mount /dev/loop0p2 fs/root
+sudo mount -text2 /dev/loop0p2 fs/root
 
 sudo touch myfile.txt fs/boot
 sudo dd if=/dev/random of=fs/boot/myfile.txt count=10 bs=10
 
+sudo mkdir fs/boot/test
+echo "Hello World!" | sudo tee fs/boot/test/testFile.txt
 

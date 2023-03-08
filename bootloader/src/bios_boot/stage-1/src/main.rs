@@ -63,16 +63,17 @@ fn enter_rust(disk: u16) {
     }
 
     let fat = FAT::new_from_disk(disk as u8)
-        .expect("No valid bootable partitions with FAT32 found!");
+        .expect("No valid bootable partitions with supported fat version found!");
 
-    bios_println!("Detected {:?} type on disk {:x} -- \'{}\' ",
+    bios_println!("Detected {:?} type on disk {:x} -- \'{}\' ({} kb) ",
         fat.get_fat_type(),
         disk,
-        fat.get_vol_label().unwrap_or_default()
+        fat.get_vol_label().unwrap_or_default(),
+        fat.get_total_sectors().unwrap_or(0) / 2
     );
 
     bios_println!("Root {:#?}",
-        fat.read_root_dir()
+        fat.print_root_entries()
     );
 
 

@@ -37,7 +37,7 @@ pub struct Extended32 {
     pub backup_boot_sector: u16,
     reserved: [u8; 12],
     pub drive_number: u8,
-    pub win_nt_flags: u8,
+    win_nt_flags: u8,
     pub signature: u8,
     pub vol_id: u32,
     pub vol_label: [u8; 11],
@@ -56,24 +56,5 @@ impl FatExtCluster for Extended32 {
     fn get_vol_string(&self) -> Option<CStringRef> {
         Some(CStringRef::from_bytes(&self.vol_label))
     }
-}
-
-
-#[repr(C)]
-#[derive(Debug, Clone, Copy)]
-pub struct DirectoryEntry32 {
-    pub file_name: [u8; 8],
-    pub file_extension: [u8; 3],
-    pub file_attributes: u8,
-    reserved_win_nt: u8,
-    pub creation_time_tens_of_second: u8,
-    pub creation_time: u16,
-    pub creation_date: u16,
-    pub last_accessed_byte: u16,
-    pub high_entry_bytes: u16,
-    pub modification_time: u16,
-    pub modification_date: u16,
-    pub low_entry_bytes: u16,
-    pub file_bytes: u32
 }
 

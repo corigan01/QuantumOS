@@ -23,60 +23,30 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+
 use crate::cstring::CStringRef;
 use crate::fat::FatExtCluster;
 
 #[repr(C, packed)]
-#[derive(Debug, Clone, Copy)]
-pub struct BiosParametersBlock {
-    pub jmp_bytes: [u8; 3],
-    pub oem_id: u64,
-    pub bytes_per_sector: u16,
-    pub sectors_per_cluster: u8,
-    pub reserved_sectors: u16,
-    pub num_of_fats: u8,
-    pub root_entries: u16,
-    pub low_sectors: u16,
-    pub media_descriptor_type: u8,
-    pub sectors_per_fat: u16,
-    sectors_per_track: u16,
-    heads_on_media: u16,
-    pub hidden_sectors: u32,
-    pub high_sectors: u32,
-
-    ex_block: [u8; 54],
+#[derive(Copy, Clone, Debug)]
+pub struct Extended16 {
+    pub drive_number: u8,
+    win_nt_flags: u8,
+    pub signature: u8,
+    pub vol_id: u32,
+    pub vol_label: [u8; 11],
+    pub sys_id_str: [u8; 8]
 }
 
-impl BiosParametersBlock {
-    pub fn validate_fat(&self) -> bool {
-            self.jmp_bytes[0] == 0xeb        &&
-            self.bytes_per_sector == 512     &&
-            self.oem_id != 0x00              &&
-            self.media_descriptor_type != 0  &&
-            ((self.low_sectors == 0 && self.high_sectors > 0) || self.low_sectors > 0)
+impl FatExtCluster for Extended16 {
+    fn is_valid_sig(&self) -> bool {
+        self.signature == 0x28 || self.signature == 0x29
     }
 
-    pub fn check_ext_bpb<T>(&self) -> bool
-        where T: FatExtCluster
-    {
-        let data = unsafe {
-            self.get_ext_bpb::<T>()
-        };
-
-        return data.is_some()
-    }
-
-    pub unsafe fn get_ext_bpb<T>(&self) -> Option<&T>
-        where T: FatExtCluster
-    {
-        let data = unsafe {
-            &*(&self.ex_block as *const u8 as *const T)
-        };
-
-        if !data.is_valid_sig() {
-            return None
-        }
-
-        return Some(data);
+    fn get_vol_string(&self) -> Option<CStringRef> {
+        Some(
+            CStringRef::from_bytes(&self.vol_label)
+        )
     }
 }
+
