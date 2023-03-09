@@ -193,7 +193,8 @@ impl FAT {
 
     pub fn get_root_dir_sector(&self) -> Option<usize> {
         let root_cluster_number = self.get_root_cluster_number()?;
-        let cluster_offset = self.get_first_sector_of_cluster(root_cluster_number)?;
+        let cluster_offset = self.get_first_sector_of_cluster(root_cluster_number - 2)? -
+            self.get_root_dir_sector_count()?;
 
 
         Some(cluster_offset)
@@ -221,10 +222,11 @@ impl FAT {
                 &*(root_data.as_ptr().add(i * 32) as *const DirectoryEntry)
             };
 
-            if dir_entry.modification_date == 0 { break; }
+            if dir_entry.modification_date == 0 { continue; }
 
-            bios_println!("{}.{}",
+            bios_println!("{}{}{}",
                 CStringRef::from_bytes(&dir_entry.file_name),
+                if dir_entry.file_extension[0] != 0 && dir_entry.file_extension[0] != 0x20 { '.' } else { ' ' },
                 CStringRef::from_bytes(&dir_entry.file_extension)
             );
         }
