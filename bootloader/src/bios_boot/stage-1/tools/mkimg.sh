@@ -45,6 +45,3 @@ sudo dd if=/dev/random of=fs/boot/myfile.txt count=10 bs=10
 
 sudo mkdir fs/boot/test
 echo "Hello World!" | sudo tee fs/boot/test/testFile.txt
-
-sudo mkdir fs/boot/test/bin
-sudo cp /bin/* fs/boot/test/bin/

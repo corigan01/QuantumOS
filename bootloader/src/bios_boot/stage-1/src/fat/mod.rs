@@ -117,7 +117,7 @@ impl FAT {
 
     pub fn get_first_fat_sector(&self) -> Option<usize> {
         Some(
-            (self.bpb?.reserved_sectors as usize) + (self.sector_info.get_sector_start() as usize)
+            (self.bpb?.reserved_sectors as usize)
         )
     }
 
@@ -174,7 +174,7 @@ impl FAT {
     }
 
     pub unsafe fn get_fat_table(&self, sector_offset: usize) -> Option<[u32; 128]> {
-        let sector = sector_offset + self.get_first_fat_sector()?;
+        let sector = sector_offset + self.get_first_fat_sector()? + self.sector_info.get_sector_start();
 
         let mut sector_tmp = [0u32; 128];
         unsafe {
@@ -214,12 +214,28 @@ impl FAT {
     }
 
     pub fn print_root_entries(&self) -> Option<()> {
-        let get_root_cluster = self.get_root_cluster_number()?;
-        let root_data = self.read_data_cluster(get_root_cluster)?;
+        let mut fat_size = (self.get_fat_size()? * 2) / 512;
+
+        if fat_size == 0 {
+            fat_size = 1;
+        }
+
+        let fat_offset = self.get_first_fat_sector()?;
+        let first_root_sector = fat_offset + fat_size + self.sector_info.get_sector_start();
+
+        let mut sector_tmp = [0u8; 512];
+
+        unsafe {
+            self.disk.read_from_disk(sector_tmp.as_mut_ptr(),
+                first_root_sector as u16..(first_root_sector as u16 + 1));
+        };
+
+        bios_println!("{:?}\n({}, {}) -- {}", sector_tmp, fat_size, first_root_sector, self.bpb?.bytes_per_sector);
+
 
         for i in 0..(512 / 32) {
             let dir_entry = unsafe {
-                &*(root_data.as_ptr().add(i * 32) as *const DirectoryEntry)
+                &*(sector_tmp.as_ptr().add(i * 32) as *const DirectoryEntry)
             };
 
             if dir_entry.modification_date == 0 { continue; }
