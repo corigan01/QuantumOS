@@ -49,32 +49,30 @@ pub struct BiosParametersBlock {
 
 impl BiosParametersBlock {
     pub fn validate_fat(&self) -> bool {
-            self.jmp_bytes[0] == 0xeb        &&
-            self.bytes_per_sector == 512     &&
-            self.oem_id != 0x00              &&
-            self.media_descriptor_type != 0  &&
-            ((self.low_sectors == 0 && self.high_sectors > 0) || self.low_sectors > 0)
+        self.jmp_bytes[0] == 0xeb
+            && self.bytes_per_sector == 512
+            && self.oem_id != 0x00
+            && self.media_descriptor_type != 0
+            && ((self.low_sectors == 0 && self.high_sectors > 0) || self.low_sectors > 0)
     }
 
     pub fn check_ext_bpb<T>(&self) -> bool
-        where T: FatExtCluster
+    where
+        T: FatExtCluster,
     {
-        let data = unsafe {
-            self.get_ext_bpb::<T>()
-        };
+        let data = unsafe { self.get_ext_bpb::<T>() };
 
-        return data.is_some()
+        return data.is_some();
     }
 
     pub unsafe fn get_ext_bpb<T>(&self) -> Option<&T>
-        where T: FatExtCluster
+    where
+        T: FatExtCluster,
     {
-        let data = unsafe {
-            &*(&self.ex_block as *const u8 as *const T)
-        };
+        let data = unsafe { &*(&self.ex_block as *const u8 as *const T) };
 
         if !data.is_valid_sig() {
-            return None
+            return None;
         }
 
         return Some(data);

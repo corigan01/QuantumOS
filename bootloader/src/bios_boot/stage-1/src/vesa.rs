@@ -34,7 +34,7 @@ pub struct BasicVesaInfo {
     oem_string_ptr: [u16; 2],
     capabilities: [u8; 4],
     video_mode_ptr: [u16; 2],
-    size_64k_blocks: u16
+    size_64k_blocks: u16,
 }
 
 impl BasicVesaInfo {
@@ -54,8 +54,7 @@ impl BasicVesaInfo {
         let info_ptr = &mut info as *mut BasicVesaInfo as *mut u8;
 
         unsafe {
-            BiosInt::read_vbe_info(info_ptr)
-                .execute_interrupt();
+            BiosInt::read_vbe_info(info_ptr).execute_interrupt();
         }
 
         if info_ptr as u16 == 0 {
@@ -70,16 +69,15 @@ impl BasicVesaInfo {
     }
 
     pub fn validate_signature(&self) -> bool {
-        self.signature[0] == b'V' &&
-        self.signature[1] == b'E' &&
-        self.signature[2] == b'S' &&
-        self.signature[3] == b'A'
+        self.signature[0] == b'V'
+            && self.signature[1] == b'E'
+            && self.signature[2] == b'S'
+            && self.signature[3] == b'A'
     }
 
     pub fn get_version_number(&self) -> u16 {
         self.version
     }
-    
 
     // FIXME: Get the oem string
     pub fn get_oem_string(&self) -> [u8; 16] {
@@ -88,9 +86,7 @@ impl BasicVesaInfo {
 
         let temp_buffer = [0_u8; 16];
 
-        unsafe {
-
-        }
+        unsafe {}
 
         temp_buffer
     }

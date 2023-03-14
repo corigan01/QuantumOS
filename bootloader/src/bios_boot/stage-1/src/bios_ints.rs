@@ -23,29 +23,29 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use core::arch::asm;
 use crate::bios_println;
-use crate::cpu_regs::{Regs16};
+use crate::cpu_regs::Regs16;
+use core::arch::asm;
 
 #[repr(u8)]
 #[derive(Copy, Clone)]
 pub enum TextModeColor {
-    Black        = 0b0000,
-    Blue         = 0b0001,
-    Green        = 0b0010,
-    Cyan         = 0b0011,
-    Red          = 0b0100,
-    Magenta      = 0b0101,
-    Brown        = 0b0110,
-    LightGrey    = 0b0111,
-    DarKGrey     = 0b1000,
-    LightBlue    = 0b1001,
-    LightGreen   = 0b1010,
-    LightCyan    = 0b1011,
-    LightRed     = 0b1100,
+    Black = 0b0000,
+    Blue = 0b0001,
+    Green = 0b0010,
+    Cyan = 0b0011,
+    Red = 0b0100,
+    Magenta = 0b0101,
+    Brown = 0b0110,
+    LightGrey = 0b0111,
+    DarKGrey = 0b1000,
+    LightBlue = 0b1001,
+    LightGreen = 0b1010,
+    LightCyan = 0b1011,
+    LightRed = 0b1100,
     LightMagenta = 0b1101,
-    Yellow       = 0b1110,
-    White        = 0b1111,
+    Yellow = 0b1110,
+    White = 0b1111,
 }
 
 #[derive(PartialEq)]
@@ -54,7 +54,7 @@ pub enum BiosIntStatus {
     InvalidCommand,
     CommandFailed,
 
-    SuccessfulCommand
+    SuccessfulCommand,
 }
 
 impl BiosIntStatus {
@@ -79,7 +79,6 @@ impl BiosIntStatus {
             return;
         }
 
-
         runnable();
     }
 }
@@ -89,7 +88,7 @@ pub struct BiosInt {
     command: u8,
     flags: Regs16,
 
-    result: u8
+    result: u8,
 }
 
 impl BiosInt {
@@ -102,7 +101,12 @@ impl BiosInt {
         }
     }
 
-    pub fn write_character(character: u8, page_number: u8, background_color: TextModeColor, foreground_color: TextModeColor) -> Self {
+    pub fn write_character(
+        character: u8,
+        page_number: u8,
+        background_color: TextModeColor,
+        foreground_color: TextModeColor,
+    ) -> Self {
         let total_color = (foreground_color as u8) | ((background_color as u8) << 4);
         let mut regs = Regs16::new();
 
@@ -207,9 +211,7 @@ impl BiosInt {
             0x86 => BiosIntStatus::UnsupportedFunction,
             0x01 => BiosIntStatus::CommandFailed,
 
-            _    => BiosIntStatus::SuccessfulCommand
+            _ => BiosIntStatus::SuccessfulCommand,
         }
     }
-
-
 }

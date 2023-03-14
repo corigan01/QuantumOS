@@ -29,14 +29,14 @@ use core::fmt::Formatter;
 
 pub struct CStringOwned {
     owned_data_ptr: *const u8,
-    len: usize
+    len: usize,
 }
 
 impl CStringOwned {
     pub unsafe fn from_ptr(bytes: *const u8, len: usize) -> Self {
         Self {
             owned_data_ptr: bytes,
-            len
+            len,
         }
     }
 }
@@ -45,23 +45,22 @@ impl Default for CStringOwned {
     fn default() -> Self {
         Self {
             owned_data_ptr: &[0u8; 0] as *const u8,
-            len: 0
+            len: 0,
         }
     }
 }
 
 #[derive(Copy, Clone)]
 pub struct CStringRef<'a> {
-    contents: &'a[u8],
-    len: usize
+    contents: &'a [u8],
+    len: usize,
 }
 
 impl<'a> CStringRef<'a> {
-
-    pub fn from_bytes(bytes: &'a[u8]) -> Self {
+    pub fn from_bytes(bytes: &'a [u8]) -> Self {
         Self {
             contents: bytes,
-            len: bytes.len()
+            len: bytes.len(),
         }
     }
 

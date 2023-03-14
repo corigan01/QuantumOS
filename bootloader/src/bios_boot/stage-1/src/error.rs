@@ -21,37 +21,29 @@ NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPO
 NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
 DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
 */
 
-use super::FatExtCluster;
-use crate::cstring::CStringRef;
+use core::fmt;
+use core::fmt::Formatter;
 
-#[repr(C, packed)]
-#[derive(Copy, Clone, Debug)]
-pub struct Extended32 {
-    pub sectors_per_fat: u32,
-    pub flags: u16,
-    pub fat_version: u16,
-    pub root_cluster_number: u32,
-    pub fs_info_structure: u16,
-    pub backup_boot_sector: u16,
-    reserved: [u8; 12],
-    pub drive_number: u8,
-    win_nt_flags: u8,
-    pub signature: u8,
-    pub vol_id: u32,
-    pub vol_label: [u8; 11],
-    system_id_string_dont_trust: u64,
+#[derive(Debug)]
+pub enum BootloaderError {
+    DiskNotFound,
+    NotSupported,
+    NoValid,
+    OutOfBounds
 }
 
-impl Extended32 {}
+impl fmt::Display for BootloaderError {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        match self {
+            BootloaderError::DiskNotFound => write!(f, "Bootloader could not find any suitable disks!")?,
+            BootloaderError::NotSupported => write!(f, "Bootloader does not support this operation!")?,
+            
+            _ => write!(f, "{:?}", self)?,
+        }
 
-impl FatExtCluster for Extended32 {
-    fn is_valid_sig(&self) -> bool {
-        self.signature == 0x28 || self.signature == 0x29
-    }
-
-    fn get_vol_string(&self) -> Option<CStringRef> {
-        Some(CStringRef::from_bytes(&self.vol_label))
+        Ok(())
     }
 }

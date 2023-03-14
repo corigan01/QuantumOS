@@ -26,13 +26,15 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #![no_main]
 #![no_std]
 
-pub mod cpu_regs;
-pub mod bios_video;
-pub mod bios_ints;
-pub mod console;
-pub mod vesa;
 pub mod bios_disk;
+pub mod bios_ints;
+pub mod bios_video;
+pub mod console;
+pub mod cpu_regs;
+pub mod cstring;
 pub mod fat;
 pub mod mbr;
-pub mod cstring;
-
+pub mod tmp_alloc;
+pub mod vesa;
+pub mod filesystem;
+pub mod error;

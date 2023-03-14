@@ -40,8 +40,4 @@ mkdir "fs/root/DISK NOT MOUNTED"
 sudo mount /dev/loop0p1 fs/boot
 sudo mount -text2 /dev/loop0p2 fs/root
 
-sudo touch myfile.txt fs/boot
-sudo dd if=/dev/random of=fs/boot/myfile.txt count=10 bs=10
-
-sudo mkdir fs/boot/test
-echo "Hello World!" | sudo tee fs/boot/test/testFile.txt
+sudo cp /bin/qemu-system-i386 fs/boot

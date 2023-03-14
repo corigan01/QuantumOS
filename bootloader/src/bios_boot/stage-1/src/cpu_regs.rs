@@ -26,31 +26,28 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 use core::arch::asm;
 
-
 #[repr(u16)]
 pub enum EFlagsStates {
-    Carry           = 0x00,
-    Parity          = 0x02,
-    Auxiliary       = 0x04,
-    Zero            = 0x06,
-    Sign            = 0x07,
-    Trap            = 0x08,
+    Carry = 0x00,
+    Parity = 0x02,
+    Auxiliary = 0x04,
+    Zero = 0x06,
+    Sign = 0x07,
+    Trap = 0x08,
     InterruptEnable = 0x09,
-    Direction       = 0x0A,
-    Overflow        = 0x0B,
-    IOP0            = 0x0C,
-    IOP1            = 0x0D,
-    NestedTask      = 0x0E,
-    Resume          = 0x0F,
-
+    Direction = 0x0A,
+    Overflow = 0x0B,
+    IOP0 = 0x0C,
+    IOP1 = 0x0D,
+    NestedTask = 0x0E,
+    Resume = 0x0F,
     // Higher flags unsupported
-
 }
 
 #[repr(C)]
 pub struct EFlags {
     low: u16,
-    high: u16
+    high: u16,
 }
 
 impl EFlags {
@@ -62,10 +59,7 @@ impl EFlags {
     }
 
     pub fn new_zero() -> Self {
-        Self {
-            low: 0,
-            high: 0
-        }
+        Self { low: 0, high: 0 }
     }
 
     pub fn update_flags(&mut self) {
@@ -111,7 +105,7 @@ pub struct Regs16 {
     pub fs: u16,
     pub es: u16,
     pub ds: u16,
-    pub eflags: u16
+    pub eflags: u16,
 }
 
 impl Regs16 {

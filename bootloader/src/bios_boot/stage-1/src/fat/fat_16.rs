@@ -23,7 +23,6 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-
 use crate::cstring::CStringRef;
 use crate::fat::FatExtCluster;
 
@@ -35,7 +34,7 @@ pub struct Extended16 {
     pub signature: u8,
     pub vol_id: u32,
     pub vol_label: [u8; 11],
-    pub sys_id_str: [u8; 8]
+    pub sys_id_str: [u8; 8],
 }
 
 impl FatExtCluster for Extended16 {
@@ -44,9 +43,6 @@ impl FatExtCluster for Extended16 {
     }
 
     fn get_vol_string(&self) -> Option<CStringRef> {
-        Some(
-            CStringRef::from_bytes(&self.vol_label)
-        )
+        Some(CStringRef::from_bytes(&self.vol_label))
     }
 }
-

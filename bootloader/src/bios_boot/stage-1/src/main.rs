@@ -26,16 +26,16 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #![no_main]
 #![no_std]
 
+use core::arch::global_asm;
 use core::panic::PanicInfo;
-use core::arch::{global_asm};
 
 use stage_1::bios_disk::BiosDisk;
-use stage_1::{bios_print, bios_println};
 use stage_1::bios_ints::{BiosInt, TextModeColor};
 use stage_1::cstring::CStringRef;
-use stage_1::fat::{FAT, fat_32::Extended32, FatExtCluster};
+use stage_1::fat::{fat_32::Extended32, FatExtCluster, FAT};
 use stage_1::mbr::{MasterBootRecord, PartitionEntry};
 use stage_1::vesa::BasicVesaInfo;
+use stage_1::{bios_print, bios_println};
 
 global_asm!(include_str!("init.s"));
 
@@ -45,18 +45,23 @@ extern "C" fn bit16_entry(disk_number: u16) {
     panic!("Stage should not return!");
 }
 
-
 fn enter_rust(disk: u16) {
     bios_println!("\n --- Quantum Boot loader 16 ---\n");
 
     let mbr = unsafe { MasterBootRecord::read_from_disk(disk as u8) };
 
-    bios_println!("Found {} partitions on boot disk {:x}!", mbr.total_valid_partitions(), disk);
+    bios_println!(
+        "Found {} partitions on boot disk {:x}!",
+        mbr.total_valid_partitions(),
+        disk
+    );
 
     if let Some(entry_id) = mbr.get_bootable_partition() {
-        bios_println!("Partition {:?} is bootable and has partition type of {:x?}",
-            entry_id, mbr.get_partition_entry(entry_id).get_partition_type());
-
+        bios_println!(
+            "Partition {:?} is bootable and has partition type of {:x?}",
+            entry_id,
+            mbr.get_partition_entry(entry_id).get_partition_type()
+        );
     } else {
         bios_println!(" | Could not find valid partition!");
         panic!("No bootable partitions found, I dont know how we even booted!");
@@ -65,22 +70,18 @@ fn enter_rust(disk: u16) {
     let fat = FAT::new_from_disk(disk as u8)
         .expect("No valid bootable partitions with supported fat version found!");
 
-    bios_println!("Detected {:?} type on disk {:x} -- \'{}\' ({} MiB) ",
+    bios_println!(
+        "Detected {:?} type on disk {:x} -- \'{}\' ({} MiB) ",
         fat.get_fat_type(),
         disk,
         fat.get_vol_label().unwrap_or_default(),
         fat.get_total_sectors().unwrap_or(0) / 2 / 1024
     );
 
-    bios_println!("Root {:#?}",
-        fat.print_root_entries()
-    );
+    bios_println!("Root {:#?}", fat.print_root_entries());
 
-
-
-    loop {};
+    loop {}
 }
-
 
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {

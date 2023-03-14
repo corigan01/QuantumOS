@@ -24,10 +24,9 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 */
 
-
-use core::fmt;
 use crate::bios_ints::{BiosInt, TextModeColor};
-use crate::console::{GlobalPrint};
+use crate::console::GlobalPrint;
+use core::fmt;
 
 pub struct BiosTextMode {
     background_color: TextModeColor,
@@ -38,28 +37,27 @@ impl BiosTextMode {
     pub fn new() -> Self {
         Self {
             background_color: TextModeColor::Black,
-            foreground_color: TextModeColor::White
+            foreground_color: TextModeColor::White,
         }
     }
 
     unsafe fn print_int_char(&self, c: u8) {
-        BiosInt::write_character(
-            c,
-            0,
-            self.background_color,
-            self.foreground_color)
-
+        BiosInt::write_character(c, 0, self.background_color, self.foreground_color)
             .execute_interrupt();
     }
 
-
     fn print_int_bytes(&self, str: &[u8]) {
         for i in str {
-            match *i  {
-                b'\n' => unsafe { self.print_int_char(0xd); self.print_int_char(0xa); },
-                c if c.is_ascii() => unsafe { self.print_int_char(c); },
+            match *i {
+                b'\n' => unsafe {
+                    self.print_int_char(0xd);
+                    self.print_int_char(0xa);
+                },
+                c if c.is_ascii() => unsafe {
+                    self.print_int_char(c);
+                },
 
-                _ =>  {
+                _ => {
                     unsafe { self.print_int_char(b'?') };
 
                     break;
@@ -73,12 +71,13 @@ impl BiosTextMode {
     }
 }
 
-
 impl GlobalPrint for BiosTextMode {
     fn print_str(str: &str) {
         BiosTextMode::new().print_int_string(str);
     }
-    fn print_bytes(bytes: &[u8]) { BiosTextMode::new().print_int_bytes(bytes); }
+    fn print_bytes(bytes: &[u8]) {
+        BiosTextMode::new().print_int_bytes(bytes);
+    }
 }
 
 impl fmt::Write for BiosTextMode {
