@@ -23,41 +23,25 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use crate::error::BootloaderError;
-use crate::filesystem::{DiskMedia, PartitionEntry, ValidFilesystem};
-use crate::filesystem::fat::Fatfs;
+use crate::filesystem::fat::bios_parameter_block::BiosBlock;
+use crate::filesystem::fat::FatValid;
 
-#[derive(Clone, Copy, Debug)]
-pub enum FileSystemTypes {
-    Fat(PartitionEntry),
-
-    NotSupported,
-    Unchecked
+#[repr(C, packed)]
+#[derive(Copy, Clone, Debug)]
+pub struct ExtendedBPB16 {
+    pub drive_number: u8,
+    win_nt_flags: u8,
+    pub signature: u8,
+    pub vol_id: u32,
+    pub vol_label: [u8; 11],
+    pub sys_id_str: [u8; 8],
 }
 
-impl FileSystemTypes {
-    pub fn new() -> Self {
-        Self::Unchecked
-    }
+impl FatValid for ExtendedBPB16 {
+    fn is_valid(bpb: &BiosBlock) -> bool {
+        let fat16 = unsafe { bpb.convert_extended_type_unchecked::<Self>() };
 
-    pub fn get_partition_entry(&self) -> Option<&PartitionEntry> {
-        match self {
-            FileSystemTypes::Fat(entry) => { Some(entry) }
-
-            _ => { None }
-        }
-    }
-
-    pub fn does_contain_file<DiskType: DiskMedia>(&self, disk: &DiskType, filename: &str) -> Result<bool, BootloaderError> {
-        if let Some(partition_entry) = self.get_partition_entry() {
-
-            // FIXME: Make this type independent, so that we can call 'does_contain_file' on
-            // any filesystem that supports this trait
-            let fat_test = Fatfs::<DiskType>::does_contain_file(disk, partition_entry, filename)?;
-
-            return Ok(fat_test);
-        }
-
-        Err(BootloaderError::NoValid)
+        fat16.signature == 0x28 || fat16.signature == 0x29
     }
 }
+

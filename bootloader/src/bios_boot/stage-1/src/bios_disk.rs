@@ -64,6 +64,7 @@ impl DiskAccessPacket {
     }
 }
 
+#[derive(Clone)]
 pub struct BiosDisk {
     drive_id: u8,
 }

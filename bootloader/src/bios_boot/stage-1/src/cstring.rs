@@ -39,6 +39,10 @@ impl CStringOwned {
             len,
         }
     }
+    
+    pub fn from_static_bytes(bytes: &'static [u8]) -> Self {
+        unsafe { Self::from_ptr(bytes.as_ptr(), bytes.len()) }
+    }
 }
 
 impl Default for CStringOwned {

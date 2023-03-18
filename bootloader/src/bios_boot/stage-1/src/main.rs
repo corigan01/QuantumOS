@@ -36,6 +36,7 @@ use stage_1::fat::{fat_32::Extended32, FatExtCluster, FAT};
 use stage_1::mbr::{MasterBootRecord, PartitionEntry};
 use stage_1::vesa::BasicVesaInfo;
 use stage_1::{bios_print, bios_println};
+use stage_1::filesystem::FileSystem;
 
 global_asm!(include_str!("init.s"));
 
@@ -79,6 +80,16 @@ fn enter_rust(disk: u16) {
     );
 
     bios_println!("Root {:#?}", fat.print_root_entries());
+
+    let fs =
+        FileSystem::<BiosDisk>::new(BiosDisk::new(disk as u8))
+            .quarry_disk()
+            .expect("Could not read any supported filesystems!")
+            .mount_root_if_contains("stage2")
+            .expect("Count not find next stage on any filesystems!");
+
+
+
 
     loop {}
 }

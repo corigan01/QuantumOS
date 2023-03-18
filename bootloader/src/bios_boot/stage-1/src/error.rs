@@ -32,6 +32,7 @@ pub enum BootloaderError {
     DiskNotFound,
     NotSupported,
     NoValid,
+    FileNotFound,
     OutOfBounds
 }
 

@@ -64,6 +64,7 @@ impl BiosParametersBlock {
 
         return data.is_some();
     }
+    
 
     pub unsafe fn get_ext_bpb<T>(&self) -> Option<&T>
     where

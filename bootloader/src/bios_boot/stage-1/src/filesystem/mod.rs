@@ -31,22 +31,32 @@ pub mod partition;
 use core::marker::PhantomData;
 use types::FileSystemTypes;
 use crate::bios_disk::BiosDisk;
+use crate::bios_println;
 use crate::error::BootloaderError;
-use crate::filesystem::partition::Partitions;
-use crate::filesystem::types::FileSystemTypes::Fat;
+use crate::filesystem::fat::Fatfs;
+use crate::filesystem::partition::{PartitionEntry, Partitions};
 
 pub struct UnQuarried;
 pub struct Quarried;
+pub struct MountedRoot;
 
 pub trait DiskMedia {
     // FIXME: sector size should not be defined to always 512
     fn read(&self, sector: usize) -> Result<[u8; 512], BootloaderError>;
 }
 
+pub trait ValidFilesystem<DiskType: DiskMedia> {
+    fn is_valid(disk: &DiskType, partition: &PartitionEntry) -> bool;
+
+    fn does_contain_file(disk: &DiskType, partition: &PartitionEntry, filename: &str) -> Result<bool, BootloaderError>;
+}
+
 pub struct FileSystem<DiskType, State = UnQuarried>
     where DiskType: Sized + DiskMedia {
     // FIXME: Should not be a hard defined limit on how many filesystems can be attached
-    current_filesystem: [FileSystemTypes; 4],
+    current_filesystems: [FileSystemTypes; 4],
+    root: FileSystemTypes,
+
     attached_disk: DiskType,
 
     state: PhantomData<State>
@@ -55,9 +65,9 @@ pub struct FileSystem<DiskType, State = UnQuarried>
 impl<DiskType: DiskMedia> FileSystem<DiskType> {
     pub fn new(disk: DiskType) -> FileSystem<DiskType> {
         FileSystem {
-            current_filesystem: [FileSystemTypes::new(); 4],
+            current_filesystems: [FileSystemTypes::new(); 4],
+            root: FileSystemTypes::Unchecked,
             attached_disk: disk,
-
             state: Default::default(),
         }
     }
@@ -67,13 +77,49 @@ impl<DiskType: DiskMedia> FileSystem<DiskType> {
     }
 }
 
-impl <DiskType: DiskMedia> FileSystem<DiskType, UnQuarried> {
-    pub fn quarry_disk(self) -> Result<FileSystem<DiskType, Quarried>, BootloaderError> {
-        let partitions = Partitions::check_all(self.attached_disk)?;
+impl <DiskType: DiskMedia + Clone> FileSystem<DiskType, UnQuarried> {
+    pub fn quarry_disk(mut self) -> Result<FileSystem<DiskType, Quarried>, BootloaderError> {
+        let partitions = Partitions::check_all(self.attached_disk.clone())?;
         let entries_ref = partitions.get_partitions_ref();
+        let mut did_find_fs = false;
 
-        for partition in entries_ref {
+        for i in 0..entries_ref.len() {
+            let partition = &entries_ref[i];
 
+            // FIXME: Consider adding a macro that adds these automatically instead of having
+            // to add new filesystem drivers here each time
+            if Fatfs::<DiskType>::is_valid(&self.attached_disk, partition) {
+                self.current_filesystems[i] = FileSystemTypes::Fat(partition.clone());
+                did_find_fs = true;
+            }
+        }
+
+        if did_find_fs {
+            Ok(FileSystem::<DiskType, Quarried> {
+                current_filesystems: self.current_filesystems,
+                root: FileSystemTypes::Unchecked,
+                attached_disk: self.attached_disk.clone(),
+                state: PhantomData::<Quarried>,
+            })
+        } else {
+            Err(BootloaderError::NoValid)
+        }
+    }
+}
+
+impl <DiskType: DiskMedia + Clone> FileSystem<DiskType, Quarried> {
+    pub fn mount_root_if_contains(&self, filename: &str) -> Result<FileSystem<DiskType, MountedRoot>, BootloaderError> {
+        for filesystems in &self.current_filesystems {
+            if filesystems.does_contain_file(&self.attached_disk, filename)? {
+                return Ok(
+                    FileSystem::<DiskType, MountedRoot> {
+                        current_filesystems: self.current_filesystems,
+                        root: *filesystems,
+                        attached_disk: self.attached_disk.clone(),
+                        state: PhantomData::<MountedRoot>,
+                    }
+                )
+            }
         }
 
         Err(BootloaderError::NoValid)
@@ -81,55 +127,13 @@ impl <DiskType: DiskMedia> FileSystem<DiskType, UnQuarried> {
 }
 
 
-impl <DiskType: DiskMedia> FileSystem<DiskType, Quarried> {
-
+impl <DiskType: DiskMedia> FileSystem<DiskType, MountedRoot> {
+    //! # Safety
+    //! This function does not check how large the buffer is, and trusts that the caller
+    //! does not load a file bigger then the given buffer. This can lead to serious issues
+    //! if this buffer is not checked, so its recommended that this function not be used.
+    pub unsafe fn read_file_into_buffer(&self, buffer: *mut u8, filename: &str) -> Result<(), BootloaderError> {
+        todo!()
+    }
 }
 
-
-fn test() {
-    let disk = BiosDisk::new(0x80);
-
-    let fs = FileSystem::<BiosDisk>::new(disk);
-    let fs = fs.quarry_disk().unwrap();
-
-
-
-
-
-
-
-
-
-}
-
-/*
-fn test() {
-    let disk = BiosDisk::new(0x80);
-    let fs = FileSystem::new();
-
-    fs.quarry_disk(disk);
-
-    if let Some(partition) = fs.quarry_for_item("bootloader.conf").bootable() {
-        fs.attach_root(partition).unwrap();
-
-        assert!(fs.does_item_exist("*kernel*"));
-        assert!(fs.does_item_exist("bootloader.conf"));
-
-    } else {
-        panic!("Can not find required bootable fields.");
-    }
-
-    let bootloader_config = fs.open_file("bootloader.conf");
-    let bootloader_config = bootloader_config.read_all().unwrap();
-
-    struct BiosConfigurator;
-    impl BiosConfigurator {
-        pub fn new(x: _) -> Self {
-            Self {}
-        }
-    }
-
-    let config = BiosConfigurator::new(bootloader_config.to_string());
-    let kernel_start = config.quarry_key_int("kernel.start").unwarp_or(0);
-
-}*/

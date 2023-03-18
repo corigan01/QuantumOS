@@ -23,11 +23,12 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use crate::bios_println;
 use crate::error::BootloaderError;
 use crate::filesystem::partition::{PartitionEntry, Partitions, PartitionType};
 
 #[derive(Copy, Clone, Debug)]
-enum MBRPartitionTypes {
+pub enum MBRPartitionTypes {
     Zero,
     LinuxNative,
     OsdevGang,
@@ -40,7 +41,7 @@ impl MBRPartitionTypes {
             0x00 => MBRPartitionTypes::Zero,
             0x83 => MBRPartitionTypes::LinuxNative,
             0x7f => MBRPartitionTypes::OsdevGang,
-            
+
             _ => MBRPartitionTypes::Unknown(value),
         }
     }
@@ -48,7 +49,7 @@ impl MBRPartitionTypes {
 
 #[repr(C, packed)]
 #[derive(Copy, Clone, Debug)]
-struct MBRPartitionEntry {
+pub struct MBRPartitionEntry {
     drive_attributes: u8,
     chs_partition_start: u16,
     chs_partition_start_high: u8,
@@ -87,7 +88,7 @@ impl MBRPartitionEntry {
     }
 
     pub fn is_bootable(&self) -> bool {
-        self.drive_attributes > 0
+        self.drive_attributes & 0x80 > 0
     }
 
     pub fn get_partition_type(&self) -> MBRPartitionTypes {
@@ -97,7 +98,7 @@ impl MBRPartitionEntry {
     pub fn get_sector_start(&self) -> usize {
         self.lba_start as usize
     }
-    
+
     pub fn get_sector_count(&self) -> usize {
         self.total_sectors as usize
     }
@@ -105,17 +106,17 @@ impl MBRPartitionEntry {
     pub fn get_sector_end(&self) -> usize {
         self.get_sector_start() + self.get_sector_count()
     }
-    
+
 }
 
 impl MasterBootRecord {
-    pub fn new(boot_sector: [u8; 512]) -> Self {
-        // TODO: ensure that this consumes the boot_sector var properly 
+    pub fn new(mut boot_sector: [u8; 512]) -> Self {
+        // TODO: ensure that this consumes the boot_sector var properly
         unsafe {
             *(boot_sector.as_mut_ptr() as *mut Self)
         }
     }
-    
+
     pub fn is_valid(&self) -> bool {
         self.partitions[0].is_valid() ||
             self.partitions[1].is_valid() ||
@@ -153,23 +154,23 @@ impl MasterBootRecord {
 
         None
     }
-    
-    pub fn to_partitions(self) -> Option<Partitions> {
+
+    pub fn to_partitions(mut self) -> Option<Partitions> {
         if !self.is_valid() {
             return None;
         }
-        
+
         let mut building_partition_entries = [PartitionEntry::new(); 4];
-        
+
         for i in 0..building_partition_entries.len() {
             let partition_entry_ref = &mut building_partition_entries[i];
-            
+
             if let Some(our_partition_ref) = self.partitions.get_mut(i) {
                 let start_sector = our_partition_ref.get_sector_start();
                 let sector_end = our_partition_ref.get_sector_end();
                 let sector_valid = our_partition_ref.is_valid();
                 let sector_bootable = our_partition_ref.is_bootable();
-                
+
                 if !sector_valid {
                     partition_entry_ref.kind = PartitionType::Unknown;
                     continue;
@@ -177,14 +178,14 @@ impl MasterBootRecord {
 
                 partition_entry_ref.start_sector = Some(start_sector);
                 partition_entry_ref.end_sector = Some(sector_end);
-                partition_entry_ref.kind = 
+                partition_entry_ref.kind =
                     if sector_bootable { PartitionType::Bootable } else { PartitionType::Normal };
-                
+
             } else {
                 partition_entry_ref.kind = PartitionType::None;
             }
         }
-        
+
         Some(Partitions {
             partitions_array: building_partition_entries
         })

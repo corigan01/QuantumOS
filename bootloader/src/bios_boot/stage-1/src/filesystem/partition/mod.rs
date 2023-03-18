@@ -29,6 +29,7 @@ use crate::filesystem::partition::mbr::MasterBootRecord;
 
 pub mod mbr;
 
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum PartitionType {
     // Valid Checked Types
     Bootable,
@@ -40,12 +41,14 @@ pub enum PartitionType {
     NotChecked
 }
 
+
 impl PartitionType {
     pub fn new() -> Self {
         Self::NotChecked
     }
 }
 
+#[derive(Clone, Copy, Debug)]
 pub struct PartitionEntry {
     start_sector: Option<usize>,
     end_sector: Option<usize>,
@@ -72,6 +75,10 @@ impl PartitionEntry {
     pub fn get_end_sector(&self) -> Option<usize> {
         self.end_sector
     }
+
+    pub fn is_bootable(&self) -> bool {
+        self.kind == PartitionType::Bootable
+    }
 }
 
 pub struct Partitions {
@@ -80,36 +87,35 @@ pub struct Partitions {
 }
 
 impl Partitions {
-    pub fn check_all<DiskType>(disk: DiskType) -> Result<Self, BootloaderError> {
+    pub fn check_all<DiskType: DiskMedia>(disk: DiskType) -> Result<Self, BootloaderError> {
         if let Ok(mbr) = Self::check_mbr(disk) {
             return Ok(mbr);
         }
-        
+
         Err(BootloaderError::NoValid)
     }
-    
-    pub fn check_mbr<DiskType>(disk: DiskType) -> Result<Self, BootloaderError>
-        where DiskType: DiskMedia {
-        
-        let boot_sector_data = disk.read(1)?;
-        
+
+    pub fn check_mbr<DiskType: DiskMedia>(disk: DiskType) -> Result<Self, BootloaderError> {
+
+        let boot_sector_data = disk.read(0)?;
+
         let test_mbr = MasterBootRecord::new(boot_sector_data);
         if let Some(partitions) = test_mbr.to_partitions() {
             return Ok(partitions);
         }
-        
-        
+
+
         Err(BootloaderError::NotSupported)
     }
-    
+
     pub fn get_partitions_ref(&self) -> &[PartitionEntry] {
         self.partitions_array.as_ref()
     }
-    
+
     pub fn get_number_of_partitions(&self) -> usize {
         self.partitions_array.len()
     }
-    
+
     pub fn get_partition_entry(&self, index: usize) -> Option<&PartitionEntry> {
         self.partitions_array.get(index)
     }
