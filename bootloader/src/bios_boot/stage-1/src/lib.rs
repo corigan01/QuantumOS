@@ -32,8 +32,6 @@ pub mod bios_video;
 pub mod console;
 pub mod cpu_regs;
 pub mod cstring;
-pub mod fat;
-pub mod mbr;
 pub mod tmp_alloc;
 pub mod vesa;
 pub mod filesystem;

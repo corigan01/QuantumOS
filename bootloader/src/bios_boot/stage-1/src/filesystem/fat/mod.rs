@@ -145,7 +145,6 @@ impl<'a, DiskType: DiskMedia + 'a> Fatfs<'a, DiskType> {
 
             if file.filetype != FatFileType::Unknown {
                 let fat_entry = self.get_fat_entry(file.start_cluster)?;
-                bios_println!("{}::{}<{:?}> C={:x} F={:x}", i, file.filename, file.filetype, file.start_cluster, fat_entry);
             }
 
 
@@ -208,8 +207,6 @@ impl<'a, DiskType: DiskMedia + 'a> Fatfs<'a, DiskType> {
         self.run_on_all_entries_in_dir_and_return_on_true(&parent,
             |entry| {
 
-                bios_println!("{}<{:?}> is a match? {}", entry.filename, entry.filetype, entry.filename == looking_cstring);
-
                 entry.filename == looking_cstring
             })
     }
@@ -218,17 +215,25 @@ impl<'a, DiskType: DiskMedia + 'a> Fatfs<'a, DiskType> {
         let mut parent = self.bpb.get_root_file_entry()?;
         let (_, mut file_consumption_part) = filename.split_at(1);
 
-        bios_println!("Finding file {}", file_consumption_part);
-
         loop {
             if let Some(next_char_i) = file_consumption_part.find('/') {
-                let (child_name, remaining) = file_consumption_part.split_at(next_char_i);
 
-                file_consumption_part = remaining.clone();
+                let child_name = if next_char_i == 0 {
+                    let (_, child_name) = file_consumption_part.split_at(1);
 
-                parent = self.get_children_file_within_parent(&parent, child_name)?;
-            } else {
-                let final_file = self.get_children_file_within_parent(&parent, file_consumption_part);
+
+                    child_name
+                } else {
+                    let (child_name, remaining) = file_consumption_part.split_at(next_char_i);
+
+                    file_consumption_part = remaining.clone();
+
+                    parent = self.get_children_file_within_parent(&parent, child_name)?;
+
+                    continue;
+                };
+
+                let final_file = self.get_children_file_within_parent(&parent, child_name);
 
                 return Ok(final_file.is_ok());
             }

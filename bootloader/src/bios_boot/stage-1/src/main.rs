@@ -32,8 +32,6 @@ use core::panic::PanicInfo;
 use stage_1::bios_disk::BiosDisk;
 use stage_1::bios_ints::{BiosInt, TextModeColor};
 use stage_1::cstring::CStringRef;
-use stage_1::fat::{fat_32::Extended32, FatExtCluster, FAT};
-use stage_1::mbr::{MasterBootRecord, PartitionEntry};
 use stage_1::vesa::BasicVesaInfo;
 use stage_1::{bios_print, bios_println};
 use stage_1::filesystem::FileSystem;
@@ -54,7 +52,7 @@ fn enter_rust(disk: u16) {
         FileSystem::<BiosDisk>::new(BiosDisk::new(disk as u8))
             .quarry_disk()
             .expect("Could not read any supported filesystems!")
-            .mount_root_if_contains("/bootloader/stage2")
+            .mount_root_if_contains("/bootloader/stage2.fbin")
             .expect("Count not find next stage on any filesystems!");
 
 
