@@ -40,4 +40,5 @@ mkdir "fs/root/DISK NOT MOUNTED"
 sudo mount /dev/loop0p1 fs/boot
 sudo mount -text2 /dev/loop0p2 fs/root
 
-sudo cp /bin/qemu-system-i386 fs/boot
+sudo mkdir fs/boot/bootloader
+sudo cp /bin/qemu-aarch64 fs/boot/bootloader/stage2.fbin

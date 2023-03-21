@@ -25,7 +25,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 use core::fmt;
-use core::fmt::Formatter;
+use core::fmt::{Debug, Formatter};
 
 pub struct CStringOwned {
     owned_data_ptr: *const u8,
@@ -39,9 +39,37 @@ impl CStringOwned {
             len,
         }
     }
-    
+
     pub fn from_static_bytes(bytes: &'static [u8]) -> Self {
         unsafe { Self::from_ptr(bytes.as_ptr(), bytes.len()) }
+    }
+
+    pub fn len(&self) -> usize {
+        self.len
+    }
+}
+
+impl PartialEq for CStringOwned {
+    fn eq(&self, other: &Self) -> bool {
+        if self.len != other.len {
+            return false;
+        }
+
+        for i in 0..self.len {
+            let s = unsafe {
+                *self.owned_data_ptr.add(i)
+            };
+            let o = unsafe {
+                *other.owned_data_ptr.add(i)
+            };
+
+            if s != o {
+                return false
+            }
+        }
+
+
+        true
     }
 }
 
@@ -51,6 +79,17 @@ impl Default for CStringOwned {
             owned_data_ptr: &[0u8; 0] as *const u8,
             len: 0,
         }
+    }
+}
+
+impl Debug for CStringOwned {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "CStringOwned(\"")?;
+        write!(f, "{}", self)?;
+        write!(f, "\")")?;
+
+
+        Ok(())
     }
 }
 
@@ -92,6 +131,10 @@ impl<'a> CStringRef<'a> {
 impl<'a> fmt::Display for CStringRef<'a> {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         for i in self.contents {
+            if *i == 0 {
+                break;
+            }
+
             write!(f, "{}", *i as char)?;
         }
 
@@ -103,6 +146,11 @@ impl fmt::Display for CStringOwned {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         for i in 0..self.len {
             let data = unsafe { *self.owned_data_ptr.add(i) };
+
+            if data == 0 {
+                break;
+            }
+
             write!(f, "{}", data as char)?;
         }
 

@@ -25,11 +25,13 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 use core::ptr::slice_from_raw_parts;
 use core::str;
+use crate::{bios_print, bios_println};
+use crate::cstring::{CStringOwned, CStringRef};
 
 use crate::error::BootloaderError;
 use crate::filesystem::{DiskMedia, ValidFilesystem};
 use crate::filesystem::fat::bios_parameter_block::BiosBlock;
-use crate::filesystem::fat::fat_file::FatFile;
+use crate::filesystem::fat::fat_file::{FatDirectoryEntry, FatFile, FatFileType, FatLongFileName};
 use crate::filesystem::partition::PartitionEntry;
 
 pub mod bios_parameter_block;
@@ -82,44 +84,153 @@ impl<'a, DiskType: DiskMedia + 'a> Fatfs<'a, DiskType> {
     }
 
     pub fn new(disk: &'a DiskType, partition: &'a PartitionEntry) -> Result<Self, BootloaderError> {
-        let fat_type = Self::quarry(&disk, &partition)?;
+        let partition_start = partition.get_start_sector().unwrap_or(0);
+        let boot_sector_data = disk.read(partition_start)?;
 
-        if !fat_type.is_valid() {
+        let bpb = BiosBlock::new(boot_sector_data);
+
+        if !bpb.extended_type.is_valid() {
             return Err(BootloaderError::NoValid);
         }
-
-        let boot_sector_data = disk.read(0)?;
 
         Ok(Self {
             disk,
             partition,
-            bpb: BiosBlock::new(boot_sector_data),
+            bpb,
         })
     }
 
-    pub fn get_children_file_within_parent(&self, parent: &FatFile, filename: &str) -> Result<FatFile, BootloaderError> {
+    fn get_fat_entry(&self, cluster_id: usize) -> Result<usize, BootloaderError> {
+        let fat_entry_size = self.bpb.get_file_allocation_table_entry_size_bytes()?;
 
+        let inter_index = cluster_id % (512 / fat_entry_size);
+        let sector_offset = cluster_id / 512;
+
+        let first_fat_sector = self.bpb.file_allocation_table_begin()?;
+        let real_fat_sector = first_fat_sector + sector_offset;
+
+        let data = Self::get_sector_offset(self.disk, self.partition, real_fat_sector)?;
+
+        self.bpb.get_file_allocation_table_entry(inter_index, &data)
+    }
+
+    fn run_on_all_entries_in_dir_and_return_on_true<Function>(&self, fat_file: &FatFile, run_on_each: Function )
+        -> Result<FatFile, BootloaderError>
+        where Function: Fn(&FatFile) -> bool
+    {
+
+        let data = if fat_file.filetype != FatFileType::Root {
+            let cluster_id = fat_file.start_cluster - 2;
+
+            let first_data_sector = self.bpb.data_cluster_begin()?;
+            let sector_offset = (cluster_id * self.bpb.cluster_size()?) + first_data_sector;
+
+            Self::get_sector_offset(self.disk, self.partition, sector_offset)?
+        } else {
+            let root_cluster = self.bpb.root_cluster_begin()?;
+
+            Self::get_sector_offset(self.disk, self.partition, root_cluster)?
+        };
+
+        // FIXME: If a dir has more then 16 entries we need to trace and add them and loop until
+        // all are read, but for now we should be able to boot with just a few entires in
+        // each entry.
+        let mut long_file_name_tmp_buffer = [0_u8; 512];
+        for i in 0..16 {
+          let file_entry = unsafe {
+            &*(data.as_ptr().add(32 * i) as *const FatDirectoryEntry)
+          };
+
+            let mut file = file_entry.to_fat_file();
+
+            if file.filetype != FatFileType::Unknown {
+                let fat_entry = self.get_fat_entry(file.start_cluster)?;
+                bios_println!("{}::{}<{:?}> C={:x} F={:x}", i, file.filename, file.filetype, file.start_cluster, fat_entry);
+            }
+
+
+            if file.filetype == FatFileType::LongFileName {
+                let long_file_name = unsafe {
+                    &*(file_entry as *const FatDirectoryEntry as *const FatLongFileName)
+                };
+
+                unsafe {
+                    long_file_name.accumulate_name(&mut long_file_name_tmp_buffer);
+                };
+
+                continue;
+
+            } else {
+                // Make the filename
+                let mut total_chars = 0;
+                for i in 0..long_file_name_tmp_buffer.len() {
+                    let value = long_file_name_tmp_buffer[i];
+
+                    if value == 0 {
+                        total_chars = i;
+                        break;
+                    }
+                }
+
+                // set the filename
+                file.filename = unsafe {
+                    CStringOwned::from_ptr(
+                        long_file_name_tmp_buffer.as_ptr(),
+                        total_chars)
+                };
+            }
+
+            if file.filetype != FatFileType::Unknown {
+                if run_on_each(&file) {
+                    return Ok(file);
+                }
+
+                long_file_name_tmp_buffer.fill(0);
+            }
+        }
+
+        Err(BootloaderError::NoValid)
+    }
+
+
+    pub fn get_children_file_within_parent(&self, parent: &FatFile, filename: &str) -> Result<FatFile, BootloaderError> {
+        bios_println!("{} Finding --> {}", parent.filename, filename);
+
+        if filename.len() == 0 {
+            bios_println!("[W]: Finding children with filename \"\" does not make sense, maybe an error?");
+            return Err(BootloaderError::NotSupported)
+        }
+
+        let looking_cstring = unsafe {
+            CStringOwned::from_ptr(filename.as_ptr(), filename.len())
+        };
+
+        self.run_on_all_entries_in_dir_and_return_on_true(&parent,
+            |entry| {
+
+                bios_println!("{}<{:?}> is a match? {}", entry.filename, entry.filetype, entry.filename == looking_cstring);
+
+                entry.filename == looking_cstring
+            })
     }
 
     pub fn contains_file(&self, filename: &str) -> Result<bool, BootloaderError> {
         let mut parent = self.bpb.get_root_file_entry()?;
-        let (_, mut file_consumption_part) = filename.clone().split_at(1);
+        let (_, mut file_consumption_part) = filename.split_at(1);
+
+        bios_println!("Finding file {}", file_consumption_part);
 
         loop {
             if let Some(next_char_i) = file_consumption_part.find('/') {
                 let (child_name, remaining) = file_consumption_part.split_at(next_char_i);
 
-                file_consumption_part = remaining;
+                file_consumption_part = remaining.clone();
 
                 parent = self.get_children_file_within_parent(&parent, child_name)?;
             } else {
                 let final_file = self.get_children_file_within_parent(&parent, file_consumption_part);
 
-                if let Ok(file) = &final_file {
-                    return Ok(true);
-                }
-
-                final_file?
+                return Ok(final_file.is_ok());
             }
         }
     }

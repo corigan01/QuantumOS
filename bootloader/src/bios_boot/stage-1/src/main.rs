@@ -49,43 +49,12 @@ extern "C" fn bit16_entry(disk_number: u16) {
 fn enter_rust(disk: u16) {
     bios_println!("\n --- Quantum Boot loader 16 ---\n");
 
-    let mbr = unsafe { MasterBootRecord::read_from_disk(disk as u8) };
-
-    bios_println!(
-        "Found {} partitions on boot disk {:x}!",
-        mbr.total_valid_partitions(),
-        disk
-    );
-
-    if let Some(entry_id) = mbr.get_bootable_partition() {
-        bios_println!(
-            "Partition {:?} is bootable and has partition type of {:x?}",
-            entry_id,
-            mbr.get_partition_entry(entry_id).get_partition_type()
-        );
-    } else {
-        bios_println!(" | Could not find valid partition!");
-        panic!("No bootable partitions found, I dont know how we even booted!");
-    }
-
-    let fat = FAT::new_from_disk(disk as u8)
-        .expect("No valid bootable partitions with supported fat version found!");
-
-    bios_println!(
-        "Detected {:?} type on disk {:x} -- \'{}\' ({} MiB) ",
-        fat.get_fat_type(),
-        disk,
-        fat.get_vol_label().unwrap_or_default(),
-        fat.get_total_sectors().unwrap_or(0) / 2 / 1024
-    );
-
-    bios_println!("Root {:#?}", fat.print_root_entries());
 
     let fs =
         FileSystem::<BiosDisk>::new(BiosDisk::new(disk as u8))
             .quarry_disk()
             .expect("Could not read any supported filesystems!")
-            .mount_root_if_contains("stage2")
+            .mount_root_if_contains("/bootloader/stage2")
             .expect("Count not find next stage on any filesystems!");
 
 

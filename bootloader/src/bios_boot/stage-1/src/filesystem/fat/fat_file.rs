@@ -25,6 +25,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 use crate::cstring::CStringOwned;
 
+#[derive(Debug)]
 pub struct FatFile {
     pub filename: CStringOwned,
     pub start_cluster: usize,
@@ -69,7 +70,62 @@ impl FatDirectoryEntry {
     }
 }
 
-#[derive(Debug)]
+#[repr(C, packed)]
+pub struct FatLongFileName {
+    pub sq_order: u8,
+    pub first_5: [u16; 5],
+    pub file_attributes: u8,
+    pub long_entry_type: u8,
+    pub checksum: u8,
+    pub next_6: [u16; 6],
+    pub reserved: u16,
+    pub final_2: [u16; 2]
+}
+
+impl FatLongFileName {
+    unsafe fn paste_name_into_buffer(&self, buffer: &mut [u8], offset: usize) {
+        // FIXME: This is stupid, but I cant think of another way to do this
+        for i in 0..5 {
+            buffer[i + offset] = self.first_5[i] as u8;
+        }
+        for i in 0..6 {
+            buffer[i + 5 + offset] = self.next_6[i] as u8;
+        }
+        for i in 0..2 {
+            buffer[i + 5 + 6 + offset] = self.final_2[i] as u8;
+        }
+    }
+
+    pub unsafe fn accumulate_name(&self, buffer: &mut [u8]) {
+        // FIXME: This is stupid! :(
+        let mut tmp_buffer = [0_u8; 512];
+        self.paste_name_into_buffer(&mut tmp_buffer, 0);
+
+        let mut data_len = 0;
+        for i in 0..tmp_buffer.len() {
+            if tmp_buffer[i] == 0 {
+                data_len = i;
+                break;
+            }
+        }
+
+
+        let mut moved_buffer_data = [0_u8; 512];
+        for i in 0..data_len {
+            moved_buffer_data[i + data_len] = buffer[i];
+        }
+        for i in 0..data_len {
+            moved_buffer_data[i] = tmp_buffer[i];
+        }
+
+        for i in 0..moved_buffer_data.len() {
+            buffer[i] = moved_buffer_data[i];
+        }
+
+    }
+}
+
+#[derive(Debug, PartialEq)]
 pub enum FatFileType {
     ReadOnly,
     Hidden,
@@ -78,7 +134,7 @@ pub enum FatFileType {
     VolumeLabel,
     Directory,
     File,
-    
+
     Root,
     Unknown,
 }

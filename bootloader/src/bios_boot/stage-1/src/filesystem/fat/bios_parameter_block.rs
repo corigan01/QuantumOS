@@ -24,6 +24,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 use core::mem::size_of;
+use crate::bios_println;
 use crate::cstring::CStringOwned;
 use crate::error::BootloaderError;
 use crate::filesystem::fat::fat16::ExtendedBPB16;
@@ -92,6 +93,18 @@ impl BiosBlock {
         Ok(*raw_ptr)
     }
 
+    pub fn get_file_allocation_table_entry_size_bytes(&self) -> Result<usize, BootloaderError> {
+        Ok(
+            match self.extended_type {
+                FatType::Fat16 => {
+                    size_of::<u16>()
+                }
+
+                _ => return Err(BootloaderError::NoValid)
+            }
+        )
+    }
+
     pub fn get_file_allocation_table_entry(&self, offset: usize, fat_data: &[u8]) -> Result<usize, BootloaderError> {
         Ok(
             match self.extended_type {
@@ -155,6 +168,16 @@ impl BiosBlock {
                 _ => return Err(BootloaderError::NoValid)
             }
         )
+    }
+
+    pub fn cluster_size(&self) -> Result<usize, BootloaderError> {
+        Ok(match self.extended_type {
+            FatType::Fat12 | FatType::Fat16 => {
+                self.bios_block.sectors_per_cluster as usize
+            }
+
+            _ => return Err(BootloaderError::NoValid)
+        })
     }
 
     pub fn reserved_sectors(&self) -> usize {
