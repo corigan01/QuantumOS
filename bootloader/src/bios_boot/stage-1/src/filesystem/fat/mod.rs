@@ -30,7 +30,7 @@ use crate::cstring::{CStringOwned, CStringRef};
 
 use crate::error::BootloaderError;
 use crate::filesystem::{DiskMedia, ValidFilesystem};
-use crate::filesystem::fat::bios_parameter_block::BiosBlock;
+use crate::filesystem::fat::bios_parameter_block::{BiosBlock, FatTableEntryType};
 use crate::filesystem::fat::fat_file::{FatDirectoryEntry, FatFile, FatFileType, FatLongFileName};
 use crate::filesystem::partition::PartitionEntry;
 
@@ -104,7 +104,7 @@ impl<'a, DiskType: DiskMedia + 'a> Fatfs<'a, DiskType> {
         let fat_entry_size = self.bpb.get_file_allocation_table_entry_size_bytes()?;
 
         let inter_index = cluster_id % (512 / fat_entry_size);
-        let sector_offset = cluster_id / 512;
+        let sector_offset = cluster_id / (512 / fat_entry_size);
 
         let first_fat_sector = self.bpb.file_allocation_table_begin()?;
         let real_fat_sector = first_fat_sector + sector_offset;
@@ -193,8 +193,6 @@ impl<'a, DiskType: DiskMedia + 'a> Fatfs<'a, DiskType> {
 
 
     pub fn get_children_file_within_parent(&self, parent: &FatFile, filename: &str) -> Result<FatFile, BootloaderError> {
-        bios_println!("{} Finding --> {}", parent.filename, filename);
-
         if filename.len() == 0 {
             bios_println!("[W]: Finding children with filename \"\" does not make sense, maybe an error?");
             return Err(BootloaderError::NotSupported)
@@ -211,7 +209,7 @@ impl<'a, DiskType: DiskMedia + 'a> Fatfs<'a, DiskType> {
             })
     }
 
-    pub fn contains_file(&self, filename: &str) -> Result<bool, BootloaderError> {
+    pub fn contains_file(&self, filename: &str) -> Result<FatFile, BootloaderError> {
         let mut parent = self.bpb.get_root_file_entry()?;
         let (_, mut file_consumption_part) = filename.split_at(1);
 
@@ -233,11 +231,52 @@ impl<'a, DiskType: DiskMedia + 'a> Fatfs<'a, DiskType> {
                     continue;
                 };
 
-                let final_file = self.get_children_file_within_parent(&parent, child_name);
-
-                return Ok(final_file.is_ok());
+                return self.get_children_file_within_parent(&parent, child_name);
             }
         }
+    }
+
+    unsafe fn follow_clusters_and_load_into_buffer(&self, file: &FatFile, ptr: *mut u8) -> Result<(), BootloaderError> {
+        let mut following_cluster = file.start_cluster;
+        let mut ptr_offset = 0;
+
+        // FIXME: This is kinda sloppy code, maybe fix in the future
+        loop {
+            let cluster_id = following_cluster - 2;
+
+            let first_data_sector = self.bpb.data_cluster_begin()?;
+            let sector_offset = (cluster_id * self.bpb.cluster_size()?) + first_data_sector;
+
+            let read_data = Self::get_sector_offset(self.disk, self.partition, sector_offset)?;
+
+            for i in read_data {
+                *ptr.add(ptr_offset) = i;
+                ptr_offset += 1;
+            }
+
+            let next_cluster_type =
+                self.bpb.convert_usize_to_fat_table_entry(
+                    self.get_fat_entry(following_cluster)?
+                )?;
+
+            match next_cluster_type {
+                FatTableEntryType::Valid(cluster) => {
+                    following_cluster = cluster;
+                }
+                FatTableEntryType::EndOfFile => {
+                    return Ok(());
+                }
+
+                _ => return Err(BootloaderError::NoValid)
+            }
+
+        }
+    }
+
+    pub unsafe fn load_file_at_location(&self, filename: &str, ptr: *mut u8) -> Result<(), BootloaderError> {
+        let file = self.contains_file(filename)?;
+
+        self.follow_clusters_and_load_into_buffer(&file, ptr)
     }
 
 }
@@ -254,6 +293,12 @@ impl<'a, DiskType: DiskMedia + 'a> ValidFilesystem<DiskType> for Fatfs<'a, DiskT
     fn does_contain_file(disk: &DiskType, partition: &PartitionEntry, filename: &str) -> Result<bool, BootloaderError> {
         let fatfs = Fatfs::<DiskType>::new(disk, partition)?;
 
-        fatfs.contains_file(filename)
+        Ok(fatfs.contains_file(filename).is_ok())
+    }
+
+    unsafe fn load_file_to_ptr(disk: &DiskType, partition: &PartitionEntry, filename: &str, ptr: *mut u8) -> Result<(), BootloaderError> {
+        let fatfs = Fatfs::<DiskType>::new(disk, partition)?;
+
+        fatfs.load_file_at_location(filename, ptr)
     }
 }

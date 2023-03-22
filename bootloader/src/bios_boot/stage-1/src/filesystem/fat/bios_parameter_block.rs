@@ -59,7 +59,32 @@ pub struct BiosBlock {
     pub bios_block: BiosBlockLow,
 }
 
+pub enum FatTableEntryType {
+    Valid(usize),
+    Reserved,
+    SectorError,
+    EndOfFile
+}
+
+
 impl BiosBlock {
+    pub fn convert_usize_to_fat_table_entry(&self, fat_table: usize) -> Result<FatTableEntryType, BootloaderError> {
+        Ok(match self.extended_type {
+            FatType::Fat16 => {
+                match fat_table {
+                    0xfff8 | 0xffff => FatTableEntryType::EndOfFile,
+                    0xfff7 => FatTableEntryType::SectorError,
+                    0 | 1  => FatTableEntryType::Reserved,
+
+                    _ => FatTableEntryType::Valid(fat_table)
+                }
+            }
+
+
+            _ => return Err(BootloaderError::NoValid)
+        })
+    }
+
     pub unsafe fn convert_extended_type_unchecked<ExtendedType: FatValid + Copy>(&self) -> ExtendedType {
         let exb = &self.bios_block.ex_block;
         let ptr = exb.as_ptr() as *const ExtendedType;
@@ -224,7 +249,6 @@ impl BiosBlock {
     pub fn get_fat_type(&self) -> FatType {
         self.extended_type
     }
-
 
     pub fn new(mut boot_sector: [u8; 512]) -> Self {
         let bpb_low = unsafe {

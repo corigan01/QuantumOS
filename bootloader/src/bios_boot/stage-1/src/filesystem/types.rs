@@ -60,4 +60,15 @@ impl FileSystemTypes {
 
         Err(BootloaderError::NoValid)
     }
+
+    pub unsafe fn load_file_to_ptr<DiskType: DiskMedia>(&self, disk: &DiskType, filename: &str, ptr: *mut u8) -> Result<(), BootloaderError> {
+        Ok(match self {
+            FileSystemTypes::Fat(partition) => {
+                unsafe { Fatfs::<DiskType>::load_file_to_ptr(disk, partition, filename, ptr)?; }
+            }
+
+            _ => return Err(BootloaderError::NoValid)
+
+        })
+    }
 }

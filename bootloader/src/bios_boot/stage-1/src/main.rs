@@ -31,12 +31,14 @@ use core::panic::PanicInfo;
 
 use stage_1::bios_disk::BiosDisk;
 use stage_1::bios_ints::{BiosInt, TextModeColor};
-use stage_1::cstring::CStringRef;
+use stage_1::cstring::{CStringOwned, CStringRef};
 use stage_1::vesa::BasicVesaInfo;
 use stage_1::{bios_print, bios_println};
 use stage_1::filesystem::FileSystem;
 
 global_asm!(include_str!("init.s"));
+
+const STAGE_2_LOADING_LOCATION: *mut u8 = 0x10000 as *mut u8;
 
 #[no_mangle]
 extern "C" fn bit16_entry(disk_number: u16) {
@@ -47,14 +49,22 @@ extern "C" fn bit16_entry(disk_number: u16) {
 fn enter_rust(disk: u16) {
     bios_println!("\n --- Quantum Boot loader 16 ---\n");
 
-
+    bios_println!("Attempting to find valid filesystems!");
     let fs =
         FileSystem::<BiosDisk>::new(BiosDisk::new(disk as u8))
             .quarry_disk()
             .expect("Could not read any supported filesystems!")
             .mount_root_if_contains("/bootloader/stage2.fbin")
-            .expect("Count not find next stage on any filesystems!");
+            .expect("Could not find next stage on any filesystems!");
 
+    bios_println!("Mounted bootloader partition");
+    bios_println!("Reading file");
+
+    unsafe {
+        fs.read_file_into_buffer(STAGE_2_LOADING_LOCATION, "/bootloader/stage2.fbin")
+    }.expect("Unable to load file!");
+
+    bios_println!("FILE: {}", unsafe { CStringOwned::from_ptr(STAGE_2_LOADING_LOCATION as *const u8, 512) } );
 
 
 

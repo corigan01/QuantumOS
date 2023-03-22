@@ -41,4 +41,5 @@ sudo mount /dev/loop0p1 fs/boot
 sudo mount -text2 /dev/loop0p2 fs/root
 
 sudo mkdir fs/boot/bootloader
-sudo cp /bin/qemu-aarch64 fs/boot/bootloader/stage2.fbin
+sudo cp /bin/qemu-i386 fs/boot/bootloader/stage2.fbin
+#echo "My super cool bootloader thing" | sudo tee fs/boot/bootloader/stage2.fbin

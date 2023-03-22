@@ -47,8 +47,8 @@ pub trait DiskMedia {
 
 pub trait ValidFilesystem<DiskType: DiskMedia> {
     fn is_valid(disk: &DiskType, partition: &PartitionEntry) -> bool;
-
     fn does_contain_file(disk: &DiskType, partition: &PartitionEntry, filename: &str) -> Result<bool, BootloaderError>;
+    unsafe fn load_file_to_ptr(disk: &DiskType, partition: &PartitionEntry, filename: &str, ptr: *mut u8) -> Result<(), BootloaderError>;
 }
 
 pub struct FileSystem<DiskType, State = UnQuarried>
@@ -133,7 +133,9 @@ impl <DiskType: DiskMedia> FileSystem<DiskType, MountedRoot> {
     //! does not load a file bigger then the given buffer. This can lead to serious issues
     //! if this buffer is not checked, so its recommended that this function not be used.
     pub unsafe fn read_file_into_buffer(&self, buffer: *mut u8, filename: &str) -> Result<(), BootloaderError> {
-        todo!()
+        let root_fs = self.root;
+
+        root_fs.load_file_to_ptr(&self.attached_disk, filename, buffer)
     }
 }
 
