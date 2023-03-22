@@ -64,7 +64,7 @@ fn enter_rust(disk: u16) {
         fs.read_file_into_buffer(STAGE_2_LOADING_LOCATION, "/bootloader/stage2.fbin")
     }.expect("Unable to load file!");
 
-    bios_println!("FILE: {}", unsafe { CStringOwned::from_ptr(STAGE_2_LOADING_LOCATION as *const u8, 10) } );
+    bios_println!("FILE: {}", unsafe { CStringOwned::from_ptr(STAGE_2_LOADING_LOCATION as *const u8, 100) } );
 
 
 

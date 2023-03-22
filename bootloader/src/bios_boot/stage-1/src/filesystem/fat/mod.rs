@@ -248,31 +248,42 @@ impl<'a, DiskType: DiskMedia + 'a> Fatfs<'a, DiskType> {
         let mut following_cluster = file.start_cluster;
         let mut ptr_offset = 0;
 
+        let mut last_percent = 0;
+        bios_print!("Reading...");
+
         // FIXME: This is kinda sloppy code, maybe fix in the future
         loop {
             let cluster_id = following_cluster - 2;
 
             let first_data_sector = self.bpb.data_cluster_begin()?;
             let sector_offset = (cluster_id * self.bpb.cluster_size()?) + first_data_sector;
+            let cluster_size = self.bpb.cluster_size()?;
 
-            let read_data = Self::get_sector_offset(self.disk, self.partition, sector_offset)?;
+            for e in 0..cluster_size {
+                let read_data = Self::get_sector_offset(self.disk, self.partition, sector_offset + e)?;
 
-            // FIXME: This makes the loading slow, but the bios is having trouble accessing high
-            // memory, so unfortunately this is our only option for moving memory
-            for i in &read_data {
-                *ptr.add(ptr_offset) = *i;
-                ptr_offset += 1;
+                // FIXME: This makes the loading slow, but the bios is having trouble accessing high
+                // memory, so unfortunately this is our only option for moving memory
+                for i in &read_data {
+                    *ptr.add(ptr_offset) = *i;
+                    ptr_offset += 1;
+                }
             }
+
 
             let table_value = self.get_fat_entry(following_cluster)?;
             let next_cluster_type =
                 self.bpb.convert_usize_to_fat_table_entry(table_value)?;
 
-            bios_println!("reading... {}kib/{}kib ({}%)",
-                following_cluster / 2,
-                file.filesize_bytes / 4096,
-                (((following_cluster / 2) as f64) / ((file.filesize_bytes / 4096) as f64) * 100.0) as usize
-            );
+            if file.filesize_bytes > 1024 * 10 {
+                let new_percent = (((following_cluster * cluster_size) as f64) / ((file.filesize_bytes / 512) as f64) * 100.0) as usize;
+                if (new_percent / 10) != last_percent {
+                    last_percent = new_percent / 10;
+
+                    bios_print!("{}%...", new_percent);
+                }
+            }
+
 
 
             match next_cluster_type {
@@ -280,12 +291,13 @@ impl<'a, DiskType: DiskMedia + 'a> Fatfs<'a, DiskType> {
                     following_cluster = cluster;
                 }
                 FatTableEntryType::EndOfFile => {
-                    bios_println!("EOF");
+                    bios_println!("EOF {:x}", table_value);
                     return Ok(());
                 }
 
                 _ => {
-                    bios_println!("READ ERROR -------");
+                    bios_println!("READ ERROR ------- {}", table_value);
+
                     return Err(BootloaderError::NoValid)
                 }
             }

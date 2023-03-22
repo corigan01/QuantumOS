@@ -76,7 +76,7 @@ impl BiosBlock {
                 match fat_table {
                     0xfff8 | 0xffff => FatTableEntryType::EndOfFile,
                     0xfff7 => FatTableEntryType::SectorError,
-                    0 | 1  => FatTableEntryType::Reserved,
+                    0  => FatTableEntryType::Reserved,
 
                     _ => FatTableEntryType::Valid(fat_table)
                 }

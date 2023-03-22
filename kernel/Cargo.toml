@@ -17,7 +17,6 @@ const_fn = []
 panic = "unwind"
 
 [dependencies]
-bootloader = "0.10.12"
 no-std-compat = "0.4.1"
 volatile = "0.4.5"
 spin = "0.9.4"
@@ -26,9 +25,6 @@ spin = "0.9.4"
 x86_64 = "0.14.9"
 owo-colors = "3.4.0"
 heapless = "0.7.16"
-
-[package.metadata.bootloader]
-kernel-stack-size = 204800
 
 [dependencies.lazy_static]
 version = "1.0"
