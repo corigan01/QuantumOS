@@ -59,6 +59,8 @@ pub struct BiosBlock {
     pub bios_block: BiosBlockLow,
 }
 
+
+#[derive(Debug)]
 pub enum FatTableEntryType {
     Valid(usize),
     Reserved,
@@ -111,7 +113,6 @@ impl BiosBlock {
         if offset_bytes > data.len() {
             return Err(BootloaderError::OutOfBounds);
         }
-
 
         let raw_ptr = data.as_ptr().add(offset_bytes) as *const EntrySize;
 

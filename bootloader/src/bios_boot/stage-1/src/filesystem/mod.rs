@@ -43,6 +43,8 @@ pub struct MountedRoot;
 pub trait DiskMedia {
     // FIXME: sector size should not be defined to always 512
     fn read(&self, sector: usize) -> Result<[u8; 512], BootloaderError>;
+    
+    unsafe fn read_ptr(&self, sector: usize, ptr: *mut u8) -> Result<(), BootloaderError>;
 }
 
 pub trait ValidFilesystem<DiskType: DiskMedia> {

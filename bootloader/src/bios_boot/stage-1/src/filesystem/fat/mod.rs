@@ -64,7 +64,10 @@ impl FatType {
 pub struct Fatfs<'a, DiskType: DiskMedia> {
     disk: &'a DiskType,
     partition: &'a PartitionEntry,
-    bpb: BiosBlock
+    bpb: BiosBlock,
+
+    saved_fat_data: [u8; 512],
+    saved_fat_meta: usize,
 }
 
 impl<'a, DiskType: DiskMedia + 'a> Fatfs<'a, DiskType> {
@@ -97,10 +100,12 @@ impl<'a, DiskType: DiskMedia + 'a> Fatfs<'a, DiskType> {
             disk,
             partition,
             bpb,
+            saved_fat_data: [0; 512],
+            saved_fat_meta: 0,
         })
     }
 
-    fn get_fat_entry(&self, cluster_id: usize) -> Result<usize, BootloaderError> {
+    fn get_fat_entry(&mut self, cluster_id: usize) -> Result<usize, BootloaderError> {
         let fat_entry_size = self.bpb.get_file_allocation_table_entry_size_bytes()?;
 
         let inter_index = cluster_id % (512 / fat_entry_size);
@@ -109,13 +114,16 @@ impl<'a, DiskType: DiskMedia + 'a> Fatfs<'a, DiskType> {
         let first_fat_sector = self.bpb.file_allocation_table_begin()?;
         let real_fat_sector = first_fat_sector + sector_offset;
 
-        let data = Self::get_sector_offset(self.disk, self.partition, real_fat_sector)?;
+        if self.saved_fat_meta != real_fat_sector {
+            self.saved_fat_meta = real_fat_sector;
+            self.saved_fat_data = Self::get_sector_offset(self.disk, self.partition, real_fat_sector)?;
+        }
 
-        self.bpb.get_file_allocation_table_entry(inter_index, &data)
+        self.bpb.get_file_allocation_table_entry(inter_index, &self.saved_fat_data)
     }
 
-    fn run_on_all_entries_in_dir_and_return_on_true<Function>(&self, fat_file: &FatFile, run_on_each: Function )
-        -> Result<FatFile, BootloaderError>
+    fn run_on_all_entries_in_dir_and_return_on_true<Function>(&mut self, fat_file: &FatFile, run_on_each: Function )
+                                                              -> Result<FatFile, BootloaderError>
         where Function: Fn(&FatFile) -> bool
     {
 
@@ -192,7 +200,7 @@ impl<'a, DiskType: DiskMedia + 'a> Fatfs<'a, DiskType> {
     }
 
 
-    pub fn get_children_file_within_parent(&self, parent: &FatFile, filename: &str) -> Result<FatFile, BootloaderError> {
+    pub fn get_children_file_within_parent(&mut self, parent: &FatFile, filename: &str) -> Result<FatFile, BootloaderError> {
         if filename.len() == 0 {
             bios_println!("[W]: Finding children with filename \"\" does not make sense, maybe an error?");
             return Err(BootloaderError::NotSupported)
@@ -209,7 +217,7 @@ impl<'a, DiskType: DiskMedia + 'a> Fatfs<'a, DiskType> {
             })
     }
 
-    pub fn contains_file(&self, filename: &str) -> Result<FatFile, BootloaderError> {
+    pub fn contains_file(&mut self, filename: &str) -> Result<FatFile, BootloaderError> {
         let mut parent = self.bpb.get_root_file_entry()?;
         let (_, mut file_consumption_part) = filename.split_at(1);
 
@@ -236,7 +244,7 @@ impl<'a, DiskType: DiskMedia + 'a> Fatfs<'a, DiskType> {
         }
     }
 
-    unsafe fn follow_clusters_and_load_into_buffer(&self, file: &FatFile, ptr: *mut u8) -> Result<(), BootloaderError> {
+    unsafe fn follow_clusters_and_load_into_buffer(&mut self, file: &FatFile, ptr: *mut u8) -> Result<(), BootloaderError> {
         let mut following_cluster = file.start_cluster;
         let mut ptr_offset = 0;
 
@@ -249,31 +257,43 @@ impl<'a, DiskType: DiskMedia + 'a> Fatfs<'a, DiskType> {
 
             let read_data = Self::get_sector_offset(self.disk, self.partition, sector_offset)?;
 
-            for i in read_data {
-                *ptr.add(ptr_offset) = i;
+            // FIXME: This makes the loading slow, but the bios is having trouble accessing high
+            // memory, so unfortunately this is our only option for moving memory
+            for i in &read_data {
+                *ptr.add(ptr_offset) = *i;
                 ptr_offset += 1;
             }
 
+            let table_value = self.get_fat_entry(following_cluster)?;
             let next_cluster_type =
-                self.bpb.convert_usize_to_fat_table_entry(
-                    self.get_fat_entry(following_cluster)?
-                )?;
+                self.bpb.convert_usize_to_fat_table_entry(table_value)?;
+
+            bios_println!("reading... {}kib/{}kib ({}%)",
+                following_cluster / 2,
+                file.filesize_bytes / 4096,
+                (((following_cluster / 2) as f64) / ((file.filesize_bytes / 4096) as f64) * 100.0) as usize
+            );
+
 
             match next_cluster_type {
                 FatTableEntryType::Valid(cluster) => {
                     following_cluster = cluster;
                 }
                 FatTableEntryType::EndOfFile => {
+                    bios_println!("EOF");
                     return Ok(());
                 }
 
-                _ => return Err(BootloaderError::NoValid)
+                _ => {
+                    bios_println!("READ ERROR -------");
+                    return Err(BootloaderError::NoValid)
+                }
             }
 
         }
     }
 
-    pub unsafe fn load_file_at_location(&self, filename: &str, ptr: *mut u8) -> Result<(), BootloaderError> {
+    pub unsafe fn load_file_at_location(&mut self, filename: &str, ptr: *mut u8) -> Result<(), BootloaderError> {
         let file = self.contains_file(filename)?;
 
         self.follow_clusters_and_load_into_buffer(&file, ptr)
@@ -291,13 +311,13 @@ impl<'a, DiskType: DiskMedia + 'a> ValidFilesystem<DiskType> for Fatfs<'a, DiskT
     }
 
     fn does_contain_file(disk: &DiskType, partition: &PartitionEntry, filename: &str) -> Result<bool, BootloaderError> {
-        let fatfs = Fatfs::<DiskType>::new(disk, partition)?;
+        let mut fatfs = Fatfs::<DiskType>::new(disk, partition)?;
 
         Ok(fatfs.contains_file(filename).is_ok())
     }
 
     unsafe fn load_file_to_ptr(disk: &DiskType, partition: &PartitionEntry, filename: &str, ptr: *mut u8) -> Result<(), BootloaderError> {
-        let fatfs = Fatfs::<DiskType>::new(disk, partition)?;
+        let mut fatfs = Fatfs::<DiskType>::new(disk, partition)?;
 
         fatfs.load_file_at_location(filename, ptr)
     }

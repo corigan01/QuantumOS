@@ -106,4 +106,11 @@ impl DiskMedia for BiosDisk {
 
         Ok(tmp)
     }
+
+    unsafe fn read_ptr(&self, sector: usize, ptr: *mut u8) -> Result<(), BootloaderError> {
+        self.read_from_disk(ptr, sector..(sector + 1));
+        
+        Ok(())
+    }
+
 }

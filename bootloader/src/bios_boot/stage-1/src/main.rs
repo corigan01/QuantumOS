@@ -38,7 +38,7 @@ use stage_1::filesystem::FileSystem;
 
 global_asm!(include_str!("init.s"));
 
-const STAGE_2_LOADING_LOCATION: *mut u8 = 0x10000 as *mut u8;
+const STAGE_2_LOADING_LOCATION: *mut u8 = (4 * (1024 * 1024)) as *mut u8;
 
 #[no_mangle]
 extern "C" fn bit16_entry(disk_number: u16) {
@@ -64,7 +64,7 @@ fn enter_rust(disk: u16) {
         fs.read_file_into_buffer(STAGE_2_LOADING_LOCATION, "/bootloader/stage2.fbin")
     }.expect("Unable to load file!");
 
-    bios_println!("FILE: {}", unsafe { CStringOwned::from_ptr(STAGE_2_LOADING_LOCATION as *const u8, 512) } );
+    bios_println!("FILE: {}", unsafe { CStringOwned::from_ptr(STAGE_2_LOADING_LOCATION as *const u8, 10) } );
 
 
 
