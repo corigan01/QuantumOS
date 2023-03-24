@@ -34,11 +34,10 @@ use stage_1::bios_ints::{BiosInt, TextModeColor};
 use stage_1::cstring::{CStringOwned, CStringRef};
 use stage_1::vesa::BasicVesaInfo;
 use stage_1::{bios_print, bios_println};
+use stage_1::config_parser::BootloaderConfig;
 use stage_1::filesystem::FileSystem;
 
 global_asm!(include_str!("init.s"));
-
-const STAGE_2_LOADING_LOCATION: *mut u8 = (4 * (1024 * 1024)) as *mut u8;
 
 #[no_mangle]
 extern "C" fn bit16_entry(disk_number: u16) {
@@ -54,17 +53,20 @@ fn enter_rust(disk: u16) {
         FileSystem::<BiosDisk>::new(BiosDisk::new(disk as u8))
             .quarry_disk()
             .expect("Could not read any supported filesystems!")
-            .mount_root_if_contains("/bootloader/stage2.fbin")
-            .expect("Could not find next stage on any filesystems!");
+            .mount_root_if_contains("/bootloader/bootloader.cfg")
+            .expect("Could detect bootloader partition, please add \'/bootloader/bootloader.cfg\' to the bootloader filesystem for a proper boot!");
 
     bios_println!("Mounted bootloader partition");
     bios_println!("Reading file");
 
-    unsafe {
-        fs.read_file_into_buffer(STAGE_2_LOADING_LOCATION, "/bootloader/stage2.fbin")
-    }.expect("Unable to load file!");
+    // FIXME: maybe should be an allocated buffer in the future
+    let mut bootloader_config_buffer = [0_u8; 1024];
 
-    bios_println!("FILE: {}", unsafe { CStringOwned::from_ptr(STAGE_2_LOADING_LOCATION as *const u8, 100) } );
+    unsafe {
+        fs.read_file_into_buffer(bootloader_config_buffer.as_mut_ptr(), "/bootloader/bootloader.cfg")
+    }.expect("Unable to load config file!");
+
+    bios_println!("CONFIG:\n{}", CStringRef::from_bytes(&bootloader_config_buffer) );
 
 
 

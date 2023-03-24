@@ -25,6 +25,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 use crate::bios_ints::BiosInt;
+use crate::cstring::{CStringOwned, CStringRef};
 
 #[repr(packed, C)]
 #[derive(Debug)]
@@ -79,15 +80,9 @@ impl BasicVesaInfo {
         self.version
     }
 
-    // FIXME: Get the oem string
-    pub fn get_oem_string(&self) -> [u8; 16] {
-        let offset = self.oem_string_ptr[0];
-        let segment = self.oem_string_ptr[1];
+    pub fn get_oem_string(&self) -> CStringOwned {
+        let ptr = ((self.oem_string_ptr[1] as usize * 0x10) + self.oem_string_ptr[0] as usize);
 
-        let temp_buffer = [0_u8; 16];
-
-        unsafe {}
-
-        temp_buffer
+        unsafe { CStringOwned::from_ptr(ptr as *const u8, 30) }
     }
 }

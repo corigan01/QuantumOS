@@ -22,3 +22,52 @@ NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FO
 DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+
+use core::mem::size_of;
+use lazy_static::lazy_static;
+use spin::Mutex;
+use crate::error::BootloaderError;
+
+pub struct AllocMemoryRegion {
+    memory_location_ptr: *mut u8,
+    memory_alloc_size: usize,
+    used_space: usize,
+}
+
+pub struct MemoryAllocationEntry {
+    magic: u64,
+    allocation_size: u32,
+}
+
+unsafe impl Send for AllocMemoryRegion {}
+unsafe impl Sync for AllocMemoryRegion {}
+
+
+lazy_static! {
+    static ref TEMP_ALLOC: Mutex<Option<AllocMemoryRegion>> = {
+        Mutex::new(None)
+    };
+}
+
+impl AllocMemoryRegion {
+    pub fn new(ptr: *mut u8, size: usize) -> Result<Self, BootloaderError> {
+        if size < size_of::<MemoryAllocationEntry>() * 2 + 1 {
+            return Err(BootloaderError::NotEnoughMemory)
+        }
+
+        Ok(Self {
+            memory_location_ptr: ptr,
+            memory_alloc_size: size,
+            used_space: 0,
+        })
+    }
+
+    pub fn get_remaining_space(&self) -> usize {
+        self.memory_alloc_size - self.used_space
+    }
+
+    pub fn allocate<'a>(&self, size: usize) -> Result<&'a mut [u8], BootloaderError> {
+        todo!()
+    }
+}
+

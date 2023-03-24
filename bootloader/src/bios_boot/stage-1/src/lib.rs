@@ -36,3 +36,4 @@ pub mod tmp_alloc;
 pub mod vesa;
 pub mod filesystem;
 pub mod error;
+pub mod config_parser;

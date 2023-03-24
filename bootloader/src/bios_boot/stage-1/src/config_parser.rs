@@ -21,31 +21,27 @@ NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPO
 NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
 DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
 */
 
-use core::fmt;
-use core::fmt::Formatter;
+use crate::error::BootloaderError;
 
-#[derive(Debug)]
-pub enum BootloaderError {
-    DiskNotFound,
-    NotSupported,
-    NoValid,
-    FileNotFound,
-    OutOfBounds,
-    NotEnoughMemory
+pub struct BootloaderConfig {
+    stage2_address: usize,
+    stage2_filepath: [u8; 32],
+
+    kernel_address: usize,
+    kernel_filepath: [u8; 32],
+
+    video_mode_preferred: (usize, usize),
+
 }
 
-impl fmt::Display for BootloaderError {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        match self {
-            BootloaderError::DiskNotFound => write!(f, "Bootloader could not find any suitable disks!")?,
-            BootloaderError::NotSupported => write!(f, "Bootloader does not support this operation!")?,
-            
-            _ => write!(f, "{:?}", self)?,
+impl BootloaderConfig {
+    pub fn from_buffer(ptr: &[u8]) -> Result<Self, BootloaderError> {
+        for i in ptr {
+
         }
 
-        Ok(())
+        Err(BootloaderError::NoValid)
     }
 }
