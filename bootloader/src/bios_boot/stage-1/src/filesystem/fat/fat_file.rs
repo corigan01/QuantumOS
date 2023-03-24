@@ -30,7 +30,7 @@ pub struct FatFile {
     pub filename: CStringOwned,
     pub start_cluster: usize,
     pub filesize_bytes: usize,
-    pub filetype: FatFileType
+    pub filetype: FatFileType,
 }
 
 #[repr(C, packed)]
@@ -54,9 +54,7 @@ pub struct FatDirectoryEntry {
 impl FatDirectoryEntry {
     pub fn to_fat_file(&self) -> FatFile {
         let filename = self.file_name.as_ptr();
-        let cstring = unsafe {
-            CStringOwned::from_ptr(filename, 11)
-        };
+        let cstring = unsafe { CStringOwned::from_ptr(filename, 11) };
         let starting_cluster = self.low_entry_bytes;
 
         let file_type = FatFileType::new_from_file(self);
@@ -79,7 +77,7 @@ pub struct FatLongFileName {
     pub checksum: u8,
     pub next_6: [u16; 6],
     pub reserved: u16,
-    pub final_2: [u16; 2]
+    pub final_2: [u16; 2],
 }
 
 impl FatLongFileName {
@@ -109,7 +107,6 @@ impl FatLongFileName {
             }
         }
 
-
         let mut moved_buffer_data = [0_u8; 512];
         for i in 0..data_len {
             moved_buffer_data[i + data_len] = buffer[i];
@@ -121,7 +118,6 @@ impl FatLongFileName {
         for i in 0..moved_buffer_data.len() {
             buffer[i] = moved_buffer_data[i];
         }
-
     }
 }
 

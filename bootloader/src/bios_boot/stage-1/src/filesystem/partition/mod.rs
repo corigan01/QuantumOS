@@ -24,8 +24,8 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 use crate::error::BootloaderError;
-use crate::filesystem::DiskMedia;
 use crate::filesystem::partition::mbr::MasterBootRecord;
+use crate::filesystem::DiskMedia;
 
 pub mod mbr;
 
@@ -38,9 +38,8 @@ pub enum PartitionType {
     None,
 
     // Unchecked Types
-    NotChecked
+    NotChecked,
 }
-
 
 impl PartitionType {
     pub fn new() -> Self {
@@ -52,7 +51,7 @@ impl PartitionType {
 pub struct PartitionEntry {
     start_sector: Option<usize>,
     end_sector: Option<usize>,
-    kind: PartitionType
+    kind: PartitionType,
 }
 
 impl PartitionEntry {
@@ -60,7 +59,7 @@ impl PartitionEntry {
         Self {
             start_sector: None,
             end_sector: None,
-            kind: PartitionType::new()
+            kind: PartitionType::new(),
         }
     }
 
@@ -83,7 +82,7 @@ impl PartitionEntry {
 
 pub struct Partitions {
     // FIXME: Should not be a constant size
-    partitions_array: [PartitionEntry; 4]
+    partitions_array: [PartitionEntry; 4],
 }
 
 impl Partitions {
@@ -96,14 +95,12 @@ impl Partitions {
     }
 
     pub fn check_mbr<DiskType: DiskMedia>(disk: DiskType) -> Result<Self, BootloaderError> {
-
         let boot_sector_data = disk.read(0)?;
 
         let test_mbr = MasterBootRecord::new(boot_sector_data);
         if let Some(partitions) = test_mbr.to_partitions() {
             return Ok(partitions);
         }
-
 
         Err(BootloaderError::NotSupported)
     }

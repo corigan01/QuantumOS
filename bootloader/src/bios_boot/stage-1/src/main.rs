@@ -31,11 +31,11 @@ use core::panic::PanicInfo;
 
 use stage_1::bios_disk::BiosDisk;
 use stage_1::bios_ints::{BiosInt, TextModeColor};
+use stage_1::config_parser::BootloaderConfig;
 use stage_1::cstring::{CStringOwned, CStringRef};
+use stage_1::filesystem::FileSystem;
 use stage_1::vesa::BasicVesaInfo;
 use stage_1::{bios_print, bios_println};
-use stage_1::config_parser::BootloaderConfig;
-use stage_1::filesystem::FileSystem;
 
 global_asm!(include_str!("init.s"));
 
@@ -54,7 +54,7 @@ fn enter_rust(disk: u16) {
             .quarry_disk()
             .expect("Could not read any supported filesystems!")
             .mount_root_if_contains("/bootloader/bootloader.cfg")
-            .expect("Could detect bootloader partition, please add \'/bootloader/bootloader.cfg\' to the bootloader filesystem for a proper boot!");
+            .expect("Could detect bootloader partition, please add '/bootloader/bootloader.cfg' to the bootloader filesystem for a proper boot!");
 
     bios_println!("Mounted bootloader partition");
     bios_println!("Reading file");
@@ -63,12 +63,17 @@ fn enter_rust(disk: u16) {
     let mut bootloader_config_buffer = [0_u8; 1024];
 
     unsafe {
-        fs.read_file_into_buffer(bootloader_config_buffer.as_mut_ptr(), "/bootloader/bootloader.cfg")
-    }.expect("Unable to load config file!");
+        fs.read_file_into_buffer(
+            bootloader_config_buffer.as_mut_ptr(),
+            "/bootloader/bootloader.cfg",
+        )
+    }
+    .expect("Unable to load config file!");
 
-    bios_println!("CONFIG:\n{}", CStringRef::from_bytes(&bootloader_config_buffer) );
-
-
+    bios_println!(
+        "CONFIG:\n{}",
+        CStringRef::from_bytes(&bootloader_config_buffer)
+    );
 
     loop {}
 }

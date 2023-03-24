@@ -56,18 +56,13 @@ impl PartialEq for CStringOwned {
         }
 
         for i in 0..self.len {
-            let s = unsafe {
-                *self.owned_data_ptr.add(i)
-            };
-            let o = unsafe {
-                *other.owned_data_ptr.add(i)
-            };
+            let s = unsafe { *self.owned_data_ptr.add(i) };
+            let o = unsafe { *other.owned_data_ptr.add(i) };
 
             if s != o {
-                return false
+                return false;
             }
         }
-
 
         true
     }
@@ -87,7 +82,6 @@ impl Debug for CStringOwned {
         write!(f, "CStringOwned(\"")?;
         write!(f, "{}", self)?;
         write!(f, "\")")?;
-
 
         Ok(())
     }

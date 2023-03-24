@@ -23,10 +23,10 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use crate::error::BootloaderError;
 use core::mem::size_of;
 use lazy_static::lazy_static;
 use spin::Mutex;
-use crate::error::BootloaderError;
 
 pub struct AllocMemoryRegion {
     memory_location_ptr: *mut u8,
@@ -42,17 +42,14 @@ pub struct MemoryAllocationEntry {
 unsafe impl Send for AllocMemoryRegion {}
 unsafe impl Sync for AllocMemoryRegion {}
 
-
 lazy_static! {
-    static ref TEMP_ALLOC: Mutex<Option<AllocMemoryRegion>> = {
-        Mutex::new(None)
-    };
+    static ref TEMP_ALLOC: Mutex<Option<AllocMemoryRegion>> = { Mutex::new(None) };
 }
 
 impl AllocMemoryRegion {
     pub fn new(ptr: *mut u8, size: usize) -> Result<Self, BootloaderError> {
         if size < size_of::<MemoryAllocationEntry>() * 2 + 1 {
-            return Err(BootloaderError::NotEnoughMemory)
+            return Err(BootloaderError::NotEnoughMemory);
         }
 
         Ok(Self {
@@ -70,4 +67,3 @@ impl AllocMemoryRegion {
         todo!()
     }
 }
-
