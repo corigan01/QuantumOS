@@ -36,8 +36,14 @@ use stage_1::vesa::BasicVesaInfo;
 use stage_1::{bios_print, bios_println};
 use stage_1::config_parser::BootloaderConfig;
 use stage_1::filesystem::FileSystem;
+use stage_1::tmp_alloc;
+use stage_1::tmp_alloc::populate_global_allocator;
 
 global_asm!(include_str!("init.s"));
+
+// FIXME: consider making this able to change based on installed memory
+const GLOBAL_ALLOC_PTR: *mut u8 = (2 * (1024 * 1024)) as *mut u8;
+const GLOBAL_ALLOC_SIZE: usize = 128 * (1024 * 1024);
 
 #[no_mangle]
 extern "C" fn bit16_entry(disk_number: u16) {
@@ -47,6 +53,9 @@ extern "C" fn bit16_entry(disk_number: u16) {
 
 fn enter_rust(disk: u16) {
     bios_println!("\n --- Quantum Boot loader 16 ---\n");
+
+    populate_global_allocator(GLOBAL_ALLOC_PTR, GLOBAL_ALLOC_SIZE)
+        .expect("Unable to construct temp allocator");
 
     bios_println!("Attempting to find valid filesystems!");
     let fs =
