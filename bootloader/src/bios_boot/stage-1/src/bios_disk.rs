@@ -24,9 +24,9 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 use crate::bios_ints::BiosInt;
-use core::ops::Range;
 use crate::error::BootloaderError;
 use crate::filesystem::DiskMedia;
+use core::ops::Range;
 
 #[repr(packed(2), C)]
 #[derive(Debug)]
@@ -101,7 +101,7 @@ impl DiskMedia for BiosDisk {
         let mut tmp = [0u8; 512];
 
         unsafe {
-            self.read_from_disk(tmp.as_mut_ptr(), (sector)..(sector + 1) );
+            self.read_from_disk(tmp.as_mut_ptr(), (sector)..(sector + 1));
         }
 
         Ok(tmp)
@@ -109,8 +109,7 @@ impl DiskMedia for BiosDisk {
 
     unsafe fn read_ptr(&self, sector: usize, ptr: *mut u8) -> Result<(), BootloaderError> {
         self.read_from_disk(ptr, sector..(sector + 1));
-        
+
         Ok(())
     }
-
 }

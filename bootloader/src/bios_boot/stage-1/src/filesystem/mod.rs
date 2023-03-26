@@ -28,13 +28,13 @@ pub mod types;
 pub mod fat;
 pub mod partition;
 
-use core::marker::PhantomData;
-use types::FileSystemTypes;
 use crate::bios_disk::BiosDisk;
 use crate::bios_println;
 use crate::error::BootloaderError;
 use crate::filesystem::fat::Fatfs;
 use crate::filesystem::partition::{PartitionEntry, Partitions};
+use core::marker::PhantomData;
+use types::FileSystemTypes;
 
 pub struct UnQuarried;
 pub struct Quarried;
@@ -43,25 +43,36 @@ pub struct MountedRoot;
 pub trait DiskMedia {
     // FIXME: sector size should not be defined to always 512
     fn read(&self, sector: usize) -> Result<[u8; 512], BootloaderError>;
-    
+
     unsafe fn read_ptr(&self, sector: usize, ptr: *mut u8) -> Result<(), BootloaderError>;
 }
 
 pub trait ValidFilesystem<DiskType: DiskMedia> {
     fn is_valid(disk: &DiskType, partition: &PartitionEntry) -> bool;
-    fn does_contain_file(disk: &DiskType, partition: &PartitionEntry, filename: &str) -> Result<bool, BootloaderError>;
-    unsafe fn load_file_to_ptr(disk: &DiskType, partition: &PartitionEntry, filename: &str, ptr: *mut u8) -> Result<(), BootloaderError>;
+    fn does_contain_file(
+        disk: &DiskType,
+        partition: &PartitionEntry,
+        filename: &str,
+    ) -> Result<bool, BootloaderError>;
+    unsafe fn load_file_to_ptr(
+        disk: &DiskType,
+        partition: &PartitionEntry,
+        filename: &str,
+        ptr: *mut u8,
+    ) -> Result<(), BootloaderError>;
 }
 
 pub struct FileSystem<DiskType, State = UnQuarried>
-    where DiskType: Sized + DiskMedia {
+where
+    DiskType: Sized + DiskMedia,
+{
     // FIXME: Should not be a hard defined limit on how many filesystems can be attached
     current_filesystems: [FileSystemTypes; 4],
     root: FileSystemTypes,
 
     attached_disk: DiskType,
 
-    state: PhantomData<State>
+    state: PhantomData<State>,
 }
 
 impl<DiskType: DiskMedia> FileSystem<DiskType> {
@@ -79,7 +90,7 @@ impl<DiskType: DiskMedia> FileSystem<DiskType> {
     }
 }
 
-impl <DiskType: DiskMedia + Clone> FileSystem<DiskType, UnQuarried> {
+impl<DiskType: DiskMedia + Clone> FileSystem<DiskType, UnQuarried> {
     pub fn quarry_disk(mut self) -> Result<FileSystem<DiskType, Quarried>, BootloaderError> {
         let partitions = Partitions::check_all(self.attached_disk.clone())?;
         let entries_ref = partitions.get_partitions_ref();
@@ -109,18 +120,19 @@ impl <DiskType: DiskMedia + Clone> FileSystem<DiskType, UnQuarried> {
     }
 }
 
-impl <DiskType: DiskMedia + Clone> FileSystem<DiskType, Quarried> {
-    pub fn mount_root_if_contains(&self, filename: &str) -> Result<FileSystem<DiskType, MountedRoot>, BootloaderError> {
+impl<DiskType: DiskMedia + Clone> FileSystem<DiskType, Quarried> {
+    pub fn mount_root_if_contains(
+        &self,
+        filename: &str,
+    ) -> Result<FileSystem<DiskType, MountedRoot>, BootloaderError> {
         for filesystems in &self.current_filesystems {
             if filesystems.does_contain_file(&self.attached_disk, filename)? {
-                return Ok(
-                    FileSystem::<DiskType, MountedRoot> {
-                        current_filesystems: self.current_filesystems,
-                        root: *filesystems,
-                        attached_disk: self.attached_disk.clone(),
-                        state: PhantomData::<MountedRoot>,
-                    }
-                )
+                return Ok(FileSystem::<DiskType, MountedRoot> {
+                    current_filesystems: self.current_filesystems,
+                    root: *filesystems,
+                    attached_disk: self.attached_disk.clone(),
+                    state: PhantomData::<MountedRoot>,
+                });
             }
         }
 
@@ -128,16 +140,18 @@ impl <DiskType: DiskMedia + Clone> FileSystem<DiskType, Quarried> {
     }
 }
 
-
-impl <DiskType: DiskMedia> FileSystem<DiskType, MountedRoot> {
+impl<DiskType: DiskMedia> FileSystem<DiskType, MountedRoot> {
     //! # Safety
     //! This function does not check how large the buffer is, and trusts that the caller
     //! does not load a file bigger then the given buffer. This can lead to serious issues
     //! if this buffer is not checked, so its recommended that this function not be used.
-    pub unsafe fn read_file_into_buffer(&self, buffer: *mut u8, filename: &str) -> Result<(), BootloaderError> {
+    pub unsafe fn read_file_into_buffer(
+        &self,
+        buffer: *mut u8,
+        filename: &str,
+    ) -> Result<(), BootloaderError> {
         let root_fs = self.root;
 
         root_fs.load_file_to_ptr(&self.attached_disk, filename, buffer)
     }
 }
-

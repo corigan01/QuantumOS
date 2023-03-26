@@ -29,11 +29,11 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 pub mod bios_disk;
 pub mod bios_ints;
 pub mod bios_video;
+pub mod config_parser;
 pub mod console;
 pub mod cpu_regs;
 pub mod cstring;
+pub mod error;
+pub mod filesystem;
 pub mod tmp_alloc;
 pub mod vesa;
-pub mod filesystem;
-pub mod error;
-pub mod config_parser;

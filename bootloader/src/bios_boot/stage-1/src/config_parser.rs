@@ -33,14 +33,16 @@ pub struct BootloaderConfig {
     kernel_filepath: [u8; 32],
 
     video_mode_preferred: (usize, usize),
-
 }
 
 impl BootloaderConfig {
-    pub fn from_buffer(ptr: &[u8]) -> Result<Self, BootloaderError> {
-        for i in ptr {
+    const KERNEL_FILE_LOCATION_KEY: &'static str = "KERNEL_ELF";
+    const KERNEL_START_LOCATION_KEY: &'static str = "KERNEL_BEGIN";
+    const NEXT_STAGE_LOCATION_KEY: &'static str = "NEXT_STAGE_BIN";
+    const VIDEO_MODE_KEY: &'static str = "VIDEO";
 
-        }
+    pub fn from_buffer(ptr: &[u8]) -> Result<Self, BootloaderError> {
+        for i in ptr {}
 
         Err(BootloaderError::NoValid)
     }

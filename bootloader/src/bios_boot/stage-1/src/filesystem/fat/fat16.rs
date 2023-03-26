@@ -45,4 +45,3 @@ impl FatValid for ExtendedBPB16 {
         fat16.signature == 0x28 || fat16.signature == 0x29
     }
 }
-

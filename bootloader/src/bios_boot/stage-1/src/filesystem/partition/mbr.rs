@@ -25,7 +25,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 use crate::bios_println;
 use crate::error::BootloaderError;
-use crate::filesystem::partition::{PartitionEntry, Partitions, PartitionType};
+use crate::filesystem::partition::{PartitionEntry, PartitionType, Partitions};
 
 #[derive(Copy, Clone, Debug)]
 pub enum MBRPartitionTypes {
@@ -106,22 +106,19 @@ impl MBRPartitionEntry {
     pub fn get_sector_end(&self) -> usize {
         self.get_sector_start() + self.get_sector_count()
     }
-
 }
 
 impl MasterBootRecord {
     pub fn new(mut boot_sector: [u8; 512]) -> Self {
         // TODO: ensure that this consumes the boot_sector var properly
-        unsafe {
-            *(boot_sector.as_mut_ptr() as *mut Self)
-        }
+        unsafe { *(boot_sector.as_mut_ptr() as *mut Self) }
     }
 
     pub fn is_valid(&self) -> bool {
-        self.partitions[0].is_valid() ||
-            self.partitions[1].is_valid() ||
-            self.partitions[2].is_valid() ||
-            self.partitions[3].is_valid()
+        self.partitions[0].is_valid()
+            || self.partitions[1].is_valid()
+            || self.partitions[2].is_valid()
+            || self.partitions[3].is_valid()
     }
 
     pub fn get_partition_entry(&self, entry: usize) -> Result<&MBRPartitionEntry, BootloaderError> {
@@ -178,16 +175,18 @@ impl MasterBootRecord {
 
                 partition_entry_ref.start_sector = Some(start_sector);
                 partition_entry_ref.end_sector = Some(sector_end);
-                partition_entry_ref.kind =
-                    if sector_bootable { PartitionType::Bootable } else { PartitionType::Normal };
-
+                partition_entry_ref.kind = if sector_bootable {
+                    PartitionType::Bootable
+                } else {
+                    PartitionType::Normal
+                };
             } else {
                 partition_entry_ref.kind = PartitionType::None;
             }
         }
 
         Some(Partitions {
-            partitions_array: building_partition_entries
+            partitions_array: building_partition_entries,
         })
     }
 }

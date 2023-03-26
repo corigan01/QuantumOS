@@ -24,15 +24,15 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 use crate::error::BootloaderError;
-use crate::filesystem::{DiskMedia, PartitionEntry, ValidFilesystem};
 use crate::filesystem::fat::Fatfs;
+use crate::filesystem::{DiskMedia, PartitionEntry, ValidFilesystem};
 
 #[derive(Clone, Copy, Debug)]
 pub enum FileSystemTypes {
     Fat(PartitionEntry),
 
     NotSupported,
-    Unchecked
+    Unchecked,
 }
 
 impl FileSystemTypes {
@@ -42,15 +42,18 @@ impl FileSystemTypes {
 
     pub fn get_partition_entry(&self) -> Option<&PartitionEntry> {
         match self {
-            FileSystemTypes::Fat(entry) => { Some(entry) }
+            FileSystemTypes::Fat(entry) => Some(entry),
 
-            _ => { None }
+            _ => None,
         }
     }
 
-    pub fn does_contain_file<DiskType: DiskMedia>(&self, disk: &DiskType, filename: &str) -> Result<bool, BootloaderError> {
+    pub fn does_contain_file<DiskType: DiskMedia>(
+        &self,
+        disk: &DiskType,
+        filename: &str,
+    ) -> Result<bool, BootloaderError> {
         if let Some(partition_entry) = self.get_partition_entry() {
-
             // FIXME: Make this type independent, so that we can call 'does_contain_file' on
             // any filesystem that supports this trait
             let fat_test = Fatfs::<DiskType>::does_contain_file(disk, partition_entry, filename)?;
@@ -61,14 +64,18 @@ impl FileSystemTypes {
         Err(BootloaderError::NoValid)
     }
 
-    pub unsafe fn load_file_to_ptr<DiskType: DiskMedia>(&self, disk: &DiskType, filename: &str, ptr: *mut u8) -> Result<(), BootloaderError> {
+    pub unsafe fn load_file_to_ptr<DiskType: DiskMedia>(
+        &self,
+        disk: &DiskType,
+        filename: &str,
+        ptr: *mut u8,
+    ) -> Result<(), BootloaderError> {
         Ok(match self {
             FileSystemTypes::Fat(partition) => {
-                unsafe { Fatfs::<DiskType>::load_file_to_ptr(disk, partition, filename, ptr)?; }
+                Fatfs::<DiskType>::load_file_to_ptr(disk, partition, filename, ptr)?;
             }
 
-            _ => return Err(BootloaderError::NoValid)
-
+            _ => return Err(BootloaderError::NoValid),
         })
     }
 }
