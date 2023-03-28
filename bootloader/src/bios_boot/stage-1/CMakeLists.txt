@@ -1,11 +1,16 @@
 cmake_minimum_required(VERSION 3.25)
 project(STAGE-1)
 
+add_custom_target(stage-1-clippy
+        COMMAND cargo clippy --release --target ${CMAKE_CURRENT_LIST_DIR}/i386-quantum_loader.json
+        COMMENT "Checking Rust"
+)
 
 add_custom_target(stage-1
         COMMAND cargo build --release --target ${CMAKE_CURRENT_LIST_DIR}/i386-quantum_loader.json
         COMMENT "building rust"
         BYPRODUCTS ${CMAKE_CURRENT_LIST_DIR}/target/i386-quantum_loader/release/stage-1
+        DEPENDS stage-1-clippy
 )
 
 add_custom_target(img

@@ -24,8 +24,6 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 */
 
-use core::arch::asm;
-
 #[repr(u16)]
 pub enum EFlagsStates {
     Carry = 0x00,
@@ -63,17 +61,7 @@ impl EFlags {
     }
 
     pub fn update_flags(&mut self) {
-        let eflags_reg;
-
-        unsafe {
-            asm!(
-            "pushf",
-            "pop {}",
-            out(reg) eflags_reg
-            );
-        };
-
-        self.low = eflags_reg;
+        todo!()
     }
 
     pub fn check_flag_status(&self, flag: EFlagsStates) -> bool {

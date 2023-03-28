@@ -28,8 +28,6 @@ pub mod types;
 pub mod fat;
 pub mod partition;
 
-use crate::bios_disk::BiosDisk;
-use crate::bios_println;
 use crate::error::BootloaderError;
 use crate::filesystem::fat::Fatfs;
 use crate::filesystem::partition::{PartitionEntry, Partitions};
