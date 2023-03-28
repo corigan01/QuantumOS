@@ -35,5 +35,4 @@ pub mod cpu_regs;
 pub mod cstring;
 pub mod error;
 pub mod filesystem;
-pub mod tmp_alloc;
 pub mod vesa;

@@ -232,7 +232,7 @@ impl<'a, DiskType: DiskMedia + 'a> Fatfs<'a, DiskType> {
                 } else {
                     let (child_name, remaining) = file_consumption_part.split_at(next_char_i);
 
-                    file_consumption_part = remaining.clone();
+                    file_consumption_part = remaining;
 
                     parent = self.get_children_file_within_parent(&parent, child_name)?;
 
