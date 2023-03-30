@@ -26,7 +26,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 use crate::error::BootloaderError;
 use crate::filesystem::partition::{PartitionEntry, PartitionType, Partitions};
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone)]
 pub enum MBRPartitionTypes {
     Zero,
     LinuxNative,
@@ -47,7 +47,7 @@ impl MBRPartitionTypes {
 }
 
 #[repr(C, packed)]
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone)]
 pub struct MBRPartitionEntry {
     drive_attributes: u8,
     chs_partition_start: u16,
@@ -60,7 +60,7 @@ pub struct MBRPartitionEntry {
 }
 
 #[repr(C, packed)]
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone)]
 pub struct MasterBootRecord {
     boot_strap_sector: [u8; 440],
     disk_id: u32,
@@ -158,9 +158,7 @@ impl MasterBootRecord {
 
         let mut building_partition_entries = [PartitionEntry::new(); 4];
 
-        for i in 0..building_partition_entries.len() {
-            let partition_entry_ref = &mut building_partition_entries[i];
-
+        for (i, partition_entry_ref) in building_partition_entries.iter_mut().enumerate() {
             if let Some(our_partition_ref) = self.partitions.get_mut(i) {
                 let start_sector = our_partition_ref.get_sector_start();
                 let sector_end = our_partition_ref.get_sector_end();

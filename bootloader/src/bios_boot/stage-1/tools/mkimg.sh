@@ -45,8 +45,10 @@ echo "# BOOTLOADER CONFIG FILE" | sudo tee -a fs/boot/bootloader/bootloader.cfg
 echo "KERNEL_ELF=/kernel.elf" | sudo tee -a fs/boot/bootloader/bootloader.cfg
 echo "NEXT_STAGE_BIN=/bootloader/stage2.bin" | sudo tee -a fs/boot/bootloader/bootloader.cfg
 echo "VIDEO=1280x720" | sudo tee -a fs/boot/bootloader/bootloader.cfg
-echo "KERNEL_ADDRESS_BEGIN=+16MB" | sudo tee -a fs/boot/bootloader/bootloader.cfg
-echo "sample" | sudo tee -a fs/boot/bootloader/bootloader.cfg
+echo "KERNEL_BEGIN=16" | sudo tee -a fs/boot/bootloader/bootloader.cfg
+echo "" | sudo tee -a fs/boot/bootloader/bootloader.cfg
 
-
+# Unmount to sync changes to disk and make sure that we dont have to wait for the OS to cache changes
 sudo umount /dev/loop0p1 /dev/loop0p2
+sudo mount /dev/loop0p1 fs/boot
+sudo mount -text2 /dev/loop0p2 fs/root

@@ -27,7 +27,7 @@ use crate::error::BootloaderError;
 use crate::filesystem::fat::Fatfs;
 use crate::filesystem::{DiskMedia, PartitionEntry, ValidFilesystem};
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy)]
 pub enum FileSystemTypes {
     Fat(PartitionEntry),
 
@@ -56,7 +56,11 @@ impl FileSystemTypes {
         if let Some(partition_entry) = self.get_partition_entry() {
             // FIXME: Make this type independent, so that we can call 'does_contain_file' on
             // any filesystem that supports this trait
-            let fat_test = Fatfs::<DiskType>::does_contain_file(disk, partition_entry, filename)?;
+            let fat_test = <Fatfs<DiskType> as ValidFilesystem<DiskType>>::does_contain_file(
+                disk,
+                partition_entry,
+                filename,
+            )?;
 
             return Ok(fat_test);
         }
@@ -72,10 +76,25 @@ impl FileSystemTypes {
     ) -> Result<(), BootloaderError> {
         Ok(match self {
             FileSystemTypes::Fat(partition) => {
-                Fatfs::<DiskType>::load_file_to_ptr(disk, partition, filename, ptr)?;
+                <Fatfs<DiskType> as ValidFilesystem<DiskType>>::load_file_to_ptr(
+                    disk, partition, filename, ptr,
+                )?;
             }
 
             _ => return Err(BootloaderError::NoValid),
         })
+    }
+
+    pub fn get_volume_name<DiskType: DiskMedia>(
+        &self,
+        disk: &DiskType,
+    ) -> Result<[u8; 11], BootloaderError> {
+        match self {
+            FileSystemTypes::Fat(partition) => {
+                <Fatfs<DiskType> as ValidFilesystem<DiskType>>::get_volume_name(disk, partition)
+            }
+
+            _ => return Err(BootloaderError::NoValid),
+        }
     }
 }

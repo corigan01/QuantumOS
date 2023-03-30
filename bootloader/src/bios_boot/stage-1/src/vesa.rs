@@ -28,7 +28,6 @@ use crate::bios_ints::BiosInt;
 use crate::cstring::CStringOwned;
 
 #[repr(packed, C)]
-#[derive(Debug)]
 pub struct BasicVesaInfo {
     signature: [u8; 4],
     version: u16,
@@ -84,5 +83,11 @@ impl BasicVesaInfo {
         let ptr = (self.oem_string_ptr[1] as usize * 0x10) + self.oem_string_ptr[0] as usize;
 
         unsafe { CStringOwned::from_ptr(ptr as *const u8, 30) }
+    }
+}
+
+impl Default for BasicVesaInfo {
+    fn default() -> Self {
+        Self::new()
     }
 }

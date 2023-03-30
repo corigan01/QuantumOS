@@ -73,6 +73,14 @@ impl BiosIntStatus {
         panic!("unwrap() BiosInt Failed to execute command successfully!");
     }
 
+    pub fn expect(&self, msg: &str) {
+        if self.did_succeed() {
+            return;
+        }
+
+        panic!("Bios Int failed! expect() '{}'", msg);
+    }
+
     pub fn run_on_fail<F: Fn()>(&self, runnable: F) {
         if self.did_succeed() {
             return;
@@ -86,20 +94,9 @@ pub struct BiosInt {
     interrupt_number: u8,
     command: u8,
     flags: Regs16,
-
-    result: u8,
 }
 
 impl BiosInt {
-    fn blank() -> Self {
-        Self {
-            interrupt_number: 0,
-            command: 0,
-            flags: Regs16::new(),
-            result: 0,
-        }
-    }
-
     pub fn write_character(
         character: u8,
         page_number: u8,
@@ -118,7 +115,6 @@ impl BiosInt {
             interrupt_number: 0x10,
             command: 0x0E,
             flags: regs,
-            ..Self::blank()
         }
     }
 
@@ -131,7 +127,6 @@ impl BiosInt {
             interrupt_number: 0x10,
             command: 0x4F,
             flags: regs,
-            ..Self::blank()
         }
     }
 
@@ -145,7 +140,6 @@ impl BiosInt {
             interrupt_number: 0x13,
             command: 0x42,
             flags: regs,
-            ..Self::blank()
         }
     }
 
@@ -159,7 +153,6 @@ impl BiosInt {
             interrupt_number: 0x13,
             command: 0x43,
             flags: regs,
-            ..Self::blank()
         }
     }
 

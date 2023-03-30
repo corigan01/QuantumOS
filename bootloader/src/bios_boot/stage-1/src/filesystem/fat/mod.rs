@@ -52,11 +52,7 @@ pub enum FatType {
 
 impl FatType {
     pub fn is_valid(&self) -> bool {
-        match self {
-            Self::Unknown => false,
-
-            _ => true,
-        }
+        !matches!(self, Self::Unknown)
     }
 }
 
@@ -117,6 +113,7 @@ impl<'a, DiskType: DiskMedia + 'a> Fatfs<'a, DiskType> {
         let first_fat_sector = self.bpb.file_allocation_table_begin()?;
         let real_fat_sector = first_fat_sector + sector_offset;
 
+        // Small optimization to improve F-A-Table lookups
         if self.saved_fat_meta != real_fat_sector {
             self.saved_fat_meta = real_fat_sector;
             self.saved_fat_data =
@@ -151,15 +148,11 @@ impl<'a, DiskType: DiskMedia + 'a> Fatfs<'a, DiskType> {
         // FIXME: If a dir has more then 16 entries we need to trace and add them and loop until
         // all are read, but for now we should be able to boot with just a few entries in
         // each entry.
-        let mut long_file_name_tmp_buffer = [0_u8; 512];
+        let mut long_file_name_tmp_buffer = [0_u8; 256];
         for i in 0..16 {
             let file_entry = unsafe { &*(data.as_ptr().add(32 * i) as *const FatDirectoryEntry) };
 
             let mut file = file_entry.to_fat_file();
-
-            if file.filetype != FatFileType::Unknown {
-                let fat_entry = self.get_fat_entry(file.start_cluster)?;
-            }
 
             if file.filetype == FatFileType::LongFileName {
                 let long_file_name =
@@ -173,10 +166,8 @@ impl<'a, DiskType: DiskMedia + 'a> Fatfs<'a, DiskType> {
             } else {
                 // Make the filename
                 let mut total_chars = 0;
-                for i in 0..long_file_name_tmp_buffer.len() {
-                    let value = long_file_name_tmp_buffer[i];
-
-                    if value == 0 {
+                for (i, value) in long_file_name_tmp_buffer.iter().enumerate() {
+                    if *value == 0 {
                         total_chars = i;
                         break;
                     }
@@ -205,7 +196,7 @@ impl<'a, DiskType: DiskMedia + 'a> Fatfs<'a, DiskType> {
         parent: &FatFile,
         filename: &str,
     ) -> Result<FatFile, BootloaderError> {
-        if filename.len() == 0 {
+        if filename.is_empty() {
             bios_println!(
                 "[W]: Finding children with filename \"\" does not make sense, maybe an error?"
             );
@@ -214,7 +205,7 @@ impl<'a, DiskType: DiskMedia + 'a> Fatfs<'a, DiskType> {
 
         let looking_cstring = unsafe { CStringOwned::from_ptr(filename.as_ptr(), filename.len()) };
 
-        self.run_on_all_entries_in_dir_and_return_on_true(&parent, |entry| {
+        self.run_on_all_entries_in_dir_and_return_on_true(parent, |entry| {
             entry.filename == looking_cstring
         })
     }
@@ -253,7 +244,6 @@ impl<'a, DiskType: DiskMedia + 'a> Fatfs<'a, DiskType> {
         let mut ptr_offset = 0;
 
         let mut last_percent = 0;
-        bios_print!("Reading...");
 
         // FIXME: This is kinda sloppy code, maybe fix in the future
         loop {
@@ -264,20 +254,42 @@ impl<'a, DiskType: DiskMedia + 'a> Fatfs<'a, DiskType> {
             let cluster_size = self.bpb.cluster_size()?;
 
             for e in 0..cluster_size {
-                let read_data =
-                    Self::get_sector_offset(self.disk, self.partition, sector_offset + e)?;
+                let partition_offset = self.partition.get_start_sector().unwrap_or(0);
+                let total_sector_offset = partition_offset + sector_offset + e;
 
-                // FIXME: This makes the loading slow, but the bios is having trouble accessing high
-                // memory, so unfortunately this is our only option for moving memory
-                for i in &read_data {
-                    *ptr.add(ptr_offset) = *i;
-                    ptr_offset += 1;
+                // Sometimes the bios is unable to load a file at some memory addresses,
+                // so we have some basic error handling here that looks if a DiskIOError
+                // has occurred and will attempt to read the disk again, but this time
+                // at a buffer that is significantly smaller and at lower memory.
+                let disk_read_status = self.disk.read_ptr(total_sector_offset, ptr.add(ptr_offset));
+
+                match disk_read_status {
+                    Ok(_) => {
+                        ptr_offset += 512;
+                    }
+
+                    Err(BootloaderError::DiskIOError) => {
+                        let read_data =
+                            Self::get_sector_offset(self.disk, self.partition, sector_offset + e)?;
+
+                        // FIXME: This makes the loading slow, but the bios is having trouble accessing high
+                        // memory, so unfortunately this is our only option for moving memory
+                        for i in &read_data {
+                            *ptr.add(ptr_offset) = *i;
+                            ptr_offset += 1;
+                        }
+                    }
+
+                    _ => {
+                        return Err(BootloaderError::DiskIOError);
+                    }
                 }
             }
 
             let table_value = self.get_fat_entry(following_cluster)?;
             let next_cluster_type = self.bpb.convert_usize_to_fat_table_entry(table_value)?;
 
+            // Print the percent loaded
             if file.filesize_bytes > 1024 * 10 {
                 let new_percent = (((following_cluster * cluster_size) as f64)
                     / ((file.filesize_bytes / 512) as f64)
@@ -294,7 +306,6 @@ impl<'a, DiskType: DiskMedia + 'a> Fatfs<'a, DiskType> {
                     following_cluster = cluster;
                 }
                 FatTableEntryType::EndOfFile => {
-                    bios_println!("EOF {:x}", table_value);
                     return Ok(());
                 }
 
@@ -316,6 +327,12 @@ impl<'a, DiskType: DiskMedia + 'a> Fatfs<'a, DiskType> {
 
         self.follow_clusters_and_load_into_buffer(&file, ptr)
     }
+
+    pub fn get_vol_label(&self) -> Result<[u8; 11], BootloaderError> {
+        let bpb_label = self.bpb.get_vol_label()?;
+
+        Ok(bpb_label)
+    }
 }
 
 impl<'a, DiskType: DiskMedia + 'a> ValidFilesystem<DiskType> for Fatfs<'a, DiskType> {
@@ -325,6 +342,15 @@ impl<'a, DiskType: DiskMedia + 'a> ValidFilesystem<DiskType> for Fatfs<'a, DiskT
         } else {
             false
         }
+    }
+
+    fn get_volume_name(
+        disk: &DiskType,
+        partition: &PartitionEntry,
+    ) -> Result<[u8; 11], BootloaderError> {
+        let fatfs = Fatfs::<DiskType>::new(disk, partition)?;
+
+        fatfs.get_vol_label()
     }
 
     fn does_contain_file(

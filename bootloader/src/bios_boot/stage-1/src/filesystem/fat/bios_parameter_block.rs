@@ -108,6 +108,14 @@ impl BiosBlock {
         Err(BootloaderError::NoValid)
     }
 
+    pub fn get_vol_label(&self) -> Result<[u8; 11], BootloaderError> {
+        Ok(match self.extended_type {
+            FatType::Fat16 => self.convert_extended_type::<ExtendedBPB16>()?.vol_label,
+
+            _ => return Err(BootloaderError::NoValid),
+        })
+    }
+
     unsafe fn get_raw_file_allocation_table_entry<EntrySize: Copy>(
         offset: usize,
         data: &[u8],

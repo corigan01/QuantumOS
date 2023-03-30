@@ -28,6 +28,8 @@ pub mod types;
 pub mod fat;
 pub mod partition;
 
+use crate::bios_println;
+use crate::cstring::CStringRef;
 use crate::error::BootloaderError;
 use crate::filesystem::fat::Fatfs;
 use crate::filesystem::partition::{PartitionEntry, Partitions};
@@ -47,6 +49,12 @@ pub trait DiskMedia {
 
 pub trait ValidFilesystem<DiskType: DiskMedia> {
     fn is_valid(disk: &DiskType, partition: &PartitionEntry) -> bool;
+
+    // FIXME: Should not have a hard limit of 32 characters
+    fn get_volume_name(
+        disk: &DiskType,
+        partition: &PartitionEntry,
+    ) -> Result<[u8; 11], BootloaderError>;
     fn does_contain_file(
         disk: &DiskType,
         partition: &PartitionEntry,
@@ -67,9 +75,8 @@ where
     // FIXME: Should not be a hard defined limit on how many filesystems can be attached
     current_filesystems: [FileSystemTypes; 4],
     root: FileSystemTypes,
-
     attached_disk: DiskType,
-
+    logging_enable: bool,
     state: PhantomData<State>,
 }
 
@@ -79,37 +86,71 @@ impl<DiskType: DiskMedia> FileSystem<DiskType> {
             current_filesystems: [FileSystemTypes::new(); 4],
             root: FileSystemTypes::Unchecked,
             attached_disk: disk,
+            logging_enable: false,
             state: Default::default(),
         }
     }
+}
 
-    fn read_from_disk(&self, sector: usize) -> Result<[u8; 512], BootloaderError> {
-        self.attached_disk.read(sector)
+impl<D: DiskMedia, T> FileSystem<D, T> {
+    pub fn toggle_logging(mut self) -> Self {
+        self.logging_enable = !self.logging_enable;
+
+        self
     }
 }
 
 impl<DiskType: DiskMedia + Clone> FileSystem<DiskType, UnQuarried> {
     pub fn quarry_disk(mut self) -> Result<FileSystem<DiskType, Quarried>, BootloaderError> {
+        if self.logging_enable {
+            bios_println!("Disk Quarry: ");
+        }
+
         let partitions = Partitions::check_all(self.attached_disk.clone())?;
         let entries_ref = partitions.get_partitions_ref();
-        let mut did_find_fs = false;
+        let mut did_find_fs = 0;
 
-        for i in 0..entries_ref.len() {
-            let partition = &entries_ref[i];
-
+        for (i, partition) in entries_ref.iter().enumerate() {
             // FIXME: Consider adding a macro that adds these automatically instead of having
             // to add new filesystem drivers here each time
             if Fatfs::<DiskType>::is_valid(&self.attached_disk, partition) {
                 self.current_filesystems[i] = FileSystemTypes::Fat(partition.clone());
-                did_find_fs = true;
+                did_find_fs += 1;
+            }
+
+            if self.logging_enable && partition.get_start_sector().unwrap_or(0) != 0 {
+                bios_println!(
+                    "    [{}]: '{:5}' {:7}MiB {:10} {:10}",
+                    i,
+                    CStringRef::from_bytes(
+                        &self.current_filesystems[i]
+                            .get_volume_name(&self.attached_disk)
+                            .unwrap_or([b' '; 11])
+                    ),
+                    partition.get_partition_size().unwrap_or(0) / 2048,
+                    if partition.is_bootable() {
+                        "bootable"
+                    } else {
+                        "normal"
+                    },
+                    match self.current_filesystems[i] {
+                        FileSystemTypes::Fat(_) => "Fat",
+                        _ => "Unknown Filesystem!",
+                    }
+                );
             }
         }
 
-        if did_find_fs {
+        if did_find_fs != 0 {
+            if self.logging_enable {
+                bios_println!("\nFound {} valid/supported filesystem(s)!\n", did_find_fs);
+            }
+
             Ok(FileSystem::<DiskType, Quarried> {
                 current_filesystems: self.current_filesystems,
                 root: FileSystemTypes::Unchecked,
                 attached_disk: self.attached_disk.clone(),
+                logging_enable: self.logging_enable,
                 state: PhantomData::<Quarried>,
             })
         } else {
@@ -123,12 +164,39 @@ impl<DiskType: DiskMedia + Clone> FileSystem<DiskType, Quarried> {
         &self,
         filename: &str,
     ) -> Result<FileSystem<DiskType, MountedRoot>, BootloaderError> {
-        for filesystems in &self.current_filesystems {
-            if filesystems.does_contain_file(&self.attached_disk, filename)? {
+        if self.logging_enable {
+            bios_println!("Looking for '{}' on all disks: ", filename);
+        }
+        for (i, filesystems) in self.current_filesystems.iter().enumerate() {
+            let contains_file = filesystems.does_contain_file(&self.attached_disk, filename)?;
+
+            if self.logging_enable {
+                bios_println!(
+                    "    [{}] '{}' {}",
+                    i,
+                    CStringRef::from_bytes(
+                        &self.current_filesystems[i]
+                            .get_volume_name(&self.attached_disk)
+                            .unwrap_or([b' '; 11])
+                    ),
+                    if contains_file {
+                        "contains file!"
+                    } else {
+                        "not found!"
+                    }
+                );
+            }
+
+            if contains_file {
+                if self.logging_enable {
+                    bios_println!("\nFound '{}'. Mounting this to root!\n", filename);
+                }
+
                 return Ok(FileSystem::<DiskType, MountedRoot> {
                     current_filesystems: self.current_filesystems,
                     root: *filesystems,
                     attached_disk: self.attached_disk.clone(),
+                    logging_enable: self.logging_enable,
                     state: PhantomData::<MountedRoot>,
                 });
             }
@@ -139,16 +207,20 @@ impl<DiskType: DiskMedia + Clone> FileSystem<DiskType, Quarried> {
 }
 
 impl<DiskType: DiskMedia> FileSystem<DiskType, MountedRoot> {
-    //! # Safety
-    //! This function does not check how large the buffer is, and trusts that the caller
-    //! does not load a file bigger then the given buffer. This can lead to serious issues
-    //! if this buffer is not checked, so its recommended that this function not be used.
+    /// # Safety
+    /// This function does not check how large the buffer is, and trusts that the caller
+    /// does not load a file bigger then the given buffer. This can lead to serious issues
+    /// if this buffer is not checked, so its recommended that this function not be used.
     pub unsafe fn read_file_into_buffer(
         &self,
         buffer: *mut u8,
         filename: &str,
     ) -> Result<(), BootloaderError> {
         let root_fs = self.root;
+
+        if self.logging_enable {
+            bios_println!("Reading '{}'...", filename);
+        }
 
         root_fs.load_file_to_ptr(&self.attached_disk, filename, buffer)
     }

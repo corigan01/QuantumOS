@@ -35,21 +35,5 @@ pub enum BootloaderError {
     FileNotFound,
     OutOfBounds,
     NotEnoughMemory,
-}
-
-impl fmt::Display for BootloaderError {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        match self {
-            BootloaderError::DiskNotFound => {
-                write!(f, "Bootloader could not find any suitable disks!")?
-            }
-            BootloaderError::NotSupported => {
-                write!(f, "Bootloader does not support this operation!")?
-            }
-
-            _ => write!(f, "{:?}", self)?,
-        }
-
-        Ok(())
-    }
+    DiskIOError,
 }

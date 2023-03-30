@@ -115,7 +115,7 @@ impl FatLongFileName {
             moved_buffer_data[i] = tmp_buffer[i];
         }
 
-        for i in 0..moved_buffer_data.len() {
+        for i in 0..buffer.len() {
             buffer[i] = moved_buffer_data[i];
         }
     }

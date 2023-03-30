@@ -23,27 +23,105 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use crate::bios_println;
 use crate::error::BootloaderError;
+use core::fmt;
+use core::fmt::{Debug, Formatter};
 
-pub struct BootloaderConfig {
-    stage2_address: usize,
-    stage2_filepath: [u8; 32],
-
-    kernel_address: usize,
-    kernel_filepath: [u8; 32],
-
-    video_mode_preferred: (usize, usize),
+pub struct BootloaderConfig<'a> {
+    stage2_filepath: Option<&'a str>,
+    kernel_address: Option<usize>,
+    kernel_filepath: Option<&'a str>,
+    video_mode_preferred: Option<(usize, usize)>,
 }
 
-impl BootloaderConfig {
+impl<'a> BootloaderConfig<'a> {
     const KERNEL_FILE_LOCATION_KEY: &'static str = "KERNEL_ELF";
     const KERNEL_START_LOCATION_KEY: &'static str = "KERNEL_BEGIN";
     const NEXT_STAGE_LOCATION_KEY: &'static str = "NEXT_STAGE_BIN";
     const VIDEO_MODE_KEY: &'static str = "VIDEO";
 
-    pub fn from_buffer(ptr: &[u8]) -> Result<Self, BootloaderError> {
-        for i in ptr {}
+    const DEFAULT_KERNEL_LOCATION: u64 = 16 * 1024 * 1024;
 
-        Err(BootloaderError::NoValid)
+    pub fn from_buffer(ptr: &'a str) -> Result<Self, BootloaderError> {
+        let mut config = BootloaderConfig {
+            stage2_filepath: None,
+            kernel_address: None,
+            kernel_filepath: None,
+            video_mode_preferred: None,
+        };
+
+        for line in ptr.split('\n') {
+            let mut split_line = line.split('=');
+            match (split_line.next(), split_line.next()) {
+                (Some(Self::KERNEL_FILE_LOCATION_KEY), Some(location_key)) => {
+                    config.kernel_filepath = Some(location_key.as_ref())
+                }
+                (Some(Self::KERNEL_START_LOCATION_KEY), Some(location_key)) => {
+                    config.kernel_address = Some(location_key.trim().parse().unwrap_or(0))
+                }
+                (Some(Self::NEXT_STAGE_LOCATION_KEY), Some(location_key)) => {
+                    config.stage2_filepath = Some(location_key.as_ref())
+                }
+                (Some(Self::VIDEO_MODE_KEY), Some(location_key)) => {
+                    let mut video_mode_split = location_key.split('x');
+                    let mut video_mode = (0usize, 0usize);
+
+                    if let (Some(x), Some(y)) = (video_mode_split.next(), video_mode_split.next()) {
+                        video_mode.0 = x.trim().parse().unwrap_or(0);
+                        video_mode.1 = y.trim().parse().unwrap_or(0);
+                    }
+
+                    config.video_mode_preferred = Some(video_mode);
+                }
+
+                _ => {}
+            }
+        }
+
+        Ok(config)
+    }
+
+    pub fn get_kernel_address(&self) -> u64 {
+        match self.kernel_address {
+            Some(value) => {
+                let value = value as u64;
+
+                if value > 1024 * 1024 {
+                    value
+                } else {
+                    value * 1024 * 1024
+                }
+            }
+            _ => Self::DEFAULT_KERNEL_LOCATION,
+        }
+    }
+
+    pub fn get_kernel_file_path(&self) -> &str {
+        self.kernel_filepath
+            .expect("Please add kernel file location in bootloader.cfg")
+    }
+}
+
+impl<'a> Debug for BootloaderConfig<'a> {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        writeln!(f, "BootloaderConfig {{")?;
+
+        if let Some(kernel_file_path) = self.kernel_filepath {
+            writeln!(f, "    Kernel Path     : {}", kernel_file_path)?;
+        }
+        if let Some(kernel_start) = self.kernel_address {
+            writeln!(f, "    Kernel Address  : {}", kernel_start)?;
+        }
+        if let Some(stage_path) = self.stage2_filepath {
+            writeln!(f, "    Stage2 Path     : {}", stage_path)?;
+        }
+        if let Some(video_mode) = self.video_mode_preferred {
+            writeln!(f, "    Preferred video : {}x{}", video_mode.0, video_mode.1)?;
+        }
+
+        writeln!(f, "}}")?;
+
+        Ok(())
     }
 }

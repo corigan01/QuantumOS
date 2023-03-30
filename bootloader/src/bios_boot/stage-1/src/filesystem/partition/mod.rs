@@ -29,7 +29,7 @@ use crate::filesystem::DiskMedia;
 
 pub mod mbr;
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, PartialEq)]
 pub enum PartitionType {
     // Valid Checked Types
     Bootable,
@@ -47,7 +47,13 @@ impl PartitionType {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+impl Default for PartitionType {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[derive(Clone, Copy)]
 pub struct PartitionEntry {
     start_sector: Option<usize>,
     end_sector: Option<usize>,
@@ -77,6 +83,12 @@ impl PartitionEntry {
 
     pub fn is_bootable(&self) -> bool {
         self.kind == PartitionType::Bootable
+    }
+}
+
+impl Default for PartitionEntry {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
