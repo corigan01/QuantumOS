@@ -23,18 +23,18 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use crate::cstring::CStringOwned;
+use crate::error::BootloaderError;
+use quantum_lib::heapless_string::HeaplessString;
 
-#[derive(Debug)]
 pub struct FatFile {
-    pub filename: CStringOwned,
+    pub filename: HeaplessString<32>,
     pub start_cluster: usize,
     pub filesize_bytes: usize,
     pub filetype: FatFileType,
 }
 
 #[repr(C, packed)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Clone, Copy)]
 pub struct FatDirectoryEntry {
     pub file_name: [u8; 8],
     pub file_extension: [u8; 3],
@@ -52,19 +52,18 @@ pub struct FatDirectoryEntry {
 }
 
 impl FatDirectoryEntry {
-    pub fn to_fat_file(&self) -> FatFile {
-        let filename = self.file_name.as_ptr();
-        let cstring = unsafe { CStringOwned::from_ptr(filename, 11) };
+    pub fn to_fat_file(&self) -> Result<FatFile, BootloaderError> {
+        let cstring = HeaplessString::from_bytes(&self.file_name).unwrap();
         let starting_cluster = self.low_entry_bytes;
 
         let file_type = FatFileType::new_from_file(self);
 
-        FatFile {
+        Ok(FatFile {
             filename: cstring,
             start_cluster: starting_cluster as usize,
             filesize_bytes: self.file_bytes as usize,
             filetype: file_type,
-        }
+        })
     }
 }
 
@@ -121,7 +120,7 @@ impl FatLongFileName {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(PartialEq)]
 pub enum FatFileType {
     ReadOnly,
     Hidden,

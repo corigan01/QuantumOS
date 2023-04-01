@@ -48,6 +48,7 @@ pub enum TextModeColor {
 }
 
 #[derive(PartialEq)]
+#[must_use = "You must handle this bios interrupt"]
 pub enum BiosIntStatus {
     UnsupportedFunction,
     InvalidCommand,
@@ -97,6 +98,7 @@ pub struct BiosInt {
 }
 
 impl BiosInt {
+    #[inline]
     pub fn write_character(
         character: u8,
         page_number: u8,
@@ -118,6 +120,7 @@ impl BiosInt {
         }
     }
 
+    #[inline]
     pub fn read_vbe_info(struct_ptr: *mut u8) -> Self {
         let mut regs = Regs16::new();
 
@@ -130,6 +133,7 @@ impl BiosInt {
         }
     }
 
+    #[inline]
     pub fn read_disk_with_packet(drive_number: u8, disk_packet: *mut u8) -> Self {
         let mut regs = Regs16::new();
 
@@ -143,6 +147,7 @@ impl BiosInt {
         }
     }
 
+    #[inline]
     pub fn write_disk_with_packet(drive_number: u8, disk_packet: *mut u8) -> Self {
         let mut regs = Regs16::new();
 
@@ -156,6 +161,8 @@ impl BiosInt {
         }
     }
 
+    // VGA related functions
+    #[inline]
     unsafe fn x10_int_dispatcher(&self) -> u8 {
         let res;
 
@@ -173,6 +180,8 @@ impl BiosInt {
         res
     }
 
+    // Disk IO related functions
+    #[inline]
     unsafe fn x13_int_dispatcher(&self) -> u8 {
         let res;
 
@@ -190,6 +199,7 @@ impl BiosInt {
         res
     }
 
+    #[inline]
     pub unsafe fn execute_interrupt(&self) -> BiosIntStatus {
         let res = match self.interrupt_number {
             0x10 => self.x10_int_dispatcher(),

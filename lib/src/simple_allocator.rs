@@ -24,9 +24,53 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 */
 
-#![no_main]
-#![no_std]
+pub struct SimpleAllocator<'a> {
+    memory_slice: &'a mut [u8],
+    used_memory: usize,
+}
 
-pub mod basic_font;
-pub mod heapless_string;
-pub mod simple_allocator;
+impl<'a> SimpleAllocator<'a> {
+    fn test_allocation(&mut self) -> bool {
+        let region = self.allocate_region(1);
+
+        let test_byte = 0xde;
+
+        region[0] = test_byte;
+        region[0] += 1;
+
+        region[0] == test_byte + 1
+    }
+
+    pub fn new(memory_region: &'a mut [u8]) -> Self {
+        Self {
+            memory_slice: memory_region,
+            used_memory: 0,
+        }
+    }
+
+    pub unsafe fn new_from_ptr(ptr: *mut u8, size: usize) -> Option<Self> {
+        let mut allocator = Self {
+            memory_slice: core::slice::from_raw_parts_mut(ptr, size),
+            used_memory: 0,
+        };
+
+        if !allocator.test_allocation() {
+            return None;
+        }
+
+        return Some(allocator);
+    }
+
+    pub fn allocate_region(&mut self, size: usize) -> &'a mut [u8] {
+        let slice = unsafe {
+            core::slice::from_raw_parts_mut(
+                self.memory_slice.as_mut_ptr().add(self.used_memory),
+                size,
+            )
+        };
+
+        self.used_memory += size;
+
+        slice
+    }
+}

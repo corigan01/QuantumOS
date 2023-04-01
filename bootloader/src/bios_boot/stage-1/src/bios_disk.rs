@@ -23,12 +23,14 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use crate::bios_ints::BiosInt;
+use crate::bios_ints::{BiosInt, TextModeColor};
+use crate::bios_println;
 use crate::error::BootloaderError;
 use crate::filesystem::DiskMedia;
 use core::ops::Range;
 
 #[repr(packed, C)]
+#[derive(Copy, Clone, Debug)]
 struct DiskAccessPacket {
     packet_size: u8,
     zero: u8,
@@ -74,16 +76,16 @@ impl BiosDisk {
 
     fn construct_packet(
         &self,
-        target: *mut u8,
+        target: u32,
         sector_start: usize,
         sectors: usize,
     ) -> DiskAccessPacket {
         DiskAccessPacket {
-            packet_size: 0x10,
+            packet_size: 12,
             zero: 0,
             number_of_sectors: sectors as u16,
-            offset: (target as u64 % 0x10) as u16,
-            segment: (target as u64 / 0x10) as u16,
+            offset: (target % 0x10) as u16,
+            segment: (target / 0x10) as u16,
             starting_lba: sector_start as u64,
         }
     }
@@ -94,7 +96,7 @@ impl DiskMedia for BiosDisk {
         let mut tmp = [0u8; 512];
 
         unsafe {
-            self.construct_packet(tmp.as_mut_ptr(), sector, 1)
+            self.construct_packet(tmp.as_mut_ptr() as u32, sector, 1)
                 .read(self.drive_id)
         }?;
 
@@ -102,6 +104,7 @@ impl DiskMedia for BiosDisk {
     }
 
     unsafe fn read_ptr(&self, sector: usize, ptr: *mut u8) -> Result<(), BootloaderError> {
-        self.construct_packet(ptr, sector, 1).read(self.drive_id)
+        self.construct_packet(ptr as u32, sector, 1)
+            .read(self.drive_id)
     }
 }

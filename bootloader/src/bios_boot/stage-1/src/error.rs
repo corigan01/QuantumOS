@@ -27,7 +27,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 use core::fmt;
 use core::fmt::Formatter;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum BootloaderError {
     DiskNotFound,
     NotSupported,

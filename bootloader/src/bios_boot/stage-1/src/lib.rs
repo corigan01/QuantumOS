@@ -32,7 +32,6 @@ pub mod bios_video;
 pub mod config_parser;
 pub mod console;
 pub mod cpu_regs;
-pub mod cstring;
 pub mod error;
 pub mod filesystem;
 pub mod vesa;

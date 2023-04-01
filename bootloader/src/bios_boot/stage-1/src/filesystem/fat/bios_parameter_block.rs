@@ -23,16 +23,16 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use crate::cstring::CStringOwned;
 use crate::error::BootloaderError;
 use crate::filesystem::fat::fat16::ExtendedBPB16;
 use crate::filesystem::fat::fat_file::{FatFile, FatFileType};
 use crate::filesystem::fat::FatType;
 use crate::filesystem::fat::FatValid;
 use core::mem::size_of;
+use quantum_lib::heapless_string::HeaplessString;
 
 #[repr(C, packed)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Clone, Copy)]
 pub struct BiosBlockLow {
     pub jmp_bytes: [u8; 3],
     pub oem_id: u64,
@@ -52,13 +52,12 @@ pub struct BiosBlockLow {
     ex_block: [u8; 54],
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Clone, Copy)]
 pub struct BiosBlock {
     pub extended_type: FatType,
     pub bios_block: BiosBlockLow,
 }
 
-#[derive(Debug)]
 pub enum FatTableEntryType {
     Valid(usize),
     Reserved,
@@ -146,7 +145,7 @@ impl BiosBlock {
         fat_data: &[u8],
     ) -> Result<usize, BootloaderError> {
         Ok(match self.extended_type {
-            FatType::Fat12 | FatType::Fat16 => {
+            FatType::Fat16 => {
                 (unsafe { Self::get_raw_file_allocation_table_entry::<u16>(offset, fat_data)? })
                     as usize
             }
@@ -157,7 +156,7 @@ impl BiosBlock {
 
     pub fn root_sector_count(&self) -> Result<usize, BootloaderError> {
         Ok(match self.extended_type {
-            FatType::Fat12 | FatType::Fat16 => {
+            FatType::Fat16 => {
                 let root_entries = self.bios_block.root_entries as usize;
                 let bytes_per_sector = self.bios_block.bytes_per_sector as usize;
 
@@ -172,7 +171,7 @@ impl BiosBlock {
 
     pub fn file_allocation_table_begin(&self) -> Result<usize, BootloaderError> {
         Ok(match self.extended_type {
-            FatType::Fat12 | FatType::Fat16 => self.bios_block.reserved_sectors as usize,
+            FatType::Fat16 => self.bios_block.reserved_sectors as usize,
 
             _ => return Err(BootloaderError::NoValid),
         })
@@ -180,7 +179,7 @@ impl BiosBlock {
 
     pub fn file_allocation_table_count(&self) -> Result<usize, BootloaderError> {
         Ok(match self.extended_type {
-            FatType::Fat12 | FatType::Fat16 => self.bios_block.num_of_fats as usize,
+            FatType::Fat16 => self.bios_block.num_of_fats as usize,
 
             _ => return Err(BootloaderError::NoValid),
         })
@@ -188,7 +187,7 @@ impl BiosBlock {
 
     pub fn file_allocation_table_size(&self) -> Result<usize, BootloaderError> {
         Ok(match self.extended_type {
-            FatType::Fat12 | FatType::Fat16 => self.bios_block.sectors_per_fat as usize,
+            FatType::Fat16 => self.bios_block.sectors_per_fat as usize,
 
             _ => return Err(BootloaderError::NoValid),
         })
@@ -196,7 +195,7 @@ impl BiosBlock {
 
     pub fn cluster_size(&self) -> Result<usize, BootloaderError> {
         Ok(match self.extended_type {
-            FatType::Fat12 | FatType::Fat16 => self.bios_block.sectors_per_cluster as usize,
+            FatType::Fat16 => self.bios_block.sectors_per_cluster as usize,
 
             _ => return Err(BootloaderError::NoValid),
         })
@@ -229,7 +228,7 @@ impl BiosBlock {
         let root_size = self.root_sector_count()?;
 
         Ok(FatFile {
-            filename: CStringOwned::from_static_bytes("/".as_bytes()),
+            filename: HeaplessString::from_str("/").unwrap(),
             start_cluster: root_cluster,
             filesize_bytes: root_size,
             filetype: FatFileType::Root,

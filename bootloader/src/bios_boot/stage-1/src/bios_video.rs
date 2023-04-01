@@ -43,7 +43,8 @@ impl BiosTextMode {
 
     unsafe fn print_int_char(&self, c: u8) {
         BiosInt::write_character(c, 0, self.background_color, self.foreground_color)
-            .execute_interrupt();
+            .execute_interrupt()
+            .unwrap();
     }
 
     fn print_int_bytes(&self, str: &[u8]) {

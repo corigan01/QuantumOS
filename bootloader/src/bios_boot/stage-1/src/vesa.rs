@@ -25,7 +25,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 use crate::bios_ints::BiosInt;
-use crate::cstring::CStringOwned;
+use quantum_lib::heapless_string::HeaplessString;
 
 #[repr(packed, C)]
 pub struct BasicVesaInfo {
@@ -79,10 +79,8 @@ impl BasicVesaInfo {
         self.version
     }
 
-    pub fn get_oem_string(&self) -> CStringOwned {
-        let ptr = (self.oem_string_ptr[1] as usize * 0x10) + self.oem_string_ptr[0] as usize;
-
-        unsafe { CStringOwned::from_ptr(ptr as *const u8, 30) }
+    pub fn get_oem_string(&self) -> HeaplessString<16> {
+        todo!()
     }
 }
 

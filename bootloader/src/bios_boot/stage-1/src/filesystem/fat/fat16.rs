@@ -27,7 +27,7 @@ use crate::filesystem::fat::bios_parameter_block::BiosBlock;
 use crate::filesystem::fat::FatValid;
 
 #[repr(C, packed)]
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone)]
 pub struct ExtendedBPB16 {
     pub drive_number: u8,
     win_nt_flags: u8,

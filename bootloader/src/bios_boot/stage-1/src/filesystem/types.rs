@@ -23,6 +23,7 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use crate::bios_println;
 use crate::error::BootloaderError;
 use crate::filesystem::fat::Fatfs;
 use crate::filesystem::{DiskMedia, PartitionEntry, ValidFilesystem};
@@ -38,6 +39,24 @@ pub enum FileSystemTypes {
 impl FileSystemTypes {
     pub fn new() -> Self {
         Self::Unchecked
+    }
+
+    pub fn get_filesize_bytes<DiskType: DiskMedia>(
+        &self,
+        disk: &DiskType,
+        filename: &str,
+    ) -> Result<usize, BootloaderError> {
+        let bytes = match self {
+            FileSystemTypes::Fat(partition) => {
+                <Fatfs<DiskType> as ValidFilesystem<DiskType>>::size_of_file(
+                    &disk, &partition, filename,
+                )
+            }
+
+            _ => Err(BootloaderError::NoValid),
+        };
+
+        bytes
     }
 
     pub fn get_partition_entry(&self) -> Option<&PartitionEntry> {
@@ -74,7 +93,7 @@ impl FileSystemTypes {
         filename: &str,
         ptr: *mut u8,
     ) -> Result<(), BootloaderError> {
-        Ok(match self {
+        match self {
             FileSystemTypes::Fat(partition) => {
                 <Fatfs<DiskType> as ValidFilesystem<DiskType>>::load_file_to_ptr(
                     disk, partition, filename, ptr,
@@ -82,7 +101,9 @@ impl FileSystemTypes {
             }
 
             _ => return Err(BootloaderError::NoValid),
-        })
+        }
+
+        Ok(())
     }
 
     pub fn get_volume_name<DiskType: DiskMedia>(

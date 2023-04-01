@@ -23,9 +23,9 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use crate::cstring::CStringOwned;
 use crate::{bios_print, bios_println};
 use core::str;
+use quantum_lib::heapless_string::HeaplessString;
 
 use crate::error::BootloaderError;
 use crate::filesystem::fat::bios_parameter_block::{BiosBlock, FatTableEntryType};
@@ -41,7 +41,7 @@ pub trait FatValid {
     fn is_valid(bpb: &BiosBlock) -> bool;
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone)]
 pub enum FatType {
     Fat32,
     Fat16,
@@ -60,9 +60,6 @@ pub struct Fatfs<'a, DiskType: DiskMedia> {
     disk: &'a DiskType,
     partition: &'a PartitionEntry,
     bpb: BiosBlock,
-
-    saved_fat_data: [u8; 512],
-    saved_fat_meta: usize,
 }
 
 impl<'a, DiskType: DiskMedia + 'a> Fatfs<'a, DiskType> {
@@ -86,22 +83,23 @@ impl<'a, DiskType: DiskMedia + 'a> Fatfs<'a, DiskType> {
     }
 
     pub fn new(disk: &'a DiskType, partition: &'a PartitionEntry) -> Result<Self, BootloaderError> {
-        let partition_start = partition.get_start_sector().unwrap_or(0);
-        let boot_sector_data = disk.read(partition_start)?;
+        if let Some(partition_start) = partition.get_start_sector() {
+            let boot_sector_data = disk.read(partition_start)?;
 
-        let bpb = BiosBlock::new(boot_sector_data);
+            let bpb = BiosBlock::new(boot_sector_data);
 
-        if !bpb.extended_type.is_valid() {
-            return Err(BootloaderError::NoValid);
+            if !bpb.extended_type.is_valid() {
+                return Err(BootloaderError::NoValid);
+            }
+
+            Ok(Self {
+                disk,
+                partition,
+                bpb,
+            })
+        } else {
+            Err(BootloaderError::NoValid)
         }
-
-        Ok(Self {
-            disk,
-            partition,
-            bpb,
-            saved_fat_data: [0; 512],
-            saved_fat_meta: 0,
-        })
     }
 
     fn get_fat_entry(&mut self, cluster_id: usize) -> Result<usize, BootloaderError> {
@@ -113,15 +111,17 @@ impl<'a, DiskType: DiskMedia + 'a> Fatfs<'a, DiskType> {
         let first_fat_sector = self.bpb.file_allocation_table_begin()?;
         let real_fat_sector = first_fat_sector + sector_offset;
 
-        // Small optimization to improve F-A-Table lookups
-        if self.saved_fat_meta != real_fat_sector {
-            self.saved_fat_meta = real_fat_sector;
-            self.saved_fat_data =
-                Self::get_sector_offset(self.disk, self.partition, real_fat_sector)?;
+        let fat_data = Self::get_sector_offset(self.disk, self.partition, real_fat_sector)?;
+
+        let entry = self
+            .bpb
+            .get_file_allocation_table_entry(inter_index, &fat_data)?;
+
+        if entry == 0 {
+            return Err(BootloaderError::OutOfBounds);
         }
 
-        self.bpb
-            .get_file_allocation_table_entry(inter_index, &self.saved_fat_data)
+        Ok(entry)
     }
 
     fn run_on_all_entries_in_dir_and_return_on_true<Function>(
@@ -152,7 +152,7 @@ impl<'a, DiskType: DiskMedia + 'a> Fatfs<'a, DiskType> {
         for i in 0..16 {
             let file_entry = unsafe { &*(data.as_ptr().add(32 * i) as *const FatDirectoryEntry) };
 
-            let mut file = file_entry.to_fat_file();
+            let mut file = file_entry.to_fat_file()?;
 
             if file.filetype == FatFileType::LongFileName {
                 let long_file_name =
@@ -174,9 +174,9 @@ impl<'a, DiskType: DiskMedia + 'a> Fatfs<'a, DiskType> {
                 }
 
                 // set the filename
-                file.filename = unsafe {
-                    CStringOwned::from_ptr(long_file_name_tmp_buffer.as_ptr(), total_chars)
-                };
+                let (new_slice, _) = long_file_name_tmp_buffer.split_at(total_chars);
+
+                file.filename = HeaplessString::from_bytes(new_slice).unwrap();
             }
 
             if file.filetype != FatFileType::Unknown {
@@ -198,12 +198,12 @@ impl<'a, DiskType: DiskMedia + 'a> Fatfs<'a, DiskType> {
     ) -> Result<FatFile, BootloaderError> {
         if filename.is_empty() {
             bios_println!(
-                "[W]: Finding children with filename \"\" does not make sense, maybe an error?"
+                "Finding children with filename \"\" does not make sense, maybe an error?"
             );
             return Err(BootloaderError::NotSupported);
         }
 
-        let looking_cstring = unsafe { CStringOwned::from_ptr(filename.as_ptr(), filename.len()) };
+        let looking_cstring = HeaplessString::from_str(filename).unwrap();
 
         self.run_on_all_entries_in_dir_and_return_on_true(parent, |entry| {
             entry.filename == looking_cstring
@@ -215,7 +215,7 @@ impl<'a, DiskType: DiskMedia + 'a> Fatfs<'a, DiskType> {
         let (_, mut file_consumption_part) = filename.split_at(1);
 
         loop {
-            if let Some(next_char_i) = file_consumption_part.find('/') {
+            return if let Some(next_char_i) = file_consumption_part.find('/') {
                 let child_name = if next_char_i == 0 {
                     let (_, child_name) = file_consumption_part.split_at(1);
 
@@ -230,8 +230,10 @@ impl<'a, DiskType: DiskMedia + 'a> Fatfs<'a, DiskType> {
                     continue;
                 };
 
-                return self.get_children_file_within_parent(&parent, child_name);
-            }
+                self.get_children_file_within_parent(&parent, child_name)
+            } else {
+                Err(BootloaderError::NoValid)
+            };
         }
     }
 
@@ -254,7 +256,13 @@ impl<'a, DiskType: DiskMedia + 'a> Fatfs<'a, DiskType> {
             let cluster_size = self.bpb.cluster_size()?;
 
             for e in 0..cluster_size {
-                let partition_offset = self.partition.get_start_sector().unwrap_or(0);
+                let partition_offset = self.partition.get_start_sector();
+
+                if partition_offset.is_none() {
+                    return Err(BootloaderError::NoValid);
+                }
+
+                let partition_offset = partition_offset.unwrap_unchecked();
                 let total_sector_offset = partition_offset + sector_offset + e;
 
                 // Sometimes the bios is unable to load a file at some memory addresses,
@@ -269,6 +277,7 @@ impl<'a, DiskType: DiskMedia + 'a> Fatfs<'a, DiskType> {
                     }
 
                     Err(BootloaderError::DiskIOError) => {
+                        bios_println!("Disk IO ERROR, retrying...");
                         let read_data =
                             Self::get_sector_offset(self.disk, self.partition, sector_offset + e)?;
 
@@ -318,7 +327,7 @@ impl<'a, DiskType: DiskMedia + 'a> Fatfs<'a, DiskType> {
         }
     }
 
-    pub unsafe fn load_file_at_location(
+    pub unsafe fn load_file_at_ptr(
         &mut self,
         filename: &str,
         ptr: *mut u8,
@@ -343,7 +352,6 @@ impl<'a, DiskType: DiskMedia + 'a> ValidFilesystem<DiskType> for Fatfs<'a, DiskT
             false
         }
     }
-
     fn get_volume_name(
         disk: &DiskType,
         partition: &PartitionEntry,
@@ -363,6 +371,18 @@ impl<'a, DiskType: DiskMedia + 'a> ValidFilesystem<DiskType> for Fatfs<'a, DiskT
         Ok(fatfs.contains_file(filename).is_ok())
     }
 
+    fn size_of_file(
+        disk: &DiskType,
+        partition: &PartitionEntry,
+        filename: &str,
+    ) -> Result<usize, BootloaderError> {
+        let mut fatfs = Fatfs::<DiskType>::new(disk, partition)?;
+
+        let file = fatfs.contains_file(filename)?;
+
+        Ok(file.filesize_bytes)
+    }
+
     unsafe fn load_file_to_ptr(
         disk: &DiskType,
         partition: &PartitionEntry,
@@ -371,6 +391,6 @@ impl<'a, DiskType: DiskMedia + 'a> ValidFilesystem<DiskType> for Fatfs<'a, DiskT
     ) -> Result<(), BootloaderError> {
         let mut fatfs = Fatfs::<DiskType>::new(disk, partition)?;
 
-        fatfs.load_file_at_location(filename, ptr)
+        fatfs.load_file_at_ptr(filename, ptr)
     }
 }

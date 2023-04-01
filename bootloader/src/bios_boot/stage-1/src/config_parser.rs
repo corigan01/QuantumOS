@@ -43,7 +43,7 @@ impl<'a> BootloaderConfig<'a> {
 
     const DEFAULT_KERNEL_LOCATION: u64 = 16 * 1024 * 1024;
 
-    pub fn from_buffer(ptr: &'a str) -> Result<Self, BootloaderError> {
+    pub fn from_str(string: &'a str) -> Result<Self, BootloaderError> {
         let mut config = BootloaderConfig {
             stage2_filepath: None,
             kernel_address: None,
@@ -51,7 +51,7 @@ impl<'a> BootloaderConfig<'a> {
             video_mode_preferred: None,
         };
 
-        for line in ptr.split('\n') {
+        for line in string.split('\n') {
             let mut split_line = line.split('=');
             match (split_line.next(), split_line.next()) {
                 (Some(Self::KERNEL_FILE_LOCATION_KEY), Some(location_key)) => {

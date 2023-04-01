@@ -15,6 +15,5 @@
     "target-endian": "little",
     "panic-strategy": "abort",
     "os": "none",
-    "vendor": "unknown",
-    "relocation-model": "static"
+    "vendor": "unknown"
 }

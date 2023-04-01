@@ -29,7 +29,6 @@ pub mod fat;
 pub mod partition;
 
 use crate::bios_println;
-use crate::cstring::CStringRef;
 use crate::error::BootloaderError;
 use crate::filesystem::fat::Fatfs;
 use crate::filesystem::partition::{PartitionEntry, Partitions};
@@ -60,6 +59,11 @@ pub trait ValidFilesystem<DiskType: DiskMedia> {
         partition: &PartitionEntry,
         filename: &str,
     ) -> Result<bool, BootloaderError>;
+    fn size_of_file(
+        disk: &DiskType,
+        partition: &PartitionEntry,
+        filename: &str,
+    ) -> Result<usize, BootloaderError>;
     unsafe fn load_file_to_ptr(
         disk: &DiskType,
         partition: &PartitionEntry,
@@ -122,11 +126,12 @@ impl<DiskType: DiskMedia + Clone> FileSystem<DiskType, UnQuarried> {
                 bios_println!(
                     "    [{}]: '{:5}' {:7}MiB {:10} {:10}",
                     i,
-                    CStringRef::from_bytes(
+                    core::str::from_utf8(
                         &self.current_filesystems[i]
                             .get_volume_name(&self.attached_disk)
                             .unwrap_or([b' '; 11])
-                    ),
+                    )
+                    .unwrap(),
                     partition.get_partition_size().unwrap_or(0) / 2048,
                     if partition.is_bootable() {
                         "bootable"
@@ -174,11 +179,12 @@ impl<DiskType: DiskMedia + Clone> FileSystem<DiskType, Quarried> {
                 bios_println!(
                     "    [{}] '{}' {}",
                     i,
-                    CStringRef::from_bytes(
+                    core::str::from_utf8(
                         &self.current_filesystems[i]
                             .get_volume_name(&self.attached_disk)
                             .unwrap_or([b' '; 11])
-                    ),
+                    )
+                    .unwrap(),
                     if contains_file {
                         "contains file!"
                     } else {
@@ -211,7 +217,7 @@ impl<DiskType: DiskMedia> FileSystem<DiskType, MountedRoot> {
     /// This function does not check how large the buffer is, and trusts that the caller
     /// does not load a file bigger then the given buffer. This can lead to serious issues
     /// if this buffer is not checked, so its recommended that this function not be used.
-    pub unsafe fn read_file_into_buffer(
+    pub unsafe fn read_file_into_ptr(
         &self,
         buffer: *mut u8,
         filename: &str,
@@ -223,5 +229,28 @@ impl<DiskType: DiskMedia> FileSystem<DiskType, MountedRoot> {
         }
 
         root_fs.load_file_to_ptr(&self.attached_disk, filename, buffer)
+    }
+
+    pub fn get_filesize_bytes(&self, filename: &str) -> Result<usize, BootloaderError> {
+        self.root.get_filesize_bytes(&self.attached_disk, filename)
+    }
+
+    pub fn load_file_into_slice<'a>(
+        &self,
+        slice: &'a mut [u8],
+        filename: &str,
+    ) -> Result<(), BootloaderError> {
+        let slice_size = slice.len();
+        let filesize_bytes = self.get_filesize_bytes(filename)?;
+
+        if slice_size <= filesize_bytes {
+            return Err(BootloaderError::OutOfBounds);
+        }
+
+        unsafe {
+            self.read_file_into_ptr(slice.as_mut_ptr(), filename)?;
+        }
+
+        Ok(())
     }
 }

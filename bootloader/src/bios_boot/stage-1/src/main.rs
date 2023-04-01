@@ -27,12 +27,15 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #![no_std]
 
 use core::arch::global_asm;
+use core::fmt::Debug;
 use core::panic::PanicInfo;
+use core::ptr::slice_from_raw_parts_mut;
+use quantum_lib::simple_allocator::SimpleAllocator;
 
 use stage_1::bios_disk::BiosDisk;
 use stage_1::bios_ints::{BiosInt, TextModeColor};
 use stage_1::config_parser::BootloaderConfig;
-use stage_1::cstring::{CStringOwned, CStringRef};
+use stage_1::error::BootloaderError;
 use stage_1::filesystem::FileSystem;
 use stage_1::vesa::BasicVesaInfo;
 use stage_1::{bios_print, bios_println};
@@ -45,8 +48,14 @@ extern "C" fn bit16_entry(disk_number: u16) {
     panic!("Stage1 should not return!");
 }
 
+static mut TEMP_ALLOC: Option<SimpleAllocator> = None;
+
 fn enter_rust(disk_id: u16) {
     bios_println!("\n --- Quantum Boot loader 16 ---\n");
+
+    unsafe {
+        TEMP_ALLOC = SimpleAllocator::new_from_ptr(0x00100000 as *mut u8, 0x00100000);
+    }
 
     let fs =
         FileSystem::<BiosDisk>::new(BiosDisk::new(disk_id as u8))
@@ -56,31 +65,21 @@ fn enter_rust(disk_id: u16) {
             .mount_root_if_contains("/bootloader/bootloader.cfg")
             .expect("Could detect bootloader partition, please add \'/bootloader/bootloader.cfg\' to the bootloader filesystem for a proper boot!");
 
-    // FIXME: maybe should be an allocated buffer in the future
-    let mut bootloader_config_buffer = [0_u8; 255];
+    let bootloader_config_file = unsafe { TEMP_ALLOC.as_mut().unwrap().allocate_region(256) };
+    let bootloader_filename = "/bootloader/bootloader.cfg";
 
-    unsafe {
-        fs.read_file_into_buffer(
-            bootloader_config_buffer.as_mut_ptr(),
-            "/bootloader/bootloader.cfg",
-        )
-    }
-    .expect("Unable to load config file!");
+    fs.load_file_into_slice(bootloader_config_file, bootloader_filename)
+        .expect("Unable to load bootloader config file!");
 
-    let bootloader_config = BootloaderConfig::from_buffer(unsafe {
-        core::str::from_utf8_unchecked(&bootloader_config_buffer)
-    })
-    .expect("Unable to parse bootloader config!");
+    bios_println!("done loading file!");
+
+    bios_println!("{:#?}", fs.get_filesize_bytes(bootloader_filename));
+
+    let bootloader_config =
+        BootloaderConfig::from_str(core::str::from_utf8(bootloader_config_file).unwrap())
+            .expect("Unable to parse bootloader config!");
 
     bios_println!("{:#?}", bootloader_config);
-
-    /*unsafe {
-        fs.read_file_into_buffer(
-            bootloader_config.get_kernel_address() as *mut u8,
-            bootloader_config.get_kernel_file_path(),
-        )
-    }
-    .expect("Unable to load kernel!");*/
 }
 
 #[panic_handler]
