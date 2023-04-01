@@ -48,6 +48,8 @@ echo "VIDEO=1280x720" | sudo tee -a fs/boot/bootloader/bootloader.cfg
 echo "KERNEL_BEGIN=16" | sudo tee -a fs/boot/bootloader/bootloader.cfg
 echo "" | sudo tee -a fs/boot/bootloader/bootloader.cfg
 
+sudo cp /bin/qemu-aarch64 fs/boot/bootloader/stage2.bin
+
 # Unmount to sync changes to disk and make sure that we dont have to wait for the OS to cache changes
 sudo umount /dev/loop0p1 /dev/loop0p2
 sudo mount /dev/loop0p1 fs/boot

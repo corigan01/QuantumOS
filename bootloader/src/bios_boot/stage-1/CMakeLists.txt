@@ -23,6 +23,7 @@ add_custom_target(get_ready_stage_1
         COMMAND
                 cp ${CMAKE_CURRENT_LIST_DIR}/target/i386-quantum_loader/release/stage-1 ${CMAKE_BINARY_DIR}/ &&
                 objcopy -I elf32-i386 -O binary ${CMAKE_BINARY_DIR}/stage-1 &&
+                stat --printf="%s" ${CMAKE_BINARY_DIR}/stage-1 &&
                 head -c 440 stage-1 | dd conv=notrunc bs=512 count=1 of=disk.img &&
                 head -c 512 disk.img &> tmp.bin &&
                 tail -c+513 stage-1 &>> tmp.bin &&

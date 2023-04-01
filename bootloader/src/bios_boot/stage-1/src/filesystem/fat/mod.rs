@@ -232,7 +232,7 @@ impl<'a, DiskType: DiskMedia + 'a> Fatfs<'a, DiskType> {
 
                 self.get_children_file_within_parent(&parent, child_name)
             } else {
-                Err(BootloaderError::NoValid)
+                Err(BootloaderError::FileNotFound)
             };
         }
     }
@@ -269,7 +269,14 @@ impl<'a, DiskType: DiskMedia + 'a> Fatfs<'a, DiskType> {
                 // so we have some basic error handling here that looks if a DiskIOError
                 // has occurred and will attempt to read the disk again, but this time
                 // at a buffer that is significantly smaller and at lower memory.
-                let disk_read_status = self.disk.read_ptr(total_sector_offset, ptr.add(ptr_offset));
+                let moved_ptr = ptr.add(ptr_offset);
+
+                let disk_read_status: Result<(), BootloaderError> =
+                    if moved_ptr as u32 > 1024 * 1024 {
+                        Err(BootloaderError::DiskIOError)
+                    } else {
+                        self.disk.read_ptr(total_sector_offset, moved_ptr)
+                    };
 
                 match disk_read_status {
                     Ok(_) => {
@@ -277,7 +284,6 @@ impl<'a, DiskType: DiskMedia + 'a> Fatfs<'a, DiskType> {
                     }
 
                     Err(BootloaderError::DiskIOError) => {
-                        bios_println!("Disk IO ERROR, retrying...");
                         let read_data =
                             Self::get_sector_offset(self.disk, self.partition, sector_offset + e)?;
 

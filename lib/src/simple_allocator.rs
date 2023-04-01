@@ -31,14 +31,16 @@ pub struct SimpleAllocator<'a> {
 
 impl<'a> SimpleAllocator<'a> {
     fn test_allocation(&mut self) -> bool {
-        let region = self.allocate_region(1);
+        if let Some(region) = self.allocate_region(1) {
+            let test_byte = 0xde;
 
-        let test_byte = 0xde;
+            region[0] = test_byte;
+            region[0] += 1;
 
-        region[0] = test_byte;
-        region[0] += 1;
-
-        region[0] == test_byte + 1
+            region[0] == test_byte + 1
+        } else {
+            false
+        }
     }
 
     pub fn new(memory_region: &'a mut [u8]) -> Self {
@@ -61,7 +63,11 @@ impl<'a> SimpleAllocator<'a> {
         return Some(allocator);
     }
 
-    pub fn allocate_region(&mut self, size: usize) -> &'a mut [u8] {
+    pub fn allocate_region(&mut self, size: usize) -> Option<&'a mut [u8]> {
+        if self.used_memory + size > self.memory_slice.len() {
+            return None;
+        }
+
         let slice = unsafe {
             core::slice::from_raw_parts_mut(
                 self.memory_slice.as_mut_ptr().add(self.used_memory),
@@ -71,6 +77,6 @@ impl<'a> SimpleAllocator<'a> {
 
         self.used_memory += size;
 
-        slice
+        Some(slice)
     }
 }

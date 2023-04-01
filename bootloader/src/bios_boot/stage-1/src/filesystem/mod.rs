@@ -23,13 +23,13 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-pub mod types;
-
 pub mod fat;
 pub mod partition;
+pub mod types;
 
 use crate::bios_println;
 use crate::error::BootloaderError;
+
 use crate::filesystem::fat::Fatfs;
 use crate::filesystem::partition::{PartitionEntry, Partitions};
 use core::marker::PhantomData;

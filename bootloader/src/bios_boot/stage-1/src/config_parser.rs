@@ -101,6 +101,11 @@ impl<'a> BootloaderConfig<'a> {
         self.kernel_filepath
             .expect("Please add kernel file location in bootloader.cfg")
     }
+
+    pub fn get_stage2_file_path(&self) -> &str {
+        self.stage2_filepath
+            .expect("Please add stage2 file location in bootloader.cfg")
+    }
 }
 
 impl<'a> Debug for BootloaderConfig<'a> {

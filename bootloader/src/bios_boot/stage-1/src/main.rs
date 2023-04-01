@@ -54,7 +54,7 @@ fn enter_rust(disk_id: u16) {
     bios_println!("\n --- Quantum Boot loader 16 ---\n");
 
     unsafe {
-        TEMP_ALLOC = SimpleAllocator::new_from_ptr(0x00100000 as *mut u8, 0x00100000);
+        TEMP_ALLOC = SimpleAllocator::new_from_ptr(0x00100000 as *mut u8, 0x03200000);
     }
 
     let fs =
@@ -65,7 +65,8 @@ fn enter_rust(disk_id: u16) {
             .mount_root_if_contains("/bootloader/bootloader.cfg")
             .expect("Could detect bootloader partition, please add \'/bootloader/bootloader.cfg\' to the bootloader filesystem for a proper boot!");
 
-    let bootloader_config_file = unsafe { TEMP_ALLOC.as_mut().unwrap().allocate_region(256) };
+    let bootloader_config_file =
+        unsafe { TEMP_ALLOC.as_mut().unwrap().allocate_region(256).unwrap() };
     let bootloader_filename = "/bootloader/bootloader.cfg";
 
     fs.load_file_into_slice(bootloader_config_file, bootloader_filename)
@@ -73,13 +74,26 @@ fn enter_rust(disk_id: u16) {
 
     bios_println!("done loading file!");
 
-    bios_println!("{:#?}", fs.get_filesize_bytes(bootloader_filename));
-
     let bootloader_config =
         BootloaderConfig::from_str(core::str::from_utf8(bootloader_config_file).unwrap())
             .expect("Unable to parse bootloader config!");
 
     bios_println!("{:#?}", bootloader_config);
+
+    let next_stage = unsafe {
+        TEMP_ALLOC
+            .as_mut()
+            .unwrap()
+            .allocate_region(
+                fs.get_filesize_bytes(bootloader_config.get_stage2_file_path())
+                    .expect("could not find stage2")
+                    + 0x10,
+            )
+            .unwrap()
+    };
+
+    fs.load_file_into_slice(next_stage, bootloader_config.get_stage2_file_path())
+        .expect("Could not load next stage!");
 }
 
 #[panic_handler]
