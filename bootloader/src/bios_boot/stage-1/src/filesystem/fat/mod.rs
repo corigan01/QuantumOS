@@ -179,7 +179,7 @@ impl<'a, DiskType: DiskMedia + 'a> Fatfs<'a, DiskType> {
                 file.filename = HeaplessString::from_bytes(new_slice).unwrap();
             }
 
-            if file.filetype != FatFileType::Unknown {
+            if file.filetype != FatFileType::Zero {
                 if run_on_each(&file) {
                     return Ok(file);
                 }

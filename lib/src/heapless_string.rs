@@ -64,6 +64,10 @@ impl<const SIZE: usize> HeaplessString<SIZE> {
     pub fn get_mut_str<'a>(&'a mut self) -> &'a str {
         return unsafe { core::str::from_utf8_unchecked_mut(&mut self.internal_buffer) }.trim_end();
     }
+
+    pub fn fill_zero(&mut self) {
+        self.internal_buffer.fill(0);
+    }
 }
 
 impl<const SIZE: usize> Debug for HeaplessString<SIZE> {

@@ -34,7 +34,7 @@ pub struct FatFile {
 }
 
 #[repr(C, packed)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct FatDirectoryEntry {
     pub file_name: [u8; 8],
     pub file_extension: [u8; 3],
@@ -68,6 +68,7 @@ impl FatDirectoryEntry {
 }
 
 #[repr(C, packed)]
+#[derive(Clone, Copy, Debug)]
 pub struct FatLongFileName {
     pub sq_order: u8,
     pub first_5: [u16; 5],
@@ -95,7 +96,7 @@ impl FatLongFileName {
 
     pub unsafe fn accumulate_name(&self, buffer: &mut [u8]) {
         // FIXME: This is stupid! :(
-        let mut tmp_buffer = [0_u8; 512];
+        let mut tmp_buffer = [0_u8; 256];
         self.paste_name_into_buffer(&mut tmp_buffer, 0);
 
         let mut data_len = 0;
@@ -106,7 +107,7 @@ impl FatLongFileName {
             }
         }
 
-        let mut moved_buffer_data = [0_u8; 512];
+        let mut moved_buffer_data = [0_u8; 256];
         for i in 0..data_len {
             moved_buffer_data[i + data_len] = buffer[i];
         }
@@ -120,7 +121,7 @@ impl FatLongFileName {
     }
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Debug)]
 pub enum FatFileType {
     ReadOnly,
     Hidden,
@@ -131,14 +132,16 @@ pub enum FatFileType {
     File,
 
     Root,
-    Unknown,
+    Unknown(u8),
+    Zero,
 }
 
 impl FatFileType {
     pub fn new_from_file(entry: &FatDirectoryEntry) -> Self {
         let attr = entry.file_attributes;
 
-        match attr {
+        let expected_type = match attr {
+            0x00 => Self::Zero,
             0x01 => Self::ReadOnly,
             0x02 => Self::Hidden,
             0x04 => Self::System,
@@ -147,7 +150,16 @@ impl FatFileType {
             0x10 => Self::Directory,
             0x20 => Self::File,
 
-            _ => Self::Unknown,
+            _ => Self::Unknown(attr),
+        };
+
+        // This is not part of the spec, but it seems that sometimes
+        // we detect a file as being zero when its a fully valid file,
+        // so this is a way of still reading malformed/out-of-spec files
+        if expected_type == Self::Zero && entry.file_name[0] != 0 {
+            Self::File
+        } else {
+            expected_type
         }
     }
 }
