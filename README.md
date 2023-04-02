@@ -49,7 +49,7 @@ Since the kernel is small, its super easy to build and get running. Follow the f
 # After successfully running the `auto_up.sh` script, now all you need to do is run
 # cargo!
 
-&> cargo krun
+&> cargo run
 
 ```
 ---
