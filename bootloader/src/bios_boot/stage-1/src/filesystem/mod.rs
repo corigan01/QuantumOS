@@ -27,8 +27,8 @@ pub mod fat;
 pub mod partition;
 pub mod types;
 
-use crate::bios_println;
 use crate::error::BootloaderError;
+use crate::{bios_print, bios_println};
 
 use crate::filesystem::fat::Fatfs;
 use crate::filesystem::partition::{PartitionEntry, Partitions};
@@ -225,10 +225,16 @@ impl<DiskType: DiskMedia> FileSystem<DiskType, MountedRoot> {
         let root_fs = self.root;
 
         if self.logging_enable {
-            bios_println!("Reading '{}'...", filename);
+            bios_print!("Reading '{}'...", filename);
         }
 
-        root_fs.load_file_to_ptr(&self.attached_disk, filename, buffer)
+        root_fs.load_file_to_ptr(&self.attached_disk, filename, buffer)?;
+
+        if self.logging_enable {
+            bios_println!("Done");
+        }
+
+        Ok(())
     }
 
     pub fn get_filesize_bytes(&self, filename: &str) -> Result<usize, BootloaderError> {

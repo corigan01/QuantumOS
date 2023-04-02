@@ -83,7 +83,7 @@ impl<const SIZE: usize> Debug for HeaplessString<SIZE> {
 
 impl<const SIZE: usize> Display for HeaplessString<SIZE> {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
-        writeln!(f, "{}", self.get_str())
+        write!(f, "{}", self.get_str())
     }
 }
 

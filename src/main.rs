@@ -25,6 +25,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 use quantum::bios_boot::BiosBootConfig;
+use std::fmt::format;
 use std::process::Command;
 use std::{env, fs};
 
@@ -57,16 +58,21 @@ fn bios_boot() -> Result<(), Box<dyn std::error::Error>> {
     let inner_config_directory = format!("{}/bootloader", bootloader_directory);
 
     let stage_1_path = quantum::bios_boot::build_stage_1()?;
+    let kernel = quantum::build_kernel()?;
 
     let bootloader_config = BiosBootConfig {
-        stage2_filepath: "".to_string(),
-        kernel_address: "".to_string(),
-        kernel_filepath: "".to_string(),
-        video_mode_preferred: (0, 0),
+        stage2_filepath: "/bootloader/stage1.bin".to_string(),
+        kernel_address: "16".to_string(),
+        kernel_filepath: "/kernel.elf".to_string(),
+        video_mode_preferred: (1280, 720),
     };
 
-    fs::copy(&stage_1_path, format!("{}/stage1", &bootloader_directory))?;
     fs::create_dir(&inner_config_directory)?;
+    fs::copy(
+        &stage_1_path,
+        format!("{}/stage1.bin", &inner_config_directory),
+    )?;
+    fs::copy(&kernel, format!("{}/kernel.elf", &bootloader_directory))?;
 
     quantum::bios_boot::make_config_file(&inner_config_directory, bootloader_config)?;
 

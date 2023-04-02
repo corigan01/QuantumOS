@@ -25,6 +25,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 use std::env;
+use std::process::Command;
 
 pub mod bios_boot;
 pub mod bios_disk;
@@ -32,4 +33,24 @@ pub mod bios_disk;
 pub fn get_build_directory() -> Result<String, Box<dyn std::error::Error>> {
     let current_directory = env::current_dir()?;
     Ok(format!("{}/target", current_directory.display()))
+}
+
+pub fn build_kernel() -> Result<String, Box<dyn std::error::Error>> {
+    let current_dir = env::current_dir()?;
+    let target = format!("{}/target", current_dir.display());
+    let cargo = env::var("CARGO").unwrap_or("cargo".into());
+
+    let kernel_path = format!("{}/x86_64-quantum_os/release/quantum_os", target);
+
+    Command::new(cargo)
+        .current_dir("kernel/")
+        .arg("build")
+        .arg("--release")
+        .arg("--target")
+        .arg("x86_64-quantum_os.json")
+        .arg(format!("--target-dir={}", target))
+        .stdout(std::process::Stdio::piped())
+        .status()?;
+
+    Ok(kernel_path)
 }

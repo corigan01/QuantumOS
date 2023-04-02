@@ -232,7 +232,7 @@ impl<'a, DiskType: DiskMedia + 'a> Fatfs<'a, DiskType> {
 
                 self.get_children_file_within_parent(&parent, child_name)
             } else {
-                Err(BootloaderError::FileNotFound)
+                self.get_children_file_within_parent(&parent, file_consumption_part)
             };
         }
     }
@@ -244,8 +244,6 @@ impl<'a, DiskType: DiskMedia + 'a> Fatfs<'a, DiskType> {
     ) -> Result<(), BootloaderError> {
         let mut following_cluster = file.start_cluster;
         let mut ptr_offset = 0;
-
-        let mut last_percent = 0;
 
         // FIXME: This is kinda sloppy code, maybe fix in the future
         loop {
@@ -303,18 +301,6 @@ impl<'a, DiskType: DiskMedia + 'a> Fatfs<'a, DiskType> {
 
             let table_value = self.get_fat_entry(following_cluster)?;
             let next_cluster_type = self.bpb.convert_usize_to_fat_table_entry(table_value)?;
-
-            // Print the percent loaded
-            if file.filesize_bytes > 1024 * 10 {
-                let new_percent = (((following_cluster * cluster_size) as f64)
-                    / ((file.filesize_bytes / 512) as f64)
-                    * 100.0) as usize;
-                if (new_percent / 10) != last_percent {
-                    last_percent = new_percent / 10;
-
-                    bios_print!("{}%...", new_percent);
-                }
-            }
 
             match next_cluster_type {
                 FatTableEntryType::Valid(cluster) => {

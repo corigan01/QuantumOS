@@ -33,27 +33,25 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 //mod vga;
 use owo_colors::OwoColorize;
-use bootloader::boot_info::{BootInfo, MemoryRegionKind};
 
 #[cfg(not(test))]
-use bootloader::entry_point;
 use lazy_static::lazy_static;
 
 use quantum_os::arch_x86_64::idt::{interrupt_tester, set_quiet_interrupt, InterruptFrame};
 use quantum_os::arch_x86_64::isr::general_isr;
-use quantum_os::arch_x86_64::{INTERRUPT_DT};
-use quantum_os::debug_output;
-use quantum_os::debug_output::StreamInfo;
-use quantum_os::serial::SERIAL1;
-use quantum_os::vga::low_level::FBuffer;
-use quantum_os::{attach_interrupt};
-use quantum_os::{debug_print, debug_println};
-use quantum_os::memory::physical_memory::{PhyRegionKind, PhyRegion, PhyRegionMap};
-use quantum_os::memory::pmm::PhyMemoryManager;
-use quantum_os::memory::init_alloc::INIT_ALLOC;
-use quantum_os::vga::framebuffer::RawColor;
+use quantum_os::arch_x86_64::INTERRUPT_DT;
+use quantum_os::attach_interrupt;
 use quantum_os::clock::rtc;
 use quantum_os::clock::rtc::{set_time_zone, update_and_get_time};
+use quantum_os::debug_output;
+use quantum_os::debug_output::StreamInfo;
+use quantum_os::memory::init_alloc::INIT_ALLOC;
+use quantum_os::memory::physical_memory::{PhyRegion, PhyRegionKind, PhyRegionMap};
+use quantum_os::memory::pmm::PhyMemoryManager;
+use quantum_os::serial::SERIAL1;
+use quantum_os::vga::framebuffer::RawColor;
+use quantum_os::vga::low_level::FBuffer;
+use quantum_os::{debug_print, debug_println};
 
 fn debug_output_char(char: u8) {
     if let Some(serial_info) = SERIAL1.lock().as_ref() {
@@ -61,12 +59,11 @@ fn debug_output_char(char: u8) {
     }
 }
 
-#[cfg(not(test))]
-entry_point!(main);
+struct BootInfo {}
 
 //#[cfg(not(test))]
 fn main(boot_info: &'static mut BootInfo) -> ! {
-
+    /*
     // safely get the baud rate
     let baud_rate = if let Some(serial) = SERIAL1.lock().as_ref() {
         serial.get_baud()
@@ -248,5 +245,7 @@ fn main(boot_info: &'static mut BootInfo) -> ! {
 
         let color = (x as u32) << 16 | (x as u32) << 8 | (x as u32);
         kernel_buffer.draw_rec((300, 300), (100, 100), color);
-    }
+    }*/
+
+    loop {}
 }

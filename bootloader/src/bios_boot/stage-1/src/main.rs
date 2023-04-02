@@ -86,7 +86,7 @@ fn enter_rust(disk_id: u16) {
             .unwrap()
             .allocate_region(
                 fs.get_filesize_bytes(bootloader_config.get_stage2_file_path())
-                    .expect("could not find stage2")
+                    .expect("Could not get stage2 filesize")
                     + 0x10,
             )
             .unwrap()
@@ -94,6 +94,21 @@ fn enter_rust(disk_id: u16) {
 
     fs.load_file_into_slice(next_stage, bootloader_config.get_stage2_file_path())
         .expect("Could not load next stage!");
+
+    let kernel = unsafe {
+        TEMP_ALLOC
+            .as_mut()
+            .unwrap()
+            .allocate_region(
+                fs.get_filesize_bytes(bootloader_config.get_kernel_file_path())
+                    .expect("Could not get kernel filesize")
+                    + 0x10,
+            )
+            .unwrap()
+    };
+
+    fs.load_file_into_slice(kernel, bootloader_config.get_kernel_file_path())
+        .expect("Could not load kernel!");
 }
 
 #[panic_handler]
