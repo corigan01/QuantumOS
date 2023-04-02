@@ -37,7 +37,7 @@ use stage_1::bios_ints::{BiosInt, TextModeColor};
 use stage_1::config_parser::BootloaderConfig;
 use stage_1::error::BootloaderError;
 use stage_1::filesystem::FileSystem;
-use stage_1::vesa::BasicVesaInfo;
+use stage_1::vesa::{BasicVesaController, VesaModeInfo};
 use stage_1::{bios_print, bios_println};
 
 global_asm!(include_str!("init.s"));
@@ -109,6 +109,21 @@ fn enter_rust(disk_id: u16) {
 
     fs.load_file_into_slice(kernel, bootloader_config.get_kernel_file_path())
         .expect("Could not load kernel!");
+
+    let bootloader_video_mode = bootloader_config.get_video_info();
+
+    if let Ok(vga_info) = BasicVesaController::new() {
+        let mode = vga_info.run_on_every_supported_mode_and_return_on_true(|mode, number| {
+            let x = mode.width as usize;
+            let y = mode.height as usize;
+
+            x == bootloader_video_mode.0 && y == bootloader_video_mode.1
+        });
+
+        bios_println!("\nPicked mode {:?}", &mode);
+
+        vga_info.set_video_mode(mode.unwrap()).unwrap();
+    }
 }
 
 #[panic_handler]

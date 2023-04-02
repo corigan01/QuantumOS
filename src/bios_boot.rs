@@ -36,7 +36,7 @@ pub fn build_stage_1() -> Result<String, Box<dyn std::error::Error>> {
 
     let stage1_path = format!("{}/i386-quantum_loader/release/stage-1", target);
 
-    Command::new(cargo)
+    let cargo_status = Command::new(cargo)
         .current_dir("bootloader/src/bios_boot/stage-1")
         .arg("build")
         .arg("--release")
@@ -45,6 +45,10 @@ pub fn build_stage_1() -> Result<String, Box<dyn std::error::Error>> {
         .arg(format!("--target-dir={}", target))
         .stdout(std::process::Stdio::piped())
         .status()?;
+
+    if !cargo_status.success() {
+        panic!("unable to build bootloader!")
+    }
 
     Command::new("objcopy")
         .arg("-I")

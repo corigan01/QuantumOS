@@ -25,7 +25,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 use fatfs::FatType::Fat16;
-use fatfs::{Dir, FileSystem, FormatVolumeOptions, FsOptions};
+use fatfs::{FileSystem, FormatVolumeOptions, FsOptions};
 use std::fs;
 use std::fs::OpenOptions;
 use std::io::{Read, Seek, SeekFrom, Write};

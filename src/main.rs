@@ -25,9 +25,8 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 use quantum::bios_boot::BiosBootConfig;
-use std::fmt::format;
+use std::fs;
 use std::process::Command;
-use std::{env, fs};
 
 fn main() {
     let build_status = bios_boot();
@@ -47,7 +46,6 @@ fn clean_dont_care() {
     // Now clean up
     let _ = fs::remove_dir_all("target/bootloader_dir");
     let _ = fs::remove_file("target/i386-quantum_loader/release/stage-1");
-
     let _ = quantum::bios_disk::delete_disk_img("target/fat.img".into());
 }
 
@@ -57,8 +55,8 @@ fn bios_boot() -> Result<(), Box<dyn std::error::Error>> {
     let bootloader_directory = quantum::bios_boot::make_bootloader_dir(&target)?;
     let inner_config_directory = format!("{}/bootloader", bootloader_directory);
 
-    let stage_1_path = quantum::bios_boot::build_stage_1()?;
-    let kernel = quantum::build_kernel()?;
+    let stage_1_path = quantum::bios_boot::build_stage_1().unwrap();
+    let kernel = quantum::build_kernel().unwrap();
 
     let bootloader_config = BiosBootConfig {
         stage2_filepath: "/bootloader/stage1.bin".to_string(),
@@ -85,7 +83,7 @@ fn bios_boot() -> Result<(), Box<dyn std::error::Error>> {
 
     fs::remove_file(&fat_img)?;
 
-    let qemu = Command::new("qemu-system-i386")
+    let _qemu = Command::new("qemu-system-i386")
         .arg("-d")
         .arg("cpu_reset")
         .arg("--no-shutdown")

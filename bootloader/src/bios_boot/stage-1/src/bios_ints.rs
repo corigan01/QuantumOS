@@ -134,6 +134,37 @@ impl BiosInt {
     }
 
     #[inline]
+    pub fn read_vbe_mode(struct_ptr: *mut u8, mode: u16) -> Self {
+        let mut regs = Regs16::new();
+
+        regs.di = struct_ptr as u16;
+        regs.cx = mode;
+
+        regs.al = 0x01;
+
+        Self {
+            interrupt_number: 0x10,
+            command: 0x4F,
+            flags: regs,
+        }
+    }
+
+    #[inline]
+    pub fn set_vbe_mode(mode: u16) -> Self {
+        let mut regs = Regs16::new();
+
+        regs.cx = mode;
+
+        regs.al = 0x02;
+
+        Self {
+            interrupt_number: 0x10,
+            command: 0x4F,
+            flags: regs,
+        }
+    }
+
+    #[inline]
     pub fn read_disk_with_packet(drive_number: u8, disk_packet: *mut u8) -> Self {
         let mut regs = Regs16::new();
 

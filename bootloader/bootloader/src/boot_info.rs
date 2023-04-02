@@ -23,19 +23,21 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-#![no_main]
-#![no_std]
+pub struct MemoryDescriptor {
+    pub ptr: u64,
+    pub size: u64
+}
 
-pub mod bios_disk;
-pub mod bios_ints;
-pub mod bios_video;
-pub mod config_parser;
-pub mod console;
-pub mod cpu_regs;
-pub mod error;
-pub mod filesystem;
-pub mod vesa;
+pub struct SimpleRamFs {
+    pub kernel_location: MemoryDescriptor,
+    pub stage2_location: MemoryDescriptor
+}
 
-pub fn convert_segmented_ptr(segmented_ptr: (usize, usize)) -> u32 {
-    (segmented_ptr.0 * 0x10 + segmented_ptr.1) as u32
+
+
+pub struct BootInfo {
+    pub booted_disk_id: u16,
+    pub ram_fs: SimpleRamFs,
+    
+    
 }

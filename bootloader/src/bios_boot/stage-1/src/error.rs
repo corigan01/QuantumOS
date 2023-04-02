@@ -36,4 +36,5 @@ pub enum BootloaderError {
     OutOfBounds,
     NotEnoughMemory,
     DiskIOError,
+    BiosCallFailed,
 }

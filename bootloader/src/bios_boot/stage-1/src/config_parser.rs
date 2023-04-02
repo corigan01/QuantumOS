@@ -106,6 +106,10 @@ impl<'a> BootloaderConfig<'a> {
         self.stage2_filepath
             .expect("Please add stage2 file location in bootloader.cfg")
     }
+
+    pub fn get_video_info(&self) -> (usize, usize) {
+        self.video_mode_preferred.unwrap_or((600, 800))
+    }
 }
 
 impl<'a> Debug for BootloaderConfig<'a> {

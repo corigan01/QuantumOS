@@ -42,7 +42,7 @@ pub fn build_kernel() -> Result<String, Box<dyn std::error::Error>> {
 
     let kernel_path = format!("{}/x86_64-quantum_os/release/quantum_os", target);
 
-    Command::new(cargo)
+    let cargo_status = Command::new(cargo)
         .current_dir("kernel/")
         .arg("build")
         .arg("--release")
@@ -51,6 +51,10 @@ pub fn build_kernel() -> Result<String, Box<dyn std::error::Error>> {
         .arg(format!("--target-dir={}", target))
         .stdout(std::process::Stdio::piped())
         .status()?;
+
+    if !cargo_status.success() {
+        panic!("unable to build bootloader!")
+    }
 
     Ok(kernel_path)
 }
