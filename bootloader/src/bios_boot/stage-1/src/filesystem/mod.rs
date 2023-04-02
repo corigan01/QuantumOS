@@ -231,7 +231,10 @@ impl<DiskType: DiskMedia> FileSystem<DiskType, MountedRoot> {
         root_fs.load_file_to_ptr(&self.attached_disk, filename, buffer)?;
 
         if self.logging_enable {
-            bios_println!("Done");
+            bios_println!(
+                "Done {}kb",
+                self.get_filesize_bytes(filename).unwrap_or(0) / 1024
+            );
         }
 
         Ok(())
