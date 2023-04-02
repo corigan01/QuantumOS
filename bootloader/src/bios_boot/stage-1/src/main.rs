@@ -29,7 +29,6 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 use core::arch::global_asm;
 use core::fmt::Debug;
 use core::panic::PanicInfo;
-use core::ptr::slice_from_raw_parts_mut;
 use quantum_lib::simple_allocator::SimpleAllocator;
 
 use stage_1::bios_disk::BiosDisk;
@@ -71,8 +70,6 @@ fn enter_rust(disk_id: u16) {
 
     fs.load_file_into_slice(bootloader_config_file, bootloader_filename)
         .expect("Unable to load bootloader config file!");
-
-    bios_println!("done loading file!");
 
     let bootloader_config =
         BootloaderConfig::from_str(core::str::from_utf8(bootloader_config_file).unwrap())

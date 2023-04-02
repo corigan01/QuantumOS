@@ -107,7 +107,8 @@ pub fn make_config_file(
         .create(true)
         .open(&config_file_path)?;
 
-    bootloader_config_file.write_all(config.to_string().as_bytes())?;
+    bootloader_config_file
+        .write_all(format!("# Bootloader Config File -----\n{}", config.to_string()).as_bytes())?;
 
     Ok(config_file_path)
 }
