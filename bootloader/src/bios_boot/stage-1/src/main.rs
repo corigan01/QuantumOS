@@ -29,6 +29,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 use core::arch::global_asm;
 use core::fmt::Debug;
 use core::panic::PanicInfo;
+
 use quantum_lib::simple_allocator::SimpleAllocator;
 
 use stage_1::bios_disk::BiosDisk;
@@ -57,7 +58,7 @@ fn enter_rust(disk_id: u16) {
     }
 
     let fs =
-        FileSystem::<BiosDisk>::new(BiosDisk::new(disk_id as u8))
+        FileSystem::new(BiosDisk::new(disk_id as u8))
             .toggle_logging()
             .quarry_disk()
             .expect("Could not read any supported filesystems!")
@@ -107,20 +108,7 @@ fn enter_rust(disk_id: u16) {
     fs.load_file_into_slice(kernel, bootloader_config.get_kernel_file_path())
         .expect("Could not load kernel!");
 
-    let bootloader_video_mode = bootloader_config.get_video_info();
-
-    if let Ok(vga_info) = BasicVesaController::new() {
-        let mode = vga_info.run_on_every_supported_mode_and_return_on_true(|mode, number| {
-            let x = mode.width as usize;
-            let y = mode.height as usize;
-
-            x == bootloader_video_mode.0 && y == bootloader_video_mode.1
-        });
-
-        bios_println!("\nPicked mode {:?}", &mode);
-
-        vga_info.set_video_mode(mode.unwrap()).unwrap();
-    }
+    let bootloader_video_mode = bootloader_config.get_recommended_video_info();
 }
 
 #[panic_handler]

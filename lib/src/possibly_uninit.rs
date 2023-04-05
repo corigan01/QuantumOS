@@ -24,12 +24,29 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 */
 
-#![no_main]
-#![no_std]
+#[derive(Clone, Copy, Ord, PartialOrd, Eq, PartialEq)]
+pub struct PossiblyUnit<Type> {
+    data: Option<Type>,
+}
 
-pub mod basic_font;
-pub mod heapless_string;
-pub mod heapless_vector;
-pub mod possibly_uninit;
-pub mod simple_allocator;
-pub mod x86_64;
+impl<Type> PossiblyUnit<Type> {
+    pub fn new() -> Self {
+        Self { data: None }
+    }
+
+    pub fn from_value(value: Type) -> Self {
+        Self { data: Some(value) }
+    }
+
+    pub fn to_ref_value<'a>(&'a self) -> Option<&'a Type> {
+        self.data.as_ref()
+    }
+
+    pub fn to_mut_ref_value<'a>(&'a mut self) -> Option<&'a mut Type> {
+        self.data.as_mut()
+    }
+
+    pub fn consume_type(self) -> Option<Type> {
+        self.data
+    }
+}

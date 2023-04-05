@@ -25,19 +25,15 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 pub struct MemoryDescriptor {
     pub ptr: u64,
-    pub size: u64
+    pub size: u64,
 }
 
 pub struct SimpleRamFs {
-    pub kernel_location: MemoryDescriptor,
-    pub stage2_location: MemoryDescriptor
+    pub kernel: MemoryDescriptor,
+    pub stage2: MemoryDescriptor,
 }
-
-
 
 pub struct BootInfo {
     pub booted_disk_id: u16,
     pub ram_fs: SimpleRamFs,
-    
-    
 }

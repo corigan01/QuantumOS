@@ -29,7 +29,7 @@ use crate::error::BootloaderError;
 use crate::{bios_println, convert_segmented_ptr};
 use quantum_lib::heapless_string::HeaplessString;
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy)]
 #[repr(packed, C)]
 pub struct BasicVesaController {
     signature: [u8; 4],
@@ -55,6 +55,8 @@ pub struct VesaModeInfo {
     pub height: u16,
     w_char: u8,
     y_char: u8,
+    planes: u8,
+    pub bpp: u8,
     banks: u8,
     memory_model: u8,
     bank_size: u8,
@@ -69,7 +71,7 @@ pub struct VesaModeInfo {
     reserved_mask: u8,
     reserved_pos: u8,
     color_attributes: u8,
-    framebuffer: u32,
+    pub framebuffer: u32,
     off_screen_memory_offset: u32,
     off_screen_memory_size: u16,
 }
@@ -90,6 +92,8 @@ impl VesaModeInfo {
             height: 0,
             w_char: 0,
             y_char: 0,
+            planes: 0,
+            bpp: 0,
             banks: 0,
             memory_model: 0,
             bank_size: 0,
@@ -111,12 +115,12 @@ impl VesaModeInfo {
     }
 }
 
-#[derive(Debug)]
-pub struct VbeMode(usize);
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub struct VbeModeID(usize);
 
-impl VbeMode {
+impl VbeModeID {
     pub fn get_mode_number(&self) -> usize {
-        return 0;
+        return self.0;
     }
 }
 
@@ -178,9 +182,9 @@ impl BasicVesaController {
     pub fn run_on_every_supported_mode_and_return_on_true<Function>(
         &self,
         function: Function,
-    ) -> Option<VbeMode>
+    ) -> Option<(VbeModeID, VesaModeInfo)>
     where
-        Function: Fn(&VesaModeInfo, &VbeMode) -> bool,
+        Function: Fn(&VesaModeInfo, &VbeModeID) -> bool,
     {
         let ptr = convert_segmented_ptr((
             self.video_mode_ptr[1] as usize,
@@ -217,10 +221,10 @@ impl BasicVesaController {
                 }
             }
 
-            let mode_id = VbeMode { 0: *mode as usize };
+            let mode_id = VbeModeID { 0: *mode as usize };
 
             if function(&temp_mode, &mode_id) {
-                return Some(mode_id);
+                return Some((mode_id, temp_mode));
             }
 
             temp_mode = VesaModeInfo::new();
@@ -229,24 +233,13 @@ impl BasicVesaController {
         None
     }
 
-    pub fn set_video_mode(&self, mode: VbeMode) -> Result<(), BootloaderError> {
-        let modes_match =
-            self.run_on_every_supported_mode_and_return_on_true(|info, checking_mode| {
-                checking_mode.get_mode_number() == mode.get_mode_number()
-            });
-
-        if modes_match.is_none() {
-            return Err(BootloaderError::NoValid);
-        }
-
+    pub unsafe fn set_video_mode(&self, mode: VbeModeID) -> Result<(), BootloaderError> {
         let bios_int_status =
             unsafe { BiosInt::set_vbe_mode(mode.get_mode_number() as u16).execute_interrupt() };
 
         if bios_int_status.did_fail() {
             return Err(BootloaderError::BiosCallFailed);
         }
-
-        bios_println!("Successfully changed video mode!");
 
         Ok(())
     }

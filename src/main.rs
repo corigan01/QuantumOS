@@ -79,6 +79,8 @@ fn bios_boot() -> Result<(), Box<dyn std::error::Error>> {
         format!("{}/bootloader_dir", &target),
     )?;
 
+    let mut vec_test = Vec::<u32>::new();
+
     let disk_img = quantum::bios_disk::make_mbr_disk(&target, &fat_img, &stage_1_path)?;
 
     fs::remove_file(&fat_img)?;
