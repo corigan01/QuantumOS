@@ -22,7 +22,5 @@ jobs:
       run: rustup component add rust-src
     - name: Add LLVM Tools Preview 
       run: rustup component add llvm-tools-preview
-    - name: Install Bootimage
-      run: cargo install bootimage
     - name: Build
-      run: cargo kbuild --verbose
+      run: cargo run noqemu
