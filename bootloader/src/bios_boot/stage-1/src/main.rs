@@ -30,6 +30,8 @@ use core::arch::global_asm;
 use core::fmt::Debug;
 use core::panic::PanicInfo;
 
+use bootloader::boot_info::{BootInfo, SimpleRamFs};
+use bootloader::BootMemoryDescriptor;
 use quantum_lib::simple_allocator::SimpleAllocator;
 
 use stage_1::bios_disk::BiosDisk;
@@ -52,6 +54,8 @@ static mut TEMP_ALLOC: Option<SimpleAllocator> = None;
 
 fn enter_rust(disk_id: u16) {
     bios_println!("\n --- Quantum Boot loader 16 ---\n");
+
+    let mut boot_info = BootInfo::default();
 
     unsafe {
         TEMP_ALLOC = SimpleAllocator::new_from_ptr(0x00100000 as *mut u8, 0x03200000);
@@ -78,35 +82,46 @@ fn enter_rust(disk_id: u16) {
 
     bios_println!("{:#?}", bootloader_config);
 
-    let next_stage = unsafe {
+    let next_stage_filesize_bytes = fs
+        .get_filesize_bytes(bootloader_config.get_stage2_file_path())
+        .expect("Could not get stage2 filesize");
+
+    let next_stage_ptr = unsafe {
         TEMP_ALLOC
             .as_mut()
             .unwrap()
-            .allocate_region(
-                fs.get_filesize_bytes(bootloader_config.get_stage2_file_path())
-                    .expect("Could not get stage2 filesize")
-                    + 0x10,
-            )
+            .allocate_region(next_stage_filesize_bytes + 0x10)
             .unwrap()
     };
 
-    fs.load_file_into_slice(next_stage, bootloader_config.get_stage2_file_path())
+    let kernel_filesize_bytes = fs
+        .get_filesize_bytes(bootloader_config.get_kernel_file_path())
+        .expect("Could not get kernel filesize");
+
+    let kernel_ptr = unsafe {
+        TEMP_ALLOC
+            .as_mut()
+            .unwrap()
+            .allocate_region(kernel_filesize_bytes + 0x10)
+            .unwrap()
+    };
+
+    fs.load_file_into_slice(next_stage_ptr, bootloader_config.get_stage2_file_path())
         .expect("Could not load next stage!");
 
-    let kernel = unsafe {
-        TEMP_ALLOC
-            .as_mut()
-            .unwrap()
-            .allocate_region(
-                fs.get_filesize_bytes(bootloader_config.get_kernel_file_path())
-                    .expect("Could not get kernel filesize")
-                    + 0x10,
-            )
-            .unwrap()
-    };
-
-    fs.load_file_into_slice(kernel, bootloader_config.get_kernel_file_path())
+    fs.load_file_into_slice(kernel_ptr, bootloader_config.get_kernel_file_path())
         .expect("Could not load kernel!");
+
+    boot_info.ram_fs = Some(SimpleRamFs::new(
+        BootMemoryDescriptor {
+            ptr: kernel_ptr.as_ptr() as u64,
+            size: kernel_filesize_bytes as u64,
+        },
+        BootMemoryDescriptor {
+            ptr: next_stage_ptr.as_ptr() as u64,
+            size: next_stage_filesize_bytes as u64,
+        },
+    ));
 
     let bootloader_video_mode = bootloader_config.get_recommended_video_info();
 }

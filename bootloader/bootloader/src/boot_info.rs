@@ -23,17 +23,35 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-pub struct MemoryDescriptor {
-    pub ptr: u64,
-    pub size: u64,
-}
+use crate::BootMemoryDescriptor;
 
 pub struct SimpleRamFs {
-    pub kernel: MemoryDescriptor,
-    pub stage2: MemoryDescriptor,
+    pub kernel: BootMemoryDescriptor,
+    pub stage2: BootMemoryDescriptor,
 }
 
 pub struct BootInfo {
     pub booted_disk_id: u16,
-    pub ram_fs: SimpleRamFs,
+    pub ram_fs: Option<SimpleRamFs>,
+}
+
+impl BootInfo {
+    pub fn new() -> Self {
+        Self {
+            booted_disk_id: 0,
+            ram_fs: None,
+        }
+    }
+}
+
+impl Default for BootInfo {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl SimpleRamFs {
+    pub fn new(kernel: BootMemoryDescriptor, stage2: BootMemoryDescriptor) -> Self {
+        Self { kernel, stage2 }
+    }
 }
