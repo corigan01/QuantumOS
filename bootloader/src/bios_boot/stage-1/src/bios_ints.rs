@@ -98,7 +98,6 @@ pub struct BiosInt {
 }
 
 impl BiosInt {
-    #[inline]
     pub fn write_character(
         character: u8,
         page_number: u8,
@@ -120,7 +119,6 @@ impl BiosInt {
         }
     }
 
-    #[inline]
     pub fn read_vbe_info(struct_ptr: *mut u8) -> Self {
         let mut regs = Regs16::new();
 
@@ -133,7 +131,6 @@ impl BiosInt {
         }
     }
 
-    #[inline]
     pub fn read_vbe_mode(struct_ptr: *mut u8, mode: u16) -> Self {
         let mut regs = Regs16::new();
 
@@ -149,22 +146,22 @@ impl BiosInt {
         }
     }
 
-    #[inline]
     pub fn set_vbe_mode(mode: u16) -> Self {
         let mut regs = Regs16::new();
 
         regs.cx = mode;
+        //regs.bh = 0x40;
 
-        regs.al = 0x02;
+        regs.ah = 0;
+        regs.al = (mode & 0xFF) as u8;
 
         Self {
             interrupt_number: 0x10,
-            command: 0x4F,
+            command: 0,
             flags: regs,
         }
     }
 
-    #[inline]
     pub fn read_disk_with_packet(drive_number: u8, disk_packet: *mut u8) -> Self {
         let mut regs = Regs16::new();
 
@@ -178,7 +175,6 @@ impl BiosInt {
         }
     }
 
-    #[inline]
     pub fn write_disk_with_packet(drive_number: u8, disk_packet: *mut u8) -> Self {
         let mut regs = Regs16::new();
 
@@ -193,26 +189,40 @@ impl BiosInt {
     }
 
     // VGA related functions
-    #[inline]
     unsafe fn x10_int_dispatcher(&self) -> u8 {
         let res;
 
         asm!(
             "int 0x10",
             inout("ah") self.command => res,
-            in("bl") self.flags.bl,
-            in("bh") self.flags.bh,
-            in("cx") self.flags.cx,
-            in("al") self.flags.al,
-            in("di") self.flags.di,
+            inout("bl") self.flags.bl => _,
+            inout("bh") self.flags.bh => _,
+            inout("cx") self.flags.cx => _,
+            inout("al") self.flags.al => _,
+            inout("di") self.flags.di => _,
             clobber_abi("system")
         );
 
         res
     }
 
+    // Memory IO related functions
+    unsafe fn x15_int_dispatcher(&self) -> u8 {
+        let res: u16;
+
+        asm!(
+            "int 0x15",
+            inout("bx") self.flags.bx => _,
+            inout("ax") self.flags.ax => res,
+            inout("cx") self.flags.cx => _,
+            inout("dx") self.flags.dx => _,
+            clobber_abi("system")
+        );
+
+        res as u8
+    }
+
     // Disk IO related functions
-    #[inline]
     unsafe fn x13_int_dispatcher(&self) -> u8 {
         let res;
 
@@ -231,7 +241,7 @@ impl BiosInt {
     }
 
     #[inline]
-    pub unsafe fn execute_interrupt(&self) -> BiosIntStatus {
+    pub unsafe fn execute_interrupt(self) -> BiosIntStatus {
         let res = match self.interrupt_number {
             0x10 => self.x10_int_dispatcher(),
             0x13 => self.x13_int_dispatcher(),

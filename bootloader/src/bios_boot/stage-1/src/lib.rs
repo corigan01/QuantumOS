@@ -34,6 +34,7 @@ pub mod console;
 pub mod cpu_regs;
 pub mod error;
 pub mod filesystem;
+pub mod memory_detection;
 pub mod vesa;
 
 pub fn convert_segmented_ptr(segmented_ptr: (usize, usize)) -> u32 {

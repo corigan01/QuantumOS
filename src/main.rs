@@ -29,14 +29,29 @@ use std::fs;
 use std::process::Command;
 
 fn main() {
-    let build_status = bios_boot();
+    let command_args: Vec<String> = std::env::args().collect();
+
+    let mut build_status = bios_boot();
 
     if build_status.is_err() {
         println!("Failed to build --> {:?}", build_status.err());
         clean_dont_care();
 
         println!("Attempting to re-run build...");
-        bios_boot().unwrap();
+        build_status = bios_boot();
+    }
+
+    if !command_args.contains(&String::from("noqemu")) {
+        let _qemu = Command::new("qemu-system-i386")
+            .arg("-d")
+            .arg("cpu_reset")
+            .arg("--no-shutdown")
+            .arg("-drive")
+            .arg(format!("format=raw,file={}", build_status.unwrap()))
+            .stdout(std::process::Stdio::piped())
+            .status();
+    } else {
+        println!("NOT RUNNING QEMU!");
     }
 
     println!("Done :)");
@@ -49,7 +64,7 @@ fn clean_dont_care() {
     let _ = quantum::bios_disk::delete_disk_img("target/fat.img".into());
 }
 
-fn bios_boot() -> Result<(), Box<dyn std::error::Error>> {
+fn bios_boot() -> Result<String, Box<dyn std::error::Error>> {
     let target = quantum::get_build_directory()?;
 
     let bootloader_directory = quantum::bios_boot::make_bootloader_dir(&target)?;
@@ -79,18 +94,11 @@ fn bios_boot() -> Result<(), Box<dyn std::error::Error>> {
         format!("{}/bootloader_dir", &target),
     )?;
 
+    let mut vec_test = Vec::<u32>::new();
+
     let disk_img = quantum::bios_disk::make_mbr_disk(&target, &fat_img, &stage_1_path)?;
 
     fs::remove_file(&fat_img)?;
 
-    let _qemu = Command::new("qemu-system-i386")
-        .arg("-d")
-        .arg("cpu_reset")
-        .arg("--no-shutdown")
-        .arg("-drive")
-        .arg(format!("format=raw,file={}", disk_img))
-        .stdout(std::process::Stdio::piped())
-        .status();
-
-    Ok(())
+    Ok(disk_img)
 }
