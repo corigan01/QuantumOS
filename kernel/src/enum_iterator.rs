@@ -44,7 +44,7 @@ use quantum_os::enum_iterator;
 use quantum_os::enum_iterator::EnumIntoIterator;
 
 enum_iterator! {
-    // The extra () in my enum is to define the Iterator for your enum!
+    // The extra () in `MyEnum` is to define the Iterator for your enum!
     // This is due to Rust's hygiene that makes it such that macros cannot construct new types
     // with concat_ident!(). Note: `concat_ident!()` is a nightly feature and was emitted
     pub enum MyEnum(MyEnumIter) {
@@ -67,8 +67,34 @@ fn main() {
 
 #[macro_export]
 macro_rules! enum_iterator {
+    /// Do nothing if nothing was given
     () => {};
 
+
+    /// # enum_iterator! {SampleEnum(SampleEnumIter) {...} }
+    ///
+    /// We take in two arguments here, as one is the struct for which,
+    /// we would like to iterate, and the other one is the iterator that
+    /// stores the index at which we are iterating.
+    ///
+    /// First thing that this macro does, is that it collects all the info
+    /// about the enum you provided. Then it breaks it up into the following:
+    ///     * $m -- The meta type (all the #derive and #repr stuff)
+    ///     * $visa -- The visibility of your enum (public or private)
+    ///     * $name -- The name of your enum
+    ///     * $itr -- The iterator type
+    ///     * All the values you provided in your enum:
+    ///         * $val -- the values
+    ///         * $epr -- anything after the equal sign
+    ///
+    /// The following work has to still be done with these things however:
+    ///     * Make the actual enum you provided
+    ///     * Make the iterator struct (with index)
+    ///     * Make a `impl` for your enum to return the newly created iterator type
+    ///     * Make a huge array containing all values in your enum
+    ///     * make the iterator access this huge array of values
+    ///
+    ///
     (
         $(#[$m:meta])*
         $visa:vis enum $name:ident($itr:ident) {
@@ -77,11 +103,14 @@ macro_rules! enum_iterator {
 
     ) => {
 
+        // Make the actual enum here
         $(#[$m])*
         $visa enum $name {
             $($val $(= $epr)?),*
         }
 
+        // Make it implement our custom type `EnumIntoIterator` that will
+        // convert any enum into a valid iterator.
         impl EnumIntoIterator for $name {
             type IntoIter = $itr;
 
@@ -92,10 +121,12 @@ macro_rules! enum_iterator {
             }
         }
 
+        // Make the iterator struct that stores the current index
         $visa struct $itr {
             index: usize
         }
 
+        // Implement all the needed types for this to work in a `for` loop etc...
         impl Iterator for $itr {
             type Item = $name;
 
@@ -115,7 +146,44 @@ macro_rules! enum_iterator {
             }
         }
 
+        // Finally make the big array of all the items in your enum,
+        // This will then be indexed into with the Iterator we constructed
         impl $name {
+            /// # ITEMS
+            /// A big array containing all the items in your enum. This array only contains
+            /// the keys in your enum and does not have their values if provided. This is
+            /// simply for indexing into your enum as if it was just an array of ints.
+            ///
+            /// # Safety
+            /// This array is a standard rust style array, no no undefined behavior should exist.
+            /// The index is a normal usize and each element is in the same order as they where
+            /// defined in your macro.
+            ///
+            /// # How to use
+            ///
+            /// ```rust
+            /// use quantum_os::enum_iterator;
+            /// use quantum_os::enum_iterator::EnumIntoIterator;
+            ///
+            /// enum_iterator! {
+            ///     pub enum MyEnum(MyEnumIter) {
+            ///         SomeVal,
+            ///         SomeOtherVal,
+            ///         MoreOptions
+            ///     }
+            /// }
+            ///
+            /// fn main() {
+            ///     // MyEnum::ITEMS is this array!
+            ///     let all_items_in_my_enum = MyEnum::ITEMS;
+            ///
+            ///     for i in all_items_in_my_enum {
+            ///         todo!()
+            ///     }
+            /// }
+            ///
+            /// ```
+            ///
             const ITEMS: [$name; <[$name]>::len(&[$($name::$val),*])] =
                 [$($name::$val),*];
 
