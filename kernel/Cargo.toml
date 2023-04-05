@@ -19,7 +19,7 @@ panic = "unwind"
 [dependencies]
 no-std-compat = "0.4.1"
 volatile = "0.4.5"
-spin = "0.9.4"
+spin = "0.9.8"
 
 # Should be implmented in Quantum down the line
 x86_64 = "0.14.9"
