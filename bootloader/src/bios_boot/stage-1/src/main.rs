@@ -128,7 +128,7 @@ fn enter_rust(disk_id: u16) {
 
     let bootloader_video_mode = bootloader_config.get_recommended_video_info();
 
-    let vga = BiosVesa::new()
+    let mut vga = BiosVesa::new()
         .quarry()
         .expect("Could not quarry Vesa information");
 
@@ -136,11 +136,16 @@ fn enter_rust(disk_id: u16) {
         .find_closest_mode(Res {
             x: bootloader_video_mode.0,
             y: bootloader_video_mode.1,
-            depth: 32,
+            depth: 24,
         })
         .expect("Could not find closest mode");
 
-    bios_println!("Mode info {:#?}", mode.get_res());
+    bios_println!("Mode info {:#?}", &mode.get_res());
+
+    vga.set_mode(mode).unwrap();
+    vga.clear_display();
+
+    loop {}
 }
 
 #[panic_handler]

@@ -182,7 +182,7 @@ impl VesaDriverInfo {
         loop {
             let data = unsafe { *ptr.add(offset) };
 
-            if data == 0 || offset >= 256 || data > 512 {
+            if data == 0 || offset >= 256 || data > 6000 {
                 return offset - 1;
             }
 

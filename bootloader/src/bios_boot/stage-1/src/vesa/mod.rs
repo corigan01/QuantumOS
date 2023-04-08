@@ -23,6 +23,7 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use crate::bios_ints::BiosInt;
 use crate::error::BootloaderError;
 use crate::{bios_print, bios_println, convert_segmented_ptr};
 use core::marker::PhantomData;
@@ -147,7 +148,7 @@ impl BiosVesa<Quarried> {
             let y_diff = res.y.abs_diff(resolution.y);
             let depth_diff = res.depth.abs_diff(resolution.depth);
 
-            if x_dff < x_offset && y_diff < y_offset && depth_diff < depth_offset {
+            if x_dff <= x_offset && y_diff <= y_offset && depth_diff <= depth_offset {
                 x_offset = x_dff;
                 y_offset = y_diff;
                 depth_offset = depth_diff;
@@ -159,5 +160,32 @@ impl BiosVesa<Quarried> {
         });
 
         self.get_mode_with_id(closest_mode_id)
+    }
+
+    pub fn clear_display(&self) {
+        let mode_data = &self.current_mode.as_ref().unwrap().mode_data;
+        let framebuffer_ptr = mode_data.framebuffer as *mut u8;
+        let framebuffer_size = mode_data.pitch as u32 * mode_data.height as u32;
+
+        let slice =
+            unsafe { core::slice::from_raw_parts_mut(framebuffer_ptr, framebuffer_size as usize) };
+
+        for byte in slice.iter_mut() {
+            *byte = 0x00;
+        }
+    }
+
+    pub fn set_mode(&mut self, mode: VesaMode) -> Result<(), BootloaderError> {
+        let mode_id = mode.mode_id;
+
+        let bios_status = unsafe { BiosInt::set_vbe_mode(mode_id as u16).execute_interrupt() };
+
+        if bios_status.did_fail() {
+            return Err(BootloaderError::BiosCallFailed);
+        }
+
+        self.current_mode = Some(mode);
+
+        Ok(())
     }
 }
