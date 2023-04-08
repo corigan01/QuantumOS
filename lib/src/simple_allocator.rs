@@ -24,12 +24,12 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 */
 
-pub struct SimpleAllocator<'a> {
+pub struct SimpleBumpAllocator<'a> {
     memory_slice: &'a mut [u8],
     used_memory: usize,
 }
 
-impl<'a> SimpleAllocator<'a> {
+impl<'a> SimpleBumpAllocator<'a> {
     fn test_allocation(&mut self) -> bool {
         if let Some(region) = self.allocate_region(1) {
             let test_byte = 0xde;

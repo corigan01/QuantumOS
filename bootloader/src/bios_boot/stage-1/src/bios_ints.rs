@@ -194,13 +194,12 @@ impl BiosInt {
 
         asm!(
             "int 0x10",
+            inout("di") self.flags.di => _,
+            inout("al") self.flags.al => _,
             inout("ah") self.command => res,
             inout("bl") self.flags.bl => _,
             inout("bh") self.flags.bh => _,
             inout("cx") self.flags.cx => _,
-            inout("al") self.flags.al => _,
-            inout("di") self.flags.di => _,
-            clobber_abi("system")
         );
 
         res
@@ -216,7 +215,6 @@ impl BiosInt {
             inout("ax") self.flags.ax => res,
             inout("cx") self.flags.cx => _,
             inout("dx") self.flags.dx => _,
-            clobber_abi("system")
         );
 
         res as u8
@@ -234,13 +232,17 @@ impl BiosInt {
             x = in(reg) self.flags.si,
             inout("ah") self.command => res,
             in("dx") self.flags.dx,
-            clobber_abi("system")
         );
 
         res
     }
 
-    #[inline]
+    /// # Safety
+    /// Unfortunate due to the nature of 16 bit and rusts kinda rusty level of support for it,
+    /// this function is extremely unsafe and is usually the cause of many issues caused. it is
+    /// up to the caller to always check that everything is valid before calling `execute_interrupt`
+    /// because it can cause the entire bootloader to just not work.
+    #[inline(never)]
     pub unsafe fn execute_interrupt(self) -> BiosIntStatus {
         let res = match self.interrupt_number {
             0x10 => self.x10_int_dispatcher(),
