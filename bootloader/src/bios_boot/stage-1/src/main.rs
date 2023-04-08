@@ -141,8 +141,8 @@ fn enter_rust(disk_id: u16) {
 
     bios_println!("Mode info {:#?}", &mode.get_res());
 
-    vga.set_mode(mode).unwrap();
-    vga.clear_display();
+    //vga.set_mode(mode).unwrap();
+    //vga.clear_display();
 
     loop {}
 }

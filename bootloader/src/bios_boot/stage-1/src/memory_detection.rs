@@ -24,6 +24,16 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 */
 
+pub enum MemoryType {
+    Usable,
+    Reserved,
+    AcpiReclaimableMemory,
+    AcpiNVSMemory,
+    BadMemoryRegion,
+    Ignored,
+    NonVolatile,
+}
+
 #[repr(C, packed)]
 pub struct BiosMemoryEntry {
     base_addr: u64,
