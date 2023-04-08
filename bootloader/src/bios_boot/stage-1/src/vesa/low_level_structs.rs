@@ -25,10 +25,9 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 use crate::bios_ints::BiosInt;
 use crate::error::BootloaderError;
-use crate::vesa::VesaMode;
-use crate::{bios_println, convert_segmented_ptr};
 
-use quantum_lib::heapless_vector;
+use crate::{bios_print, bios_println, convert_segmented_ptr};
+
 use quantum_lib::heapless_vector::HeaplessVec;
 
 #[repr(C, packed)]
@@ -53,7 +52,7 @@ pub struct VesaModeInfo {
     memory_model: u8,
     bank_size: u8,
     image_pages: u8,
-    reserved: u8,
+    reserved1: u8,
     red_mask: u8,
     red_pos: u8,
     green_mask: u8,
@@ -66,10 +65,11 @@ pub struct VesaModeInfo {
     pub framebuffer: u32,
     off_screen_memory_offset: u32,
     off_screen_memory_size: u16,
+    reserved2: [u8; 206],
 }
 
-impl VesaModeInfo {
-    pub fn new() -> Self {
+impl Default for VesaModeInfo {
+    fn default() -> Self {
         Self {
             attributes: 0,
             window_a: 0,
@@ -90,7 +90,7 @@ impl VesaModeInfo {
             memory_model: 0,
             bank_size: 0,
             image_pages: 0,
-            reserved: 0,
+            reserved1: 0,
             red_mask: 0,
             red_pos: 0,
             green_mask: 0,
@@ -103,19 +103,25 @@ impl VesaModeInfo {
             framebuffer: 0,
             off_screen_memory_offset: 0,
             off_screen_memory_size: 0,
+            reserved2: [0; 206],
         }
+    }
+}
+
+impl VesaModeInfo {
+    pub fn new() -> Self {
+        Self::default()
     }
 
     pub fn quarry(mode_id: usize) -> Result<Self, BootloaderError> {
         let mut this_mode = Self::new();
+        let ptr = &mut this_mode as *mut VesaModeInfo as *mut u8;
 
-        let interrupt_status = unsafe {
-            BiosInt::read_vbe_mode(
-                &mut this_mode as *mut VesaModeInfo as *mut u8,
-                mode_id as u16,
-            )
-            .execute_interrupt()
-        };
+        assert!(mode_id <= u16::MAX as usize);
+        assert!(ptr as usize <= u16::MAX as usize);
+
+        let interrupt_status =
+            unsafe { BiosInt::read_vbe_mode(ptr, mode_id as u16).execute_interrupt() };
 
         if interrupt_status.did_fail() {
             return Err(BootloaderError::BiosCallFailed);
@@ -125,8 +131,8 @@ impl VesaModeInfo {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
-#[repr(packed, C)]
+#[derive(Clone, Copy, Debug, Default)]
+#[repr(C, packed(2))]
 pub struct VesaDriverInfo {
     pub signature: [u8; 4],
     pub version: u16,
@@ -138,14 +144,7 @@ pub struct VesaDriverInfo {
 
 impl VesaDriverInfo {
     pub fn new() -> Self {
-        Self {
-            signature: [0; 4],
-            version: 0,
-            oem_string_ptr: [0; 2],
-            capabilities: [0; 4],
-            video_mode_ptr: [0; 2],
-            size_64k_blocks: 0,
-        }
+        Self::default()
     }
 
     pub fn quarry() -> Result<Self, BootloaderError> {
@@ -155,8 +154,6 @@ impl VesaDriverInfo {
         assert!(ptr as u32 <= u16::MAX as u32);
 
         let status = unsafe { BiosInt::read_vbe_info(ptr).execute_interrupt() };
-
-        bios_println!("{:#?}", info);
 
         if status.did_fail() || !info.validate_signature() {
             return Err(BootloaderError::BiosCallFailed);
@@ -185,8 +182,8 @@ impl VesaDriverInfo {
         loop {
             let data = unsafe { *ptr.add(offset) };
 
-            if data == 0 || offset > 255 || data > 512 {
-                return offset;
+            if data == 0 || offset >= 256 || data > 512 {
+                return offset - 1;
             }
 
             offset += 1;

@@ -70,6 +70,12 @@ impl BiosVesa {
     }
 }
 
+impl Default for BiosVesa {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl BiosVesa<UnQuarried> {
     pub fn quarry(self) -> Result<BiosVesa<Quarried>, BootloaderError> {
         Ok(BiosVesa {
@@ -89,9 +95,12 @@ impl BiosVesa<Quarried> {
         Function: FnMut(&VesaMode) -> bool,
     {
         let supported_modes = self.info.get_all_supported_modes()?;
-        bios_print!("COCK ");
 
         for mode in supported_modes {
+            if mode == 0 {
+                continue;
+            }
+
             let mode_info_packed = low_level_structs::VesaModeInfo::quarry(mode);
 
             if let Ok(mode_info) = mode_info_packed {
@@ -110,7 +119,18 @@ impl BiosVesa<Quarried> {
     }
 
     fn get_mode_with_id(&self, raw_mode_id: usize) -> Result<VesaMode, BootloaderError> {
-        self.run_on_all_supported_modes(|mode| mode.mode_id == raw_mode_id)
+        let mode_info_packed = low_level_structs::VesaModeInfo::quarry(raw_mode_id);
+
+        if let Ok(mode_info) = mode_info_packed {
+            let safe_vesa_mode = VesaMode {
+                mode_id: raw_mode_id,
+                mode_data: mode_info,
+            };
+
+            return Ok(safe_vesa_mode);
+        }
+
+        Err(BootloaderError::NoValid)
     }
 
     pub fn find_closest_mode(&self, resolution: Res) -> Result<VesaMode, BootloaderError> {
@@ -120,14 +140,14 @@ impl BiosVesa<Quarried> {
 
         let mut closest_mode_id = 0;
 
-        self.run_on_all_supported_modes(|mode| {
+        let _ = self.run_on_all_supported_modes(|mode| {
             let res = mode.get_res();
 
             let x_dff = res.x.abs_diff(resolution.x);
             let y_diff = res.y.abs_diff(resolution.y);
             let depth_diff = res.depth.abs_diff(resolution.depth);
 
-            if x_dff < x_offset && y_diff < y_diff && depth_diff < depth_offset {
+            if x_dff < x_offset && y_diff < y_offset && depth_diff < depth_offset {
                 x_offset = x_dff;
                 y_offset = y_diff;
                 depth_offset = depth_diff;
@@ -136,7 +156,7 @@ impl BiosVesa<Quarried> {
             }
 
             false
-        })?;
+        });
 
         self.get_mode_with_id(closest_mode_id)
     }
