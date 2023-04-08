@@ -65,36 +65,34 @@ fn main() {
 
  */
 
+/// # enum_iterator! {SampleEnum(SampleEnumIter) {...} }
+///
+/// We take in two arguments here, as one is the struct for which,
+/// we would like to iterate, and the other one is the iterator that
+/// stores the index at which we are iterating.
+///
+/// First thing that this macro does, is that it collects all the info
+/// about the enum you provided. Then it breaks it up into the following:
+///     * $m -- The meta type (all the #derive and #repr stuff)
+///     * $visa -- The visibility of your enum (public or private)
+///     * $name -- The name of your enum
+///     * $itr -- The iterator type
+///     * All the values you provided in your enum:
+///         * $val -- the values
+///         * $epr -- anything after the equal sign
+///
+/// The following work has to still be done with these things however:
+///     * Make the actual enum you provided
+///     * Make the iterator struct (with index)
+///     * Make a `impl` for your enum to return the newly created iterator type
+///     * Make a huge array containing all values in your enum
+///     * make the iterator access this huge array of values
+///
+///
 #[macro_export]
 macro_rules! enum_iterator {
-    /// Do nothing if nothing was given
     () => {};
 
-
-    /// # enum_iterator! {SampleEnum(SampleEnumIter) {...} }
-    ///
-    /// We take in two arguments here, as one is the struct for which,
-    /// we would like to iterate, and the other one is the iterator that
-    /// stores the index at which we are iterating.
-    ///
-    /// First thing that this macro does, is that it collects all the info
-    /// about the enum you provided. Then it breaks it up into the following:
-    ///     * $m -- The meta type (all the #derive and #repr stuff)
-    ///     * $visa -- The visibility of your enum (public or private)
-    ///     * $name -- The name of your enum
-    ///     * $itr -- The iterator type
-    ///     * All the values you provided in your enum:
-    ///         * $val -- the values
-    ///         * $epr -- anything after the equal sign
-    ///
-    /// The following work has to still be done with these things however:
-    ///     * Make the actual enum you provided
-    ///     * Make the iterator struct (with index)
-    ///     * Make a `impl` for your enum to return the newly created iterator type
-    ///     * Make a huge array containing all values in your enum
-    ///     * make the iterator access this huge array of values
-    ///
-    ///
     (
         $(#[$m:meta])*
         $visa:vis enum $name:ident($itr:ident) {

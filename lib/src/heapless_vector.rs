@@ -266,13 +266,14 @@ where
     type Item = Type;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if let Ok(data) = self.vec.get(self.index) {
-            self.index += 1;
-
-            return Some(*data);
+        if self.index > self.vec.used_data {
+            return None;
         }
+        
+        let data = self.vec.internal_data[self.index];
+        self.index += 1;
 
-        return None;
+        return Some(data);
     }
 }
 

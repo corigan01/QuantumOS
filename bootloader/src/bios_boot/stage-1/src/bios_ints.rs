@@ -193,13 +193,17 @@ impl BiosInt {
         let res;
 
         asm!(
+            "push si",
+            "mov si, {x:x}",
             "int 0x10",
-            inout("ah") self.command => res,
+            "pop si",
+            x = in(reg) self.flags.si,
+            inout("di") self.flags.di => _,
+            inout("al") self.flags.al => _,
+            inlateout("ah") self.command => res,
             inout("bl") self.flags.bl => _,
             inout("bh") self.flags.bh => _,
             inout("cx") self.flags.cx => _,
-            inout("al") self.flags.al => _,
-            inout("di") self.flags.di => _,
             clobber_abi("system")
         );
 
