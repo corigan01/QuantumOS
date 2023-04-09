@@ -24,6 +24,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 */
 
+use std::fmt::{Display, Formatter};
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::process::Command;
@@ -82,9 +83,12 @@ impl BiosBootConfig {
     const KERNEL_START_LOCATION_KEY: &'static str = "KERNEL_BEGIN";
     const NEXT_STAGE_LOCATION_KEY: &'static str = "NEXT_STAGE_BIN";
     const VIDEO_MODE_KEY: &'static str = "VIDEO";
+}
 
-    pub fn to_string(&self) -> String {
-        format!(
+impl Display for BiosBootConfig {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        writeln!(
+            f,
             "{}={}\n{}={}\n{}={}\n{}={}x{}\n",
             Self::KERNEL_START_LOCATION_KEY,
             self.kernel_address,
@@ -112,7 +116,7 @@ pub fn make_config_file(
         .open(&config_file_path)?;
 
     bootloader_config_file
-        .write_all(format!("# Bootloader Config File -----\n{}", config.to_string()).as_bytes())?;
+        .write_all(format!("# Bootloader Config File -----\n{}", config).as_bytes())?;
 
     Ok(config_file_path)
 }

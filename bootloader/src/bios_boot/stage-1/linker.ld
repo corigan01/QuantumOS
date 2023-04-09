@@ -1,10 +1,7 @@
 ENTRY(begin)
 
 SECTIONS {
-    . = 0x500;
-    _stack_start = .;
     . = 0x7c00;
-    _stack_end = .;
 
     .boot : {
         *(.boot .boot.*)
@@ -16,11 +13,13 @@ SECTIONS {
         SHORT(0xAA55)
     }
 
-    .text : {
-        *(.text .text.*)
-    }
+    . = 0x7E00;
+
     .data : {
         *(.data .data.*)
+    }
+    .text : {
+        *(.text .text.*)
     }
     .bss :  {
         *(.bss .bss.*)
@@ -35,5 +34,5 @@ SECTIONS {
        *(.eh_frame_hdr .eh_frame_hdr.*)
     }
 
-    _stage_1_end_sectors = ((. - 0x7c00) / 512);
+    _stage_1_end_sectors = ((. - 0x7E00) / 512);
 }

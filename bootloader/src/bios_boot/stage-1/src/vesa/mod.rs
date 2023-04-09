@@ -25,7 +25,6 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 use crate::bios_ints::BiosInt;
 use crate::error::BootloaderError;
-use crate::{bios_print, bios_println, convert_segmented_ptr};
 use core::marker::PhantomData;
 
 pub mod low_level_structs;

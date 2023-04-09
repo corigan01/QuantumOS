@@ -37,8 +37,10 @@ use quantum_lib::simple_allocator::SimpleBumpAllocator;
 use stage_1::bios_disk::BiosDisk;
 use stage_1::bios_ints::{BiosInt, TextModeColor};
 use stage_1::bios_println;
+use stage_1::bootloader_stack_information::{get_stack_used_bytes, get_total_stack_size};
 use stage_1::config_parser::BootloaderConfig;
 use stage_1::filesystem::FileSystem;
+use stage_1::memory_detection::MemoryMap;
 use stage_1::vesa::{BiosVesa, Res};
 
 global_asm!(include_str!("init.s"));
@@ -123,28 +125,34 @@ fn enter_rust(disk_id: u16) {
                 size: next_stage_filesize_bytes as u64,
             },
         ));
+
+        bios_println!(
+            "stack ({} / {})",
+            get_stack_used_bytes(),
+            get_total_stack_size()
+        );
     }
 
-    let bootloader_video_mode = bootloader_config.get_recommended_video_info();
+    {
+        let bootloader_video_mode = bootloader_config.get_recommended_video_info();
 
-    let mut vga = BiosVesa::new()
-        .quarry()
-        .expect("Could not quarry Vesa information");
+        let mut vga = BiosVesa::new()
+            .quarry()
+            .expect("Could not quarry Vesa information");
 
-    let mode = vga
-        .find_closest_mode(Res {
-            x: bootloader_video_mode.0,
-            y: bootloader_video_mode.1,
-            depth: 24,
-        })
-        .expect("Could not find closest mode");
+        let mode = vga
+            .find_closest_mode(Res {
+                x: bootloader_video_mode.0,
+                y: bootloader_video_mode.1,
+                depth: 24,
+            })
+            .expect("Could not find closest mode");
 
-    bios_println!("Mode info {:#?}", &mode.get_res());
+        bios_println!("Mode info {:#?}", &mode.get_res());
 
-    //vga.set_mode(mode).unwrap();
-    //vga.clear_display();
-
-    loop {}
+        //vga.set_mode(mode).unwrap();
+        //vga.clear_display();
+    }
 }
 
 #[panic_handler]

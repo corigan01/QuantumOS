@@ -1,4 +1,3 @@
-#![feature(result_contains_err)]
 /*
   ____                 __               __                __
  / __ \__ _____ ____  / /___ ____ _    / /  ___  ___ ____/ /__ ____
@@ -23,21 +22,32 @@ NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FO
 DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
-#![no_main]
-#![no_std]
 
-pub mod bios_disk;
-pub mod bios_ints;
-pub mod bios_video;
-pub mod bootloader_stack_information;
-pub mod config_parser;
-pub mod console;
-pub mod cpu_regs;
-pub mod error;
-pub mod filesystem;
-pub mod memory_detection;
-pub mod vesa;
+use quantum_lib::bytes::Bytes;
 
-pub fn convert_segmented_ptr(segmented_ptr: (usize, usize)) -> u32 {
-    (segmented_ptr.0 * 0x10 + segmented_ptr.1) as u32
+const STACK_TOP: u32 = 0x7c00;
+const STACK_BOTTOM: u32 = 0x500;
+
+pub fn get_stack_used_bytes() -> Bytes {
+    let stack_ptr = STACK_BOTTOM as *mut u8;
+    let total_stack_size = STACK_TOP - STACK_BOTTOM;
+    let mut bytes = 0;
+
+    loop {
+        let data = unsafe { *stack_ptr.add(bytes) };
+
+        if data != 0 || bytes > total_stack_size as usize {
+            break;
+        }
+
+        bytes += 1;
+    }
+
+    bytes.into()
+}
+
+pub fn get_total_stack_size() -> Bytes {
+    let size = STACK_TOP - STACK_BOTTOM;
+
+    size.into()
 }

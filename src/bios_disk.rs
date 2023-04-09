@@ -71,6 +71,7 @@ pub fn create_fat_img_from_directory(
     let directory = fs::read_dir(directory_path)?;
 
     // FIXME: Should be a function todo this because there is a lot of redundant code
+    #[allow(clippy::manual_flatten)]
     for items in directory {
         if let Ok(item) = items {
             if item.file_type().unwrap().is_file() {
@@ -202,9 +203,9 @@ pub fn make_mbr_disk(
     stage1_file.read_to_end(&mut stage1_entire_file).unwrap();
 
     disk_img.seek(SeekFrom::Start(0))?;
-    disk_img.write(&mut stage1_entire_file[0..410])?;
+    disk_img.write_all(&stage1_entire_file[0..410])?;
     disk_img.seek(SeekFrom::Start(512))?;
-    disk_img.write(&mut stage1_entire_file[512..])?;
+    disk_img.write_all(&stage1_entire_file[512..])?;
 
     disk_img.sync_all()?;
 

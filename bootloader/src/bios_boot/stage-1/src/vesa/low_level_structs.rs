@@ -26,7 +26,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 use crate::bios_ints::BiosInt;
 use crate::error::BootloaderError;
 
-use crate::{bios_print, bios_println, convert_segmented_ptr};
+use crate::convert_segmented_ptr;
 
 use quantum_lib::heapless_vector::HeaplessVec;
 
@@ -131,7 +131,7 @@ impl VesaModeInfo {
     }
 }
 
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Default)]
 #[repr(C, packed(2))]
 pub struct VesaDriverInfo {
     pub signature: [u8; 4],

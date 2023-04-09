@@ -28,6 +28,7 @@ use crate::filesystem::fat::fat16::ExtendedBPB16;
 use crate::filesystem::fat::fat_file::{FatFile, FatFileType};
 use crate::filesystem::fat::FatType;
 use crate::filesystem::fat::FatValid;
+
 use core::mem::size_of;
 use quantum_lib::heapless_string::HeaplessString;
 

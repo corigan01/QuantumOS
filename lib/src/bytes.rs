@@ -24,13 +24,50 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 */
 
-#![no_main]
-#![no_std]
+use core::fmt::{Debug, Display, Formatter};
 
-pub mod basic_font;
-pub mod bytes;
-pub mod heapless_string;
-pub mod heapless_vector;
-pub mod possibly_uninit;
-pub mod simple_allocator;
-pub mod x86_64;
+#[derive(Clone, Copy, PartialOrd, PartialEq, Default, Debug)]
+pub struct Bytes {
+    bytes: u128,
+}
+
+impl Bytes {
+    pub fn new() -> Self {
+        Self { bytes: 0 }
+    }
+}
+
+impl Display for Bytes {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        let deviser = if self.bytes > 1024 {
+            (1024, "Kib")
+        } else if self.bytes > (1024 * 1024) {
+            (1024 * 1024, "Mib")
+        } else if self.bytes > (1024 * 1024 * 1024) {
+            (1024 * 1024 * 1024, "Gib")
+        } else {
+            (1, "bytes")
+        };
+
+        let norm_bytes = self.bytes / deviser.0;
+        let symb = deviser.1;
+
+        write!(f, "{} {}", norm_bytes, symb)?;
+
+        Ok(())
+    }
+}
+
+macro_rules! from_all_types {
+    ($($t:ty)*) => ($(
+        impl From<$t> for Bytes {
+            fn from(value: $t) -> Self {
+                Bytes {
+                    bytes: value as u128
+                }
+            }
+        }
+    )*)
+}
+
+from_all_types! {usize u8 u16 u32 u64 u128}

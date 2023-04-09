@@ -34,7 +34,7 @@ pub struct FatFile {
 }
 
 #[repr(C, packed)]
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy)]
 pub struct FatDirectoryEntry {
     pub file_name: [u8; 8],
     pub file_extension: [u8; 3],
@@ -68,7 +68,7 @@ impl FatDirectoryEntry {
 }
 
 #[repr(C, packed)]
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy)]
 pub struct FatLongFileName {
     pub sq_order: u8,
     pub first_5: [u16; 5],
@@ -121,7 +121,7 @@ impl FatLongFileName {
     }
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq)]
 pub enum FatFileType {
     ReadOnly,
     Hidden,

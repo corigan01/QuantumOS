@@ -128,7 +128,8 @@ load_legs:
 # we couldn't read the rest of the bootloader
 # TODO: Add a message so the user can see if this fails
 disk_error:
-    mov al, 0x23
+    # Print 'd' if we have an error loading the disk
+    mov al, 0x64
     call print_err
     jmp spin
 

@@ -29,7 +29,14 @@ use std::fs;
 use std::process::Command;
 
 fn main() {
+    println!("Welcome to the Quantum World");
+
     let command_args: Vec<String> = std::env::args().collect();
+    let noqemu = command_args.contains(&String::from("noqemu"));
+
+    if noqemu {
+        println!("Build only mode!");
+    }
 
     let mut build_status = bios_boot();
 
@@ -41,7 +48,7 @@ fn main() {
         build_status = bios_boot();
     }
 
-    if !command_args.contains(&String::from("noqemu")) {
+    if !noqemu {
         let _qemu = Command::new("qemu-system-i386")
             .arg("-d")
             .arg("cpu_reset")
@@ -65,9 +72,16 @@ fn clean_dont_care() {
 }
 
 fn bios_boot() -> Result<String, Box<dyn std::error::Error>> {
-    let target = quantum::get_build_directory()?;
+    let target = quantum::get_build_directory().map_err(|err| {
+        eprintln!("Unable to get the `target` for which to build into.");
+        err
+    })?;
 
-    let bootloader_directory = quantum::bios_boot::make_bootloader_dir(&target)?;
+    let bootloader_directory = quantum::bios_boot::make_bootloader_dir(&target).map_err(|err| {
+        eprintln!("Unable to create bootloader directory! {err}");
+        err
+    })?;
+
     let inner_config_directory = format!("{}/bootloader", bootloader_directory);
 
     let stage_1_path = quantum::bios_boot::build_stage_1().unwrap();

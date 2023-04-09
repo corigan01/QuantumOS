@@ -37,7 +37,7 @@ impl BiosTextMode {
     pub fn new() -> Self {
         Self {
             background_color: TextModeColor::Black,
-            foreground_color: TextModeColor::White,
+            foreground_color: TextModeColor::Blue,
         }
     }
 
@@ -90,7 +90,7 @@ impl fmt::Write for BiosTextMode {
 }
 
 #[doc(hidden)]
-pub fn _print(args: ::core::fmt::Arguments) {
+pub fn _print(args: fmt::Arguments) {
     use core::fmt::Write;
     BiosTextMode::new().write_fmt(args).unwrap();
 }

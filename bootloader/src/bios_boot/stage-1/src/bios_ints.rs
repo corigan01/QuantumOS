@@ -205,21 +205,6 @@ impl BiosInt {
         res
     }
 
-    // Memory IO related functions
-    unsafe fn x15_int_dispatcher(&self) -> u8 {
-        let res: u16;
-
-        asm!(
-            "int 0x15",
-            inout("bx") self.flags.bx => _,
-            inout("ax") self.flags.ax => res,
-            inout("cx") self.flags.cx => _,
-            inout("dx") self.flags.dx => _,
-        );
-
-        res as u8
-    }
-
     // Disk IO related functions
     unsafe fn x13_int_dispatcher(&self) -> u8 {
         let res;

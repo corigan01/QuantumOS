@@ -23,14 +23,12 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use crate::bios_ints::{BiosInt, TextModeColor};
-use crate::bios_println;
+use crate::bios_ints::BiosInt;
 use crate::error::BootloaderError;
 use crate::filesystem::DiskMedia;
-use core::ops::Range;
 
 #[repr(packed, C)]
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone)]
 struct DiskAccessPacket {
     packet_size: u8,
     zero: u8,

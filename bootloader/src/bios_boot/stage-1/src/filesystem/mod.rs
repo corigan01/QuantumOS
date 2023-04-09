@@ -33,6 +33,7 @@ use crate::{bios_print, bios_println};
 use crate::filesystem::fat::Fatfs;
 use crate::filesystem::partition::{PartitionEntry, Partitions};
 use core::marker::PhantomData;
+use quantum_lib::bytes::Bytes;
 use types::FileSystemTypes;
 
 pub struct UnQuarried;
@@ -231,10 +232,9 @@ impl<DiskType: DiskMedia> FileSystem<DiskType, MountedRoot> {
         root_fs.load_file_to_ptr(&self.attached_disk, filename, buffer)?;
 
         if self.logging_enable {
-            bios_println!(
-                "Done {}kb",
-                self.get_filesize_bytes(filename).unwrap_or(0) / 1024
-            );
+            let bytes: Bytes = self.get_filesize_bytes(filename).unwrap_or(0).into();
+
+            bios_println!(" Done ({})", bytes);
         }
 
         Ok(())

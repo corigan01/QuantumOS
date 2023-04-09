@@ -24,6 +24,11 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 */
 
+use crate::bios_println;
+use crate::error::BootloaderError;
+use core::arch::asm;
+use quantum_lib::heapless_vector::HeaplessVec;
+
 pub enum MemoryType {
     Usable,
     Reserved,
@@ -34,6 +39,7 @@ pub enum MemoryType {
     NonVolatile,
 }
 
+#[derive(Clone, Copy, Debug, Default)]
 #[repr(C, packed)]
 pub struct BiosMemoryEntry {
     base_addr: u64,
@@ -43,6 +49,69 @@ pub struct BiosMemoryEntry {
 }
 
 pub struct MemoryMap {
-    total_entries: u32,
-    entries: [BiosMemoryEntry; 32],
+    entries: HeaplessVec<BiosMemoryEntry, 32>,
+}
+
+impl MemoryMap {
+    const MAGIC: u32 = 0x534D4150;
+
+    pub fn new() -> Self {
+        Self {
+            entries: HeaplessVec::new(),
+        }
+    }
+
+    pub fn quarry() -> Result<Self, BootloaderError> {
+        let mut memory_map = Self::new();
+
+        let asm_runner = |offset: &mut usize| {
+            let mut memory_entry = BiosMemoryEntry::default();
+
+            let mut status = 0;
+            let mut written_data_amount = 0;
+
+            let entry_ptr = &mut memory_entry as *mut BiosMemoryEntry as *mut u8;
+
+            unsafe {
+                asm!(
+                    "push ebx",
+                    "mov ebx, edx",
+                    "mov edx, 0x534D4150",
+                    "int 0x15",
+                    "mov edx, ebx",
+                    "pop ebx",
+                    inout("eax") 0xe820 => status,
+                    inout("edx") *offset,
+                    inout("ecx") 24 => written_data_amount,
+                    in("di") entry_ptr
+                )
+            };
+
+            bios_println!("Memory entry {memory_entry:?}");
+
+            if status != Self::MAGIC || written_data_amount == 0 {
+                return Err(BootloaderError::BiosCallFailed);
+            }
+
+            if *offset == 0 {
+                return Err(BootloaderError::NoValid);
+            }
+
+            Ok(memory_entry)
+        };
+
+        for i in 0..32 {
+            bios_println!("attempting to get {i}' memory map!");
+            let mut offset = i;
+            let status = asm_runner(&mut offset);
+
+            if status.contains_err(&BootloaderError::NoValid) {
+                break;
+            }
+
+            memory_map.entries.push_within_capsity(status?);
+        }
+
+        Ok(memory_map)
+    }
 }
