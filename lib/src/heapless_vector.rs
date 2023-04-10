@@ -269,7 +269,7 @@ where
         if self.index > self.vec.used_data {
             return None;
         }
-        
+
         let data = self.vec.internal_data[self.index];
         self.index += 1;
 

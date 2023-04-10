@@ -49,6 +49,12 @@ impl<T> BiosCallResult<T> {
     pub unsafe fn ignore_error(self) -> Nothing {
         Nothing::default()
     }
+    pub fn did_succeed(&self) -> bool {
+        matches!(self, Self::Success(_))
+    }
+    pub fn did_fail(&self) -> bool {
+        !self.did_succeed()
+    }
 }
 
 pub struct BiosCall<CallType = NoCall> {
@@ -151,7 +157,11 @@ impl BiosCall<Bit16> {
     #[inline(never)]
     unsafe fn general_purpose_disk_call(&mut self) {
         asm!(
+            "push si",
+            "mov si, {si_imp:x}",
             "int 0x13",
+            "pop si",
+            si_imp = in(reg) self.registers_16.si,
             inout("ax") self.registers_16.ax => self.registers_16.ax,
             inout("bx") self.registers_16.bx => self.registers_16.bx,
             inout("cx") self.registers_16.cx => self.registers_16.cx,
@@ -175,7 +185,40 @@ impl BiosCall<Bit16> {
         self.general_purpose_video_call();
         let carry_flag = Self::carry_flag();
 
-        if false {
+        if carry_flag {
+            return BiosCallResult::FailedToExecute;
+        }
+        if (self.registers_16.ax & 0xFF00 >> 8) == 0x80 {
+            return BiosCallResult::InvalidCall;
+        }
+        if (self.registers_16.ax & 0xFF00 >> 8) == 0x86 {
+            return BiosCallResult::Unsupported;
+        }
+
+        BiosCallResult::Success(Nothing::default())
+    }
+
+    pub unsafe fn bios_disk_io(
+        mut self,
+        disk_id: u8,
+        disk_packet: *mut u8,
+        is_writting: bool,
+    ) -> BiosCallResult<Nothing> {
+        if disk_packet as u32 == 0 {
+            return PreChecksFailed;
+        }
+        if *disk_packet != 12 && *disk_packet != 16 {
+            return PreChecksFailed;
+        }
+
+        self.registers_16.ax = if is_writting { 0x4300 } else { 0x4200 };
+        self.registers_16.dx = disk_id as u16;
+        self.registers_16.si = disk_packet as u16;
+
+        self.general_purpose_disk_call();
+        let carry_flag = Self::carry_flag();
+
+        if carry_flag {
             return BiosCallResult::FailedToExecute;
         }
         if (self.registers_16.ax & 0xFF00 >> 8) == 0x80 {

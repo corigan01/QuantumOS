@@ -24,17 +24,12 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 */
 
-#![no_main]
-#![no_std]
-
-pub mod basic_font;
-pub mod bytes;
-pub mod debug_stream;
-pub mod heapless_string;
-pub mod heapless_vector;
-pub mod possibly_uninit;
-pub mod simple_allocator;
-pub mod time;
-pub mod x86_64;
-
-pub type Nothing = ();
+#[derive(Clone, Copy, Debug, Ord, PartialOrd, Eq, PartialEq)]
+pub struct Time {
+    second: u16,
+    minute: u16,
+    hour: u16,
+    day: u16,
+    month: u16,
+    year: u16,
+}
