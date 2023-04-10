@@ -24,8 +24,8 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 use crate::bios_ints::BiosInt;
-use crate::error::BootloaderError;
 use crate::filesystem::DiskMedia;
+use bootloader::error::BootloaderError;
 
 #[repr(packed, C)]
 #[derive(Copy, Clone)]

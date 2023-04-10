@@ -27,8 +27,8 @@ pub mod fat;
 pub mod partition;
 pub mod types;
 
-use crate::error::BootloaderError;
 use crate::{bios_print, bios_println};
+use bootloader::error::BootloaderError;
 
 use crate::filesystem::fat::Fatfs;
 use crate::filesystem::partition::{PartitionEntry, Partitions};

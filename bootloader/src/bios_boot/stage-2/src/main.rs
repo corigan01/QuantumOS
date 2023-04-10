@@ -28,4 +28,13 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #![no_main] // disable all Rust-level entry points
 #![allow(dead_code)]
 
-fn main() {}
+#[no_mangle]
+extern "C" fn bit16_entry2() -> ! {
+    main();
+    loop {};
+}
+
+fn main() {
+    
+    
+}

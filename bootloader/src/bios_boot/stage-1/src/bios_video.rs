@@ -26,6 +26,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 use crate::bios_ints::{BiosInt, TextModeColor};
 use crate::console::GlobalPrint;
+use bootloader::bios_call::BiosCall;
 use core::fmt;
 
 pub struct BiosTextMode {
@@ -42,9 +43,10 @@ impl BiosTextMode {
     }
 
     unsafe fn print_int_char(&self, c: u8) {
-        BiosInt::write_character(c, 0, self.background_color, self.foreground_color)
-            .execute_interrupt()
-            .unwrap();
+        BiosCall::new()
+            .bit16_call()
+            .display_char(c as char, 0x0000)
+            .ignore_error()
     }
 
     fn print_int_bytes(&self, str: &[u8]) {

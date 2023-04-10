@@ -28,11 +28,11 @@ use core::str;
 
 use quantum_lib::heapless_string::HeaplessString;
 
-use crate::error::BootloaderError;
 use crate::filesystem::fat::bios_parameter_block::{BiosBlock, FatTableEntryType};
 use crate::filesystem::fat::fat_file::{FatDirectoryEntry, FatFile, FatFileType, FatLongFileName};
 use crate::filesystem::partition::PartitionEntry;
 use crate::filesystem::{DiskMedia, ValidFilesystem};
+use bootloader::error::BootloaderError;
 
 pub mod bios_parameter_block;
 pub mod fat16;

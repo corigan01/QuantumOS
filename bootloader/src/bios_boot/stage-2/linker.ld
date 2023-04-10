@@ -15,11 +15,11 @@ SECTIONS {
 
     . = 0x7E00;
 
-    .data : {
-        *(.data .data.*)
-    }
     .text : {
         *(.text .text.*)
+    }
+    .data : {
+        *(.data .data.*)
     }
     .bss :  {
         *(.bss .bss.*)
@@ -34,14 +34,5 @@ SECTIONS {
        *(.eh_frame_hdr .eh_frame_hdr.*)
     }
 
-
-    _stage_1_end = .;
-
-    . = 0x0007FFFF - 0x10;
-
-    .end_magic : {
-        SHORT(0xdead)
-    }
-
-    _stage_1_end_sectors = ((_stage_1_end - 0x7E00) / 512);
+    _stage_1_end_sectors = ((. - 0x7E00) / 512);
 }

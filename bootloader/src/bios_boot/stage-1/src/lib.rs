@@ -33,7 +33,6 @@ pub mod bootloader_stack_information;
 pub mod config_parser;
 pub mod console;
 pub mod cpu_regs;
-pub mod error;
 pub mod filesystem;
 pub mod memory_detection;
 pub mod vesa;

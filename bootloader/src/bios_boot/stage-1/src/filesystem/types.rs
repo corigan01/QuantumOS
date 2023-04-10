@@ -24,9 +24,9 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 use crate::bios_println;
-use crate::error::BootloaderError;
 use crate::filesystem::fat::Fatfs;
 use crate::filesystem::{DiskMedia, PartitionEntry, ValidFilesystem};
+use bootloader::error::BootloaderError;
 
 #[derive(Clone, Copy)]
 pub enum FileSystemTypes {

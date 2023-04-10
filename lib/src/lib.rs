@@ -34,3 +34,5 @@ pub mod heapless_vector;
 pub mod possibly_uninit;
 pub mod simple_allocator;
 pub mod x86_64;
+
+pub type Nothing = ();

@@ -2,6 +2,16 @@
 name = "stage-2"
 version = "0.1.0"
 edition = "2021"
-
+build = "build.rs"
 
 [dependencies]
+quantum_lib = { path = "../../../../lib" }
+bootloader = { path = "../../../bootloader" }
+
+[profile.release]
+opt-level="s"
+lto = true
+codegen-units = 1
+debug = false
+overflow-checks = false
+panic = "abort"

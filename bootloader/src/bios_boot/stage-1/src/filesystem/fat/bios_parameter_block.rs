@@ -23,11 +23,11 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use crate::error::BootloaderError;
 use crate::filesystem::fat::fat16::ExtendedBPB16;
 use crate::filesystem::fat::fat_file::{FatFile, FatFileType};
 use crate::filesystem::fat::FatType;
 use crate::filesystem::fat::FatValid;
+use bootloader::error::BootloaderError;
 
 use core::mem::size_of;
 use quantum_lib::heapless_string::HeaplessString;

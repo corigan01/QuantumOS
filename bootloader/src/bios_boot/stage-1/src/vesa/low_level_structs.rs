@@ -24,7 +24,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 use crate::bios_ints::BiosInt;
-use crate::error::BootloaderError;
+use bootloader::error::BootloaderError;
 
 use crate::convert_segmented_ptr;
 

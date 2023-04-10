@@ -55,8 +55,8 @@ begin:
     cld
 
     # Point the stack here at 0x7c00, this is right before the bootloader is loaded into memory
-    # This gives us memory regions between 0x7c00 and 0x0500 for our stack. This will be plenty
-    # for our simple 16 bit rust stage-1.
+    # This gives us memory regions between 0x7c00 and 0x0500 for our stack. This will be "plenty"
+    # (more like all we get) for our 16-bit rust stage-1.
     mov sp, 0x7c00
 
     # This will load rust into memory, this way we can keep the bootloader section small and just load

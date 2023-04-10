@@ -25,7 +25,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 use crate::bios_println;
-use crate::error::BootloaderError;
+use bootloader::error::BootloaderError;
 use core::arch::asm;
 use quantum_lib::heapless_vector::HeaplessVec;
 
