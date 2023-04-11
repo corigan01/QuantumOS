@@ -33,7 +33,7 @@ use core::panic::PanicInfo;
 
 #[no_mangle]
 #[link_section = ".start"]
-extern "C" fn _start() -> ! {
+pub extern "C" fn _start(data: u32) -> ! {
     main();
     loop {}
 }

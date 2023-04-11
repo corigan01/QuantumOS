@@ -159,6 +159,13 @@ fn enter_rust(disk_id: u16) {
     BiosTextMode::print_int_bytes(b"OK\n");
 
     BiosTextMode::print_int_bytes(b"Loading Stage2\n");
+
+    unsafe {
+        _print(format_args!(
+            "{} bytes  = {:x?}",
+            next_stage_filesize_bytes, next_stage_ptr
+        ));
+    }
     unsafe {
         enter_stage2(
             next_stage_ptr.as_ptr(),
