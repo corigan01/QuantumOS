@@ -63,6 +63,39 @@ pub fn build_stage_1() -> Result<String, Box<dyn std::error::Error>> {
     Ok(stage1_path)
 }
 
+pub fn build_stage_2() -> Result<String, Box<dyn std::error::Error>> {
+    let current_dir = env::current_dir()?;
+    let target = format!("{}/target", current_dir.display());
+    let cargo = env::var("CARGO").unwrap_or("cargo".into());
+
+    let stage2_path = format!("{}/i686-quantum_loader/release/stage-2", target);
+
+    let cargo_status = Command::new(cargo)
+        .current_dir("bootloader/src/bios_boot/stage-2")
+        .arg("build")
+        .arg("--release")
+        .arg("--target")
+        .arg("i686-quantum_loader.json")
+        .arg(format!("--target-dir={}", target))
+        .stdout(std::process::Stdio::piped())
+        .status()?;
+
+    if !cargo_status.success() {
+        panic!("unable to build bootloader!")
+    }
+
+    Command::new("objcopy")
+        .arg("-I")
+        .arg("elf64-x86-64")
+        .arg("-O")
+        .arg("binary")
+        .arg(&stage2_path)
+        .stdout(std::process::Stdio::piped())
+        .status()?;
+
+    Ok(stage2_path)
+}
+
 pub fn make_bootloader_dir(path: &String) -> Result<String, Box<dyn std::error::Error>> {
     let bootloader_dir = format!("{}/bootloader_dir", path);
 

@@ -23,5 +23,52 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-pub mod interrupts;
-pub mod registers;
+use core::arch::asm;
+
+pub struct Interrupts {}
+
+impl Interrupts {
+    #[inline(always)]
+    pub unsafe fn disable() {
+        asm!("cli");
+    }
+
+    #[inline(always)]
+    pub unsafe fn enable() {
+        asm!("sti");
+    }
+
+    #[deprecated]
+    #[doc = "Should read from eeflags instead"]
+    pub fn are_interrupts_enabled() -> bool {
+        let mut flags: u16;
+
+        unsafe {
+            asm!(
+                "pushf",
+                "pop {flags:x}",
+                flags = lateout(reg) flags,
+            );
+        }
+
+        flags & (1 << 9) != 0
+    }
+
+    pub fn assert_interrupts_must_be_enabled() {
+        let enabled = Self::are_interrupts_enabled();
+
+        assert_eq!(
+            enabled, true,
+            "Expected Interrupts to be enabled, try `Interrupts::enable()`!"
+        );
+    }
+
+    pub fn assert_interrupts_must_be_disabled() {
+        let enabled = Self::are_interrupts_enabled();
+
+        assert_eq!(
+            enabled, false,
+            "Expected Interrupts to be disabled, try `Interrupts::disable()`!"
+        );
+    }
+}

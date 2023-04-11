@@ -24,6 +24,8 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 */
 
+use core::arch::asm;
+
 #[derive(Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Default)]
 #[repr(C)]
 pub struct GPRegs8 {
@@ -93,4 +95,138 @@ pub struct SegmentRegs {
     pub ss: u16,
     pub fs: u16,
     pub gs: u16,
+}
+
+pub struct CR0 {}
+
+impl CR0 {
+    #[inline(never)]
+    pub fn read_to_32() -> u32 {
+        let reading_value;
+
+        unsafe {
+            asm!(
+                "mov {output:e}, cr0",
+                output = out(reg) reading_value
+            );
+        }
+
+        assert!(reading_value != 0);
+
+        reading_value
+    }
+
+    #[inline(never)]
+    fn write_at_position(bit_pos: u32, flag: bool) {
+        assert!(bit_pos <= 32);
+
+        let read_value = Self::read_to_32();
+        let set_bit_pos = 1 << bit_pos;
+
+        let moved_bit = if flag {
+            set_bit_pos
+        } else {
+            u32::MAX ^ set_bit_pos
+        };
+
+        let new_value = if flag {
+            read_value | moved_bit
+        } else {
+            read_value & moved_bit
+        };
+
+        unsafe {
+            asm!(
+                "mov cr0, {value:e}",
+                value = in(reg) new_value
+            );
+        }
+    }
+
+    pub fn is_protected_mode_set() -> bool {
+        let value = Self::read_to_32();
+
+        value & 1 == 1
+    }
+
+    pub fn is_monitor_coprocessor_set() -> bool {
+        let value = Self::read_to_32();
+        let bit_pos = 1;
+
+        (value & (1 << bit_pos)) >> bit_pos == 1
+    }
+
+    pub fn is_enumlation_set() -> bool {
+        let value = Self::read_to_32();
+        let bit_pos = 2;
+
+        (value & (1 << bit_pos)) >> bit_pos == 1
+    }
+
+    pub fn is_task_switched_set() -> bool {
+        let value = Self::read_to_32();
+        let bit_pos = 3;
+
+        (value & (1 << bit_pos)) >> bit_pos == 1
+    }
+
+    pub fn is_extention_type_set() -> bool {
+        let value = Self::read_to_32();
+        let bit_pos = 4;
+
+        (value & (1 << bit_pos)) >> bit_pos == 1
+    }
+
+    pub fn is_not_write_through_set() -> bool {
+        let value = Self::read_to_32();
+        let bit_pos = 16;
+
+        (value & (1 << bit_pos)) >> bit_pos == 1
+    }
+
+    pub fn is_alignment_mask_set() -> bool {
+        let value = Self::read_to_32();
+        let bit_pos = 18;
+
+        (value & (1 << bit_pos)) >> bit_pos == 1
+    }
+
+    pub fn is_write_protect_set() -> bool {
+        let value = Self::read_to_32();
+        let bit_pos = 28;
+
+        (value & (1 << bit_pos)) >> bit_pos == 1
+    }
+
+    pub fn set_protected_mode(flag: bool) {
+        Self::write_at_position(0, flag);
+    }
+
+    pub fn set_monitor_coprocessor(flag: bool) {
+        Self::write_at_position(1, flag);
+    }
+
+    pub fn set_enumlation(flag: bool) {
+        Self::write_at_position(2, flag);
+    }
+
+    pub fn set_task_switched(flag: bool) {
+        Self::write_at_position(3, flag);
+    }
+
+    pub fn set_extention_type(flag: bool) {
+        Self::write_at_position(4, flag);
+    }
+
+    pub fn set_not_write_through(flag: bool) {
+        Self::write_at_position(16, flag);
+    }
+
+    pub fn set_alignment_mask(flag: bool) {
+        Self::write_at_position(18, flag);
+    }
+
+    pub fn set_write_protect(flag: bool) {
+        Self::write_at_position(28, flag);
+    }
 }

@@ -23,7 +23,9 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+#[cfg(debug)]
 use crate::bios_println;
+
 use crate::filesystem::fat::Fatfs;
 use crate::filesystem::{DiskMedia, PartitionEntry, ValidFilesystem};
 use bootloader::error::BootloaderError;

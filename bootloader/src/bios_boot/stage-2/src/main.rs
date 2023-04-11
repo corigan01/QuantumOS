@@ -28,13 +28,27 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #![no_main] // disable all Rust-level entry points
 #![allow(dead_code)]
 
+use core::arch::asm;
+use core::panic::PanicInfo;
+
 #[no_mangle]
-extern "C" fn bit16_entry2() -> ! {
+#[link_section = ".start"]
+extern "C" fn _start() -> ! {
     main();
-    loop {};
+    loop {}
 }
 
 fn main() {
-    
-    
+    let video_ptr = 0xB8000 as *mut u16;
+
+    for (i, byte) in b"YOUR MOM".iter().enumerate() {
+        unsafe { *video_ptr.add(i) = (*byte as u16) << 8 | 0xAA };
+    }
+}
+
+#[panic_handler]
+#[cold]
+#[allow(dead_code)]
+fn panic(_info: &PanicInfo) -> ! {
+    loop {}
 }

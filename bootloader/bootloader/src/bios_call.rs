@@ -57,34 +57,13 @@ impl<T> BiosCallResult<T> {
     }
 }
 
+#[allow(dead_code)]
 pub struct BiosCall<CallType = NoCall> {
     registers_16: GPRegs16,
     registers_32: GPRegs32,
     segment_registers: SegmentRegs,
     reserved: PhantomData<CallType>,
 }
-
-/**
-The BDA is only partially standardized and mostly relevant for real mode BIOS operations. The following is a partial list. See the External Links references below for more detail.
-
-address (size)	description
-0x0400 (4 words)	IO ports for COM1-COM4 serial (each address is 1 word, zero if none)
-0x0408 (3 words)	IO ports for LPT1-LPT3 parallel (each address is 1 word, zero if none)
-0x040E (word)	EBDA base address >> 4 (usually!)
-0x0410 (word)	packed bit flags for detected hardware
-0x0413 (word)	Number of kilobytes before EBDA / unusable memory
-0x0417 (word)	keyboard state flags
-0x041E (32 bytes)	keyboard buffer
-0x0449 (byte)	Display Mode
-0x044A (word)	number of columns in text mode
-0x0463 (2 bytes, taken as a word)	base IO port for video
-0x046C (word)	# of IRQ0 timer ticks since boot
-0x0475 (byte)	# of hard disk drives detected
-0x0480 (word)	keyboard buffer start
-0x0482 (word)	keyboard buffer end
-0x0497 (byte)	last keyboard LED/Shift key state
-
-*/
 
 impl BiosCall {
     const BDA_PTR: *const u8 = 0x0400 as *const u8;
@@ -151,6 +130,7 @@ impl BiosCall<Bit16> {
             inout("bx") self.registers_16.bx => self.registers_16.bx,
             inout("cx") self.registers_16.cx => self.registers_16.cx,
             inout("dx") self.registers_16.dx => self.registers_16.dx,
+            inout("di") self.registers_16.di => self.registers_16.di,
         );
     }
 
@@ -180,7 +160,7 @@ impl BiosCall<Bit16> {
 
         self.registers_16.ax = 0x0E00 | (c as u16 & 0x00FF);
         self.registers_16.cx = 0x1;
-        self.registers_16.bx = 0;
+        self.registers_16.bx = attributes;
 
         self.general_purpose_video_call();
         let carry_flag = Self::carry_flag();
@@ -216,6 +196,79 @@ impl BiosCall<Bit16> {
         self.registers_16.si = disk_packet as u16;
 
         self.general_purpose_disk_call();
+        let carry_flag = Self::carry_flag();
+
+        if carry_flag {
+            return BiosCallResult::FailedToExecute;
+        }
+        if (self.registers_16.ax & 0xFF00 >> 8) == 0x80 {
+            return BiosCallResult::InvalidCall;
+        }
+        if (self.registers_16.ax & 0xFF00 >> 8) == 0x86 {
+            return BiosCallResult::Unsupported;
+        }
+
+        BiosCallResult::Success(Nothing::default())
+    }
+
+    pub unsafe fn read_vbe_info(mut self, struct_ptr: *mut u8) -> BiosCallResult<Nothing> {
+        assert_ne!(struct_ptr as u16, 0);
+        assert!(struct_ptr as u16 <= u16::MAX);
+
+        self.registers_16.di = struct_ptr as u16;
+        self.registers_16.ax = 0x4F00;
+
+        self.general_purpose_video_call();
+        let carry_flag = Self::carry_flag();
+
+        if carry_flag {
+            return BiosCallResult::FailedToExecute;
+        }
+        if (self.registers_16.ax & 0xFF00 >> 8) == 0x80 {
+            return BiosCallResult::InvalidCall;
+        }
+        if (self.registers_16.ax & 0xFF00 >> 8) == 0x86 {
+            return BiosCallResult::Unsupported;
+        }
+
+        BiosCallResult::Success(Nothing::default())
+    }
+
+    pub unsafe fn read_vbe_mode(
+        mut self,
+        struct_ptr: *mut u8,
+        mode: u16,
+    ) -> BiosCallResult<Nothing> {
+        assert_ne!(struct_ptr as u16, 0);
+        assert!(struct_ptr as u16 <= u16::MAX);
+        assert_ne!(mode, 0);
+
+        self.registers_16.di = struct_ptr as u16;
+        self.registers_16.cx = mode;
+        self.registers_16.ax = 0x4F01;
+
+        self.general_purpose_video_call();
+        let carry_flag = Self::carry_flag();
+
+        if carry_flag {
+            return BiosCallResult::FailedToExecute;
+        }
+        if (self.registers_16.ax & 0xFF00 >> 8) == 0x80 {
+            return BiosCallResult::InvalidCall;
+        }
+        if (self.registers_16.ax & 0xFF00 >> 8) == 0x86 {
+            return BiosCallResult::Unsupported;
+        }
+
+        BiosCallResult::Success(Nothing::default())
+    }
+
+    pub unsafe fn set_vbe_mode(mut self, mode: u16) -> BiosCallResult<Nothing> {
+        assert_ne!(mode, 0);
+
+        self.registers_16.cx = mode;
+
+        self.general_purpose_video_call();
         let carry_flag = Self::carry_flag();
 
         if carry_flag {

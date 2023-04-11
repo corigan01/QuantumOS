@@ -23,7 +23,9 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+#[cfg(debug)]
 use crate::bios_ints::BiosInt;
+use bootloader::bios_call::BiosCall;
 use bootloader::error::BootloaderError;
 use core::marker::PhantomData;
 
@@ -95,6 +97,8 @@ impl BiosVesa<Quarried> {
         Function: FnMut(&VesaMode) -> bool,
     {
         let supported_modes = self.info.get_all_supported_modes()?;
+
+        assert_ne!(supported_modes.len(), 0);
 
         for mode in supported_modes {
             if mode == 0 {
@@ -177,7 +181,7 @@ impl BiosVesa<Quarried> {
     pub fn set_mode(&mut self, mode: VesaMode) -> Result<(), BootloaderError> {
         let mode_id = mode.mode_id;
 
-        let bios_status = unsafe { BiosInt::set_vbe_mode(mode_id as u16).execute_interrupt() };
+        let bios_status = unsafe { BiosCall::new().bit16_call().set_vbe_mode(mode_id as u16) };
 
         if bios_status.did_fail() {
             return Err(BootloaderError::BiosCallFailed);

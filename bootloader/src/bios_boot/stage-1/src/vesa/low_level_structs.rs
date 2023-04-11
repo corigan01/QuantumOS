@@ -23,7 +23,7 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use crate::bios_ints::BiosInt;
+use bootloader::bios_call::BiosCall;
 use bootloader::error::BootloaderError;
 
 use crate::convert_segmented_ptr;
@@ -120,8 +120,11 @@ impl VesaModeInfo {
         assert!(mode_id <= u16::MAX as usize);
         assert!(ptr as usize <= u16::MAX as usize);
 
-        let interrupt_status =
-            unsafe { BiosInt::read_vbe_mode(ptr, mode_id as u16).execute_interrupt() };
+        let interrupt_status = unsafe {
+            BiosCall::new()
+                .bit16_call()
+                .read_vbe_mode(ptr, mode_id as u16)
+        };
 
         if interrupt_status.did_fail() {
             return Err(BootloaderError::BiosCallFailed);
@@ -153,7 +156,7 @@ impl VesaDriverInfo {
 
         assert!(ptr as u32 <= u16::MAX as u32);
 
-        let status = unsafe { BiosInt::read_vbe_info(ptr).execute_interrupt() };
+        let status = unsafe { BiosCall::new().bit16_call().read_vbe_info(ptr) };
 
         if status.did_fail() || !info.validate_signature() {
             return Err(BootloaderError::BiosCallFailed);

@@ -23,7 +23,6 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use crate::bios_ints::BiosInt;
 use crate::filesystem::DiskMedia;
 use bootloader::bios_call::BiosCall;
 use bootloader::error::BootloaderError;

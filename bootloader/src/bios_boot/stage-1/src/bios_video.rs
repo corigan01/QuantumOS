@@ -24,68 +24,45 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 */
 
-use crate::bios_ints::{BiosInt, TextModeColor};
-use crate::console::GlobalPrint;
 use bootloader::bios_call::BiosCall;
 use core::fmt;
 
-pub struct BiosTextMode {
-    background_color: TextModeColor,
-    foreground_color: TextModeColor,
-}
+pub struct BiosTextMode {}
 
 impl BiosTextMode {
     pub fn new() -> Self {
-        Self {
-            background_color: TextModeColor::Black,
-            foreground_color: TextModeColor::Blue,
-        }
+        Self {}
     }
 
-    unsafe fn print_int_char(&self, c: u8) {
+    unsafe fn print_int_char(c: u8) {
         BiosCall::new()
             .bit16_call()
             .display_char(c as char, 0x0000)
             .ignore_error()
     }
 
-    fn print_int_bytes(&self, str: &[u8]) {
+    pub fn print_int_bytes(str: &[u8]) {
         for i in str {
             match *i {
                 b'\n' => unsafe {
-                    self.print_int_char(0xd);
-                    self.print_int_char(0xa);
+                    Self::print_int_char(0xd);
+                    Self::print_int_char(0xa);
                 },
                 c if c.is_ascii() => unsafe {
-                    self.print_int_char(c);
+                    Self::print_int_char(c);
                 },
-
                 _ => {
-                    unsafe { self.print_int_char(b'?') };
-
+                    unsafe { Self::print_int_char(b'?') };
                     break;
                 }
             }
         }
     }
-
-    fn print_int_string(&self, str: &str) {
-        self.print_int_bytes(str.as_bytes());
-    }
-}
-
-impl GlobalPrint for BiosTextMode {
-    fn print_str(str: &str) {
-        BiosTextMode::new().print_int_string(str);
-    }
-    fn print_bytes(bytes: &[u8]) {
-        BiosTextMode::new().print_int_bytes(bytes);
-    }
 }
 
 impl fmt::Write for BiosTextMode {
     fn write_str(&mut self, s: &str) -> fmt::Result {
-        self.print_int_string(s);
+        Self::print_int_bytes(s.as_bytes());
 
         Ok(())
     }
@@ -98,6 +75,7 @@ pub fn _print(args: fmt::Arguments) {
 }
 
 /// Prints to the host through the bios int.
+#[cfg(debug)]
 #[macro_export]
 macro_rules! bios_print {
     ($($arg:tt)*) => {
@@ -106,6 +84,7 @@ macro_rules! bios_print {
 }
 
 /// Prints to the host through the bios int, appending a newline.
+#[cfg(debug)]
 #[macro_export]
 macro_rules! bios_println {
     () => ($crate::bios_print!("\n"));

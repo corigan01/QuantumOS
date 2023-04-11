@@ -97,13 +97,11 @@ impl<'a> BootloaderConfig<'a> {
     }
 
     pub fn get_kernel_file_path(&self) -> &str {
-        self.kernel_filepath
-            .expect("Please add kernel file location in bootloader.cfg")
+        self.kernel_filepath.unwrap_or("/kernel.elf")
     }
 
     pub fn get_stage2_file_path(&self) -> &str {
-        self.stage2_filepath
-            .expect("Please add stage2 file location in bootloader.cfg")
+        self.stage2_filepath.unwrap_or("/bootloader/stage2.bin")
     }
 
     pub fn get_recommended_video_info(&self) -> (usize, usize) {
@@ -111,6 +109,7 @@ impl<'a> BootloaderConfig<'a> {
     }
 }
 
+#[cfg(debug)]
 impl<'a> Debug for BootloaderConfig<'a> {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         writeln!(f, "BootloaderConfig {{")?;

@@ -23,7 +23,9 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+#[cfg(debug)]
 use crate::{bios_print, bios_println};
+
 use core::str;
 
 use quantum_lib::heapless_string::HeaplessString;
@@ -198,6 +200,7 @@ impl<'a, DiskType: DiskMedia + 'a> Fatfs<'a, DiskType> {
         filename: &str,
     ) -> Result<FatFile, BootloaderError> {
         if filename.is_empty() {
+            #[cfg(debug)]
             bios_println!(
                 "Finding children with filename \"\" does not make sense, maybe an error?"
             );
@@ -270,12 +273,12 @@ impl<'a, DiskType: DiskMedia + 'a> Fatfs<'a, DiskType> {
                 // at a buffer that is significantly smaller and at lower memory.
                 let moved_ptr = ptr.add(ptr_offset);
 
-                let disk_read_status: Result<(), BootloaderError> =
-                    if moved_ptr as u32 > 1024 * 1024 {
-                        Err(BootloaderError::DiskIOError)
-                    } else {
-                        self.disk.read_ptr(total_sector_offset, moved_ptr)
-                    };
+                let disk_read_status: Result<(), BootloaderError> = if moved_ptr as u32 > 64 * 1024
+                {
+                    Err(BootloaderError::DiskIOError)
+                } else {
+                    self.disk.read_ptr(total_sector_offset, moved_ptr)
+                };
 
                 match disk_read_status {
                     Ok(_) => {
@@ -312,6 +315,7 @@ impl<'a, DiskType: DiskMedia + 'a> Fatfs<'a, DiskType> {
                 }
 
                 _ => {
+                    #[cfg(debug)]
                     bios_println!("READ ERROR ------- {}", table_value);
 
                     return Err(BootloaderError::NoValid);

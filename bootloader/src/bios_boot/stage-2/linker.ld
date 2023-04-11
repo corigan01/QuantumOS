@@ -1,38 +1,27 @@
-ENTRY(begin)
+ENTRY(_start)
 
 SECTIONS {
-    . = 0x7c00;
+    . = 0x00100000;
 
-    .boot : {
-        *(.boot .boot.*)
+    .start : {
+        *(.start)
     }
-
-    . = 0x7c00 + 510;
-
-    .bootable_magic : {
-        SHORT(0xAA55)
-    }
-
-    . = 0x7E00;
-
     .text : {
         *(.text .text.*)
-    }
-    .data : {
-        *(.data .data.*)
-    }
-    .bss :  {
-        *(.bss .bss.*)
     }
     .rodata : {
         *(.rodata .rodata.*)
     }
+    .data : {
+        *(.data .data.*)
+    }
+    .bss : {
+        *(.bss .bss.*)
+    }
     .eh_frame : {
-       *(.eh_frame .eh_frame.*)
+        *(.eh_frame .eh_frame.*)
     }
     .eh_frame_hdr : {
-       *(.eh_frame_hdr .eh_frame_hdr.*)
+        *(.eh_frame_hdr .eh_frame_hdr.*)
     }
-
-    _stage_1_end_sectors = ((. - 0x7E00) / 512);
 }

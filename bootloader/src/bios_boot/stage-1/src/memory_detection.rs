@@ -24,7 +24,9 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 */
 
+#[cfg(debug)]
 use crate::bios_println;
+
 use bootloader::error::BootloaderError;
 use core::arch::asm;
 use quantum_lib::heapless_vector::HeaplessVec;
@@ -87,6 +89,7 @@ impl MemoryMap {
                 )
             };
 
+            #[cfg(debug)]
             bios_println!("Memory entry {memory_entry:?}");
 
             if status != Self::MAGIC || written_data_amount == 0 {
@@ -101,15 +104,16 @@ impl MemoryMap {
         };
 
         for i in 0..32 {
+            #[cfg(debug)]
             bios_println!("attempting to get {i}' memory map!");
             let mut offset = i;
             let status = asm_runner(&mut offset);
 
-            if status.contains_err(&BootloaderError::NoValid) {
+            if matches!(status, Err(BootloaderError::NoValid)) {
                 break;
             }
 
-            memory_map.entries.push_within_capsity(status?);
+            let _ = memory_map.entries.push_within_capsity(status?);
         }
 
         Ok(memory_map)
