@@ -42,7 +42,7 @@ fn main() {
     let video_ptr = 0xB8000 as *mut u16;
 
     for (i, byte) in b"YOUR MOM".iter().enumerate() {
-        unsafe { *video_ptr.add(i) = (*byte as u16) << 8 | 0xAA };
+        unsafe { *video_ptr.add(i) = (*byte as u16) | 0x0F00 };
     }
 }
 

@@ -161,24 +161,20 @@ fn enter_rust(disk_id: u16) {
     BiosTextMode::print_int_bytes(b"Loading Stage2\n");
 
     unsafe {
-        _print(format_args!(
-            "{} bytes  = {:x?}",
-            next_stage_filesize_bytes, next_stage_ptr
-        ));
-    }
-    unsafe {
         enter_stage2(
             next_stage_ptr.as_ptr(),
             &boot_info as *const BootInfo as *const u8,
         );
     }
+
+    loop {}
 }
 
 #[panic_handler]
 #[cold]
 #[allow(dead_code)]
 fn panic(info: &PanicInfo) -> ! {
-    _print(format_args!("{}", info));
+    //_print(format_args!("{}", info));
 
     loop {}
 }
