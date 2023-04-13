@@ -25,3 +25,31 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 pub mod interrupts;
 pub mod registers;
+
+pub enum PrivlLevel {
+    Ring0,
+    Ring1,
+    Ring2,
+    Ring3,
+}
+
+impl PrivlLevel {
+    pub fn new_from_usize(value: usize) -> Option<Self> {
+        match value {
+            0 => Some(Self::Ring0),
+            1 => Some(Self::Ring1),
+            2 => Some(Self::Ring2),
+            3 => Some(Self::Ring3),
+            _ => None,
+        }
+    }
+
+    pub fn to_usize(&self) -> usize {
+        match self {
+            Self::Ring0 => 0,
+            Self::Ring1 => 1,
+            Self::Ring2 => 2,
+            Self::Ring3 => 3,
+        }
+    }
+}

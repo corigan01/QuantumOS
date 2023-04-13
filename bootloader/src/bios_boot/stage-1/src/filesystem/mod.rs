@@ -35,8 +35,10 @@ use bootloader::error::BootloaderError;
 use crate::filesystem::fat::Fatfs;
 use crate::filesystem::partition::{PartitionEntry, Partitions};
 use core::marker::PhantomData;
-use quantum_lib::bytes::Bytes;
 use types::FileSystemTypes;
+
+#[cfg(debug)]
+use quantum_lib::bytes::Bytes;
 
 pub struct UnQuarried;
 pub struct Quarried;
@@ -180,14 +182,14 @@ impl<DiskType: DiskMedia + Clone> FileSystem<DiskType, Quarried> {
             bios_println!("Looking for '{}' on all disks: ", filename);
         }
 
-        for (i, filesystems) in self.current_filesystems.iter().enumerate() {
+        for (_i, filesystems) in self.current_filesystems.iter().enumerate() {
             let contains_file = filesystems.does_contain_file(&self.attached_disk, filename)?;
 
             #[cfg(debug)]
             if self.logging_enable {
                 bios_println!(
                     "    [{}] '{}' {}",
-                    i,
+                    _i,
                     core::str::from_utf8(
                         &self.current_filesystems[i]
                             .get_volume_name(&self.attached_disk)

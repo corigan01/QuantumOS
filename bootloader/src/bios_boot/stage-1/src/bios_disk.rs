@@ -55,6 +55,7 @@ impl DiskAccessPacket {
         Err(BootloaderError::DiskIOError)
     }
 
+    #[allow(dead_code)]
     unsafe fn write(&mut self, disk_id: u8) -> Result<(), BootloaderError> {
         let status = BiosCall::new()
             .bit16_call()

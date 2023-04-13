@@ -24,8 +24,6 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 use bootloader::error::BootloaderError;
-use core::fmt;
-use core::fmt::{Debug, Formatter};
 
 pub struct BootloaderConfig<'a> {
     stage2_filepath: Option<&'a str>,
@@ -69,6 +67,8 @@ impl<'a> BootloaderConfig<'a> {
                     if let (Some(x), Some(y)) = (video_mode_split.next(), video_mode_split.next()) {
                         video_mode.0 = x.trim().parse().unwrap_or(0);
                         video_mode.1 = y.trim().parse().unwrap_or(0);
+                    } else {
+                        continue;
                     }
 
                     config.video_mode_preferred = Some(video_mode);
@@ -105,13 +105,16 @@ impl<'a> BootloaderConfig<'a> {
     }
 
     pub fn get_recommended_video_info(&self) -> (usize, usize) {
-        self.video_mode_preferred.unwrap_or((600, 800))
+        self.video_mode_preferred.unwrap_or((640, 480))
     }
 }
 
 #[cfg(debug)]
+use core::fmt::{Debug, Formatter};
+
+#[cfg(debug)]
 impl<'a> Debug for BootloaderConfig<'a> {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> ::core::fmt::Result {
         writeln!(f, "BootloaderConfig {{")?;
 
         if let Some(kernel_file_path) = self.kernel_filepath {

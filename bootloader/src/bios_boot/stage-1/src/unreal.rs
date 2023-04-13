@@ -77,8 +77,6 @@ impl SimpleGDT {
 
 impl SimpleGDTPtr {
     pub unsafe fn load(self) {
-        Interrupts::assert_interrupts_must_be_disabled();
-
         asm!(
             "lgdt [{ptr}]",
             ptr = in(reg) &self, options(readonly, nostack)

@@ -115,7 +115,7 @@ pub fn display_string(string: &str) {
                 console_info.y += 1;
                 console_info.x = 0;
 
-                let glyph_height = 13;
+                let glyph_height = 14;
 
                 let y_allowed_chars = y_res / (glyph_height + char_y_addition);
                 if console_info.y > y_allowed_chars {

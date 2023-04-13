@@ -1,4 +1,3 @@
-#![feature(panic_info_message)]
 /*
   ____                 __               __                __
  / __ \__ _____ ____  / /___ ____ _    / /  ___  ___ ____/ /__ ____
@@ -29,10 +28,9 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #[cfg(debug)]
 use stage_1::bios_println;
 
-use bootloader::bios_call::BiosCall;
 use bootloader::boot_info::{BootInfo, SimpleRamFs, VideoInformation};
 use bootloader::BootMemoryDescriptor;
-use core::arch::{asm, global_asm};
+use core::arch::global_asm;
 use core::panic::PanicInfo;
 use quantum_lib::simple_allocator::SimpleBumpAllocator;
 use stage_1::bios_disk::BiosDisk;
@@ -49,7 +47,6 @@ extern "C" fn bit16_entry(disk_number: u16) {
     enter_rust(disk_number);
 }
 
-#[link_section = ".GDT"]
 static mut TEMP_ALLOC: Option<SimpleBumpAllocator> = None;
 
 fn enter_rust(disk_id: u16) {
@@ -90,7 +87,7 @@ fn enter_rust(disk_id: u16) {
     let bootloader_config_string =
         unsafe { core::str::from_utf8_unchecked(bootloader_config_file_ptr) };
 
-    let bootloader_config = BootloaderConfig::from_str(bootloader_config_string)
+    let bootloader_config = BootloaderConfig::from_str(bootloader_config_string.trim())
         .expect("Unable to parse bootloader config!");
 
     let next_stage_filesize_bytes = fs
@@ -167,12 +164,9 @@ fn enter_rust(disk_id: u16) {
             &boot_info as *const BootInfo as *const u8,
         );
     }
-
-    loop {}
 }
 
 #[panic_handler]
-#[cold]
 #[allow(dead_code)]
 fn panic(info: &PanicInfo) -> ! {
     _print(format_args!("{}", info));

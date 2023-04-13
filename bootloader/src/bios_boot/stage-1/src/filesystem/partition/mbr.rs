@@ -69,6 +69,7 @@ pub struct MasterBootRecord {
 }
 
 impl MBRPartitionEntry {
+    #[allow(dead_code)]
     fn new() -> Self {
         Self {
             drive_attributes: 0,

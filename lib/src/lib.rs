@@ -28,6 +28,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #![no_std]
 
 pub mod basic_font;
+pub mod bitset;
 pub mod bytes;
 pub mod debug_stream;
 pub mod heapless_string;

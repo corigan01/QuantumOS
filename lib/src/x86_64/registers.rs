@@ -24,6 +24,8 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 */
 
+use crate::bitset::BitSet;
+use crate::x86_64::PrivlLevel;
 use core::arch::asm;
 
 #[derive(Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Default)]
@@ -228,5 +230,102 @@ impl CR0 {
 
     pub fn set_write_protect(flag: bool) {
         Self::write_at_position(28, flag);
+    }
+}
+
+pub struct EFLAGS {}
+
+impl EFLAGS {
+    pub fn read_to_u32() -> u32 {
+        let mut flags;
+
+        unsafe {
+            asm!(
+            "pushf",
+            "pop {flags:x}",
+            flags = lateout(reg) flags,
+            );
+        }
+
+        flags
+    }
+
+    fn read_flag(bit_pos: usize) -> bool {
+        let value = Self::read_to_u32();
+        let flag = 1 << bit_pos;
+
+        value & flag > 0
+    }
+
+    pub fn is_carry_flag_set() -> bool {
+        Self::read_flag(0)
+    }
+
+    pub fn is_parity_flag_set() -> bool {
+        Self::read_flag(2)
+    }
+
+    pub fn is_auxiliary_flag_set() -> bool {
+        Self::read_flag(4)
+    }
+
+    pub fn is_zero_flag_set() -> bool {
+        Self::read_flag(6)
+    }
+
+    pub fn is_sign_flag_set() -> bool {
+        Self::read_flag(7)
+    }
+
+    pub fn is_trap_flag_set() -> bool {
+        Self::read_flag(8)
+    }
+
+    pub fn is_interrupt_enable_flag_set() -> bool {
+        Self::read_flag(9)
+    }
+
+    pub fn is_direction_flag_set() -> bool {
+        Self::read_flag(10)
+    }
+
+    pub fn is_overflow_flag_set() -> bool {
+        Self::read_flag(11)
+    }
+
+    pub fn get_cpu_priv_level() -> PrivlLevel {
+        let eflags_value = Self::read_to_u32();
+        let id = eflags_value.get_bits(12..14);
+
+        PrivlLevel::new_from_usize(id as usize)
+            .expect("Internel Error, 2 bit value should not be possible to outofbounds")
+    }
+
+    pub fn is_nested_task_flag_set() -> bool {
+        Self::read_flag(14)
+    }
+
+    pub fn is_resume_flag_set() -> bool {
+        Self::read_flag(16)
+    }
+
+    pub fn is_v8086_mode_flag_set() -> bool {
+        Self::read_flag(17)
+    }
+
+    pub fn is_alignment_check() -> bool {
+        Self::read_flag(18)
+    }
+
+    pub fn is_virt_interrupt_flag_set() -> bool {
+        Self::read_flag(19)
+    }
+
+    pub fn is_virt_interrupt_pending() -> bool {
+        Self::read_flag(20)
+    }
+
+    pub fn is_cpuid_available() -> bool {
+        Self::read_flag(21)
     }
 }
