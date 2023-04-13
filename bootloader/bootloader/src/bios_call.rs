@@ -266,9 +266,11 @@ impl BiosCall<Bit16> {
     pub unsafe fn set_vbe_mode(mut self, mode: u16) -> BiosCallResult<Nothing> {
         assert_ne!(mode, 0);
 
-        self.registers_16.cx = mode;
+        self.registers_16.ax = 0x4F02;
+        self.registers_16.bx = mode;
 
         self.general_purpose_video_call();
+
         let carry_flag = Self::carry_flag();
 
         if carry_flag {

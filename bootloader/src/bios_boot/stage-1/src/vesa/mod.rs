@@ -31,6 +31,7 @@ use core::marker::PhantomData;
 
 pub mod low_level_structs;
 
+#[derive(Clone, Copy)]
 pub struct VesaMode {
     pub mode_id: usize,
     pub mode_data: low_level_structs::VesaModeInfo,
@@ -178,7 +179,7 @@ impl BiosVesa<Quarried> {
         }
     }
 
-    pub fn set_mode(&mut self, mode: VesaMode) -> Result<(), BootloaderError> {
+    pub fn set_mode(&mut self, mode: &VesaMode) -> Result<(), BootloaderError> {
         let mode_id = mode.mode_id;
 
         let bios_status = unsafe { BiosCall::new().bit16_call().set_vbe_mode(mode_id as u16) };
@@ -187,7 +188,7 @@ impl BiosVesa<Quarried> {
             return Err(BootloaderError::BiosCallFailed);
         }
 
-        self.current_mode = Some(mode);
+        self.current_mode = Some(*mode);
 
         Ok(())
     }

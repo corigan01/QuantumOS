@@ -28,27 +28,45 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #![no_main] // disable all Rust-level entry points
 #![allow(dead_code)]
 
+use bootloader::boot_info::{BootInfo, VideoInformation};
 use core::arch::asm;
 use core::panic::PanicInfo;
+use quantum_lib::basic_font::BUILT_IN_FONT;
+use quantum_lib::debug_stream::{add_connection_to_global_stream, StreamConnectionBuilder};
+use quantum_lib::{debug_print, debug_println};
+use stage_2::debug::{display_string, setup_framebuffer};
 
 #[no_mangle]
 #[link_section = ".start"]
-pub extern "C" fn _start(data: u32) -> ! {
-    main();
-    loop {}
+pub extern "C" fn _start(boot_info: u32) -> ! {
+    let boot_info_ref = unsafe { &*(boot_info as *const BootInfo) };
+
+    let video_info: &VideoInformation = boot_info_ref.vid.as_ref().unwrap();
+
+    let framebuffer = video_info.framebuffer;
+    let x_res = video_info.x;
+    let y_res = video_info.y;
+    let bbp = video_info.depth;
+
+    setup_framebuffer(framebuffer, x_res as usize, y_res as usize, bbp as usize);
+
+    let stream_connection = StreamConnectionBuilder::new().add_connection(display_string);
+    add_connection_to_global_stream(stream_connection);
+
+    debug_println!("Quantum Bootloader! (Stage2)");
+
+    main(boot_info_ref);
+    panic!("Stage2 should not finish!");
 }
 
-fn main() {
-    let video_ptr = 0xB8000 as *mut u16;
-
-    for (i, byte) in b"YOUR MOM".iter().enumerate() {
-        unsafe { *video_ptr.add(i) = (*byte as u16) | 0x0F00 };
-    }
+fn main(boot_info: &BootInfo) {
+    debug_println!("{:#?}", boot_info);
 }
 
 #[panic_handler]
 #[cold]
 #[allow(dead_code)]
-fn panic(_info: &PanicInfo) -> ! {
+fn panic(info: &PanicInfo) -> ! {
+    debug_println!("\nBootloader PANIC\n{}", info);
     loop {}
 }

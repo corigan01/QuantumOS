@@ -42,19 +42,37 @@ pub enum StreamType {
 }
 
 #[derive(Copy, Clone)]
-pub struct StreamConnectionInfomation {
+pub struct StreamConnectionBuilder {
     outlet: StreamConnection,
     stream_type: StreamType,
     bitrate: Option<usize>,
 }
 
-impl StreamConnectionInfomation {
+impl StreamConnectionBuilder {
     pub fn new() -> Self {
         Self::default()
     }
+
+    pub fn add_connection(mut self, connection: StreamConnection) -> Self {
+        self.outlet = connection;
+
+        self
+    }
+
+    pub fn add_bitrate(mut self, bitrate: usize) -> Self {
+        self.bitrate = Some(bitrate);
+
+        self
+    }
+
+    pub fn add_type(mut self, t: StreamType) -> Self {
+        self.stream_type = t;
+
+        self
+    }
 }
 
-impl Display for StreamConnectionInfomation {
+impl Display for StreamConnectionBuilder {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         writeln!(f, "New Attached Debug Stream! (QuantumOS)")?;
         writeln!(f, "    StreamType: {:?}", self.stream_type)?;
@@ -64,7 +82,7 @@ impl Display for StreamConnectionInfomation {
     }
 }
 
-impl Default for StreamConnectionInfomation {
+impl Default for StreamConnectionBuilder {
     fn default() -> Self {
         Self {
             outlet: |_| {},
@@ -75,7 +93,7 @@ impl Default for StreamConnectionInfomation {
 }
 
 pub struct DebugStream {
-    stream_connections: HeaplessVec<StreamConnectionInfomation, 4>,
+    stream_connections: HeaplessVec<StreamConnectionBuilder, 4>,
 }
 
 impl DebugStream {
@@ -108,6 +126,14 @@ impl fmt::Write for DebugStream {
     }
 }
 
+pub fn add_connection_to_global_stream(stream: StreamConnectionBuilder) {
+    DEBUG_OUTPUT_STREAM
+        .lock()
+        .stream_connections
+        .push_within_capsity(stream)
+        .unwrap()
+}
+
 lazy_static! {
     static ref DEBUG_OUTPUT_STREAM: Mutex<DebugStream> = Mutex::new(DebugStream::new());
 }
@@ -120,7 +146,7 @@ pub fn _print(args: ::core::fmt::Arguments) {
 #[macro_export]
 macro_rules! debug_print {
     ($($arg:tt)*) => {
-        $crate::debug_output::_print(format_args!($($arg)*));
+        $crate::debug_stream::_print(format_args!($($arg)*));
     };
 }
 

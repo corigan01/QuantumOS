@@ -21,17 +21,10 @@ NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPO
 NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
 DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
 */
 
-#![no_main]
-#![no_std]
+#![no_std] // don't link the Rust standard library
+#![no_main] // disable all Rust-level entry points
 
-pub mod bios_call;
-pub mod boot_info;
-pub mod error;
-
-#[derive(Clone, Copy, Debug)]
-pub struct BootMemoryDescriptor {
-    pub ptr: u64,
-    pub size: u64,
-}
+pub mod debug;

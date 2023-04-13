@@ -25,14 +25,26 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 use crate::BootMemoryDescriptor;
 
+#[derive(Clone, Copy, Debug)]
 pub struct SimpleRamFs {
     pub kernel: BootMemoryDescriptor,
     pub stage2: BootMemoryDescriptor,
 }
 
+#[derive(Clone, Copy, Debug)]
+pub struct VideoInformation {
+    pub video_mode: u16,
+    pub x: u32,
+    pub y: u32,
+    pub depth: u32,
+    pub framebuffer: u32,
+}
+
+#[derive(Clone, Copy, Debug)]
 pub struct BootInfo {
     pub booted_disk_id: u16,
     pub ram_fs: Option<SimpleRamFs>,
+    pub vid: Option<VideoInformation>,
 }
 
 impl BootInfo {
@@ -40,6 +52,7 @@ impl BootInfo {
         Self {
             booted_disk_id: 0,
             ram_fs: None,
+            vid: None,
         }
     }
 }

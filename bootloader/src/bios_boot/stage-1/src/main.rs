@@ -30,7 +30,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 use stage_1::bios_println;
 
 use bootloader::bios_call::BiosCall;
-use bootloader::boot_info::{BootInfo, SimpleRamFs};
+use bootloader::boot_info::{BootInfo, SimpleRamFs, VideoInformation};
 use bootloader::BootMemoryDescriptor;
 use core::arch::{asm, global_asm};
 use core::panic::PanicInfo;
@@ -138,16 +138,12 @@ fn enter_rust(disk_id: u16) {
         },
     ));
 
-    //BiosTextMode::print_int_bytes(b"\n");
-    //BiosTextMode::print_int_bytes(bootloader_config_string.as_bytes());
-    //BiosTextMode::print_int_bytes(b"\n");
-
     BiosTextMode::print_int_bytes(b"Getting Vesa Info ... ");
     let raw_video_info = bootloader_config.get_recommended_video_info();
     let expected_res = Res {
         x: raw_video_info.0,
         y: raw_video_info.1,
-        depth: 24,
+        depth: 32,
     };
 
     let mut vesa = BiosVesa::new().quarry().unwrap();
@@ -155,10 +151,15 @@ fn enter_rust(disk_id: u16) {
     BiosTextMode::print_int_bytes(b"OK\n");
 
     BiosTextMode::print_int_bytes(b"Setting Mode ... ");
-    //vesa.set_mode(closest_mode).unwrap();
-    BiosTextMode::print_int_bytes(b"OK\n");
+    vesa.set_mode(&closest_mode).unwrap();
 
-    BiosTextMode::print_int_bytes(b"Loading Stage2\n");
+    boot_info.vid = Some(VideoInformation {
+        video_mode: 0,
+        x: closest_mode.mode_data.width.into(),
+        y: closest_mode.mode_data.height.into(),
+        depth: closest_mode.mode_data.bpp.into(),
+        framebuffer: closest_mode.mode_data.framebuffer,
+    });
 
     unsafe {
         enter_stage2(
@@ -174,7 +175,7 @@ fn enter_rust(disk_id: u16) {
 #[cold]
 #[allow(dead_code)]
 fn panic(info: &PanicInfo) -> ! {
-    //_print(format_args!("{}", info));
+    _print(format_args!("{}", info));
 
     loop {}
 }
