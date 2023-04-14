@@ -24,6 +24,28 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 */
 
+/// A built-in font that consists of 96 characters.
+///
+/// Each character is represented by a 13-byte array of values that
+/// correspond to its pixel representation. The font starts with
+/// the space character (ASCII code 32) and continues to the tilde
+/// character (ASCII code 126).
+///
+/// # Example
+/// ```rust
+/// use quantum_lib::basic_font::BUILT_IN_FONT;
+///
+/// // The first char is a ' ' which is ascii code 32, which is the first position / offset.
+/// let first_font_char_offset = 32;
+///
+/// // Get the index into the array
+/// let offset_char = b'A' - first_font_char_offset;
+///
+/// let pixels = &BUILT_IN_FONT[offset_char];
+///
+/// // Now paint the pixels to the screen from bottom to top, and from right to left
+/// // ...
+/// ```
 pub const BUILT_IN_FONT: [[u8; 13]; 96] = [
     [
         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,

@@ -26,23 +26,35 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 use crate::x86_64::registers::EFLAGS;
 use core::arch::asm;
 
+/// A struct for managing interrupts in x86 architectures.
 pub struct Interrupts {}
 
 impl Interrupts {
+    /// Disables interrupts by executing the "cli" instruction.
+    ///
     /// # Safety
-    /// The caller must ensure that disabling interrupts are valid, and will not cause issues.
+    ///
+    /// The caller must ensure that disabling interrupts is valid and will not cause issues.
     #[inline(always)]
     pub unsafe fn disable() {
         asm!("cli");
     }
 
+    /// Enables interrupts by executing the "sti" instruction.
+    ///
     /// # Safety
-    /// The caller must ensure that enabling interrupts are valid, and will not cause issues.
+    ///
+    /// The caller must ensure that enabling interrupts is valid and will not cause issues.
     #[inline(always)]
     pub unsafe fn enable() {
         asm!("sti");
     }
 
+    /// Asserts that interrupts must be enabled.
+    ///
+    /// # Panics
+    ///
+    /// Panics if interrupts are not enabled.
     pub fn assert_interrupts_must_be_enabled() {
         let enabled = EFLAGS::is_interrupt_enable_flag_set();
 
@@ -52,6 +64,11 @@ impl Interrupts {
         );
     }
 
+    /// Asserts that interrupts must be disabled.
+    ///
+    /// # Panics
+    ///
+    /// Panics if interrupts are not disabled.
     pub fn assert_interrupts_must_be_disabled() {
         let enabled = EFLAGS::is_interrupt_enable_flag_set();
 

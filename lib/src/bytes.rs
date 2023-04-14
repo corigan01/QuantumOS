@@ -26,44 +26,74 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 use core::fmt::{Debug, Display, Formatter};
 
+/// A type that represents a size in bytes, and can convert it to a human-readable string.
+///
+/// # Example
+/// ```
+/// use quantum_lib::bytes::Bytes;
+///
+/// let size = Bytes::from(1024);
+///
+/// assert_eq!(format!("{}", size), "1 Kib");
+/// ```
 #[derive(Clone, Copy, PartialOrd, PartialEq, Default, Debug)]
-pub struct Bytes {
-    bytes: u128,
-}
+pub struct Bytes(u128);
 
 impl Bytes {
+    pub const KIB: u128 = 1024;
+    pub const MIB: u128 = 1024 * 1024;
+    pub const GIB: u128 = 1024 * 1024 * 1024;
+
+    /// Creates a new `Bytes` instance with zero bytes.
     pub fn new() -> Self {
-        Self { bytes: 0 }
+        Self { 0: 0 }
     }
 }
 
 impl Display for Bytes {
+    /// Formats the `Bytes` instance as a human-readable string.
+    ///
+    /// # Examples
+    /// ```
+    /// use quantum_lib::bytes::Bytes;
+    ///
+    /// let size = Bytes::from(2048);
+    ///
+    /// assert_eq!(format!("{}", size), "2 Kib");
+    /// ```
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
-        let deviser = if self.bytes > 1024 {
-            (1024, "Kib")
-        } else if self.bytes > (1024 * 1024) {
-            (1024 * 1024, "Mib")
-        } else if self.bytes > (1024 * 1024 * 1024) {
-            (1024 * 1024 * 1024, "Gib")
+        let (bytes, symb) = if self.0 >= Self::GIB {
+            (self.0 / Self::GIB, "Gib")
+        } else if self.0 >= Self::MIB {
+            (self.0 / Self::MIB, "Mib")
+        } else if self.0 >= Self::KIB {
+            (self.0 / Self::KIB, "Kib")
         } else {
-            (1, "bytes")
+            (self.0, "bytes")
         };
 
-        let norm_bytes = self.bytes / deviser.0;
-        let symb = deviser.1;
-
-        write!(f, "{} {}", norm_bytes, symb)?;
+        write!(f, "{} {}", bytes, symb)?;
 
         Ok(())
     }
 }
 
+/// Converts the specified value to a `Bytes` instance.
+///
+/// # Examples
+/// ```
+/// use quantum_lib::bytes::Bytes;
+///
+/// let size: Bytes = 1024.into();
+///
+/// assert_eq!(format!("{}", size), "1 Kib");
+/// ```
 macro_rules! from_all_types {
     ($($t:ty)*) => ($(
         impl From<$t> for Bytes {
             fn from(value: $t) -> Self {
                 Bytes {
-                    bytes: value as u128
+                    0: value as u128
                 }
             }
         }

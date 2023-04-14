@@ -26,14 +26,21 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 pub mod interrupts;
 pub mod registers;
 
+/// Enumeration of possible privilege levels (rings) in x86 and x86_64 architectures.
 pub enum PrivlLevel {
+    /// Ring 0, the most privileged level, typically reserved for the kernel.
     Ring0,
+    /// Ring 1, a less privileged level, typically used for device drivers.
     Ring1,
+    /// Ring 2, a less privileged level, typically used for user-defined code with elevated privileges.
     Ring2,
+    /// Ring 3, the least privileged level, typically used for user space applications.
     Ring3,
 }
 
 impl PrivlLevel {
+    /// Creates a new `PrivlLevel` from a `usize` value.
+    /// Returns `Some(PrivlLevel)` if `value` is between 0 and 3 inclusive, otherwise returns `None`.
     pub fn new_from_usize(value: usize) -> Option<Self> {
         match value {
             0 => Some(Self::Ring0),
@@ -44,6 +51,7 @@ impl PrivlLevel {
         }
     }
 
+    /// Returns the `usize` representation of the `PrivlLevel`.
     pub fn to_usize(&self) -> usize {
         match self {
             Self::Ring0 => 0,
