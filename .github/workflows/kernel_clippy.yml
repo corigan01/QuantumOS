@@ -1,23 +1,17 @@
 on: push
 name: Clippy Kernel
 jobs:
-  build:
 
+  clippy_check:
     runs-on: ubuntu-latest
-
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v1
       - name: Set Nightly
         run: rustup override set nightly
       - name: Add Rust SRC
         run: rustup component add rust-src
       - name: Add LLVM Tools Preview
         run: rustup component add llvm-tools-preview
-
-  clippy_check:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v1
       - uses: actions-rs/toolchain@v1
         with:
             toolchain: nightly
