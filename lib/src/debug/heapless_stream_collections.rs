@@ -21,24 +21,41 @@ NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPO
 NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
 DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
 */
 
-#![no_main]
-#![no_std]
+use crate::debug::stream_connection::StreamConnection;
+use crate::heapless_vector::HeaplessVec;
 
-pub mod basic_font;
-pub mod bitset;
-pub mod bytes;
-pub mod debug;
-pub mod framebuffer_utils;
-pub mod heapless_string;
-pub mod heapless_vector;
-pub mod panic_utils;
-pub mod possibly_uninit;
-pub mod ptr;
-pub mod simple_allocator;
-pub mod time;
-pub mod x86_64;
+pub struct HeaplessStreamCollections {
+    pub(crate) stream_connections: HeaplessVec<StreamConnection, 4>,
+}
 
-pub type Nothing = ();
+impl HeaplessStreamCollections {
+    pub fn new() -> Self {
+        Self {
+            stream_connections: HeaplessVec::new(),
+        }
+    }
+}
+
+impl Default for HeaplessStreamCollections {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ::core::fmt::Write for HeaplessStreamCollections {
+    fn write_str(&mut self, s: &str) -> ::core::fmt::Result {
+        let len = self.stream_connections.len();
+        let slice = unsafe { self.stream_connections.as_mut_slice() };
+        let broken_down_slice = &mut slice[..len];
+
+        for stream in broken_down_slice {
+            let outlet = stream.outlet as fn(&str);
+
+            outlet(s);
+        }
+
+        Ok(())
+    }
+}

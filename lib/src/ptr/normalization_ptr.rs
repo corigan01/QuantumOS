@@ -21,24 +21,45 @@ NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPO
 NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
 DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
 */
 
-#![no_main]
-#![no_std]
+use crate::ptr::unsafe_ptr::UnsafePtr;
 
-pub mod basic_font;
-pub mod bitset;
-pub mod bytes;
-pub mod debug;
-pub mod framebuffer_utils;
-pub mod heapless_string;
-pub mod heapless_vector;
-pub mod panic_utils;
-pub mod possibly_uninit;
-pub mod ptr;
-pub mod simple_allocator;
-pub mod time;
-pub mod x86_64;
+pub struct NormPtr {
+    ptr: UnsafePtr<u8>,
+    ptr_size_bytes: Option<usize>,
+}
 
-pub type Nothing = ();
+impl NormPtr {
+    pub fn new(ptr: u64) -> Self {
+        Self {
+            ptr: UnsafePtr::new(ptr),
+            ptr_size_bytes: None,
+        }
+    }
+
+    pub fn set_ptr_from_u8(&mut self, ptr: *mut u8) {
+        self.ptr.set_ptr(ptr);
+        self.ptr_size_bytes = Some(1);
+    }
+
+    pub fn set_ptr_from_u16(&mut self, ptr: *mut u16) {
+        self.ptr.set_ptr(ptr as *mut u8);
+        self.ptr_size_bytes = Some(2);
+    }
+
+    pub fn set_ptr_from_u32(&mut self, ptr: *mut u32) {
+        self.ptr.set_ptr(ptr as *mut u8);
+        self.ptr_size_bytes = Some(4);
+    }
+
+    pub fn set_ptr_from_u64(&mut self, ptr: *mut u64) {
+        self.ptr.set_ptr(ptr as *mut u8);
+        self.ptr_size_bytes = Some(8);
+    }
+
+    pub fn set_ptr_from_unknown_type(&mut self, ptr: *mut u8, ptr_size_in_bytes: usize) {
+        self.ptr.set_ptr(ptr);
+        self.ptr_size_bytes = Some(ptr_size_in_bytes);
+    }
+}

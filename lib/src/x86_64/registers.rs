@@ -657,7 +657,7 @@ pub struct CR1 {}
 
 impl CR1 {
     pub unsafe fn do_you_want_to_crash_the_computer() {
-        panic!("Accessing this Register will cause a fault.")
+        panic!("Accessing this Register (CR1) will cause a fault.")
     }
 }
 
@@ -706,7 +706,6 @@ Bits 0-11 of the physical base address are assumed to be 0. Bits 3 and 4 of CR3 
 */
 
 impl CR3 {
-    #[cfg(target_pointer_width = "32")]
     fn read_to_u32() -> u32 {
         let value: u32;
 
@@ -720,25 +719,31 @@ impl CR3 {
         value
     }
 
-    #[cfg(target_pointer_width = "64")]
-    fn read_to_u64() -> u64 {
-        let value: u64;
+    fn read_flag(bit_pos: usize) -> bool {
+        let value = Self::read_to_u32();
+        let flag = 1 << bit_pos;
 
-        unsafe {
-            asm!(
-            "mov rax, cr3",
-            out("rax") value
-            );
-        }
-
-        value
+        value & flag > 0
     }
 
-    pub fn read_to_usize() -> usize {
-        #[cfg(target_pointer_width = "64")]
-        return Self::read_to_u64() as usize;
-        #[cfg(target_pointer_width = "32")]
-        return Self::read_to_u32() as usize;
+    pub fn is_read_page_level_write_through_set() -> Option<bool> {
+        let cr4_value = CR4::is_pcid_enable_set();
+
+        if !cr4_value {
+            return None;
+        }
+
+        Some(Self::read_flag(3))
+    }
+
+    pub fn is_page_level_cache_disable_set() -> Option<bool> {
+        let cr4_value = CR4::is_pcid_enable_set();
+
+        if !cr4_value {
+            return None;
+        }
+
+        Some(Self::read_flag(4))
     }
 }
 

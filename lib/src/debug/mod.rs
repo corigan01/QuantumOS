@@ -21,24 +21,49 @@ NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPO
 NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
 DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
 */
 
-#![no_main]
-#![no_std]
+use crate::debug::heapless_stream_collections::HeaplessStreamCollections;
+use crate::debug::stream_connection::StreamConnection;
+use crate::heapless_vector::HeaplessVecErr;
+use core::fmt::Write;
+use lazy_static::lazy_static;
+use spin::Mutex;
 
-pub mod basic_font;
-pub mod bitset;
-pub mod bytes;
-pub mod debug;
-pub mod framebuffer_utils;
-pub mod heapless_string;
-pub mod heapless_vector;
-pub mod panic_utils;
-pub mod possibly_uninit;
-pub mod ptr;
-pub mod simple_allocator;
-pub mod time;
-pub mod x86_64;
+pub mod heapless_stream_collections;
+pub mod stream_connection;
 
-pub type Nothing = ();
+type StreamOutlet = fn(&str);
+
+pub fn add_connection_to_global_stream(stream: StreamConnection) -> Result<(), HeaplessVecErr> {
+    DEBUG_OUTPUT_STREAM
+        .lock()
+        .stream_connections
+        .push_within_capsity(stream)
+}
+
+lazy_static! {
+    static ref DEBUG_OUTPUT_STREAM: Mutex<HeaplessStreamCollections> =
+        Mutex::new(HeaplessStreamCollections::new());
+}
+
+#[doc(hidden)]
+pub fn _print(args: ::core::fmt::Arguments) {
+    DEBUG_OUTPUT_STREAM.lock().write_fmt(args).unwrap();
+}
+
+#[macro_export]
+macro_rules! debug_print {
+    ($($arg:tt)*) => {
+        $crate::debug::_print(format_args!($($arg)*));
+    };
+}
+
+#[macro_export]
+macro_rules! debug_println {
+    () => ($crate::debug_print!("\n"));
+    ($($arg:tt)*) => {
+        $crate::debug::_print(format_args!($($arg)*));
+        $crate::debug_print!("\n");
+    }
+}

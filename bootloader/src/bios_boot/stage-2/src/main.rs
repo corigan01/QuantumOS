@@ -30,12 +30,11 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 use bootloader::bios_call::BiosCall;
 use bootloader::boot_info::{BootInfo, VideoInformation};
-use core::arch::asm;
 use core::panic::PanicInfo;
-use quantum_lib::basic_font::BUILT_IN_FONT;
-use quantum_lib::debug_stream::{add_connection_to_global_stream, StreamConnectionBuilder};
+use quantum_lib::debug::add_connection_to_global_stream;
+use quantum_lib::debug::stream_connection::StreamConnectionBuilder;
+use quantum_lib::debug_println;
 use quantum_lib::x86_64::registers::{CR2, CR4};
-use quantum_lib::{debug_print, debug_println};
 use stage_2::debug::{display_string, setup_framebuffer};
 
 #[no_mangle]
@@ -58,8 +57,11 @@ pub extern "C" fn _start(boot_info: u32) -> ! {
         true,
     );
 
-    let stream_connection = StreamConnectionBuilder::new().add_connection(display_string);
-    add_connection_to_global_stream(stream_connection);
+    let stream_connection = StreamConnectionBuilder::new()
+        .console_connection()
+        .add_outlet(display_string)
+        .build();
+    add_connection_to_global_stream(stream_connection).unwrap();
 
     debug_println!("Quantum Bootloader! (Stage2)");
 
