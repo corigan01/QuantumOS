@@ -743,9 +743,25 @@ impl CR3 {
     }
 }
 
+/// Control Register 4 (CR4) is a 32-bit register in x86 and x86-64 processors that controls
+/// various operating modes of the processor.
+///
+/// This struct provides convenient methods for reading and modifying the bits of the CR4
+/// register in a safe way.
+///
+/// # Examples
+///
+/// ```no_run
+/// use quantum_lib::x86_64::registers::CR4;
+///
+/// let is_pae_enabled = CR4::is_physical_address_extention_set();
+/// println!("PAE is enabled: {}", is_pae_enabled);
+///
+/// ```
 pub struct CR4 {}
 
 impl CR4 {
+    /// Reads the value of the CR4 register and returns it as an unsigned 32-bit integer.
     #[inline(never)]
     pub fn read_to_u32() -> u32 {
         let reading_value;
@@ -760,6 +776,7 @@ impl CR4 {
         reading_value
     }
 
+    /// Reads the value of a specific flag in the CR4 register and returns whether it is set or not.
     fn read_flag(bit_pos: usize) -> bool {
         let value = Self::read_to_u32();
         let flag = 1 << bit_pos;
@@ -767,86 +784,159 @@ impl CR4 {
         value & flag > 0
     }
 
+    /// Returns whether the Virtual-8086 Mode Extensions feature is enabled or not.
     pub fn is_v8086_mode_extentions_set() -> bool {
         Self::read_flag(0)
     }
 
+    /// Returns whether the Protected-Mode Virtual Interrupts feature is enabled or not.
     pub fn is_protected_mode_virtual_interrupts_set() -> bool {
         Self::read_flag(1)
     }
 
+    /// Returns whether the Time Stamp Disable feature is enabled or not.
     pub fn is_time_stamp_disable_set() -> bool {
         Self::read_flag(2)
     }
 
+    /// Returns whether the Debugging Extensions feature is enabled or not.
     pub fn is_debugging_extentions_set() -> bool {
         Self::read_flag(3)
     }
 
+    /// Returns whether the Page Size Extension feature is enabled or not.
     pub fn is_page_size_extention_set() -> bool {
         Self::read_flag(4)
     }
 
+    /// Returns whether the Physical Address Extension feature is enabled or not.
     pub fn is_physical_address_extention_set() -> bool {
         Self::read_flag(5)
     }
 
+    /// Returns whether the Machine Check Exception feature is enabled or not.
     pub fn is_machine_check_exeption_set() -> bool {
         Self::read_flag(6)
     }
 
+    /// Returns whether the Page Global Enable feature is enabled or not.
     pub fn is_page_global_enable_set() -> bool {
         Self::read_flag(7)
     }
 
+    /// Returns whether the Performance Monitoring Counter Enable feature is enabled or not.
     pub fn is_performance_monitoring_counter_enable_set() -> bool {
         Self::read_flag(8)
     }
 
+    /// Returns whether the Support for FXSAVE and FXRSTOR instructions feature is enabled or not.
     pub fn is_support_for_fxsave_and_fxrstor_instructions_set() -> bool {
         Self::read_flag(9)
     }
 
+    /// Returns whether the Support for Unmasked SIMD Floating-Point Exceptions feature is enabled or not.
     pub fn is_support_for_unmasked_simd_fload_exceptions_set() -> bool {
         Self::read_flag(10)
     }
 
+    /// Returns whether the User-Mode Instruction Prevention feature is enabled or not.
     pub fn is_user_mode_instruction_prevention_set() -> bool {
         Self::read_flag(11)
     }
 
+    /// Returns whether the Virtual Machine Extensions feature is enabled or not.
     pub fn is_virtual_machine_extentions_enable_set() -> bool {
         Self::read_flag(13)
     }
 
+    /// Returns whether the Safer Mode Extensions feature is enabled or not.
     pub fn is_safer_mode_extentions_set() -> bool {
         Self::read_flag(14)
     }
 
+    /// Determines whether the Support for RDFSBASE/RDGSBASE/WRFSBASE/WRGSBASE instructions are supported
     pub fn is_support_for_rdfsbase_rdgsbase_wrfsbase_wrgsbase_set() -> bool {
         Self::read_flag(16)
     }
 
+    /// Returns a boolean indicating whether the Page-Attribute Table (PAT) and
+    /// the Process-Context Identifiers (PCID) feature is enabled.
+    ///
+    /// This function reads the Control Register 4 (CR4) to determine if the PCID
+    /// feature is enabled. If bit 17 of CR4 is set, the PCID feature is enabled
+    /// and this function returns `true`. If bit 17 is not set, the PCID feature
+    /// is not enabled and this function returns `false`.
+    ///
+    /// The PCID feature is available on some Intel and AMD processors and allows
+    /// for improved performance in virtualized environments by reducing the cost
+    /// of address space switching.
+    ///
     pub fn is_pcid_enable_set() -> bool {
         Self::read_flag(17)
     }
 
+    /// Returns true if the `CR4` control register bit indicating support for the `XSAVE` and
+    /// Processor Extended States (AVX and XSAVEOPT) instructions is set.
+    ///
+    /// The `XSAVE` instruction is used to save and restore processor state components in an
+    /// efficient and extensible way. It supports the management of multiple extended
+    /// processor states as described by the processor architecture. It enables a user to
+    /// save an extended processor state component and restore it later without executing
+    /// any instruction that requires that component.
+    ///
+    /// The `AVX` instruction set introduced a number of new registers and instructions
+    /// for operations on vectors of data. It can accelerate floating point calculations,
+    /// encryption, and other operations.
+    ///
+    /// The `XSAVEOPT` instruction was introduced to allow more efficient saving and restoring
+    /// of the `XSAVE` area by eliminating unneeded state components. It is a performance
+    /// optimization over `XSAVE`.
+    ///
+    /// The `XSAVE` and Processor Extended States features are only available on processors
+    /// that support them. Attempting to execute `XSAVE` or AVX instructions on a processor
+    /// that does not support these instructions can cause a general protection exception.
+    ///
     pub fn is_support_for_xsafe_and_processor_extended_states_enable_set() -> bool {
         Self::read_flag(18)
     }
 
+    /// Returns a boolean indicating whether the supervisor mode execution protection (SMEP) feature is enabled.
     pub fn is_supervisor_mode_execution_protection_enable_set() -> bool {
         Self::read_flag(20)
     }
 
+    /// Checks whether the Supervisor Mode Access Prevention (SMAP) feature is enabled.
+    ///
+    /// SMAP prevents the kernel-mode code from accessing user-mode data by raising a fault
+    /// whenever a privileged instruction attempts to read or write data from a user-mode
+    /// address. It helps mitigate certain types of security vulnerabilities.
+    ///
+    /// Returns `true` if SMAP is enabled, `false` otherwise.
     pub fn is_supervisor_mode_access_prevention_enable_set() -> bool {
         Self::read_flag(21)
     }
 
+    /// Checks whether the Protection Key (PKU) feature is enabled.
+    ///
+    /// PKU provides a mechanism to protect specific memory regions from accidental or
+    /// malicious writes by providing a way to tag memory pages with protection keys.
+    /// This feature can be used to enforce application-specific memory protection policies
+    /// or to sandbox applications that are vulnerable to memory corruption attacks.
+    ///
+    /// Returns `true` if PKU is enabled, `false` otherwise.
     pub fn is_protection_key_enable_set() -> bool {
         Self::read_flag(22)
     }
 
+    /// Checks whether the Protection Keys for Supervisor Mode Pages (PKE) feature is enabled.
+    ///
+    /// PKE provides a way to use protection keys to protect supervisor-mode pages from being
+    /// accessed or modified by unprivileged code. This feature is useful in multi-tenant
+    /// cloud environments where multiple virtual machines are hosted on a single physical
+    /// server, and each virtual machine is assigned a set of protection keys to enforce
+    /// isolation between them.
+    ///
+    /// Returns `true` if PKE is enabled, `false` otherwise.
     pub fn is_protection_keys_for_supervisor_mode_pages_enable_set() -> bool {
         Self::read_flag(23)
     }
