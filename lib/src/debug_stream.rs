@@ -143,7 +143,6 @@ pub fn _print(args: ::core::fmt::Arguments) {
     DEBUG_OUTPUT_STREAM.lock().write_fmt(args).unwrap();
 }
 
-/// Prints to the host through the bios int.
 #[macro_export]
 macro_rules! debug_print {
     ($($arg:tt)*) => {
@@ -151,7 +150,6 @@ macro_rules! debug_print {
     };
 }
 
-/// Prints to the host through the bios int, appending a newline.
 #[macro_export]
 macro_rules! debug_println {
     () => ($crate::debug_print!("\n"));

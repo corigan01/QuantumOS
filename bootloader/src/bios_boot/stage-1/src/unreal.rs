@@ -129,24 +129,16 @@ pub unsafe fn enter_stage2(entry_point: *const u8, info: *const u8) {
         asm!("ljmp $0x8, $2f", "2:", options(att_syntax));
         asm!(
             ".code32",
-
-            // reload segment registers
             "mov {0:e}, 0x10",
             "mov ds, {0:e}",
             "mov es, {0:e}",
             "mov ss, {0:e}",
-
-            // jump to third stage
             "pop {1:e}",
             "call {1:e}",
-
-            // enter endless loop in case third stage returns
             "4:",
-            "mov WORD ptr [{2}], 0x64",
             "jmp 4b",
             out(reg) _,
             out(reg) _,
-            in(reg) 0xb8000
         );
     }
 }
