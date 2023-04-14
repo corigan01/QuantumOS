@@ -98,8 +98,8 @@ impl<'a> SimpleBumpAllocator<'a> {
     /// ```
     /// use core::mem::size_of;
     ///
-    /// let size = size_of::<u32>() * 1024;
-    /// let mut memory = vec![0u8; size];
+    /// let mut memory = [0u8; 1024];
+    ///
     /// let ptr = memory.as_mut_ptr();
     /// let allocator = unsafe { SimpleBumpAllocator::new_from_ptr(ptr, size) }.unwrap();
     /// ```
