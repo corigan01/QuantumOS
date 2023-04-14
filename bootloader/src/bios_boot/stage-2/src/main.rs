@@ -28,11 +28,13 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #![no_main] // disable all Rust-level entry points
 #![allow(dead_code)]
 
+use bootloader::bios_call::BiosCall;
 use bootloader::boot_info::{BootInfo, VideoInformation};
 use core::arch::asm;
 use core::panic::PanicInfo;
 use quantum_lib::basic_font::BUILT_IN_FONT;
 use quantum_lib::debug_stream::{add_connection_to_global_stream, StreamConnectionBuilder};
+use quantum_lib::x86_64::registers::{CR2, CR4};
 use quantum_lib::{debug_print, debug_println};
 use stage_2::debug::{display_string, setup_framebuffer};
 
@@ -48,7 +50,13 @@ pub extern "C" fn _start(boot_info: u32) -> ! {
     let y_res = video_info.y;
     let bbp = video_info.depth;
 
-    setup_framebuffer(framebuffer, x_res as usize, y_res as usize, bbp as usize);
+    setup_framebuffer(
+        framebuffer,
+        x_res as usize,
+        y_res as usize,
+        bbp as usize,
+        true,
+    );
 
     let stream_connection = StreamConnectionBuilder::new().add_connection(display_string);
     add_connection_to_global_stream(stream_connection);

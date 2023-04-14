@@ -97,10 +97,16 @@ fn bios_boot() -> Result<String, Box<dyn std::error::Error>> {
 
     fs::create_dir(&inner_config_directory)?;
     fs::copy(
-        &stage_2_path,
+        stage_2_path,
         format!("{}/stage2.bin", &inner_config_directory),
     )?;
-    fs::copy(&kernel, format!("{}/kernel.elf", &bootloader_directory))?;
+
+    fs::copy(kernel, format!("{}/kernel.elf", &bootloader_directory))?;
+    // LARGE TEST KERNEL
+    /* fs::copy(
+        "/bin/qemu-aarch64",
+        format!("{}/kernel.elf", &bootloader_directory),
+    )?;*/
 
     quantum::bios_boot::make_config_file(&inner_config_directory, bootloader_config)?;
 

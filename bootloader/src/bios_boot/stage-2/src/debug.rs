@@ -35,6 +35,7 @@ pub struct ConsoleFramebuffer {
     pub bbp: usize,
     pub screen_x_res: usize,
     pub screen_y_res: usize,
+    pub implement_scrolling: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -58,12 +59,19 @@ lazy_static! {
     pub static ref CONSOLE: Mutex<Console> = Mutex::new(Console::new());
 }
 
-pub fn setup_framebuffer(framebuffer: u32, x_res: usize, y_res: usize, bbp: usize) {
+pub fn setup_framebuffer(
+    framebuffer: u32,
+    x_res: usize,
+    y_res: usize,
+    bbp: usize,
+    allow_scrolling: bool,
+) {
     let framebuffer = ConsoleFramebuffer {
         framebuffer,
         bbp,
         screen_x_res: x_res,
         screen_y_res: y_res,
+        implement_scrolling: allow_scrolling,
     };
 
     CONSOLE.lock().framebuffer = Some(framebuffer);
@@ -87,7 +95,7 @@ unsafe fn scroll_framebuffer_y(ptr: *mut u8, width: usize, height: usize, scroll
 
 pub fn display_string(string: &str) {
     let mut console_info = CONSOLE.lock();
-    let frame_info = if let Some(framebuffer_info) = &console_info.framebuffer {
+    let frame_info = if let Some(framebuffer_info) = console_info.framebuffer {
         framebuffer_info
     } else {
         return;
@@ -106,8 +114,8 @@ pub fn display_string(string: &str) {
 
     let bytes_per_pixel = bbp / 8;
 
-    // FIXME: Make a better color system
-    let dummy_color = [0x00, 0xFF, 0x00, 0x00];
+    // FIXME: Make a better color system FFC914
+    let dummy_color = [0x14, 0xC9, 0xFF, 0x00];
 
     for character in string.bytes() {
         match character.to_ascii_uppercase() {
@@ -115,17 +123,19 @@ pub fn display_string(string: &str) {
                 console_info.y += 1;
                 console_info.x = 0;
 
-                let glyph_height = 14;
+                if frame_info.implement_scrolling {
+                    let glyph_height = 14;
 
-                let y_allowed_chars = y_res / (glyph_height + char_y_addition);
-                if console_info.y > y_allowed_chars {
-                    scroll_framebuffer_y(
-                        framebuffer as *mut u8,
-                        x_res,
-                        y_res,
-                        glyph_height + char_y_addition,
-                    );
-                    console_info.y -= 1;
+                    let y_allowed_chars = y_res / (glyph_height + char_y_addition);
+                    if console_info.y > y_allowed_chars {
+                        scroll_framebuffer_y(
+                            framebuffer as *mut u8,
+                            x_res,
+                            y_res,
+                            glyph_height + char_y_addition,
+                        );
+                        console_info.y -= 1;
+                    }
                 }
             },
 
