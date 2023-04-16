@@ -24,7 +24,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 */
 
-use bootloader::bios_call::BiosCall;
+use quantum_lib::x86_64::bios_call::BiosCall;
 use core::fmt;
 
 pub struct BiosTextMode {}

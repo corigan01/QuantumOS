@@ -24,6 +24,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 use crate::BootMemoryDescriptor;
+use crate::E820_memory::E820Entry;
 
 #[derive(Clone, Copy, Debug)]
 pub struct SimpleRamFs {
@@ -45,6 +46,7 @@ pub struct BootInfo {
     pub booted_disk_id: u16,
     pub ram_fs: Option<SimpleRamFs>,
     pub vid: Option<VideoInformation>,
+    pub memory_map: Option<&'static [E820Entry]>
 }
 
 impl BootInfo {
@@ -53,6 +55,7 @@ impl BootInfo {
             booted_disk_id: 0,
             ram_fs: None,
             vid: None,
+            memory_map: None
         }
     }
 }

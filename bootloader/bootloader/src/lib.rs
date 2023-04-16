@@ -26,9 +26,9 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #![no_main]
 #![no_std]
 
-pub mod bios_call;
 pub mod boot_info;
 pub mod error;
+pub mod E820_memory;
 
 #[derive(Clone, Copy, Debug)]
 pub struct BootMemoryDescriptor {

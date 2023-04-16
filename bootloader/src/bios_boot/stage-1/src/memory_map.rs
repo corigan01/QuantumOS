@@ -21,19 +21,39 @@ NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPO
 NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
 DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
 */
-#![no_main]
-#![no_std]
 
-pub mod bios_disk;
-pub mod bios_video;
-pub mod config_parser;
-pub mod cpu_regs;
-pub mod filesystem;
-pub mod unreal;
-pub mod vesa;
-pub mod memory_map;
+use bootloader::E820_memory::E820Entry;
+use quantum_lib::heapless_vector::HeaplessVec;
+use quantum_lib::x86_64::bios_call::BiosCall;
+use quantum_lib::x86_64::bios_call::BiosCallResult::Success;
+use quantum_lib::heapless_vector::HeaplessVecErr;
 
-pub fn convert_segmented_ptr(segmented_ptr: (usize, usize)) -> u32 {
-    (segmented_ptr.0 * 0x10 + segmented_ptr.1) as u32
+pub fn get_memory_map(memory_map_region: &mut [E820Entry]) -> usize {
+    let mut region_offset = 0;
+    let mut last_entry_value = 0;
+
+    loop {
+        let entry = E820Entry::default();
+        let ptr = &entry as *const E820Entry as *const u8;
+
+        let value = unsafe {
+            BiosCall::new().bit32_call().memory_detection_operating(ptr, last_entry_value)
+        };
+
+        if let Success(value) = value {
+            memory_map_region[region_offset] = entry;
+            last_entry_value = value;
+            region_offset += 1;
+
+            if value == 0 || region_offset >= memory_map_region.len()  {
+                break;
+            }
+        } else {
+            break;
+        }
+    }
+
+    region_offset
 }

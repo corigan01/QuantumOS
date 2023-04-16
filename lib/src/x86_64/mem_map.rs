@@ -23,43 +23,5 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-pub mod interrupts;
-pub mod registers;
-pub mod mem_map;
-pub mod bios_call;
-
-/// Enumeration of possible privilege levels (rings) in x86 and x86_64 architectures.
-pub enum PrivlLevel {
-    /// Ring 0, the most privileged level, typically reserved for the kernel.
-    Ring0,
-    /// Ring 1, a less privileged level, typically used for device drivers.
-    Ring1,
-    /// Ring 2, a less privileged level, typically used for user-defined code with elevated privileges.
-    Ring2,
-    /// Ring 3, the least privileged level, typically used for user space applications.
-    Ring3,
-}
-
-impl PrivlLevel {
-    /// Creates a new `PrivlLevel` from a `usize` value.
-    /// Returns `Some(PrivlLevel)` if `value` is between 0 and 3 inclusive, otherwise returns `None`.
-    pub fn new_from_usize(value: usize) -> Option<Self> {
-        match value {
-            0 => Some(Self::Ring0),
-            1 => Some(Self::Ring1),
-            2 => Some(Self::Ring2),
-            3 => Some(Self::Ring3),
-            _ => None,
-        }
-    }
-
-    /// Returns the `usize` representation of the `PrivlLevel`.
-    pub fn to_usize(&self) -> usize {
-        match self {
-            Self::Ring0 => 0,
-            Self::Ring1 => 1,
-            Self::Ring2 => 2,
-            Self::Ring3 => 3,
-        }
-    }
+pub struct HardwareMemoryMap {
 }

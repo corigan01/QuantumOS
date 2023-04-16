@@ -23,7 +23,7 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use bootloader::bios_call::BiosCall;
+use quantum_lib::x86_64::bios_call::BiosCall;
 use bootloader::error::BootloaderError;
 
 use crate::convert_segmented_ptr;

@@ -22,18 +22,12 @@ NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FO
 DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
-#![no_main]
-#![no_std]
 
-pub mod bios_disk;
-pub mod bios_video;
-pub mod config_parser;
-pub mod cpu_regs;
-pub mod filesystem;
-pub mod unreal;
-pub mod vesa;
-pub mod memory_map;
-
-pub fn convert_segmented_ptr(segmented_ptr: (usize, usize)) -> u32 {
-    (segmented_ptr.0 * 0x10 + segmented_ptr.1) as u32
+#[repr(C, packed)]
+#[derive(Default, Debug, Copy, Clone)]
+pub struct E820Entry {
+    address: u64,
+    len: u64,
+    entry_type: u32,
+    acpi: u32
 }

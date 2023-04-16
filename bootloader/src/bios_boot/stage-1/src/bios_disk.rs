@@ -24,7 +24,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 use crate::filesystem::DiskMedia;
-use bootloader::bios_call::BiosCall;
+use quantum_lib::x86_64::bios_call::BiosCall;
 use bootloader::error::BootloaderError;
 
 #[repr(packed, C)]

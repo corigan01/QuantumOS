@@ -28,13 +28,16 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #![no_main] // disable all Rust-level entry points
 #![allow(dead_code)]
 
-use bootloader::bios_call::BiosCall;
+use quantum_lib::x86_64::bios_call::BiosCall;
 use bootloader::boot_info::{BootInfo, VideoInformation};
 use core::panic::PanicInfo;
 use quantum_lib::debug::add_connection_to_global_stream;
-use quantum_lib::debug::stream_connection::StreamConnectionBuilder;
+use quantum_lib::debug::stream_connection::{
+    StreamConnection, StreamConnectionBuilder, StreamConnectionInfomation,
+};
 use quantum_lib::debug_println;
-use quantum_lib::x86_64::registers::{CR2, CR4};
+use quantum_lib::x86_64::interrupts::Interrupts;
+use quantum_lib::x86_64::registers::{CR4, EFLAGS};
 use stage_2::debug::{display_string, setup_framebuffer};
 
 #[no_mangle]
@@ -60,6 +63,8 @@ pub extern "C" fn _start(boot_info: u32) -> ! {
     let stream_connection = StreamConnectionBuilder::new()
         .console_connection()
         .add_outlet(display_string)
+        .add_connection_name("VGA")
+        .does_support_scrolling(true)
         .build();
     add_connection_to_global_stream(stream_connection).unwrap();
 
@@ -71,6 +76,9 @@ pub extern "C" fn _start(boot_info: u32) -> ! {
 
 fn main(boot_info: &BootInfo) {
     debug_println!("{:#?}", boot_info);
+
+
+
 }
 
 #[panic_handler]

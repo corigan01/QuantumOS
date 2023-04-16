@@ -31,7 +31,10 @@ use stage_1::bios_println;
 use bootloader::boot_info::{BootInfo, SimpleRamFs, VideoInformation};
 use bootloader::BootMemoryDescriptor;
 use core::arch::global_asm;
+use core::mem::size_of;
 use core::panic::PanicInfo;
+use bootloader::E820_memory::E820Entry;
+use quantum_lib::heapless_vector::{HeaplessVec, HeaplessVecErr};
 use quantum_lib::simple_allocator::SimpleBumpAllocator;
 use stage_1::bios_disk::BiosDisk;
 use stage_1::bios_video::{BiosTextMode, _print};
@@ -39,6 +42,7 @@ use stage_1::config_parser::BootloaderConfig;
 use stage_1::filesystem::FileSystem;
 use stage_1::unreal::{enter_stage2, enter_unreal_mode};
 use stage_1::vesa::{BiosVesa, Res};
+use stage_1::memory_map::get_memory_map;
 
 global_asm!(include_str!("init.s"));
 
@@ -135,6 +139,30 @@ fn enter_rust(disk_id: u16) {
         },
     ));
 
+    BiosTextMode::print_int_bytes(b"Getting memory map ... ");
+
+    let amount_of_entries_allowed = 10;
+    let memory_region_len = amount_of_entries_allowed * size_of::<E820Entry>();
+
+    let mut memory_region = unsafe {
+        TEMP_ALLOC.as_mut().unwrap().allocate_region(memory_region_len).unwrap()
+    };
+
+    let e820_ptr = memory_region as *mut [u8] as *mut E820Entry;
+    let e820_ref = unsafe {
+        core::slice::from_raw_parts_mut(e820_ptr, amount_of_entries_allowed)
+    };
+
+    get_memory_map(e820_ref);
+
+    let map_slice: &'static [E820Entry] = unsafe {
+        core::mem::transmute(e820_ref)
+    };
+
+    boot_info.memory_map = Some(map_slice);
+
+    BiosTextMode::print_int_bytes(b"OK\n");
+
     BiosTextMode::print_int_bytes(b"Getting Vesa Info ... ");
     let raw_video_info = bootloader_config.get_recommended_video_info();
     let expected_res = Res {
@@ -147,7 +175,8 @@ fn enter_rust(disk_id: u16) {
     let closest_mode = vesa.find_closest_mode(expected_res).unwrap();
     BiosTextMode::print_int_bytes(b"OK\n");
 
-    BiosTextMode::print_int_bytes(b"Setting Mode ... ");
+
+    BiosTextMode::print_int_bytes(b"Setting Mode and jumping to stage2! ");
     vesa.set_mode(&closest_mode).unwrap();
 
     boot_info.vid = Some(VideoInformation {
@@ -169,6 +198,7 @@ fn enter_rust(disk_id: u16) {
 #[panic_handler]
 #[allow(dead_code)]
 fn panic(info: &PanicInfo) -> ! {
+    BiosTextMode::print_int_bytes(b"Panic!!");
     _print(format_args!("{}", info));
 
     loop {}
