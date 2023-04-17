@@ -34,6 +34,7 @@ pub enum StreamType {
 }
 
 #[derive(Clone, Copy, Debug)]
+#[allow(dead_code)]
 pub struct StreamConnection {
     pub(crate) info: StreamConnectionInfomation,
     pub(crate) outlet: StreamOutlet,

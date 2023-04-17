@@ -347,6 +347,90 @@ pub struct SegmentRegs {
     pub gs: u16,
 }
 
+impl SegmentRegs {
+    pub unsafe fn reload_all_to(seg: u16) {
+        asm!(
+            "mov ds, ax",
+            "mov es, ax",
+            "mov fs, ax",
+            "mov gs, ax",
+            in("ax") seg
+        )
+    }
+
+    pub unsafe fn restore(segment_registers: SegmentRegs) {
+        asm!(
+            "mov ds, ax",
+            in("ax") segment_registers.ds
+        );
+        asm!(
+            "mov es, ax",
+            in("ax") segment_registers.es
+        );
+        asm!(
+            "mov ss, ax",
+            in("ax") segment_registers.ss
+        );
+        asm!(
+            "mov fs, ax",
+            in("ax") segment_registers.fs
+        );
+        asm!(
+            "mov gs, ax",
+            in("ax") segment_registers.gs
+        );
+    }
+
+    pub fn save() -> SegmentRegs {
+        let mut segment_registers = SegmentRegs::default();
+
+        unsafe {
+            asm!(
+                "mov ax, ds",
+                out("ax") segment_registers.ds
+            );
+            asm!(
+                "mov ax, es",
+                out("ax") segment_registers.es
+            );
+            asm!(
+                "mov ax, ss",
+                out("ax") segment_registers.ss
+            );
+            asm!(
+                "mov ax, fs",
+                out("ax") segment_registers.fs
+            );
+            asm!(
+                "mov ax, gs",
+                out("ax") segment_registers.gs
+            );
+        }
+
+        segment_registers
+    }
+
+}
+
+pub struct CpuStack {}
+
+impl CpuStack {
+    #[inline(always)]
+    pub unsafe fn push(value: u32) {
+        asm!(
+            "push {v:e}",
+            v = in(reg) value
+        )
+    }
+
+    pub unsafe fn align_stack() {
+        asm!(
+            "and esp, 0xffffff00",
+        );
+    }
+
+}
+
 /// The `CR0` control register is used in x86 architecture to control various aspects of the processor's behavior.
 ///
 /// The `CR0` struct contains a number of methods to read and modify the various flags and settings of the `CR0` register.
@@ -726,6 +810,26 @@ impl CR3 {
         value & flag > 0
     }
 
+    #[cfg(target_pointer_width = "32")]
+    pub unsafe fn set_page_directory_base_register_32(ptr: u32) {
+        unsafe {
+            asm!(
+                "mov cr3, {value}",
+                value = in(reg) ptr
+            )
+        }
+    }
+
+    #[cfg(target_pointer_width = "64")]
+    pub unsafe fn set_page_directory_base_register_64(ptr: u64) {
+        unsafe {
+            asm!(
+            "mov cr3, {value}",
+            value = in(reg) ptr
+            )
+        }
+    }
+
     pub fn is_read_page_level_write_through_set() -> Option<bool> {
         let cr4_value = CR4::is_pcid_enable_set();
 
@@ -786,6 +890,35 @@ impl CR4 {
         let flag = 1 << bit_pos;
 
         value & flag > 0
+    }
+
+    /// Writes a single bit at a given position in the `CR4` register, as specified by the `bit_pos` parameter.
+    /// The bit is set to the value of the `flag` parameter, which is a boolean value indicating whether the bit should be set (true) or cleared (false).
+    #[inline(never)]
+    fn write_at_position(bit_pos: u32, flag: bool) {
+        assert!(bit_pos <= 32);
+
+        let read_value = Self::read_to_u32();
+        let set_bit_pos = 1 << bit_pos;
+
+        let moved_bit = if flag {
+            set_bit_pos
+        } else {
+            u32::MAX ^ set_bit_pos
+        };
+
+        let new_value = if flag {
+            read_value | moved_bit
+        } else {
+            read_value & moved_bit
+        };
+
+        unsafe {
+            asm!(
+            "mov cr4, {value:e}",
+            value = in(reg) new_value
+            );
+        }
     }
 
     /// Returns whether the Virtual-8086 Mode Extensions feature is enabled or not.
@@ -943,5 +1076,114 @@ impl CR4 {
     /// Returns `true` if PKE is enabled, `false` otherwise.
     pub fn is_protection_keys_for_supervisor_mode_pages_enable_set() -> bool {
         Self::read_flag(23)
+    }
+
+    pub fn set_physical_address_extention(flag: bool) {
+        Self::write_at_position(5, flag);
+    }
+}
+
+/*
+IA32_EFER
+Extended Feature Enable Register (EFER) is a model-specific register added in the AMD K6 processor,
+to allow enabling the SYSCALL/SYSRET instruction, and later for entering and exiting long mode.
+This register becomes architectural in AMD64 and has been adopted by Intel. Its MSR number is 0xC0000080.
+Bit(s)	Label	Description
+0	SCE	System Call Extensions
+1-7	0	Reserved
+8	LME	Long Mode Enable
+10	LMA	Long Mode Active
+11	NXE	No-Execute Enable
+12	SVME	Secure Virtual Machine Enable
+13	LMSLE	Long Mode Segment Limit Enable
+14	FFXSR	Fast FXSAVE/FXRSTOR
+15	TCE	Translation Cache Extension
+16-63	0	Reserved
+ */
+
+#[allow(non_camel_case_types)]
+pub struct IA32_EFER {}
+
+impl IA32_EFER {
+    #[inline(never)]
+    pub fn read_to_u32() -> u32 {
+        let value;
+
+        unsafe {
+            asm!(
+                "mov ecx, 0xC0000080",
+                "rdmsr",
+                out("eax") value
+            )
+        }
+
+        value
+    }
+
+    #[inline(never)]
+    fn write_at_position(bit_pos: u32, flag: bool) {
+        assert!(bit_pos <= 32);
+
+        let read_value = Self::read_to_u32();
+        let set_bit_pos = 1 << bit_pos;
+
+        let moved_bit = if flag {
+            set_bit_pos
+        } else {
+            u32::MAX ^ set_bit_pos
+        };
+
+        let new_value = if flag {
+            read_value | moved_bit
+        } else {
+            read_value & moved_bit
+        };
+
+        unsafe {
+            asm!(
+            "mov ecx, 0xC0000080",
+            "wrmsr",
+             in("eax") new_value
+            );
+        }
+    }
+
+    fn read_flag(bit_pos: usize) -> bool {
+        let value = Self::read_to_u32();
+        let flag = 1 << bit_pos;
+
+        value & flag > 0
+    }
+
+    pub fn is_system_call_extentions_set() -> bool {
+        Self::read_flag(0)
+    }
+
+    pub fn is_long_mode_active_set() -> bool {
+        Self::read_flag(10)
+    }
+
+    pub fn is_no_execute_enable_set() -> bool {
+        Self::read_flag(11)
+    }
+
+    pub fn is_secure_virtual_machine_enable_set() -> bool {
+        Self::read_flag(12)
+    }
+
+    pub fn is_long_mode_segment_limit_enable_set() -> bool {
+        Self::read_flag(13)
+    }
+
+    pub fn is_fast_fxsafe_enable_set() -> bool {
+        Self::read_flag(14)
+    }
+
+    pub fn is_translation_cache_extention_set() -> bool {
+        Self::read_flag(15)
+    }
+
+    pub fn set_long_mode_enable(flag: bool) {
+        Self::write_at_position(8, flag)
     }
 }

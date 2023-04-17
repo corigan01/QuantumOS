@@ -31,7 +31,7 @@ pub mod basic_font;
 pub mod bitset;
 pub mod bytes;
 pub mod debug;
-pub mod framebuffer_utils;
+//pub mod framebuffer_utils;
 pub mod heapless_string;
 pub mod heapless_vector;
 pub mod panic_utils;

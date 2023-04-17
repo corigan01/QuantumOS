@@ -33,8 +33,7 @@ use bootloader::BootMemoryDescriptor;
 use core::arch::global_asm;
 use core::mem::size_of;
 use core::panic::PanicInfo;
-use bootloader::E820_memory::E820Entry;
-use quantum_lib::heapless_vector::{HeaplessVec, HeaplessVecErr};
+use bootloader::e820_memory::E820Entry;
 use quantum_lib::simple_allocator::SimpleBumpAllocator;
 use stage_1::bios_disk::BiosDisk;
 use stage_1::bios_video::{BiosTextMode, _print};
@@ -141,10 +140,10 @@ fn enter_rust(disk_id: u16) {
 
     BiosTextMode::print_int_bytes(b"Getting memory map ... ");
 
-    let amount_of_entries_allowed = 10;
+    let amount_of_entries_allowed = 50;
     let memory_region_len = amount_of_entries_allowed * size_of::<E820Entry>();
 
-    let mut memory_region = unsafe {
+    let memory_region = unsafe {
         TEMP_ALLOC.as_mut().unwrap().allocate_region(memory_region_len).unwrap()
     };
 

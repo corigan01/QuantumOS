@@ -1,8 +1,8 @@
 /*
-  ____                 __               __                __
- / __ \__ _____ ____  / /___ ____ _    / /  ___  ___ ____/ /__ ____
-/ /_/ / // / _ `/ _ \/ __/ // /  ' \  / /__/ _ \/ _ `/ _  / -_) __/
-\___\_\_,_/\_,_/_//_/\__/\_,_/_/_/_/ /____/\___/\_,_/\_,_/\__/_/
+  ____                 __               __   _ __
+ / __ \__ _____ ____  / /___ ____ _    / /  (_) /
+/ /_/ / // / _ `/ _ \/ __/ // /  ' \  / /__/ / _ \
+\___\_\_,_/\_,_/_//_/\__/\_,_/_/_/_/ /____/_/_.__/
   Part of the Quantum OS Project
 
 Copyright 2023 Gavin Kellam
@@ -23,11 +23,3 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-#[repr(C, packed)]
-#[derive(Default, Debug, Copy, Clone)]
-pub struct E820Entry {
-    address: u64,
-    len: u64,
-    entry_type: u32,
-    acpi: u32
-}

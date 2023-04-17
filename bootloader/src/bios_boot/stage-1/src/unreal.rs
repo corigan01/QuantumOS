@@ -28,7 +28,7 @@ use crate::bios_println;
 use core::arch::asm;
 use core::mem::size_of;
 use quantum_lib::x86_64::interrupts::Interrupts;
-use quantum_lib::x86_64::registers::CR0;
+use quantum_lib::x86_64::registers::{CpuStack, CR0, SegmentRegs};
 
 #[repr(C, packed(2))]
 pub struct SimpleGDTPtr {
@@ -92,22 +92,17 @@ static GD_TABLE: SimpleGDT = SimpleGDT::new();
 pub unsafe fn enter_unreal_mode() {
     Interrupts::disable();
 
-    let ds: u16;
-    let ss: u16;
-
-    asm!("mov {ds:x}, ds", ds = out(reg) ds);
-    asm!("mov {ss:x}, ss", ss = out(reg) ss);
+    let seg = SegmentRegs::save();
 
     GD_TABLE.package().load();
 
     CR0::set_protected_mode(true);
 
-    asm!("mov {0:e}, 0x10", "mov ds, {0:e}", "mov ss, {0:e}", out(reg) _);
+    SegmentRegs::reload_all_to(0x10);
 
     CR0::set_protected_mode(false);
 
-    asm!("mov ds, {0:x}", in(reg) ds);
-    asm!("mov ss, {0:x}", in(reg) ss);
+    SegmentRegs::restore(seg);
 
     Interrupts::enable();
 }
@@ -118,27 +113,20 @@ pub unsafe fn enter_stage2(entry_point: *const u8, info: *const u8) {
     Interrupts::disable();
     CR0::set_protected_mode(true);
 
-    unsafe {
-        asm!(
-            "and esp, 0xffffff00",
-            "push {info:e}",
-            "push {entry_point:e}",
-            info = in(reg) info as u32,
-            entry_point = in(reg) entry_point as u32,
-        );
-        asm!("ljmp $0x8, $2f", "2:", options(att_syntax));
-        asm!(
-            ".code32",
-            "mov {0:e}, 0x10",
-            "mov ds, {0:e}",
-            "mov es, {0:e}",
-            "mov ss, {0:e}",
-            "pop {1:e}",
-            "call {1:e}",
-            "4:",
-            "jmp 4b",
-            out(reg) _,
-            out(reg) _,
-        );
-    }
+    CpuStack::align_stack();
+    CpuStack::push(info as u32);
+    CpuStack::push(entry_point as u32);
+
+    SegmentRegs::reload_all_to(0x10);
+
+    asm!("ljmp $0x8, $2f", "2:", options(att_syntax));
+    asm!(
+        ".code32",
+        "pop {0:e}",
+        "call {0:e}",
+        "4:",
+        "jmp 4b",
+        out(reg) _,
+    );
+
 }

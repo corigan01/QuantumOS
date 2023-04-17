@@ -24,18 +24,18 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 */
 
-use bootloader::E820_memory::E820Entry;
-use quantum_lib::heapless_vector::HeaplessVec;
+use bootloader::e820_memory::E820Entry;
 use quantum_lib::x86_64::bios_call::BiosCall;
 use quantum_lib::x86_64::bios_call::BiosCallResult::Success;
-use quantum_lib::heapless_vector::HeaplessVecErr;
 
 pub fn get_memory_map(memory_map_region: &mut [E820Entry]) -> usize {
     let mut region_offset = 0;
     let mut last_entry_value = 0;
 
     loop {
-        let entry = E820Entry::default();
+        let mut entry = E820Entry::default();
+        entry.len = 1;
+
         let ptr = &entry as *const E820Entry as *const u8;
 
         let value = unsafe {

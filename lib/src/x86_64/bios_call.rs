@@ -63,12 +63,6 @@ impl<T> BiosCallResult<T> {
     }
 }
 
-fn test() {
-    let test: Option<()> = Option::None;
-
-    test.unwrap()
-}
-
 #[allow(dead_code)]
 pub struct BiosCall<CallType = NoCall> {
     registers_16: GPRegs16,
@@ -140,7 +134,7 @@ impl BiosCall<Bit32> {
     #[inline(never)]
     unsafe fn general_purpose_memory_call(&mut self) {
         asm!(
-        "mov es, {es}",
+        "mov es, {es:e}",
         "int 0x15",
         inout("eax") self.registers_32.eax => self.registers_32.eax,
         inout("ebx") self.registers_32.ebx => self.registers_32.ebx,

@@ -31,6 +31,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 use quantum_lib::x86_64::bios_call::BiosCall;
 use bootloader::boot_info::{BootInfo, VideoInformation};
 use core::panic::PanicInfo;
+use quantum_lib::bytes::Bytes;
 use quantum_lib::debug::add_connection_to_global_stream;
 use quantum_lib::debug::stream_connection::{
     StreamConnection, StreamConnectionBuilder, StreamConnectionInfomation,
@@ -75,10 +76,21 @@ pub extern "C" fn _start(boot_info: u32) -> ! {
 }
 
 fn main(boot_info: &BootInfo) {
-    debug_println!("{:#?}", boot_info);
+    let mut total_memory = 0;
 
+    for entry in boot_info.memory_map.unwrap() {
+        if entry.len == 0 && entry.address == 0 {
+            break;
+        }
 
+        if entry.entry_type == 1 {
+            total_memory += entry.len;
+        }
 
+        debug_println!("{:#?}", entry);
+    }
+
+    debug_println!("Bytes {}", Bytes::from(total_memory));
 }
 
 #[panic_handler]
