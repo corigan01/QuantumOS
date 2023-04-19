@@ -64,7 +64,7 @@ pub extern "C" fn _start(boot_info: u32) -> ! {
     let stream_connection = StreamConnectionBuilder::new()
         .console_connection()
         .add_outlet(display_string)
-        .add_connection_name("VGA")
+        .add_connection_name("VGA DEBUG")
         .does_support_scrolling(true)
         .build();
     add_connection_to_global_stream(stream_connection).unwrap();
@@ -77,7 +77,6 @@ pub extern "C" fn _start(boot_info: u32) -> ! {
 
 fn main(boot_info: &BootInfo) {
     let mut total_memory = 0;
-
     for entry in boot_info.memory_map.unwrap() {
         if entry.len == 0 && entry.address == 0 {
             break;
@@ -86,11 +85,13 @@ fn main(boot_info: &BootInfo) {
         if entry.entry_type == 1 {
             total_memory += entry.len;
         }
-
-        debug_println!("{:#?}", entry);
     }
 
-    debug_println!("Bytes {}", Bytes::from(total_memory));
+    debug_println!("Memory Avl: {:?} {}", boot_info.memory_map.unwrap().as_ptr(), Bytes::from(total_memory));
+    debug_println!("Vga info: {:#?}", boot_info.vid);
+
+
+
 }
 
 #[panic_handler]

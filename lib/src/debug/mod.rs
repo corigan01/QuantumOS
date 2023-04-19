@@ -36,10 +36,19 @@ pub mod stream_connection;
 type StreamOutlet = fn(&str);
 
 pub fn add_connection_to_global_stream(stream: StreamConnection) -> Result<(), HeaplessVecErr> {
-    DEBUG_OUTPUT_STREAM
+    let does_stream_want_welcome = !stream.ignore_welcome;
+    let stream_info_copy = stream.info;
+
+    let status = DEBUG_OUTPUT_STREAM
         .lock()
         .stream_connections
-        .push_within_capsity(stream)
+        .push_within_capsity(stream);
+
+    if does_stream_want_welcome {
+        crate::debug_println!("New Stream added! '{}'", stream_info_copy.connection_name);
+    }
+
+    status
 }
 
 lazy_static! {

@@ -25,10 +25,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 use quantum_lib::x86_64::bios_call::BiosCall;
 use bootloader::error::BootloaderError;
-
-use crate::convert_segmented_ptr;
-
-use quantum_lib::heapless_vector::HeaplessVec;
+use quantum_lib::ptr::segmented_ptr::SegPtr;
 
 #[repr(C, packed)]
 #[derive(Clone, Copy)]
@@ -172,10 +169,8 @@ impl VesaDriverInfo {
     pub fn get_mode_ptr(&self) -> *mut u16 {
         assert!(self.validate_signature());
 
-        convert_segmented_ptr((
-            self.video_mode_ptr[1] as usize,
-            self.video_mode_ptr[0] as usize,
-        )) as *mut u16
+        SegPtr::new(self.video_mode_ptr[1], self.video_mode_ptr[0])
+            .unsegmentize() as *mut u16
     }
 
     pub fn get_supported_modes_len(&self) -> usize {
@@ -193,20 +188,9 @@ impl VesaDriverInfo {
         }
     }
 
-    pub fn get_all_supported_modes(&self) -> Result<HeaplessVec<usize, 256>, BootloaderError> {
-        let items = unsafe {
+    pub fn get_all_supported_modes(&self) -> &[u16] {
+        unsafe {
             core::slice::from_raw_parts(self.get_mode_ptr(), self.get_supported_modes_len())
-        };
-        let mut vector = HeaplessVec::new();
-
-        for item in items {
-            let push_status = vector.push_within_capsity(*item as usize);
-
-            if push_status.is_err() {
-                return Err(BootloaderError::NotEnoughMemory);
-            }
         }
-
-        Ok(vector)
     }
 }

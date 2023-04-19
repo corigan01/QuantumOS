@@ -25,7 +25,6 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 pub mod interrupts;
 pub mod registers;
-pub mod mem_map;
 pub mod bios_call;
 pub mod paging;
 

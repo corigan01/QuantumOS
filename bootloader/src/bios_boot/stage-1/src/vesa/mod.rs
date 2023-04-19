@@ -95,11 +95,13 @@ impl BiosVesa<Quarried> {
     where
         Function: FnMut(&VesaMode) -> bool,
     {
-        let supported_modes = self.info.get_all_supported_modes()?;
+        let supported_modes = self.info.get_all_supported_modes();
 
         assert_ne!(supported_modes.len(), 0);
 
         for mode in supported_modes {
+            let mode = *mode as usize;
+
             if mode == 0 {
                 continue;
             }

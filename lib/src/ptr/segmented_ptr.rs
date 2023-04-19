@@ -23,5 +23,27 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-pub struct HardwareMemoryMap {
+pub struct SegPtr {
+    segment: u16,
+    address: u16
+}
+
+impl SegPtr {
+    pub fn new(seg: u16, ptr: u16) -> Self {
+        Self {
+            segment: seg,
+            address: ptr,
+        }
+    }
+
+    pub fn segmentize(ptr: u32) -> Self {
+        Self {
+            segment: (ptr / 0x10) as u16,
+            address: (ptr % 0x10) as u16,
+        }
+    }
+
+    pub fn unsegmentize(self) -> u32 {
+        ((self.segment as u32) * 0x10) + (self.address as u32)
+    }
 }

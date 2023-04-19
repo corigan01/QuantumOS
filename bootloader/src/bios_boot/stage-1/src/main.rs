@@ -51,6 +51,8 @@ extern "C" fn bit16_entry(disk_number: u16) {
 }
 
 static mut TEMP_ALLOC: Option<SimpleBumpAllocator> = None;
+static mut boot_info: BootInfo = BootInfo::new();
+
 
 fn enter_rust(disk_id: u16) {
     BiosTextMode::print_int_bytes(b"Quantum Bootloader (Stage1)\n");
@@ -61,10 +63,8 @@ fn enter_rust(disk_id: u16) {
     };
     BiosTextMode::print_int_bytes(b" OK\n");
 
-    let mut boot_info = BootInfo::default();
-
     unsafe {
-        TEMP_ALLOC = SimpleBumpAllocator::new_from_ptr((0x00100000 - (512)) as *mut u8, 0x03200000);
+        TEMP_ALLOC = SimpleBumpAllocator::new_from_ptr((0x00100000) as *mut u8, 0x03200000);
     }
 
     if unsafe { &TEMP_ALLOC }.is_none() {
@@ -127,24 +127,26 @@ fn enter_rust(disk_id: u16) {
 
     BiosTextMode::print_int_bytes(b" OK\n");
 
-    boot_info.ram_fs = Some(SimpleRamFs::new(
-        BootMemoryDescriptor {
-            ptr: kernel_ptr.as_ptr() as u64,
-            size: kernel_filesize_bytes as u64,
-        },
-        BootMemoryDescriptor {
-            ptr: next_stage_ptr.as_ptr() as u64,
-            size: next_stage_filesize_bytes as u64,
-        },
-    ));
+    unsafe {
+        boot_info.ram_fs = Some(SimpleRamFs::new(
+            BootMemoryDescriptor {
+                ptr: kernel_ptr.as_ptr() as u64,
+                size: kernel_filesize_bytes as u64,
+            },
+            BootMemoryDescriptor {
+                ptr: next_stage_ptr.as_ptr() as u64,
+                size: next_stage_filesize_bytes as u64,
+            },
+        ));
+    }
 
     BiosTextMode::print_int_bytes(b"Getting memory map ... ");
 
-    let amount_of_entries_allowed = 50;
+    let amount_of_entries_allowed = 10;
     let memory_region_len = amount_of_entries_allowed * size_of::<E820Entry>();
 
     let memory_region = unsafe {
-        TEMP_ALLOC.as_mut().unwrap().allocate_region(memory_region_len).unwrap()
+        TEMP_ALLOC.as_mut().unwrap().allocate_region(memory_region_len + 0x10).unwrap()
     };
 
     let e820_ptr = memory_region as *mut [u8] as *mut E820Entry;
@@ -158,7 +160,9 @@ fn enter_rust(disk_id: u16) {
         core::mem::transmute(e820_ref)
     };
 
-    boot_info.memory_map = Some(map_slice);
+    unsafe {
+        boot_info.memory_map = Some(map_slice);
+    }
 
     BiosTextMode::print_int_bytes(b"OK\n");
 
@@ -174,17 +178,18 @@ fn enter_rust(disk_id: u16) {
     let closest_mode = vesa.find_closest_mode(expected_res).unwrap();
     BiosTextMode::print_int_bytes(b"OK\n");
 
-
     BiosTextMode::print_int_bytes(b"Setting Mode and jumping to stage2! ");
     vesa.set_mode(&closest_mode).unwrap();
 
-    boot_info.vid = Some(VideoInformation {
-        video_mode: 0,
-        x: closest_mode.mode_data.width.into(),
-        y: closest_mode.mode_data.height.into(),
-        depth: closest_mode.mode_data.bpp.into(),
-        framebuffer: closest_mode.mode_data.framebuffer,
-    });
+    unsafe {
+        boot_info.vid = Some(VideoInformation {
+            video_mode: 0,
+            x: closest_mode.mode_data.width.into(),
+            y: closest_mode.mode_data.height.into(),
+            depth: closest_mode.mode_data.bpp.into(),
+            framebuffer: closest_mode.mode_data.framebuffer,
+        });
+    }
 
     unsafe {
         enter_stage2(

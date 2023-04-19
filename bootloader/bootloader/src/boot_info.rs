@@ -42,6 +42,7 @@ pub struct VideoInformation {
 }
 
 #[derive(Clone, Copy, Debug)]
+#[repr(C)]
 pub struct BootInfo {
     pub booted_disk_id: u16,
     pub ram_fs: Option<SimpleRamFs>,
@@ -50,7 +51,7 @@ pub struct BootInfo {
 }
 
 impl BootInfo {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             booted_disk_id: 0,
             ram_fs: None,

@@ -53,6 +53,8 @@ fn main() {
             .arg("-d")
             .arg("cpu_reset")
             .arg("--no-shutdown")
+            .arg("-m")
+            .arg("256M")
             .arg("-drive")
             .arg(format!("format=raw,file={}", build_status.unwrap()))
             .stdout(std::process::Stdio::piped())

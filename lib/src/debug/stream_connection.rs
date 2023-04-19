@@ -38,14 +38,15 @@ pub enum StreamType {
 pub struct StreamConnection {
     pub(crate) info: StreamConnectionInfomation,
     pub(crate) outlet: StreamOutlet,
+    pub(crate) ignore_welcome: bool
 }
 
 #[derive(Clone, Copy, Debug)]
 pub struct StreamConnectionInfomation {
-    max_chars: Option<(usize, usize)>,
-    does_support_scrolling: bool,
-    data_rate: Option<usize>,
-    connection_name: &'static str,
+    pub(crate) max_chars: Option<(usize, usize)>,
+    pub(crate) does_support_scrolling: bool,
+    pub(crate) data_rate: Option<usize>,
+    pub(crate) connection_name: &'static str,
 }
 
 impl StreamConnectionInfomation {
@@ -64,6 +65,7 @@ impl Default for StreamConnection {
         Self {
             info: StreamConnectionInfomation::new(),
             outlet: |_| {},
+            ignore_welcome: false,
         }
     }
 }
@@ -74,6 +76,7 @@ pub struct ConsoleStreamType;
 pub struct StreamConnectionBuilder<Type = UnknownConnectionType> {
     info: StreamConnectionInfomation,
     outlet: Option<StreamOutlet>,
+    ignore_welcome: bool,
     reserved: PhantomData<Type>,
 }
 
@@ -82,6 +85,7 @@ impl StreamConnectionBuilder {
         StreamConnectionBuilder {
             info: StreamConnectionInfomation::new(),
             outlet: None,
+            ignore_welcome: false,
             reserved: Default::default(),
         }
     }
@@ -92,6 +96,7 @@ impl StreamConnectionBuilder<UnknownConnectionType> {
         StreamConnectionBuilder {
             info: self.info,
             outlet: self.outlet,
+            ignore_welcome: false,
             reserved: Default::default(),
         }
     }
@@ -128,12 +133,19 @@ impl StreamConnectionBuilder<ConsoleStreamType> {
         self
     }
 
+    pub fn prevent_welcome_message(mut self, flag: bool) -> Self {
+        self.ignore_welcome = flag;
+
+        self
+    }
+
     pub fn build(self) -> StreamConnection {
         StreamConnection {
             info: self.info,
             outlet: self
                 .outlet
                 .expect("You must add an outlet to a console type"),
+            ignore_welcome: self.ignore_welcome,
         }
     }
 }

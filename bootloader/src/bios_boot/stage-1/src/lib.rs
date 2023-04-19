@@ -34,6 +34,3 @@ pub mod unreal;
 pub mod vesa;
 pub mod memory_map;
 
-pub fn convert_segmented_ptr(segmented_ptr: (usize, usize)) -> u32 {
-    (segmented_ptr.0 * 0x10 + segmented_ptr.1) as u32
-}

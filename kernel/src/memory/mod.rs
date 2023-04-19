@@ -218,6 +218,4 @@ mod test_case {
         assert_eq!(address.is_err(), true);
         assert_eq!(address.err().unwrap().get_address(), address_number);
     }
-
-
 }

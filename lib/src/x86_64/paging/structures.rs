@@ -21,25 +21,22 @@ NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPO
 NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
 DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
 */
 
-#![no_main]
-#![no_std]
+pub struct PageMapLevel4 {
+    entries: InternalPageEntires
+} // Not able to be mapped
+pub struct PageMapLevel3 {
+    entries: InternalPageEntires
+} // 1gb able to be mapped
+pub struct PageMapLevel2 {
+    entries: InternalPageEntires
+} // 2mb able to be mapped
+pub struct PageMapLevel1 {
+    entries: InternalPageEntires
+} // 4kb able to be mapped
 
-pub mod basic_font;
-pub mod bitset;
-pub mod bytes;
-pub mod debug;
-//pub mod framebuffer_utils;
-pub mod heapless_string;
-pub mod heapless_vector;
-pub mod panic_utils;
-pub mod possibly_uninit;
-pub mod ptr;
-pub mod simple_allocator;
-pub mod time;
-pub mod x86_64;
-pub mod address_utils;
+pub(crate) struct InternalPageEntires {
+    entries: [u64; 512]
+}
 
-pub type Nothing = ();

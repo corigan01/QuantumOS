@@ -9,7 +9,7 @@ quantum_lib = { path = "../../../../lib" }
 bootloader = { path = "../../../bootloader" }
 
 [profile.release]
-opt-level="s"
+opt-level="z"
 lto = true
 codegen-units = 1
 debug = 0
