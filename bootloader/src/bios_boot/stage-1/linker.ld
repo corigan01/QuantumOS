@@ -13,13 +13,19 @@ SECTIONS {
         SHORT(0xAA55)
     }
 
-    . = 0x7E00;
+    _stage_1_start = .;
 
-    .data : {
-        *(.data .data.*)
+    .GDT : {
+        *(.GDT .GDT.*)
     }
     .text : {
         *(.text .text.*)
+    }
+    .data : {
+        *(.data .data.*)
+    }
+    .rodata : {
+        *(.rodata .rodata.*)
     }
     .bss :  {
         *(.bss .bss.*)
@@ -34,5 +40,8 @@ SECTIONS {
        *(.eh_frame_hdr .eh_frame_hdr.*)
     }
 
-    _stage_1_end_sectors = ((. - 0x7E00) / 512);
+    _stage_1_end = .;
+
+    _stage_1_bytes = _stage_1_end - _stage_1_start;
+    _stage_1_sectors = (_stage_1_bytes / 512);
 }

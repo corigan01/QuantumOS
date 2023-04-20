@@ -22,99 +22,112 @@ NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FO
 DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
-
 #![no_main]
 #![no_std]
 
-use core::arch::global_asm;
-use core::fmt::Debug;
-use core::panic::PanicInfo;
-
-use bootloader::boot_info::{BootInfo, SimpleRamFs};
-use bootloader::BootMemoryDescriptor;
-use quantum_lib::simple_allocator::SimpleBumpAllocator;
-
-use stage_1::bios_disk::BiosDisk;
-use stage_1::bios_ints::{BiosInt, TextModeColor};
+#[cfg(debug)]
 use stage_1::bios_println;
-use stage_1::bootloader_stack_information::{get_stack_used_bytes, get_total_stack_size};
+
+use bootloader::boot_info::{BootInfo, SimpleRamFs, VideoInformation};
+use bootloader::BootMemoryDescriptor;
+use core::arch::global_asm;
+use core::mem::size_of;
+use core::panic::PanicInfo;
+use bootloader::e820_memory::E820Entry;
+use quantum_lib::simple_allocator::SimpleBumpAllocator;
+use stage_1::bios_disk::BiosDisk;
+use stage_1::bios_video::{BiosTextMode, _print};
 use stage_1::config_parser::BootloaderConfig;
 use stage_1::filesystem::FileSystem;
-use stage_1::memory_detection::MemoryMap;
+use stage_1::unreal::{enter_stage2, enter_unreal_mode};
 use stage_1::vesa::{BiosVesa, Res};
+use stage_1::memory_map::get_memory_map;
 
 global_asm!(include_str!("init.s"));
 
 #[no_mangle]
 extern "C" fn bit16_entry(disk_number: u16) {
-    bios_println!("\n --- Quantum Boot loader 16 ---\n");
     enter_rust(disk_number);
-    panic!("Stage1 should not return!");
 }
 
 static mut TEMP_ALLOC: Option<SimpleBumpAllocator> = None;
+static mut boot_info: BootInfo = BootInfo::new();
+
 
 fn enter_rust(disk_id: u16) {
-    let mut boot_info = BootInfo::default();
+    BiosTextMode::print_int_bytes(b"Quantum Bootloader (Stage1)\n");
+
+    BiosTextMode::print_int_bytes(b"Unreal ...");
+    unsafe {
+        enter_unreal_mode();
+    };
+    BiosTextMode::print_int_bytes(b" OK\n");
 
     unsafe {
-        TEMP_ALLOC = SimpleBumpAllocator::new_from_ptr(0x00100000 as *mut u8, 0x03200000);
+        TEMP_ALLOC = SimpleBumpAllocator::new_from_ptr((0x00100000) as *mut u8, 0x03200000);
     }
 
-    let bootloader_config;
+    if unsafe { &TEMP_ALLOC }.is_none() {
+        BiosTextMode::print_int_bytes(b"Allocator is broken :(");
+    }
 
-    {
-        let fs =
-            FileSystem::new(BiosDisk::new(disk_id as u8))
-                .toggle_logging()
-                .quarry_disk()
-                .expect("Could not read any supported filesystems!")
-                .mount_root_if_contains("/bootloader/bootloader.cfg")
-                .expect("Could detect bootloader partition, please add \'/bootloader/bootloader.cfg\' to the bootloader filesystem for a proper boot!");
+    BiosTextMode::print_int_bytes(b"Loading files ");
+    let fs =
+        FileSystem::new(BiosDisk::new(disk_id as u8))
+            .quarry_disk()
+            .expect("Could not read any supported filesystems!")
+            .mount_root_if_contains("/bootloader/bootloader.cfg")
+            .expect("Could detect bootloader partition, please add \'/bootloader/bootloader.cfg\' to the bootloader filesystem for a proper boot!");
 
-        let bootloader_config_file_ptr =
-            unsafe { TEMP_ALLOC.as_mut().unwrap().allocate_region(256).unwrap() };
-        let bootloader_filename = "/bootloader/bootloader.cfg";
+    let bootloader_config_file_ptr =
+        unsafe { TEMP_ALLOC.as_mut().unwrap().allocate_region(511).unwrap() };
+    let bootloader_filename = "/bootloader/bootloader.cfg";
 
-        fs.load_file_into_slice(bootloader_config_file_ptr, bootloader_filename)
-            .expect("Unable to load bootloader config file!");
+    fs.load_file_into_slice(bootloader_config_file_ptr, bootloader_filename)
+        .expect("Unable to load bootloader config file!");
 
-        bootloader_config =
-            BootloaderConfig::from_str(core::str::from_utf8(bootloader_config_file_ptr).unwrap())
-                .expect("Unable to parse bootloader config!");
+    BiosTextMode::print_int_bytes(b"...config...");
+    let bootloader_config_string =
+        unsafe { core::str::from_utf8_unchecked(bootloader_config_file_ptr) };
 
-        bios_println!("{:#?}", bootloader_config);
+    let bootloader_config = BootloaderConfig::from_str(bootloader_config_string.trim())
+        .expect("Unable to parse bootloader config!");
 
-        let next_stage_filesize_bytes = fs
-            .get_filesize_bytes(bootloader_config.get_stage2_file_path())
-            .expect("Could not get stage2 filesize");
+    let next_stage_filesize_bytes = fs
+        .get_filesize_bytes(bootloader_config.get_stage2_file_path())
+        .expect("Could not get stage2 filesize");
 
-        let next_stage_ptr = unsafe {
-            TEMP_ALLOC
-                .as_mut()
-                .unwrap()
-                .allocate_region(next_stage_filesize_bytes + 0x10)
-                .unwrap()
-        };
+    let next_stage_ptr = unsafe {
+        TEMP_ALLOC
+            .as_mut()
+            .unwrap()
+            .allocate_region(next_stage_filesize_bytes + 0x10)
+            .unwrap()
+    };
 
-        let kernel_filesize_bytes = fs
-            .get_filesize_bytes(bootloader_config.get_kernel_file_path())
-            .expect("Could not get kernel filesize");
+    let kernel_filesize_bytes = fs
+        .get_filesize_bytes(bootloader_config.get_kernel_file_path())
+        .expect("Could not get kernel filesize");
 
-        let kernel_ptr = unsafe {
-            TEMP_ALLOC
-                .as_mut()
-                .unwrap()
-                .allocate_region(kernel_filesize_bytes + 0x10)
-                .unwrap()
-        };
+    let kernel_ptr = unsafe {
+        TEMP_ALLOC
+            .as_mut()
+            .unwrap()
+            .allocate_region(kernel_filesize_bytes + 0x10)
+            .unwrap()
+    };
 
-        fs.load_file_into_slice(next_stage_ptr, bootloader_config.get_stage2_file_path())
-            .expect("Could not load next stage!");
+    BiosTextMode::print_int_bytes(b"...stage2...");
+    fs.load_file_into_slice(next_stage_ptr, bootloader_config.get_stage2_file_path())
+        .expect("Could not load next stage!");
 
-        fs.load_file_into_slice(kernel_ptr, bootloader_config.get_kernel_file_path())
-            .expect("Could not load kernel!");
+    BiosTextMode::print_int_bytes(b"...kernel...");
+    fs.load_file_into_slice(kernel_ptr, bootloader_config.get_kernel_file_path())
+        .expect("Could not load kernel!");
 
+    BiosTextMode::print_int_bytes(b" OK\n");
+
+    unsafe {
         boot_info.ram_fs = Some(SimpleRamFs::new(
             BootMemoryDescriptor {
                 ptr: kernel_ptr.as_ptr() as u64,
@@ -125,39 +138,72 @@ fn enter_rust(disk_id: u16) {
                 size: next_stage_filesize_bytes as u64,
             },
         ));
-
-        bios_println!(
-            "stack ({} / {})",
-            get_stack_used_bytes(),
-            get_total_stack_size()
-        );
     }
 
-    {
-        let bootloader_video_mode = bootloader_config.get_recommended_video_info();
+    BiosTextMode::print_int_bytes(b"Getting memory map ... ");
 
-        let mut vga = BiosVesa::new()
-            .quarry()
-            .expect("Could not quarry Vesa information");
+    let amount_of_entries_allowed = 10;
+    let memory_region_len = amount_of_entries_allowed * size_of::<E820Entry>();
 
-        let mode = vga
-            .find_closest_mode(Res {
-                x: bootloader_video_mode.0,
-                y: bootloader_video_mode.1,
-                depth: 24,
-            })
-            .expect("Could not find closest mode");
+    let memory_region = unsafe {
+        TEMP_ALLOC.as_mut().unwrap().allocate_region(memory_region_len + 0x10).unwrap()
+    };
 
-        bios_println!("Mode info {:#?}", &mode.get_res());
+    let e820_ptr = memory_region as *mut [u8] as *mut E820Entry;
+    let e820_ref = unsafe {
+        core::slice::from_raw_parts_mut(e820_ptr, amount_of_entries_allowed)
+    };
 
-        //vga.set_mode(mode).unwrap();
-        //vga.clear_display();
+    get_memory_map(e820_ref);
+
+    let map_slice: &'static [E820Entry] = unsafe {
+        core::mem::transmute(e820_ref)
+    };
+
+    unsafe {
+        boot_info.memory_map = Some(map_slice);
+    }
+
+    BiosTextMode::print_int_bytes(b"OK\n");
+
+    BiosTextMode::print_int_bytes(b"Getting Vesa Info ... ");
+    let raw_video_info = bootloader_config.get_recommended_video_info();
+    let expected_res = Res {
+        x: raw_video_info.0,
+        y: raw_video_info.1,
+        depth: 32,
+    };
+
+    let mut vesa = BiosVesa::new().quarry().unwrap();
+    let closest_mode = vesa.find_closest_mode(expected_res).unwrap();
+    BiosTextMode::print_int_bytes(b"OK\n");
+
+    BiosTextMode::print_int_bytes(b"Setting Mode and jumping to stage2! ");
+    vesa.set_mode(&closest_mode).unwrap();
+
+    unsafe {
+        boot_info.vid = Some(VideoInformation {
+            video_mode: 0,
+            x: closest_mode.mode_data.width.into(),
+            y: closest_mode.mode_data.height.into(),
+            depth: closest_mode.mode_data.bpp.into(),
+            framebuffer: closest_mode.mode_data.framebuffer,
+        });
+    }
+
+    unsafe {
+        enter_stage2(
+            next_stage_ptr.as_ptr(),
+            &boot_info as *const BootInfo as *const u8,
+        );
     }
 }
 
 #[panic_handler]
+#[allow(dead_code)]
 fn panic(info: &PanicInfo) -> ! {
-    bios_println!("{}", info);
+    BiosTextMode::print_int_bytes(b"Panic!!");
+    _print(format_args!("{}", info));
 
     loop {}
 }

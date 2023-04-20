@@ -24,9 +24,9 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 */
 
-use core::ptr::null;
 use crate::debug_println;
 use crate::memory::VirtualAddress;
+use core::ptr::null;
 
 #[derive(Debug, Clone, Copy)]
 pub struct SafePtr<T> {
@@ -35,17 +35,15 @@ pub struct SafePtr<T> {
 
 impl<T> SafePtr<T> {
     pub fn new() -> Self {
-        Self {
-            pointer: None
-        }
+        Self { pointer: None }
     }
 
-    pub fn new_from_ptr(ptr: *mut T) -> Self {
+    pub unsafe fn new_from_ptr(ptr: *mut T) -> Self {
         if ptr.is_null() {
             return Self::new();
         }
-        
-        unsafe { Self::unsafe_new(ptr) }
+
+        Self::unsafe_new(ptr)
     }
 
     pub unsafe fn unsafe_from_address(ptr: VirtualAddress) -> Self {
@@ -53,9 +51,7 @@ impl<T> SafePtr<T> {
     }
 
     pub unsafe fn unsafe_new(ptr: *mut T) -> Self {
-        Self {
-            pointer: Some(ptr)
-        }
+        Self { pointer: Some(ptr) }
     }
 
     pub unsafe fn advance_ptr(&self) -> Option<*mut T> {
@@ -69,8 +65,7 @@ impl<T> SafePtr<T> {
     pub fn as_ptr(&self) -> Option<*mut T> {
         if let Some(pointer) = self.pointer {
             Some(pointer as *mut _)
-        }
-        else {
+        } else {
             None
         }
     }
@@ -88,10 +83,10 @@ pub fn test() {
         unsafe { SafePtr::unsafe_from_address(VirtualAddress::from_ptr(&mut 8)) };
 
     if let Some(number) = something.as_ptr() {
-        unsafe { debug_println!("Value: {:?} *{:?}", *number, number); };
+        unsafe {
+            debug_println!("Value: {:?} *{:?}", *number, number);
+        };
     } else {
         debug_println!("NULL PTR!!");
     }
-
-
 }

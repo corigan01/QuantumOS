@@ -24,7 +24,36 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 */
 
-pub trait GlobalPrint {
-    fn print_str(str: &str);
-    fn print_bytes(bytes: &[u8]);
+use bootloader::e820_memory::E820Entry;
+use quantum_lib::x86_64::bios_call::BiosCall;
+use quantum_lib::x86_64::bios_call::BiosCallResult::Success;
+
+pub fn get_memory_map(memory_map_region: &mut [E820Entry]) -> usize {
+    let mut region_offset = 0;
+    let mut last_entry_value = 0;
+
+    loop {
+        let mut entry = E820Entry::default();
+        entry.len = 1;
+
+        let ptr = &entry as *const E820Entry as *const u8;
+
+        let value = unsafe {
+            BiosCall::new().bit32_call().memory_detection_operation(ptr, last_entry_value)
+        };
+
+        if let Success(value) = value {
+            memory_map_region[region_offset] = entry;
+            last_entry_value = value;
+            region_offset += 1;
+
+            if value == 0 || region_offset >= memory_map_region.len()  {
+                break;
+            }
+        } else {
+            break;
+        }
+    }
+
+    region_offset
 }

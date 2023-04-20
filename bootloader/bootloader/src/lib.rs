@@ -27,7 +27,10 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #![no_std]
 
 pub mod boot_info;
+pub mod error;
+pub mod e820_memory;
 
+#[derive(Clone, Copy, Debug)]
 pub struct BootMemoryDescriptor {
     pub ptr: u64,
     pub size: u64,

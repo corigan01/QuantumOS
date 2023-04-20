@@ -1,8 +1,8 @@
 /*
-  ____                 __               __                __
- / __ \__ _____ ____  / /___ ____ _    / /  ___  ___ ____/ /__ ____
-/ /_/ / // / _ `/ _ \/ __/ // /  ' \  / /__/ _ \/ _ `/ _  / -_) __/
-\___\_\_,_/\_,_/_//_/\__/\_,_/_/_/_/ /____/\___/\_,_/\_,_/\__/_/
+  ____                 __               __   _ __
+ / __ \__ _____ ____  / /___ ____ _    / /  (_) /
+/ /_/ / // / _ `/ _ \/ __/ // /  ' \  / /__/ / _ \
+\___\_\_,_/\_,_/_//_/\__/\_,_/_/_/_/ /____/_/_.__/
   Part of the Quantum OS Project
 
 Copyright 2023 Gavin Kellam
@@ -23,31 +23,12 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use quantum_lib::bytes::Bytes;
+pub mod virtual_address;
 
-const STACK_TOP: u32 = 0x7c00;
-const STACK_BOTTOM: u32 = 0x500;
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
+pub struct InvdAddress(u64);
 
-pub fn get_stack_used_bytes() -> Bytes {
-    let stack_ptr = STACK_BOTTOM as *mut u8;
-    let total_stack_size = STACK_TOP - STACK_BOTTOM;
-    let mut bytes = 0;
+pub const VIRTUAL_ALLOWED_ADDRESS_SIZE: u8 = 48;
+pub const PHYSICAL_ALLOWED_ADDRESS_SIZE: u8 = 48;
 
-    loop {
-        let data = unsafe { *stack_ptr.add(bytes) };
-
-        if data != 0 || bytes > total_stack_size as usize {
-            break;
-        }
-
-        bytes += 1;
-    }
-
-    bytes.into()
-}
-
-pub fn get_total_stack_size() -> Bytes {
-    let size = STACK_TOP - STACK_BOTTOM;
-
-    size.into()
-}
+pub const PAGE_SIZE: usize = 4096;

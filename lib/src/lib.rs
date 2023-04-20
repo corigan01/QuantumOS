@@ -28,9 +28,18 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #![no_std]
 
 pub mod basic_font;
+pub mod bitset;
 pub mod bytes;
+pub mod debug;
+//pub mod framebuffer_utils;
 pub mod heapless_string;
 pub mod heapless_vector;
+pub mod panic_utils;
 pub mod possibly_uninit;
+pub mod ptr;
 pub mod simple_allocator;
+pub mod time;
 pub mod x86_64;
+pub mod address_utils;
+
+pub type Nothing = ();

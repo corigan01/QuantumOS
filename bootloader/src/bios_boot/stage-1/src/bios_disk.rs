@@ -23,9 +23,9 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use crate::bios_ints::BiosInt;
-use crate::error::BootloaderError;
 use crate::filesystem::DiskMedia;
+use quantum_lib::x86_64::bios_call::BiosCall;
+use bootloader::error::BootloaderError;
 
 #[repr(packed, C)]
 #[derive(Copy, Clone)]
@@ -39,9 +39,14 @@ struct DiskAccessPacket {
 }
 
 impl DiskAccessPacket {
+    fn get_ptr(&mut self) -> *mut u8 {
+        self as *mut Self as *mut u8
+    }
+
     unsafe fn read(&mut self, disk_id: u8) -> Result<(), BootloaderError> {
-        let status = BiosInt::read_disk_with_packet(disk_id, self as *mut Self as *mut u8)
-            .execute_interrupt();
+        let status = BiosCall::new()
+            .bit16_call()
+            .bios_disk_io(disk_id, self.get_ptr(), false);
 
         if status.did_succeed() {
             return Ok(());
@@ -50,9 +55,11 @@ impl DiskAccessPacket {
         Err(BootloaderError::DiskIOError)
     }
 
+    #[allow(dead_code)]
     unsafe fn write(&mut self, disk_id: u8) -> Result<(), BootloaderError> {
-        let status = BiosInt::write_disk_with_packet(disk_id, self as *mut Self as *mut u8)
-            .execute_interrupt();
+        let status = BiosCall::new()
+            .bit16_call()
+            .bios_disk_io(disk_id, self.get_ptr(), true);
 
         if status.did_succeed() {
             return Ok(());

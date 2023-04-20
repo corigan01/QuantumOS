@@ -27,14 +27,18 @@ pub mod fat;
 pub mod partition;
 pub mod types;
 
-use crate::error::BootloaderError;
+#[cfg(debug)]
 use crate::{bios_print, bios_println};
+
+use bootloader::error::BootloaderError;
 
 use crate::filesystem::fat::Fatfs;
 use crate::filesystem::partition::{PartitionEntry, Partitions};
 use core::marker::PhantomData;
-use quantum_lib::bytes::Bytes;
 use types::FileSystemTypes;
+
+#[cfg(debug)]
+use quantum_lib::bytes::Bytes;
 
 pub struct UnQuarried;
 pub struct Quarried;
@@ -107,6 +111,7 @@ impl<D: DiskMedia, T> FileSystem<D, T> {
 
 impl<DiskType: DiskMedia + Clone> FileSystem<DiskType, UnQuarried> {
     pub fn quarry_disk(mut self) -> Result<FileSystem<DiskType, Quarried>, BootloaderError> {
+        #[cfg(debug)]
         if self.logging_enable {
             bios_println!("Disk Quarry: ");
         }
@@ -123,6 +128,7 @@ impl<DiskType: DiskMedia + Clone> FileSystem<DiskType, UnQuarried> {
                 did_find_fs += 1;
             }
 
+            #[cfg(debug)]
             if self.logging_enable && partition.get_start_sector().unwrap_or(0) != 0 {
                 bios_println!(
                     "    [{}]: '{:5}' {:7}MiB {:10} {:10}",
@@ -148,6 +154,7 @@ impl<DiskType: DiskMedia + Clone> FileSystem<DiskType, UnQuarried> {
         }
 
         if did_find_fs != 0 {
+            #[cfg(debug)]
             if self.logging_enable {
                 bios_println!("\nFound {} valid/supported filesystem(s)!\n", did_find_fs);
             }
@@ -170,16 +177,19 @@ impl<DiskType: DiskMedia + Clone> FileSystem<DiskType, Quarried> {
         &self,
         filename: &str,
     ) -> Result<FileSystem<DiskType, MountedRoot>, BootloaderError> {
+        #[cfg(debug)]
         if self.logging_enable {
             bios_println!("Looking for '{}' on all disks: ", filename);
         }
-        for (i, filesystems) in self.current_filesystems.iter().enumerate() {
+
+        for (_i, filesystems) in self.current_filesystems.iter().enumerate() {
             let contains_file = filesystems.does_contain_file(&self.attached_disk, filename)?;
 
+            #[cfg(debug)]
             if self.logging_enable {
                 bios_println!(
                     "    [{}] '{}' {}",
-                    i,
+                    _i,
                     core::str::from_utf8(
                         &self.current_filesystems[i]
                             .get_volume_name(&self.attached_disk)
@@ -195,6 +205,7 @@ impl<DiskType: DiskMedia + Clone> FileSystem<DiskType, Quarried> {
             }
 
             if contains_file {
+                #[cfg(debug)]
                 if self.logging_enable {
                     bios_println!("\nFound '{}'. Mounting this to root!\n", filename);
                 }
@@ -225,12 +236,14 @@ impl<DiskType: DiskMedia> FileSystem<DiskType, MountedRoot> {
     ) -> Result<(), BootloaderError> {
         let root_fs = self.root;
 
+        #[cfg(debug)]
         if self.logging_enable {
             bios_print!("Reading '{}'...", filename);
         }
 
         root_fs.load_file_to_ptr(&self.attached_disk, filename, buffer)?;
 
+        #[cfg(debug)]
         if self.logging_enable {
             let bytes: Bytes = self.get_filesize_bytes(filename).unwrap_or(0).into();
 

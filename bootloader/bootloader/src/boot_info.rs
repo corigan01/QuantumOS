@@ -24,22 +24,39 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 use crate::BootMemoryDescriptor;
+use crate::e820_memory::E820Entry;
 
+#[derive(Clone, Copy, Debug)]
 pub struct SimpleRamFs {
     pub kernel: BootMemoryDescriptor,
     pub stage2: BootMemoryDescriptor,
 }
 
+#[derive(Clone, Copy, Debug)]
+pub struct VideoInformation {
+    pub video_mode: u16,
+    pub x: u32,
+    pub y: u32,
+    pub depth: u32,
+    pub framebuffer: u32,
+}
+
+#[derive(Clone, Copy, Debug)]
+#[repr(C)]
 pub struct BootInfo {
     pub booted_disk_id: u16,
     pub ram_fs: Option<SimpleRamFs>,
+    pub vid: Option<VideoInformation>,
+    pub memory_map: Option<&'static [E820Entry]>
 }
 
 impl BootInfo {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             booted_disk_id: 0,
             ram_fs: None,
+            vid: None,
+            memory_map: None
         }
     }
 }

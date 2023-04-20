@@ -55,8 +55,8 @@ begin:
     cld
 
     # Point the stack here at 0x7c00, this is right before the bootloader is loaded into memory
-    # This gives us memory regions between 0x7c00 and 0x0500 for our stack. This will be plenty
-    # for our simple 16 bit rust stage-1.
+    # This gives us memory regions between 0x7c00 and 0x0500 for our stack. This will be "plenty"
+    # (more like all we get) for our 16-bit rust stage-1.
     mov sp, 0x7c00
 
     # This will load rust into memory, this way we can keep the bootloader section small and just load
@@ -102,11 +102,11 @@ init_a20:
 # FIXME: Tell the user this is unsupported!
 .activation_failed:
     mov al, 0x25
-    call print_err
+    call print
     jmp spin
 .not_supported:
     mov al, 0x27
-    call print_err
+    call print
     jmp spin
 
 load_legs:
@@ -130,10 +130,10 @@ load_legs:
 disk_error:
     # Print 'd' if we have an error loading the disk
     mov al, 0x64
-    call print_err
+    call print
     jmp spin
 
-print_err:
+print:
     mov ah, 0x0e
     int 0x10
 
@@ -146,7 +146,7 @@ print_err:
 DATAPACKET:
     .byte    0x10                           # Size of packet
     .byte    0x00                           # Always 0
-    .byte    _stage_1_end_sectors           # Sectors to read
+    .byte    _stage_1_sectors               # Sectors to read
     .byte    0x00                           # Always 0
     .2byte   0x0000                         # Load address
     .2byte   0x07e0                         # Load segment

@@ -23,9 +23,7 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use crate::error::BootloaderError;
-use core::fmt;
-use core::fmt::{Debug, Formatter};
+use bootloader::error::BootloaderError;
 
 pub struct BootloaderConfig<'a> {
     stage2_filepath: Option<&'a str>,
@@ -69,6 +67,8 @@ impl<'a> BootloaderConfig<'a> {
                     if let (Some(x), Some(y)) = (video_mode_split.next(), video_mode_split.next()) {
                         video_mode.0 = x.trim().parse().unwrap_or(0);
                         video_mode.1 = y.trim().parse().unwrap_or(0);
+                    } else {
+                        continue;
                     }
 
                     config.video_mode_preferred = Some(video_mode);
@@ -97,22 +97,24 @@ impl<'a> BootloaderConfig<'a> {
     }
 
     pub fn get_kernel_file_path(&self) -> &str {
-        self.kernel_filepath
-            .expect("Please add kernel file location in bootloader.cfg")
+        self.kernel_filepath.unwrap_or("/kernel.elf")
     }
 
     pub fn get_stage2_file_path(&self) -> &str {
-        self.stage2_filepath
-            .expect("Please add stage2 file location in bootloader.cfg")
+        self.stage2_filepath.unwrap_or("/bootloader/stage2.bin")
     }
 
     pub fn get_recommended_video_info(&self) -> (usize, usize) {
-        self.video_mode_preferred.unwrap_or((600, 800))
+        self.video_mode_preferred.unwrap_or((640, 480))
     }
 }
 
+#[cfg(debug)]
+use core::fmt::{Debug, Formatter};
+
+#[cfg(debug)]
 impl<'a> Debug for BootloaderConfig<'a> {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> ::core::fmt::Result {
         writeln!(f, "BootloaderConfig {{")?;
 
         if let Some(kernel_file_path) = self.kernel_filepath {

@@ -1,4 +1,3 @@
-#![feature(result_contains_err)]
 /*
   ____                 __               __                __
  / __ \__ _____ ____  / /___ ____ _    / /  ___  ___ ____/ /__ ____
@@ -27,17 +26,11 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #![no_std]
 
 pub mod bios_disk;
-pub mod bios_ints;
 pub mod bios_video;
-pub mod bootloader_stack_information;
 pub mod config_parser;
-pub mod console;
 pub mod cpu_regs;
-pub mod error;
 pub mod filesystem;
-pub mod memory_detection;
+pub mod unreal;
 pub mod vesa;
+pub mod memory_map;
 
-pub fn convert_segmented_ptr(segmented_ptr: (usize, usize)) -> u32 {
-    (segmented_ptr.0 * 0x10 + segmented_ptr.1) as u32
-}

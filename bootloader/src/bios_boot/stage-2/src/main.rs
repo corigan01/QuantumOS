@@ -28,4 +28,88 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #![no_main] // disable all Rust-level entry points
 #![allow(dead_code)]
 
-fn main() {}
+use core::panic::PanicInfo;
+use bootloader::boot_info::{BootInfo, VideoInformation};
+use quantum_lib::debug::add_connection_to_global_stream;
+use quantum_lib::debug::stream_connection::StreamConnectionBuilder;
+use quantum_lib::debug_println;
+use quantum_lib::bytes::Bytes;
+use quantum_lib::x86_64::CPU;
+
+use spin::Mutex;
+use stage_2::debug::{display_string, setup_framebuffer};
+use stage_2::paging::enable_paging;
+
+#[no_mangle]
+#[link_section = ".start"]
+pub extern "C" fn _start(boot_info: u32) -> ! {
+    let boot_info_ref = unsafe { &*(boot_info as *const BootInfo) };
+
+    let video_info: &VideoInformation = boot_info_ref.vid.as_ref().unwrap();
+
+    let framebuffer = video_info.framebuffer;
+    let x_res = video_info.x;
+    let y_res = video_info.y;
+    let bbp = video_info.depth;
+
+    setup_framebuffer(
+        framebuffer,
+        x_res as usize,
+        y_res as usize,
+        bbp as usize,
+        true,
+    );
+
+    let stream_connection = StreamConnectionBuilder::new()
+        .console_connection()
+        .add_outlet(display_string)
+        .add_connection_name("VGA DEBUG")
+        .does_support_scrolling(true)
+        .build();
+    add_connection_to_global_stream(stream_connection).unwrap();
+
+    debug_println!("Quantum Bootloader! (Stage2)");
+
+    main(boot_info_ref);
+    panic!("Stage2 should not finish!");
+}
+
+fn main(boot_info: &BootInfo) {
+    let mut total_memory = 0;
+    for entry in boot_info.memory_map.unwrap() {
+        if entry.len == 0 && entry.address == 0 {
+            break;
+        }
+
+        if entry.entry_type == 1 {
+            total_memory += entry.len;
+        }
+    }
+
+    debug_println!(
+        "Memory Avl: {:?} {}",
+        boot_info.memory_map.unwrap().as_ptr(),
+        Bytes::from(total_memory)
+    );
+    debug_println!("Vga info: {:#?}", boot_info.vid);
+
+    unsafe { enable_paging() };
+
+    let sampled_data = unsafe {
+        &*(boot_info.ram_fs.unwrap().kernel.ptr as *const [u8; 10])
+    };
+
+    let test = unsafe {
+        core::str::from_utf8_unchecked(sampled_data)
+    };
+
+    debug_println!("Kernel ELF '{}'", test);
+}
+
+#[panic_handler]
+#[cold]
+#[allow(dead_code)]
+fn panic(info: &PanicInfo) -> ! {
+    debug_println!("\nBootloader PANIC\n{}", info);
+    loop {}
+}

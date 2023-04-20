@@ -23,12 +23,13 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use crate::bios_ints::BiosInt;
-use crate::error::BootloaderError;
+use quantum_lib::x86_64::bios_call::BiosCall;
+use bootloader::error::BootloaderError;
 use core::marker::PhantomData;
 
 pub mod low_level_structs;
 
+#[derive(Clone, Copy)]
 pub struct VesaMode {
     pub mode_id: usize,
     pub mode_data: low_level_structs::VesaModeInfo,
@@ -94,9 +95,13 @@ impl BiosVesa<Quarried> {
     where
         Function: FnMut(&VesaMode) -> bool,
     {
-        let supported_modes = self.info.get_all_supported_modes()?;
+        let supported_modes = self.info.get_all_supported_modes();
+
+        assert_ne!(supported_modes.len(), 0);
 
         for mode in supported_modes {
+            let mode = *mode as usize;
+
             if mode == 0 {
                 continue;
             }
@@ -174,16 +179,16 @@ impl BiosVesa<Quarried> {
         }
     }
 
-    pub fn set_mode(&mut self, mode: VesaMode) -> Result<(), BootloaderError> {
+    pub fn set_mode(&mut self, mode: &VesaMode) -> Result<(), BootloaderError> {
         let mode_id = mode.mode_id;
 
-        let bios_status = unsafe { BiosInt::set_vbe_mode(mode_id as u16).execute_interrupt() };
+        let bios_status = unsafe { BiosCall::new().bit16_call().set_vbe_mode(mode_id as u16) };
 
         if bios_status.did_fail() {
             return Err(BootloaderError::BiosCallFailed);
         }
 
-        self.current_mode = Some(mode);
+        self.current_mode = Some(*mode);
 
         Ok(())
     }
