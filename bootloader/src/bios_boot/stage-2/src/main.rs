@@ -102,70 +102,67 @@ fn main(boot_info: &BootInfo) {
     debug_println!("Vga info: {:#?}", boot_info.vid);
 
     unsafe { enable_paging() };
+
+    let sampled_data = unsafe {
+        &*(boot_info.ram_fs.unwrap().kernel.ptr as *const [u8; 10])
+    };
+
+    let test = unsafe {
+        core::str::from_utf8_unchecked(sampled_data)
+    };
+
+    debug_println!("Kernel ELF '{}'", test);
 }
 
-lazy_static! {
-    static ref LEVEL4: Mutex<PageMapLevel4> = { Mutex::new(PageMapLevel4::new()) };
-}
-
-lazy_static! {
-    static ref LEVEL3: Mutex<PageMapLevel3> = { Mutex::new(PageMapLevel3::new()) };
-}
-
-lazy_static! {
-    static ref LEVEL2: Mutex<PageMapLevel2> = { Mutex::new(PageMapLevel2::new()) };
-}
+static mut LEVEL4: PageMapLevel4 = PageMapLevel4::new();
+static mut LEVEL3: PageMapLevel3 = PageMapLevel3::new();
+static mut LEVEL2: [PageMapLevel2; 5] = [PageMapLevel2::new(); 5];
 
 unsafe fn enable_paging() {
     debug_print!("building pages ...");
 
-    let mut level4 = LEVEL4.lock();
-    let mut level3 = LEVEL3.lock();
-    let mut level2 = LEVEL2.lock();
+    let mut level4 = &mut LEVEL4;
+    let mut level3 = &mut LEVEL3;
+    let mut level2_tables = &mut LEVEL2;
 
-    for i in 0..10 {
-        let huge_address = VirtAddress::new(i * 2 * 1024 * 1024)
-            .unwrap()
-            .try_aligned()
-            .unwrap();
+    for (offset, level2) in level2_tables.iter_mut().enumerate() {
+        let offset_addition = offset as u64 * 1024 * 1024 * 1024;
 
-        let address = huge_address.as_u64();
+        for i in 0..512 {
+            let huge_address = VirtAddress::new(i * 2 * 1024 * 1024 + offset_addition)
+                .unwrap()
+                .try_aligned()
+                .unwrap();
 
-        let two_mb_entries = PageConfigBuilder::new()
-            .level2()
+            let two_mb_entries = PageConfigBuilder::new()
+                .level2()
+                .present(true)
+                .read_write(true)
+                .executable(true)
+                .user_page(false)
+                .set_huge_page_address(huge_address)
+                .build()
+                .unwrap();
+
+            level2.set_entry(two_mb_entries, i as usize).unwrap();
+        }
+
+        debug_print!("L2...");
+
+        let level_2_entry = PageConfigBuilder::new()
+            .level3()
             .present(true)
             .read_write(true)
             .executable(true)
             .user_page(false)
-            .set_huge_page_address(huge_address)
+            .set_address_of_next_table(level2.get_address())
             .build()
             .unwrap();
 
-        debug_println!(
-            "\n{:x?} {:x?} == {:x}",
-            two_mb_entries,
-            address,
-            i * 2 * 1024 * 1024
-        );
-
-        level2.set_entry(two_mb_entries, i as usize).unwrap();
+        level3.set_entry(level_2_entry, offset).unwrap();
     }
 
-    debug_print!("L2...0x{:x} ", level2.get_address().as_u64());
-
-    let level_2_entry = PageConfigBuilder::new()
-        .level3()
-        .present(true)
-        .read_write(true)
-        .executable(true)
-        .user_page(false)
-        .set_address_of_next_table(level2.get_address())
-        .build()
-        .unwrap();
-
-    level3.set_entry(level_2_entry, 0).unwrap();
-
-    debug_print!("L3... 0x{:#x?} ", level2.get_address().as_u64());
+    debug_print!("L3...");
 
     let level_3_config = PageConfigBuilder::new()
         .level4()
@@ -181,17 +178,7 @@ unsafe fn enable_paging() {
 
     debug_print!("L4...");
     let level4_address = level4.get_address().as_u64();
-    debug_println!(" OK");
-
-    debug_println!(
-        "LEVEL 4: 0x{:x} [0: 0x{:x}] LEVEL 3: 0x{:x} [0: 0x{:x}], LEVEL 2: 0x{:x} [0: 0x{:x}]",
-        level4_address,
-        level4.get_entry(0),
-        level3.get_address().as_u64(),
-        level3.get_entry(0),
-        level2.get_address().as_u64(),
-        level2.get_entry(0)
-    );
+    debug_println!(" OK ({}Gib Mapped!)", level2_tables.len());
 
     debug_print!("Disabling paging ...");
     CR0::set_paging(false);
@@ -215,16 +202,12 @@ unsafe fn enable_paging() {
     debug_println!("OK");
 
     debug_print!("Enabling paging ...");
-    //CPU::halt();
     CR0::set_paging(true);
     debug_println!("OK");
 
     debug_print!("Reloading segment registers ...");
     SegmentRegs::reload_all_to(0x10);
     debug_println!("OK");
-
-    debug_println!("YAY YOU MADE IT TO LONG MODE!!!");
-    loop {}
 }
 
 #[panic_handler]

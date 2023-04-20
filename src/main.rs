@@ -34,6 +34,7 @@ fn main() {
     let command_args: Vec<String> = std::env::args().collect();
     let noqemu = command_args.contains(&String::from("noqemu"));
     let kvm = command_args.contains(&String::from("kvm"));
+    let debug_int = command_args.contains(&String::from("debug-int"));
 
     if noqemu {
         println!("Build only mode!");
@@ -50,17 +51,18 @@ fn main() {
     }
 
     if !noqemu {
-        let user_extra_args: Vec<String> = if kvm {
-            let mut vec = Vec::new();
+        let mut user_extra_args: Vec<String> = Default::default();
 
-            vec.push(String::from("-enable-kvm"));
+        if kvm {
+            user_extra_args.push(String::from("-enable-kvm"));
+        }
 
-            vec
-        } else {
-            Default::default()
-        };
+        if debug_int {
+            user_extra_args.push(String::from("-d"));
+            user_extra_args.push(String::from("int"));
+        }
 
-        let _qemu = Command::new("qemu-system-i386")
+        let _qemu = Command::new("qemu-system-x86_64")
             .arg("-d")
             .arg("cpu_reset")
             .arg("--no-shutdown")

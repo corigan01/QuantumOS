@@ -26,22 +26,22 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 use crate::address_utils::virtual_address::{Aligned, VirtAddress};
 use crate::x86_64::paging::PagingErr;
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 pub struct PageMapLevel4 {
     entries: InternalPageEntries,
 } // Not able to be mapped
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 pub struct PageMapLevel3 {
     entries: InternalPageEntries,
 } // 1gb able to be mapped
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 pub struct PageMapLevel2 {
     entries: InternalPageEntries,
 } // 2mb able to be mapped
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 pub struct PageMapLevel1 {
     entries: InternalPageEntries,
 } // 4kb able to be mapped
@@ -103,14 +103,14 @@ impl Into<u64> for PageMapLevel4Entry {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 #[repr(align(4096), C)]
 pub(crate) struct InternalPageEntries {
     entries: [u64; 512],
 }
 
 impl InternalPageEntries {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self { entries: [0; 512] }
     }
 
@@ -133,7 +133,7 @@ impl InternalPageEntries {
 }
 
 impl PageMapLevel4 {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             entries: InternalPageEntries::new(),
         }
@@ -158,7 +158,7 @@ impl PageMapLevel4 {
 }
 
 impl PageMapLevel3 {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             entries: InternalPageEntries::new(),
         }
@@ -183,7 +183,7 @@ impl PageMapLevel3 {
 }
 
 impl PageMapLevel2 {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             entries: InternalPageEntries::new(),
         }
@@ -208,7 +208,7 @@ impl PageMapLevel2 {
 }
 
 impl PageMapLevel1 {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             entries: InternalPageEntries::new(),
         }
