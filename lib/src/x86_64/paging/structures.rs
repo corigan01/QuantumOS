@@ -24,30 +24,26 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 use crate::address_utils::virtual_address::{Aligned, VirtAddress};
-use crate::x86_64::paging::PageingErr;
+use crate::x86_64::paging::PagingErr;
 
 #[derive(Debug)]
-#[repr(align(4096), C)]
 pub struct PageMapLevel4 {
-    entries: InternalPageEntires
+    entries: InternalPageEntries,
 } // Not able to be mapped
 
 #[derive(Debug)]
-#[repr(align(4096), C)]
 pub struct PageMapLevel3 {
-    entries: InternalPageEntires
+    entries: InternalPageEntries,
 } // 1gb able to be mapped
 
 #[derive(Debug)]
-#[repr(align(4096), C)]
 pub struct PageMapLevel2 {
-    entries: InternalPageEntires
+    entries: InternalPageEntries,
 } // 2mb able to be mapped
 
 #[derive(Debug)]
-#[repr(align(4096), C)]
 pub struct PageMapLevel1 {
-    entries: InternalPageEntires
+    entries: InternalPageEntries,
 } // 4kb able to be mapped
 
 #[derive(Debug)]
@@ -108,103 +104,130 @@ impl Into<u64> for PageMapLevel4Entry {
 }
 
 #[derive(Debug)]
-#[repr(C, align(4096))]
-pub(crate) struct InternalPageEntires {
-    entries: [u64; 512]
+#[repr(align(4096), C)]
+pub(crate) struct InternalPageEntries {
+    entries: [u64; 512],
 }
 
-impl InternalPageEntires {
+impl InternalPageEntries {
     pub fn new() -> Self {
-        Self {
-            entries: [0; 512]
-        }
+        Self { entries: [0; 512] }
     }
 
-    pub fn set<T>(&mut self, value: T, pos: usize) -> Result<(), PageingErr>
-        where T: Into<u64> {
+    pub fn set<T>(&mut self, value: T, pos: usize) -> Result<(), PagingErr>
+    where
+        T: Into<u64>,
+    {
         if pos > 512 {
-            return Err(PageingErr::OutofBounds);
+            return Err(PagingErr::OutofBounds);
         }
 
         self.entries[pos] = value.into();
 
         Ok(())
     }
+
+    pub fn get_u64_ptr(&self) -> u64 {
+        &self.entries as *const [u64; 512] as u64
+    }
 }
 
 impl PageMapLevel4 {
     pub fn new() -> Self {
         Self {
-            entries: InternalPageEntires::new()
+            entries: InternalPageEntries::new(),
         }
     }
 
-    pub fn set_entry(&mut self, entry: PageMapLevel4Entry, pos: usize) -> Result<(), PageingErr> {
+    pub fn set_entry(&mut self, entry: PageMapLevel4Entry, pos: usize) -> Result<(), PagingErr> {
         self.entries.set(entry, pos)
     }
 
-    pub fn get_address(&self) -> VirtAddress<Aligned, 12> {
-        let raw_address = &self.entries as *const InternalPageEntires as u64;
-
-        VirtAddress::new(raw_address).unwrap().try_aligned().unwrap()
+    pub fn get_entry(&self, pos: usize) -> &u64 {
+        &self.entries.entries[pos]
     }
 
-    pub fn ptr(&self) -> u64 {
-        &self.entries as *const InternalPageEntires as u64
+    pub fn get_address(&self) -> VirtAddress<Aligned, 12> {
+        let raw_address = self.entries.get_u64_ptr();
+
+        VirtAddress::new(raw_address)
+            .unwrap()
+            .try_aligned()
+            .unwrap()
     }
 }
 
 impl PageMapLevel3 {
     pub fn new() -> Self {
         Self {
-            entries: InternalPageEntires::new()
+            entries: InternalPageEntries::new(),
         }
     }
 
-    pub fn set_entry(&mut self, entry: PageMapLevel3Entry, pos: usize) -> Result<(), PageingErr> {
+    pub fn set_entry(&mut self, entry: PageMapLevel3Entry, pos: usize) -> Result<(), PagingErr> {
         self.entries.set(entry, pos)
     }
 
-    pub fn get_address(&self) -> VirtAddress<Aligned, 12> {
-        let raw_address = &self.entries as *const InternalPageEntires as u64;
+    pub fn get_entry(&self, pos: usize) -> &u64 {
+        &self.entries.entries[pos]
+    }
 
-        VirtAddress::new(raw_address).unwrap().try_aligned().unwrap()
+    pub fn get_address(&self) -> VirtAddress<Aligned, 12> {
+        let raw_address = self.entries.get_u64_ptr();
+
+        VirtAddress::new(raw_address)
+            .unwrap()
+            .try_aligned()
+            .unwrap()
     }
 }
 
 impl PageMapLevel2 {
     pub fn new() -> Self {
         Self {
-            entries: InternalPageEntires::new()
+            entries: InternalPageEntries::new(),
         }
     }
 
-    pub fn set_entry(&mut self, entry: PageMapLevel2Entry, pos: usize) -> Result<(), PageingErr> {
+    pub fn set_entry(&mut self, entry: PageMapLevel2Entry, pos: usize) -> Result<(), PagingErr> {
         self.entries.set(entry, pos)
     }
 
-    pub fn get_address(&self) -> VirtAddress<Aligned, 12> {
-        let raw_address = &self.entries as *const InternalPageEntires as u64;
+    pub fn get_entry(&self, pos: usize) -> &u64 {
+        &self.entries.entries[pos]
+    }
 
-        VirtAddress::new(raw_address).unwrap().try_aligned().unwrap()
+    pub fn get_address(&self) -> VirtAddress<Aligned, 12> {
+        let raw_address = self.entries.get_u64_ptr();
+
+        VirtAddress::new(raw_address)
+            .unwrap()
+            .try_aligned()
+            .unwrap()
     }
 }
 
 impl PageMapLevel1 {
     pub fn new() -> Self {
         Self {
-            entries: InternalPageEntires::new()
+            entries: InternalPageEntries::new(),
         }
     }
 
-    pub fn set_entry(&mut self, entry: PageMapLevel1Entry, pos: usize) -> Result<(), PageingErr> {
+    pub fn set_entry(&mut self, entry: PageMapLevel1Entry, pos: usize) -> Result<(), PagingErr> {
         self.entries.set(entry, pos)
     }
 
-    pub fn get_address(&self) -> VirtAddress<Aligned, 12> {
-        let raw_address = &self.entries as *const InternalPageEntires as u64;
+    pub fn get_entry(&self, pos: usize) -> &u64 {
+        &self.entries.entries[pos]
+    }
 
-        VirtAddress::new(raw_address).unwrap().try_aligned().unwrap()
+    pub fn get_address(&self) -> VirtAddress<Aligned, 12> {
+        let raw_address = self.entries.get_u64_ptr();
+
+        VirtAddress::new(raw_address)
+            .unwrap()
+            .try_aligned()
+            .unwrap()
     }
 }
-

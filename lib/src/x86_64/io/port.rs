@@ -28,18 +28,17 @@ use core::marker::PhantomData;
 pub struct ReadWritePort;
 pub struct WriteOnlyPort;
 pub struct ReadOnlyPort;
-pub struct AbusedPort;
 
 pub struct IOPort<Flags = ReadWritePort> {
     port: u16,
-    reserved: PhantomData<Flags>
+    reserved: PhantomData<Flags>,
 }
 
 impl IOPort {
     pub fn new(n: u16) -> IOPort {
         IOPort {
             port: n,
-            reserved: Default::default()
+            reserved: Default::default(),
         }
     }
 }

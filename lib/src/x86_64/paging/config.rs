@@ -23,13 +23,15 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use core::marker::PhantomData;
-use core::mem::transmute;
 use crate::address_utils::virtual_address::{Aligned, VirtAddress};
 use crate::address_utils::VIRTUAL_ALLOWED_ADDRESS_SIZE;
 use crate::bitset::BitSet;
-use crate::x86_64::paging::PageingErr;
-use crate::x86_64::paging::structures::{PageMapLevel1Entry, PageMapLevel2Entry, PageMapLevel3Entry, PageMapLevel4Entry};
+use crate::x86_64::paging::structures::{
+    PageMapLevel1Entry, PageMapLevel2Entry, PageMapLevel3Entry, PageMapLevel4Entry,
+};
+use crate::x86_64::paging::PagingErr;
+use core::marker::PhantomData;
+use core::mem::transmute;
 
 pub struct NonTypedPageConfig;
 
@@ -56,7 +58,7 @@ pub struct PageConfigBuilder<Type = NonTypedPageConfig> {
     page_attribute_table: bool,
     global: bool,
     address: u64,
-    reserved: PhantomData<Type>
+    reserved: PhantomData<Type>,
 }
 
 impl PageConfigBuilder {
@@ -85,33 +87,26 @@ impl PageConfigBuilder {
 
 impl PageConfigBuilder<NonTypedPageConfig> {
     pub fn level1(self) -> PageConfigBuilder<PageMapLevel1Entry> {
-        unsafe {
-            transmute(self)
-        }
+        unsafe { transmute(self) }
     }
-    
+
     pub fn level2(self) -> PageConfigBuilder<PageMapLevel2Entry> {
-        unsafe {
-            transmute(self)
-        }
+        unsafe { transmute(self) }
     }
-    
+
     pub fn level3(self) -> PageConfigBuilder<PageMapLevel3Entry> {
-        unsafe {
-            transmute(self)
-        }
+        unsafe { transmute(self) }
     }
-    
+
     pub fn level4(self) -> PageConfigBuilder<PageMapLevel4Entry> {
-        unsafe {
-            transmute(self)
-        }
+        unsafe { transmute(self) }
     }
 }
 
 impl<Type> PageConfigBuilder<Type>
-    where Type: PageConfigable {
-
+where
+    Type: PageConfigable,
+{
     pub fn present(mut self, flag: bool) -> Self {
         self.present = flag;
 
@@ -156,7 +151,7 @@ impl PageConfigBuilder<PageMapLevel1Entry> {
         self
     }
 
-    pub fn build(self) -> Result<PageMapLevel1Entry, PageingErr> {
+    pub fn build(self) -> Result<PageMapLevel1Entry, PagingErr> {
         // TODO: Add checking for invalid configs
 
         let mut compiled_options = 0_u64;
@@ -170,12 +165,13 @@ impl PageConfigBuilder<PageMapLevel1Entry> {
         compiled_options.set_bit(6, self.dirty);
         compiled_options.set_bit(7, self.page_attribute_table);
         compiled_options.set_bit(8, self.global);
-        compiled_options.set_bits(12..(VIRTUAL_ALLOWED_ADDRESS_SIZE + 1), self.address >> 12);
+        compiled_options.set_bits(12..(VIRTUAL_ALLOWED_ADDRESS_SIZE), self.address >> 12);
         compiled_options.set_bits(59..(62 + 1), self.protection_key as u64);
         compiled_options.set_bit(63, self.execute_disable);
 
-
-        Ok(PageMapLevel1Entry::add_config_options_from_u64(compiled_options))
+        Ok(PageMapLevel1Entry::add_config_options_from_u64(
+            compiled_options,
+        ))
     }
 }
 
@@ -194,7 +190,7 @@ impl PageConfigBuilder<PageMapLevel2Entry> {
         self
     }
 
-    pub fn build(self) -> Result<PageMapLevel2Entry, PageingErr> {
+    pub fn build(self) -> Result<PageMapLevel2Entry, PagingErr> {
         // TODO: Add checking for invalid configs
 
         let mut compiled_options = 0_u64;
@@ -212,14 +208,16 @@ impl PageConfigBuilder<PageMapLevel2Entry> {
             compiled_options.set_bit(8, self.global);
             compiled_options.set_bit(12, self.page_attribute_table);
             compiled_options.set_bits(59..(62 + 1), self.protection_key as u64);
-            compiled_options.set_bits(21..(VIRTUAL_ALLOWED_ADDRESS_SIZE + 1), self.address >> 21);
+            compiled_options.set_bits(21..(VIRTUAL_ALLOWED_ADDRESS_SIZE), self.address >> 21);
         } else {
-            compiled_options.set_bits(12..(VIRTUAL_ALLOWED_ADDRESS_SIZE + 1), self.address >> 12);
+            compiled_options.set_bits(12..(VIRTUAL_ALLOWED_ADDRESS_SIZE), self.address >> 12);
         }
 
         compiled_options.set_bit(63, self.execute_disable);
 
-        Ok(PageMapLevel2Entry::add_config_options_from_u64(compiled_options))
+        Ok(PageMapLevel2Entry::add_config_options_from_u64(
+            compiled_options,
+        ))
     }
 }
 
@@ -238,7 +236,7 @@ impl PageConfigBuilder<PageMapLevel3Entry> {
         self
     }
 
-    pub fn build(self) -> Result<PageMapLevel3Entry, PageingErr> {
+    pub fn build(self) -> Result<PageMapLevel3Entry, PagingErr> {
         // TODO: Add checking for invalid configs
 
         let mut compiled_options = 0_u64;
@@ -256,15 +254,16 @@ impl PageConfigBuilder<PageMapLevel3Entry> {
             compiled_options.set_bit(8, self.global);
             compiled_options.set_bit(12, self.page_attribute_table);
             compiled_options.set_bits(59..(62 + 1), self.protection_key as u64);
-            compiled_options.set_bits(30..(VIRTUAL_ALLOWED_ADDRESS_SIZE + 1), self.address >> 30);
+            compiled_options.set_bits(30..(VIRTUAL_ALLOWED_ADDRESS_SIZE), self.address >> 30);
         } else {
-            compiled_options.set_bits(12..(VIRTUAL_ALLOWED_ADDRESS_SIZE + 1), self.address >> 30);
+            compiled_options.set_bits(12..(VIRTUAL_ALLOWED_ADDRESS_SIZE), self.address >> 12);
         }
 
         compiled_options.set_bit(63, self.execute_disable);
 
-
-        Ok(PageMapLevel3Entry::add_config_options_from_u64(compiled_options))
+        Ok(PageMapLevel3Entry::add_config_options_from_u64(
+            compiled_options,
+        ))
     }
 }
 
@@ -275,7 +274,7 @@ impl PageConfigBuilder<PageMapLevel4Entry> {
         self
     }
 
-    pub fn build(self) -> Result<PageMapLevel4Entry, PageingErr> {
+    pub fn build(self) -> Result<PageMapLevel4Entry, PagingErr> {
         // TODO: Add checking for invalid configs
 
         let mut compiled_options = 0_u64;
@@ -286,10 +285,11 @@ impl PageConfigBuilder<PageMapLevel4Entry> {
         compiled_options.set_bit(3, self.writh_through);
         compiled_options.set_bit(4, self.cache_disable);
         compiled_options.set_bit(5, self.accessed);
-        compiled_options.set_bits(12..(VIRTUAL_ALLOWED_ADDRESS_SIZE + 1), self.address >> 12);
+        compiled_options.set_bits(12..(VIRTUAL_ALLOWED_ADDRESS_SIZE), self.address >> 12);
         compiled_options.set_bit(63, self.execute_disable);
 
-
-        Ok(PageMapLevel4Entry::add_config_options_from_u64(compiled_options))
+        Ok(PageMapLevel4Entry::add_config_options_from_u64(
+            compiled_options,
+        ))
     }
 }

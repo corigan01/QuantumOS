@@ -33,6 +33,7 @@ fn main() {
 
     let command_args: Vec<String> = std::env::args().collect();
     let noqemu = command_args.contains(&String::from("noqemu"));
+    let kvm = command_args.contains(&String::from("kvm"));
 
     if noqemu {
         println!("Build only mode!");
@@ -49,12 +50,23 @@ fn main() {
     }
 
     if !noqemu {
+        let user_extra_args: Vec<String> = if kvm {
+            let mut vec = Vec::new();
+
+            vec.push(String::from("-enable-kvm"));
+
+            vec
+        } else {
+            Default::default()
+        };
+
         let _qemu = Command::new("qemu-system-i386")
             .arg("-d")
             .arg("cpu_reset")
             .arg("--no-shutdown")
             .arg("-m")
             .arg("256M")
+            .args(user_extra_args)
             .arg("-drive")
             .arg(format!("format=raw,file={}", build_status.unwrap()))
             .stdout(std::process::Stdio::piped())

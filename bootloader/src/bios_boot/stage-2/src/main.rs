@@ -28,24 +28,22 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #![no_main] // disable all Rust-level entry points
 #![allow(dead_code)]
 
+use bootloader::boot_info::{BootInfo, VideoInformation};
 use core::arch::asm;
 use core::mem::size_of;
-use quantum_lib::x86_64::bios_call::BiosCall;
-use bootloader::boot_info::{BootInfo, VideoInformation};
 use core::panic::PanicInfo;
 use lazy_static::lazy_static;
 use quantum_lib::address_utils::virtual_address::VirtAddress;
 use quantum_lib::bytes::Bytes;
 use quantum_lib::debug::add_connection_to_global_stream;
-use quantum_lib::debug::stream_connection::{
-    StreamConnection, StreamConnectionBuilder, StreamConnectionInfomation,
-};
-use quantum_lib::{debug_print, debug_println};
-use quantum_lib::x86_64::CPU;
+use quantum_lib::debug::stream_connection::{StreamConnection, StreamConnectionBuilder};
+use quantum_lib::x86_64::bios_call::BiosCall;
 use quantum_lib::x86_64::interrupts::Interrupts;
 use quantum_lib::x86_64::paging::config::PageConfigBuilder;
 use quantum_lib::x86_64::paging::structures::{PageMapLevel2, PageMapLevel3, PageMapLevel4};
-use quantum_lib::x86_64::registers::{CR0, CR3, CR4, EFLAGS, IA32_EFER, SegmentRegs};
+use quantum_lib::x86_64::registers::{SegmentRegs, CR0, CR3, CR4, EFLAGS, IA32_EFER};
+use quantum_lib::x86_64::CPU;
+use quantum_lib::{debug_print, debug_println};
 use stage_2::debug::{display_string, setup_framebuffer};
 
 use spin::Mutex;
@@ -96,31 +94,27 @@ fn main(boot_info: &BootInfo) {
         }
     }
 
-    debug_println!("Memory Avl: {:?} {}", boot_info.memory_map.unwrap().as_ptr(), Bytes::from(total_memory));
+    debug_println!(
+        "Memory Avl: {:?} {}",
+        boot_info.memory_map.unwrap().as_ptr(),
+        Bytes::from(total_memory)
+    );
     debug_println!("Vga info: {:#?}", boot_info.vid);
 
     unsafe { enable_paging() };
-
 }
 
 lazy_static! {
-    static ref LEVEL4: Mutex<PageMapLevel4> = {
-        Mutex::new(PageMapLevel4::new())
-    };
+    static ref LEVEL4: Mutex<PageMapLevel4> = { Mutex::new(PageMapLevel4::new()) };
 }
 
 lazy_static! {
-    static ref LEVEL3: Mutex<PageMapLevel3> = {
-        Mutex::new(PageMapLevel3::new())
-    };
+    static ref LEVEL3: Mutex<PageMapLevel3> = { Mutex::new(PageMapLevel3::new()) };
 }
 
 lazy_static! {
-    static ref LEVEL2: Mutex<[PageMapLevel2; 10]> = {
-        Mutex::new([PageMapLevel2::new(); 10])
-    };
+    static ref LEVEL2: Mutex<PageMapLevel2> = { Mutex::new(PageMapLevel2::new()) };
 }
-
 
 unsafe fn enable_paging() {
     debug_print!("building pages ...");
@@ -129,36 +123,35 @@ unsafe fn enable_paging() {
     let mut level3 = LEVEL3.lock();
     let mut level2 = LEVEL2.lock();
 
+    for i in 0..10 {
+        let huge_address = VirtAddress::new(i * 2 * 1024 * 1024)
+            .unwrap()
+            .try_aligned()
+            .unwrap();
 
-    for (k, l2) in level2.iter_mut().enumerate() {
-        let giga_offset: u64 = k as u64 * 1024 * 1024 * 1024;
+        let address = huge_address.as_u64();
 
-        for i in 0..10 {
-            let huge_address = VirtAddress::new(giga_offset + (i * 2 * 1024 * 1024))
-                .unwrap()
-                .try_aligned()
-                .unwrap();
+        let two_mb_entries = PageConfigBuilder::new()
+            .level2()
+            .present(true)
+            .read_write(true)
+            .executable(true)
+            .user_page(false)
+            .set_huge_page_address(huge_address)
+            .build()
+            .unwrap();
 
-            let address = huge_address.as_u64();
+        debug_println!(
+            "\n{:x?} {:x?} == {:x}",
+            two_mb_entries,
+            address,
+            i * 2 * 1024 * 1024
+        );
 
-            let two_mb_entries = PageConfigBuilder::new()
-                .level2()
-                .present(true)
-                .read_write(true)
-                .executable(true)
-                .user_page(false)
-                .set_huge_page_address(huge_address)
-                .build()
-                .unwrap();
-
-            debug_println!("0b{:x?} {:x?} == {:x}", two_mb_entries, address, i * 2 * 1024 * 1024);
-
-            l2.set_entry(two_mb_entries, i as usize).unwrap();
-        }
+        level2.set_entry(two_mb_entries, i as usize).unwrap();
     }
 
-    //CPU::halt();
-    debug_print!("L2...");
+    debug_print!("L2...0x{:x} ", level2.get_address().as_u64());
 
     let level_2_entry = PageConfigBuilder::new()
         .level3()
@@ -187,15 +180,26 @@ unsafe fn enable_paging() {
     level4.set_entry(level_3_config, 0).unwrap();
 
     debug_print!("L4...");
-    let level4_address = level4.ptr();
+    let level4_address = level4.get_address().as_u64();
     debug_println!(" OK");
+
+    debug_println!(
+        "LEVEL 4: 0x{:x} [0: 0x{:x}] LEVEL 3: 0x{:x} [0: 0x{:x}], LEVEL 2: 0x{:x} [0: 0x{:x}]",
+        level4_address,
+        level4.get_entry(0),
+        level3.get_address().as_u64(),
+        level3.get_entry(0),
+        level2.get_address().as_u64(),
+        level2.get_entry(0)
+    );
 
     debug_print!("Disabling paging ...");
     CR0::set_paging(false);
     debug_println!("OK");
 
     debug_print!("Setting PAE ...");
-    CR4::set_physical_address_extention(true);
+    CR4::set_physical_address_extension(true);
+    CR4::set_page_size_extension(true);
     debug_println!("OK");
 
     debug_print!("Setting Long mode ...");
@@ -206,25 +210,21 @@ unsafe fn enable_paging() {
     CR3::set_page_directory_base_register(level4_address as *mut u8);
     debug_println!("OK 0x{:x}", level4_address);
 
-
     debug_print!("Enabling protected mode ...");
     CR0::set_protected_mode(true);
     debug_println!("OK");
 
-    //CPU::halt();
     debug_print!("Enabling paging ...");
+    //CPU::halt();
     CR0::set_paging(true);
     debug_println!("OK");
-
 
     debug_print!("Reloading segment registers ...");
     SegmentRegs::reload_all_to(0x10);
     debug_println!("OK");
 
-
     debug_println!("YAY YOU MADE IT TO LONG MODE!!!");
     loop {}
-
 }
 
 #[panic_handler]

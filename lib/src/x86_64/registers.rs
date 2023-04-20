@@ -409,7 +409,6 @@ impl SegmentRegs {
 
         segment_registers
     }
-
 }
 
 pub struct CpuStack {}
@@ -424,11 +423,8 @@ impl CpuStack {
     }
 
     pub unsafe fn align_stack() {
-        asm!(
-            "and esp, 0xffffff00",
-        );
+        asm!("and esp, 0xffffff00",);
     }
-
 }
 
 /// The `CR0` control register is used in x86 architecture to control various aspects of the processor's behavior.
@@ -862,7 +858,7 @@ impl CR3 {
 /// ```no_run
 /// use quantum_lib::x86_64::registers::CR4;
 ///
-/// let is_pae_enabled = CR4::is_physical_address_extention_set();
+/// let is_pae_enabled = CR4::is_physical_address_extension_set();
 /// println!("PAE is enabled: {}", is_pae_enabled);
 ///
 /// ```
@@ -942,12 +938,12 @@ impl CR4 {
     }
 
     /// Returns whether the Page Size Extension feature is enabled or not.
-    pub fn is_page_size_extention_set() -> bool {
+    pub fn is_page_size_extension_set() -> bool {
         Self::read_flag(4)
     }
 
     /// Returns whether the Physical Address Extension feature is enabled or not.
-    pub fn is_physical_address_extention_set() -> bool {
+    pub fn is_physical_address_extension_set() -> bool {
         Self::read_flag(5)
     }
 
@@ -1078,8 +1074,13 @@ impl CR4 {
         Self::read_flag(23)
     }
 
-    pub fn set_physical_address_extention(flag: bool) {
+    pub fn set_physical_address_extension(flag: bool) {
         Self::write_at_position(5, flag);
+    }
+
+    /// sets the Page Size Extension feature.
+    pub fn set_page_size_extension(flag: bool) {
+        Self::write_at_position(4, flag);
     }
 }
 
@@ -1160,7 +1161,6 @@ impl IA32_EFER {
         Self::read_flag(0)
     }
 
-
     pub fn is_long_mode_active_set() -> bool {
         Self::read_flag(10)
     }
@@ -1188,6 +1188,4 @@ impl IA32_EFER {
     pub fn set_long_mode_enable(flag: bool) {
         Self::write_at_position(8, flag)
     }
-
-
 }

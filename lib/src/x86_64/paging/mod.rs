@@ -27,7 +27,7 @@ pub mod config;
 pub mod structures;
 
 #[derive(Clone, Copy, Debug)]
-pub enum PageingErr {
+pub enum PagingErr {
     InvalidConfig(&'static str),
     OutofBounds,
 }

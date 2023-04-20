@@ -38,11 +38,11 @@ pub enum StreamType {
 pub struct StreamConnection {
     pub(crate) info: StreamConnectionInfomation,
     pub(crate) outlet: StreamOutlet,
-    pub(crate) ignore_welcome: bool
+    pub(crate) ignore_welcome: bool,
 }
 
 #[derive(Clone, Copy, Debug)]
-pub struct StreamConnectionInfomation {
+pub(crate) struct StreamConnectionInfomation {
     pub(crate) max_chars: Option<(usize, usize)>,
     pub(crate) does_support_scrolling: bool,
     pub(crate) data_rate: Option<usize>,
