@@ -137,6 +137,8 @@ pub fn display_string(string: &str) {
                         console_info.y -= 1;
                     }
                 }
+
+                return;
             },
 
             i if i >= first_font_char_offset && i < (font.len() + 32) as u8 => {
@@ -177,7 +179,7 @@ pub fn display_string(string: &str) {
                 let allowed_chars_per_line = x_res / (glyph_width + char_x_addition);
 
                 if console_info.x >= (allowed_chars_per_line - 1) {
-                    display_string("\n");
+                    //display_string("\n");
                 } else {
                     console_info.x += 1;
                 }
