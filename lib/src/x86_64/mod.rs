@@ -27,6 +27,7 @@ pub mod interrupts;
 pub mod registers;
 pub mod bios_call;
 pub mod paging;
+pub mod io;
 
 /// Enumeration of possible privilege levels (rings) in x86 and x86_64 architectures.
 pub enum PrivlLevel {
@@ -61,5 +62,14 @@ impl PrivlLevel {
             Self::Ring2 => 2,
             Self::Ring3 => 3,
         }
+    }
+}
+
+
+pub struct CPU {}
+
+impl CPU {
+    pub fn halt() -> ! {
+        loop {}
     }
 }

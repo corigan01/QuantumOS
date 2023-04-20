@@ -39,7 +39,7 @@ pub fn get_memory_map(memory_map_region: &mut [E820Entry]) -> usize {
         let ptr = &entry as *const E820Entry as *const u8;
 
         let value = unsafe {
-            BiosCall::new().bit32_call().memory_detection_operating(ptr, last_entry_value)
+            BiosCall::new().bit32_call().memory_detection_operation(ptr, last_entry_value)
         };
 
         if let Success(value) = value {

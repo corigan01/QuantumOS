@@ -26,8 +26,10 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 use crate::x86_64::bios_call::BiosCallResult::{PreChecksFailed, Success};
 use core::arch::asm;
 use core::marker::PhantomData;
+use core::ptr::read;
 use crate::x86_64::registers::{EFLAGS, GPRegs16, GPRegs32, SegmentRegs};
 use crate::Nothing;
+use crate::x86_64::io::port::IOPort;
 
 pub struct Bit16;
 pub struct Bit32;
@@ -83,20 +85,27 @@ impl BiosCall {
         }
     }
 
-    pub fn get_serial_io_ports() -> [u16; 4] {
+    pub fn get_serial_io_ports() -> [IOPort; 4] {
         let buff_ptr = Self::BDA_PTR as *const [u16; 4];
-
         let read_data = unsafe { *buff_ptr };
 
-        read_data
+        [
+            IOPort::new(read_data[0]),
+            IOPort::new(read_data[1]),
+            IOPort::new(read_data[2]),
+            IOPort::new(read_data[3])
+        ]
     }
 
-    pub fn get_parallel_io_ports() -> [u16; 3] {
+    pub fn get_parallel_io_ports() -> [IOPort; 3] {
         let buff_ptr = unsafe { Self::BDA_PTR.add(0x8) } as *const [u16; 3];
-
         let read_data = unsafe { *buff_ptr };
 
-        read_data
+        [
+            IOPort::new(read_data[0]),
+            IOPort::new(read_data[1]),
+            IOPort::new(read_data[2])
+        ]
     }
 
     pub fn get_timer_ticks_since_midnight() -> u16 {
@@ -145,7 +154,7 @@ impl BiosCall<Bit32> {
         );
     }
 
-    pub unsafe fn memory_detection_operating(mut self, memory_entry_ptr: *const u8, ebx: u32) -> BiosCallResult<u32> {
+    pub unsafe fn memory_detection_operation(mut self, memory_entry_ptr: *const u8, ebx: u32) -> BiosCallResult<u32> {
         self.registers_32.ebx = ebx;
         self.registers_32.edi = memory_entry_ptr as u32;
         self.registers_32.edx = 0x534D4150;

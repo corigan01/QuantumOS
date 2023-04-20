@@ -561,6 +561,13 @@ impl CR0 {
         (value & (1 << bit_pos)) >> bit_pos == 1
     }
 
+    pub fn is_paging_set() -> bool {
+        let value = Self::read_to_32();
+        let bit_pos = 31;
+
+        (value & (1 << bit_pos)) >> bit_pos == 1
+    }
+
     /// Sets or clears the protected mode flag in the `CR0` register, as specified by the `flag` parameter.
     pub fn set_protected_mode(flag: bool) {
         Self::write_at_position(0, flag);
@@ -599,6 +606,10 @@ impl CR0 {
     /// Sets or clears the write-protect flag in the `CR0` register, as specified by the `flag` parameter.
     pub fn set_write_protect(flag: bool) {
         Self::write_at_position(28, flag);
+    }
+
+    pub fn set_paging(flag: bool) {
+        Self::write_at_position(31, flag);
     }
 }
 
@@ -810,18 +821,7 @@ impl CR3 {
         value & flag > 0
     }
 
-    #[cfg(target_pointer_width = "32")]
-    pub unsafe fn set_page_directory_base_register_32(ptr: u32) {
-        unsafe {
-            asm!(
-                "mov cr3, {value}",
-                value = in(reg) ptr
-            )
-        }
-    }
-
-    #[cfg(target_pointer_width = "64")]
-    pub unsafe fn set_page_directory_base_register_64(ptr: u64) {
+    pub unsafe fn set_page_directory_base_register(ptr: *mut u8) {
         unsafe {
             asm!(
             "mov cr3, {value}",
@@ -1143,7 +1143,8 @@ impl IA32_EFER {
             asm!(
             "mov ecx, 0xC0000080",
             "wrmsr",
-             in("eax") new_value
+            in("eax") new_value,
+            out("ecx") _
             );
         }
     }
@@ -1158,6 +1159,7 @@ impl IA32_EFER {
     pub fn is_system_call_extentions_set() -> bool {
         Self::read_flag(0)
     }
+
 
     pub fn is_long_mode_active_set() -> bool {
         Self::read_flag(10)
@@ -1186,4 +1188,6 @@ impl IA32_EFER {
     pub fn set_long_mode_enable(flag: bool) {
         Self::write_at_position(8, flag)
     }
+
+
 }

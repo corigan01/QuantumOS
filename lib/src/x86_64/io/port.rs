@@ -23,12 +23,23 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-pub mod virtual_address;
+use core::marker::PhantomData;
 
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
-pub struct InvdAddress(u64);
+pub struct ReadWritePort;
+pub struct WriteOnlyPort;
+pub struct ReadOnlyPort;
+pub struct AbusedPort;
 
-pub const VIRTUAL_ALLOWED_ADDRESS_SIZE: u8 = 48;
-pub const PHYSICAL_ALLOWED_ADDRESS_SIZE: u8 = 48;
+pub struct IOPort<Flags = ReadWritePort> {
+    port: u16,
+    reserved: PhantomData<Flags>
+}
 
-pub const PAGE_SIZE: usize = 4096;
+impl IOPort {
+    pub fn new(n: u16) -> IOPort {
+        IOPort {
+            port: n,
+            reserved: Default::default()
+        }
+    }
+}

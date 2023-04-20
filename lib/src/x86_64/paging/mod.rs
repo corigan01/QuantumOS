@@ -25,3 +25,9 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 pub mod config;
 pub mod structures;
+
+#[derive(Clone, Copy, Debug)]
+pub enum PageingErr {
+    InvalidConfig(&'static str),
+    OutofBounds,
+}

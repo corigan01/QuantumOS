@@ -23,12 +23,5 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-pub mod virtual_address;
+pub mod port;
 
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
-pub struct InvdAddress(u64);
-
-pub const VIRTUAL_ALLOWED_ADDRESS_SIZE: u8 = 48;
-pub const PHYSICAL_ALLOWED_ADDRESS_SIZE: u8 = 48;
-
-pub const PAGE_SIZE: usize = 4096;

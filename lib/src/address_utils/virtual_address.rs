@@ -67,22 +67,22 @@ impl VirtAddress {
             address.get_bits(VIRTUAL_ALLOWED_ADDRESS_SIZE..64) == 0
     }
 
-    pub fn is_address_aligned(address: u64) -> bool {
-        address & (0x1000 - 1) == 0
+    pub fn is_address_aligned(address: u64, alignment: usize) -> bool {
+        address & (2_u64.pow(alignment as u32) - 1) == 0
     }
 
-    pub fn strip_unaligned_bits_to_align_address<const ALIGNED_BITS: u64>(self) -> VirtAddress<Aligned, ALIGNED_BITS> {
+    pub fn strip_unaligned_bits_to_align_address<const ALIGNED_BITS: u64>(mut self) -> VirtAddress<Aligned, ALIGNED_BITS> {
         VirtAddress {
-            value: self.value ^ ((2_u64.pow(ALIGNED_BITS as u32)) - 1),
+            value: self.value.set_bits(0..((ALIGNED_BITS + 1) as u8), 0),
             reserved: Default::default()
         }
     }
 
     pub fn try_aligned<const ALIGNED_BITS: u64>(self) -> Result<VirtAddress<Aligned, ALIGNED_BITS>, InvdAddress> {
-        if Self::is_address_aligned(self.value) {
+        if Self::is_address_aligned(self.value, ALIGNED_BITS as usize) {
             return Ok(
                 VirtAddress {
-                    value: self.value ^ (2_u64.pow(ALIGNED_BITS as u32) - 1),
+                    value: self.value,
                     reserved: Default::default()
                 }
             );
