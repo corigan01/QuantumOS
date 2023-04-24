@@ -96,6 +96,39 @@ pub fn build_stage_2() -> Result<String, Box<dyn std::error::Error>> {
     Ok(stage2_path)
 }
 
+pub fn build_stage_3() -> Result<String, Box<dyn std::error::Error>> {
+    let current_dir = env::current_dir()?;
+    let target = format!("{}/target", current_dir.display());
+    let cargo = env::var("CARGO").unwrap_or("cargo".into());
+
+    let stage3_path = format!("{}/x86_64-quantum_loader/release/stage-3", target);
+
+    let cargo_status = Command::new(cargo)
+        .current_dir("bootloader/src/bios_boot/stage-3")
+        .arg("build")
+        .arg("--release")
+        .arg("--target")
+        .arg("x86_64-quantum_loader.json")
+        .arg(format!("--target-dir={}", target))
+        .stdout(std::process::Stdio::piped())
+        .status()?;
+
+    if !cargo_status.success() {
+        panic!("unable to build bootloader!")
+    }
+
+    Command::new("objcopy")
+        .arg("-I")
+        .arg("elf64-x86-64")
+        .arg("-O")
+        .arg("binary")
+        .arg(&stage3_path)
+        .stdout(std::process::Stdio::piped())
+        .status()?;
+
+    Ok(stage3_path)
+}
+
 pub fn make_bootloader_dir(path: &String) -> Result<String, Box<dyn std::error::Error>> {
     let bootloader_dir = format!("{}/bootloader_dir", path);
 
@@ -106,6 +139,7 @@ pub fn make_bootloader_dir(path: &String) -> Result<String, Box<dyn std::error::
 
 pub struct BiosBootConfig {
     pub stage2_filepath: String,
+    pub stage3_filepath: String,
     pub kernel_address: String,
     pub kernel_filepath: String,
     pub video_mode_preferred: (usize, usize),
@@ -114,7 +148,8 @@ pub struct BiosBootConfig {
 impl BiosBootConfig {
     const KERNEL_FILE_LOCATION_KEY: &'static str = "KERNEL_ELF";
     const KERNEL_START_LOCATION_KEY: &'static str = "KERNEL_BEGIN";
-    const NEXT_STAGE_LOCATION_KEY: &'static str = "NEXT_STAGE_BIN";
+    const NEXT_2_STAGE_LOCATION_KEY: &'static str = "NEXT_2_STAGE_BIN";
+    const NEXT_3_STAGE_LOCATION_KEY: &'static str = "NEXT_3_STAGE_BIN";
     const VIDEO_MODE_KEY: &'static str = "VIDEO";
 }
 
@@ -122,13 +157,15 @@ impl Display for BiosBootConfig {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         writeln!(
             f,
-            "{}={}\n{}={}\n{}={}\n{}={}x{}\n",
+            "{}={}\n{}={}\n{}={}\n{}={}\n{}={}x{}\n",
             Self::KERNEL_START_LOCATION_KEY,
             self.kernel_address,
             Self::KERNEL_FILE_LOCATION_KEY,
             self.kernel_filepath,
-            Self::NEXT_STAGE_LOCATION_KEY,
+            Self::NEXT_2_STAGE_LOCATION_KEY,
             self.stage2_filepath,
+            Self::NEXT_3_STAGE_LOCATION_KEY,
+            self.stage3_filepath,
             Self::VIDEO_MODE_KEY,
             self.video_mode_preferred.0,
             self.video_mode_preferred.1

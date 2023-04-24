@@ -1,11 +1,11 @@
 /*
-  ____                 __               __ __                 __
- / __ \__ _____ ____  / /___ ____ _    / //_/__ _______  ___ / /
-/ /_/ / // / _ `/ _ \/ __/ // /  ' \  / ,< / -_) __/ _ \/ -_) /
-\___\_\_,_/\_,_/_//_/\__/\_,_/_/_/_/ /_/|_|\__/_/ /_//_/\__/_/
-  Part of the Quantum OS Kernel
+  ____                 __               __                __
+ / __ \__ _____ ____  / /___ ____ _    / /  ___  ___ ____/ /__ ____
+/ /_/ / // / _ `/ _ \/ __/ // /  ' \  / /__/ _ \/ _ `/ _  / -_) __/
+\___\_\_,_/\_,_/_//_/\__/\_,_/_/_/_/ /____/\___/\_,_/\_,_/\__/_/
+  Part of the Quantum OS Project
 
-Copyright 2022 Gavin Kellam
+Copyright 2023 Gavin Kellam
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
 associated documentation files (the "Software"), to deal in the Software without restriction,
@@ -28,21 +28,8 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #![no_main] // disable all Rust-level entry points
 #![allow(dead_code)]
 
-use quantum_os::serial::BaudRate::Baud115200;
-use quantum_os::serial::{SerialCOM, SerialDevice};
-
 #[no_mangle]
 #[link_section = ".start"]
-pub extern "C" fn _start() {
-    main()
-}
-
-fn main() {
-    let serial = SerialDevice::new(SerialCOM::Com1, Baud115200).unwrap();
-
-    loop {
-        serial.write_byte(b'Q');
-        serial.write_byte(b'O');
-        serial.write_byte(b'S');
-    }
+pub extern "C" fn _start(boot_info: u32) -> ! {
+    let boot_info_ref = unsafe { &*(boot_info as *const BootInfo) };
 }

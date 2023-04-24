@@ -35,19 +35,19 @@ pub enum ElfArch {
     Ia64,
     X86_64,
     Aarch64,
-    RiscV
+    RiscV,
 }
 
 #[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq)]
 pub enum ElfBits {
     Bit32,
-    Bit64
+    Bit64,
 }
 
 #[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq)]
 pub enum ElfEndian {
     LittleEndian,
-    BigEndian
+    BigEndian,
 }
 
 #[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq)]
@@ -55,7 +55,7 @@ pub enum ElfType {
     Relocatable,
     Executable,
     Shared,
-    Core
+    Core,
 }
 
 #[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq)]
@@ -63,12 +63,11 @@ pub enum ElfErr {
     InvalidLen,
     InvalidArch,
     NotAnElf,
-    InvalidAlignment
+    InvalidAlignment,
 }
 
-
 pub struct ElfHeader<'a> {
-    raw_data: &'a [u8]
+    raw_data: &'a [u8],
 }
 
 impl<'a> ElfHeader<'a> {
@@ -80,7 +79,7 @@ impl<'a> ElfHeader<'a> {
             return Err(ElfErr::InvalidLen);
         }
 
-        let header = ElfHeader {raw_data: bytes};
+        let header = ElfHeader { raw_data: bytes };
 
         // Check if header is elf
         match header.is_elf() {
@@ -97,8 +96,8 @@ impl<'a> ElfHeader<'a> {
                 } else {
                     Err(ElfErr::InvalidArch)
                 }
-            },
-            false => Err(ElfErr::NotAnElf)
+            }
+            false => Err(ElfErr::NotAnElf),
         }
     }
 
@@ -125,12 +124,8 @@ impl<'a> ElfHeader<'a> {
 
     fn both_arch_return_from_pos(&self, pos_if_u32: usize, pos_if_u64: usize) -> Option<u64> {
         match self.elf_bits()? {
-            ElfBits::Bit32 => {
-                Some(self.u32_from_data(pos_if_u32) as u64)
-            }
-            ElfBits::Bit64 => {
-                Some(self.u64_from_data(pos_if_u64))
-            }
+            ElfBits::Bit32 => Some(self.u32_from_data(pos_if_u32) as u64),
+            ElfBits::Bit64 => Some(self.u64_from_data(pos_if_u64)),
         }
     }
 
@@ -153,7 +148,7 @@ impl<'a> ElfHeader<'a> {
             1 => Some(ElfBits::Bit32),
             2 => Some(ElfBits::Bit64),
 
-            _ => None
+            _ => None,
         }
     }
 
@@ -164,7 +159,7 @@ impl<'a> ElfHeader<'a> {
             1 => Some(ElfEndian::LittleEndian),
             2 => Some(ElfEndian::BigEndian),
 
-            _ => None
+            _ => None,
         }
     }
 
@@ -185,7 +180,7 @@ impl<'a> ElfHeader<'a> {
             3 => Some(ElfType::Shared),
             4 => Some(ElfType::Core),
 
-            _ => None
+            _ => None,
         }
     }
 
@@ -205,7 +200,7 @@ impl<'a> ElfHeader<'a> {
             0xB7 => Some(ElfArch::Aarch64),
             0xF3 => Some(ElfArch::RiscV),
 
-            _ => None
+            _ => None,
         }
     }
 
@@ -227,78 +222,50 @@ impl<'a> ElfHeader<'a> {
 
     pub fn elf_flags(&self) -> Option<u32> {
         match self.elf_bits()? {
-            ElfBits::Bit32 => {
-                Some(self.u32_from_data(36))
-            }
-            ElfBits::Bit64 => {
-                Some(self.u32_from_data(48))
-            }
+            ElfBits::Bit32 => Some(self.u32_from_data(36)),
+            ElfBits::Bit64 => Some(self.u32_from_data(48)),
         }
     }
 
     pub fn elf_header_size(&self) -> Option<u16> {
         match self.elf_bits()? {
-            ElfBits::Bit32 => {
-                Some(self.u16_from_data(40))
-            }
-            ElfBits::Bit64 => {
-                Some(self.u16_from_data(52))
-            }
+            ElfBits::Bit32 => Some(self.u16_from_data(40)),
+            ElfBits::Bit64 => Some(self.u16_from_data(52)),
         }
     }
 
     pub fn elf_size_of_entry_in_program_table(&self) -> Option<u16> {
         match self.elf_bits()? {
-            ElfBits::Bit32 => {
-                Some(self.u16_from_data(42))
-            }
-            ElfBits::Bit64 => {
-                Some(self.u16_from_data(54))
-            }
+            ElfBits::Bit32 => Some(self.u16_from_data(42)),
+            ElfBits::Bit64 => Some(self.u16_from_data(54)),
         }
     }
 
     pub fn elf_number_of_entries_in_program_table(&self) -> Option<u16> {
         match self.elf_bits()? {
-            ElfBits::Bit32 => {
-                Some(self.u16_from_data(44))
-            }
-            ElfBits::Bit64 => {
-                Some(self.u16_from_data(56))
-            }
+            ElfBits::Bit32 => Some(self.u16_from_data(44)),
+            ElfBits::Bit64 => Some(self.u16_from_data(56)),
         }
     }
 
     pub fn elf_size_of_entry_in_section_table(&self) -> Option<u16> {
         match self.elf_bits()? {
-            ElfBits::Bit32 => {
-                Some(self.u16_from_data(46))
-            }
-            ElfBits::Bit64 => {
-                Some(self.u16_from_data(58))
-            }
+            ElfBits::Bit32 => Some(self.u16_from_data(46)),
+            ElfBits::Bit64 => Some(self.u16_from_data(58)),
         }
     }
 
     pub fn elf_number_of_entries_in_section_table(&self) -> Option<u16> {
         match self.elf_bits()? {
-            ElfBits::Bit32 => {
-                Some(self.u16_from_data(48))
-            }
-            ElfBits::Bit64 => {
-                Some(self.u16_from_data(60))
-            }
+            ElfBits::Bit32 => Some(self.u16_from_data(48)),
+            ElfBits::Bit64 => Some(self.u16_from_data(60)),
         }
     }
 
     pub fn elf_start_of_section_names_offset(&self) -> Option<u16> {
         match self.elf_bits()? {
-            ElfBits::Bit32 => {
-                Some(self.u16_from_data(50))
-            }
-            ElfBits::Bit64 => {
-                Some(self.u16_from_data(62))
-            }
+            ElfBits::Bit32 => Some(self.u16_from_data(50)),
+            ElfBits::Bit64 => Some(self.u16_from_data(62)),
         }
     }
 
@@ -308,7 +275,7 @@ impl<'a> ElfHeader<'a> {
         }
 
         let bits = self.elf_bits()?;
-        let header_in_elf_offset= self.elf_program_header_table_position()? as usize;
+        let header_in_elf_offset = self.elf_program_header_table_position()? as usize;
         let bytes_per_table = self.elf_size_of_entry_in_program_table()? as usize;
         let offset_of_headers = bytes_per_table * idx;
 
@@ -341,9 +308,8 @@ pub enum ElfHeaderFlags {
     Executable,
     Writable,
     Readable,
-    None
+    None,
 }
-
 
 /*
 32 Bit version:
@@ -377,12 +343,12 @@ pub enum ElfSegmentType {
     RequiresInterp,
     Note,
     Phdr,
-    Unknown(usize)
+    Unknown(usize),
 }
 
 pub struct ProgramHeader<'a> {
     raw_data: &'a [u8],
-    bits: ElfBits
+    bits: ElfBits,
 }
 
 impl<'a> ProgramHeader<'a> {
@@ -398,7 +364,7 @@ impl<'a> ProgramHeader<'a> {
 
         Ok(Self {
             raw_data: bytes,
-            bits: bits,
+            bits,
         })
     }
 
@@ -418,23 +384,15 @@ impl<'a> ProgramHeader<'a> {
 
     fn both_arch_sized_return_from_pos(&self, pos_if_u32: usize, pos_if_u64: usize) -> u64 {
         match self.bits {
-            ElfBits::Bit32 => {
-                self.u32_from_data(pos_if_u32) as u64
-            }
-            ElfBits::Bit64 => {
-                self.u64_from_data(pos_if_u64)
-            }
+            ElfBits::Bit32 => self.u32_from_data(pos_if_u32) as u64,
+            ElfBits::Bit64 => self.u64_from_data(pos_if_u64),
         }
     }
 
     fn both_u32_sized_return_from_pos(&self, pos_if_u32: usize, pos_if_u64: usize) -> u32 {
         match self.bits {
-            ElfBits::Bit32 => {
-                self.u32_from_data(pos_if_u32)
-            }
-            ElfBits::Bit64 => {
-                self.u32_from_data(pos_if_u64)
-            }
+            ElfBits::Bit32 => self.u32_from_data(pos_if_u32),
+            ElfBits::Bit64 => self.u32_from_data(pos_if_u64),
         }
     }
 
@@ -449,7 +407,7 @@ impl<'a> ProgramHeader<'a> {
             4 => ElfSegmentType::Note,
             6 => ElfSegmentType::Phdr,
 
-            _ => ElfSegmentType::Unknown(seg_type_number as usize)
+            _ => ElfSegmentType::Unknown(seg_type_number as usize),
         }
     }
 
@@ -498,5 +456,29 @@ impl<'a> ProgramHeader<'a> {
 
     pub fn section_alignment(&self) -> u64 {
         self.both_arch_sized_return_from_pos(28, 48)
+    }
+}
+
+#[allow(dead_code)]
+pub struct SectionHeader<'a> {
+    raw_data: &'a [u8],
+    bits: ElfBits,
+}
+
+impl<'a> SectionHeader<'a> {
+    pub fn new(bytes: &'a [u8], bits: ElfBits) -> Result<Self, ElfErr> {
+        let bytes_len = bytes.len();
+
+        if matches!(bits, ElfBits::Bit64) && bytes_len < 56 {
+            return Err(ElfErr::InvalidLen);
+        }
+        if matches!(bits, ElfBits::Bit32) && bytes_len < 32 {
+            return Err(ElfErr::InvalidLen);
+        }
+
+        Ok(Self {
+            raw_data: bytes,
+            bits,
+        })
     }
 }

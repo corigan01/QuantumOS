@@ -23,13 +23,14 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use crate::BootMemoryDescriptor;
 use crate::e820_memory::E820Entry;
+use crate::BootMemoryDescriptor;
 
 #[derive(Clone, Copy, Debug)]
 pub struct SimpleRamFs {
     pub kernel: BootMemoryDescriptor,
     pub stage2: BootMemoryDescriptor,
+    pub stage3: BootMemoryDescriptor,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -47,7 +48,7 @@ pub struct BootInfo {
     pub booted_disk_id: u16,
     pub ram_fs: Option<SimpleRamFs>,
     pub vid: Option<VideoInformation>,
-    pub memory_map: Option<&'static [E820Entry]>
+    pub memory_map: Option<&'static [E820Entry]>,
 }
 
 impl BootInfo {
@@ -56,7 +57,7 @@ impl BootInfo {
             booted_disk_id: 0,
             ram_fs: None,
             vid: None,
-            memory_map: None
+            memory_map: None,
         }
     }
 }
@@ -68,7 +69,15 @@ impl Default for BootInfo {
 }
 
 impl SimpleRamFs {
-    pub fn new(kernel: BootMemoryDescriptor, stage2: BootMemoryDescriptor) -> Self {
-        Self { kernel, stage2 }
+    pub fn new(
+        kernel: BootMemoryDescriptor,
+        stage2: BootMemoryDescriptor,
+        stage3: BootMemoryDescriptor,
+    ) -> Self {
+        Self {
+            kernel,
+            stage2,
+            stage3,
+        }
     }
 }

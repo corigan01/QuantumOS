@@ -24,7 +24,6 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 Quantum OS Lib file, documentation coming soon!
 
-*/
 
 #![no_std] // don't link the Rust standard library
 #![no_main] // disable all Rust-level entry points
@@ -103,3 +102,17 @@ pub mod post_hal;
 pub mod qemu;
 pub mod serial;
 pub mod vga;
+*/
+
+#![no_std]
+#![no_main]
+
+use core::panic::PanicInfo;
+
+pub mod port;
+pub mod serial;
+
+#[panic_handler]
+fn panic(_info: &PanicInfo) -> ! {
+    loop {}
+}

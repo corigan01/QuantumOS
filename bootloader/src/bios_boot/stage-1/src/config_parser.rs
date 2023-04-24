@@ -27,6 +27,7 @@ use bootloader::error::BootloaderError;
 
 pub struct BootloaderConfig<'a> {
     stage2_filepath: Option<&'a str>,
+    stage3_filepath: Option<&'a str>,
     kernel_address: Option<usize>,
     kernel_filepath: Option<&'a str>,
     video_mode_preferred: Option<(usize, usize)>,
@@ -35,7 +36,8 @@ pub struct BootloaderConfig<'a> {
 impl<'a> BootloaderConfig<'a> {
     const KERNEL_FILE_LOCATION_KEY: &'static str = "KERNEL_ELF";
     const KERNEL_START_LOCATION_KEY: &'static str = "KERNEL_BEGIN";
-    const NEXT_STAGE_LOCATION_KEY: &'static str = "NEXT_STAGE_BIN";
+    const NEXT_2_STAGE_LOCATION_KEY: &'static str = "NEXT_2_STAGE_BIN";
+    const NEXT_3_STAGE_LOCATION_KEY: &'static str = "NEXT_3_STAGE_BIN";
     const VIDEO_MODE_KEY: &'static str = "VIDEO";
 
     const DEFAULT_KERNEL_LOCATION: u64 = 16 * 1024 * 1024;
@@ -43,6 +45,7 @@ impl<'a> BootloaderConfig<'a> {
     pub fn from_str(string: &'a str) -> Result<Self, BootloaderError> {
         let mut config = BootloaderConfig {
             stage2_filepath: None,
+            stage3_filepath: None,
             kernel_address: None,
             kernel_filepath: None,
             video_mode_preferred: None,
@@ -57,8 +60,11 @@ impl<'a> BootloaderConfig<'a> {
                 (Some(Self::KERNEL_START_LOCATION_KEY), Some(location_key)) => {
                     config.kernel_address = Some(location_key.trim().parse().unwrap_or(0))
                 }
-                (Some(Self::NEXT_STAGE_LOCATION_KEY), Some(location_key)) => {
+                (Some(Self::NEXT_2_STAGE_LOCATION_KEY), Some(location_key)) => {
                     config.stage2_filepath = Some(location_key.as_ref())
+                }
+                (Some(Self::NEXT_3_STAGE_LOCATION_KEY), Some(location_key)) => {
+                    config.stage3_filepath = Some(location_key.as_ref())
                 }
                 (Some(Self::VIDEO_MODE_KEY), Some(location_key)) => {
                     let mut video_mode_split = location_key.split('x');
@@ -102,6 +108,10 @@ impl<'a> BootloaderConfig<'a> {
 
     pub fn get_stage2_file_path(&self) -> &str {
         self.stage2_filepath.unwrap_or("/bootloader/stage2.bin")
+    }
+
+    pub fn get_stage3_file_path(&self) -> &str {
+        self.stage3_filepath.unwrap_or("/bootloader/stage3.bin")
     }
 
     pub fn get_recommended_video_info(&self) -> (usize, usize) {

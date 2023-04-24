@@ -29,19 +29,19 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 use stage_1::bios_println;
 
 use bootloader::boot_info::{BootInfo, SimpleRamFs, VideoInformation};
+use bootloader::e820_memory::E820Entry;
 use bootloader::BootMemoryDescriptor;
 use core::arch::global_asm;
 use core::mem::size_of;
 use core::panic::PanicInfo;
-use bootloader::e820_memory::E820Entry;
 use quantum_lib::simple_allocator::SimpleBumpAllocator;
 use stage_1::bios_disk::BiosDisk;
 use stage_1::bios_video::{BiosTextMode, _print};
 use stage_1::config_parser::BootloaderConfig;
 use stage_1::filesystem::FileSystem;
+use stage_1::memory_map::get_memory_map;
 use stage_1::unreal::{enter_stage2, enter_unreal_mode};
 use stage_1::vesa::{BiosVesa, Res};
-use stage_1::memory_map::get_memory_map;
 
 global_asm!(include_str!("init.s"));
 
@@ -92,15 +92,27 @@ fn enter_rust(disk_id: u16) {
     let bootloader_config = BootloaderConfig::from_str(bootloader_config_string.trim())
         .expect("Unable to parse bootloader config!");
 
-    let next_stage_filesize_bytes = fs
+    let next_2_stage_bytes = fs
         .get_filesize_bytes(bootloader_config.get_stage2_file_path())
         .expect("Could not get stage2 filesize");
 
-    let next_stage_ptr = unsafe {
+    let next_2_stage_ptr = unsafe {
         TEMP_ALLOC
             .as_mut()
             .unwrap()
-            .allocate_region(next_stage_filesize_bytes + 0x10)
+            .allocate_region(0x00100000 - 512)
+            .unwrap()
+    };
+
+    let next_3_stage_bytes = fs
+        .get_filesize_bytes(bootloader_config.get_stage3_file_path())
+        .expect("Could not get stage3 filesize");
+
+    let next_3_stage_ptr = unsafe {
+        TEMP_ALLOC
+            .as_mut()
+            .unwrap()
+            .allocate_region(next_3_stage_bytes)
             .unwrap()
     };
 
@@ -117,7 +129,11 @@ fn enter_rust(disk_id: u16) {
     };
 
     BiosTextMode::print_int_bytes(b"...stage2...");
-    fs.load_file_into_slice(next_stage_ptr, bootloader_config.get_stage2_file_path())
+    fs.load_file_into_slice(next_2_stage_ptr, bootloader_config.get_stage2_file_path())
+        .expect("Could not load next stage!");
+
+    BiosTextMode::print_int_bytes(b"...stage3...");
+    fs.load_file_into_slice(next_3_stage_ptr, bootloader_config.get_stage3_file_path())
         .expect("Could not load next stage!");
 
     BiosTextMode::print_int_bytes(b"...kernel...");
@@ -133,8 +149,12 @@ fn enter_rust(disk_id: u16) {
                 size: kernel_filesize_bytes as u64,
             },
             BootMemoryDescriptor {
-                ptr: next_stage_ptr.as_ptr() as u64,
-                size: next_stage_filesize_bytes as u64,
+                ptr: next_2_stage_ptr.as_ptr() as u64,
+                size: next_2_stage_bytes as u64,
+            },
+            BootMemoryDescriptor {
+                ptr: next_3_stage_ptr.as_ptr() as u64,
+                size: next_3_stage_bytes as u64,
             },
         ));
     }
@@ -145,19 +165,19 @@ fn enter_rust(disk_id: u16) {
     let memory_region_len = amount_of_entries_allowed * size_of::<E820Entry>();
 
     let memory_region = unsafe {
-        TEMP_ALLOC.as_mut().unwrap().allocate_region(memory_region_len + 0x10).unwrap()
+        TEMP_ALLOC
+            .as_mut()
+            .unwrap()
+            .allocate_region(memory_region_len + 0x10)
+            .unwrap()
     };
 
     let e820_ptr = memory_region as *mut [u8] as *mut E820Entry;
-    let e820_ref = unsafe {
-        core::slice::from_raw_parts_mut(e820_ptr, amount_of_entries_allowed)
-    };
+    let e820_ref = unsafe { core::slice::from_raw_parts_mut(e820_ptr, amount_of_entries_allowed) };
 
     get_memory_map(e820_ref);
 
-    let map_slice: &'static [E820Entry] = unsafe {
-        core::mem::transmute(e820_ref)
-    };
+    let map_slice: &'static [E820Entry] = unsafe { core::mem::transmute(e820_ref) };
 
     unsafe {
         BOOT_INFO.memory_map = Some(map_slice);
@@ -192,7 +212,7 @@ fn enter_rust(disk_id: u16) {
 
     unsafe {
         enter_stage2(
-            next_stage_ptr.as_ptr(),
+            next_2_stage_ptr.as_ptr(),
             &BOOT_INFO as *const BootInfo as *const u8,
         );
     }

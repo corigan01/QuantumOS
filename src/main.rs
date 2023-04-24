@@ -102,10 +102,12 @@ fn bios_boot() -> Result<String, Box<dyn std::error::Error>> {
 
     let stage_1_path = quantum::bios_boot::build_stage_1().unwrap();
     let stage_2_path = quantum::bios_boot::build_stage_2().unwrap();
+    let stage_3_path = quantum::bios_boot::build_stage_3().unwrap();
     let kernel = quantum::build_kernel().unwrap();
 
     let bootloader_config = BiosBootConfig {
         stage2_filepath: "/bootloader/stage2.bin".to_string(),
+        stage3_filepath: "/bootloader/stage3.bin".to_string(),
         kernel_address: "16".to_string(),
         kernel_filepath: "/kernel.elf".to_string(),
         video_mode_preferred: (1280, 720),
@@ -115,6 +117,10 @@ fn bios_boot() -> Result<String, Box<dyn std::error::Error>> {
     fs::copy(
         stage_2_path,
         format!("{}/stage2.bin", &inner_config_directory),
+    )?;
+    fs::copy(
+        stage_3_path,
+        format!("{}/stage3.bin", &inner_config_directory),
     )?;
 
     fs::copy(kernel, format!("{}/kernel.elf", &bootloader_directory))?;

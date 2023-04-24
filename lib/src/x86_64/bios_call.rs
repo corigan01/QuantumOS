@@ -23,12 +23,18 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use crate::x86_64::bios_call::BiosCallResult::{PreChecksFailed, Success};
+#[cfg(not(target_pointer_width = "64"))]
+use crate::x86_64::bios_call::BiosCallResult::PreChecksFailed;
+#[cfg(not(target_pointer_width = "64"))]
+use crate::x86_64::registers::EFLAGS;
+#[cfg(not(target_pointer_width = "64"))]
 use core::arch::asm;
-use core::marker::PhantomData;
-use crate::x86_64::registers::{EFLAGS, GPRegs16, GPRegs32, SegmentRegs};
-use crate::Nothing;
+
+use crate::x86_64::bios_call::BiosCallResult::Success;
 use crate::x86_64::io::port::IOPort;
+use crate::x86_64::registers::{GPRegs16, GPRegs32, SegmentRegs};
+use crate::Nothing;
+use core::marker::PhantomData;
 
 pub struct Bit16;
 pub struct Bit32;
@@ -92,7 +98,7 @@ impl BiosCall {
             IOPort::new(read_data[0]),
             IOPort::new(read_data[1]),
             IOPort::new(read_data[2]),
-            IOPort::new(read_data[3])
+            IOPort::new(read_data[3]),
         ]
     }
 
@@ -103,7 +109,7 @@ impl BiosCall {
         [
             IOPort::new(read_data[0]),
             IOPort::new(read_data[1]),
-            IOPort::new(read_data[2])
+            IOPort::new(read_data[2]),
         ]
     }
 
@@ -114,8 +120,6 @@ impl BiosCall {
 
         read_data
     }
-
-    
 }
 
 impl BiosCall<NoCall> {
@@ -138,6 +142,7 @@ impl BiosCall<NoCall> {
     }
 }
 
+#[cfg(not(target_pointer_width = "64"))]
 impl BiosCall<Bit32> {
     #[inline(never)]
     unsafe fn general_purpose_memory_call(&mut self) {
@@ -153,7 +158,11 @@ impl BiosCall<Bit32> {
         );
     }
 
-    pub unsafe fn memory_detection_operation(mut self, memory_entry_ptr: *const u8, ebx: u32) -> BiosCallResult<u32> {
+    pub unsafe fn memory_detection_operation(
+        mut self,
+        memory_entry_ptr: *const u8,
+        ebx: u32,
+    ) -> BiosCallResult<u32> {
         self.registers_32.ebx = ebx;
         self.registers_32.edi = memory_entry_ptr as u32;
         self.registers_32.edx = 0x534D4150;
@@ -177,6 +186,7 @@ impl BiosCall<Bit32> {
     }
 }
 
+#[cfg(not(target_pointer_width = "64"))]
 impl BiosCall<Bit16> {
     #[inline(never)]
     unsafe fn general_purpose_video_call(&mut self) {
@@ -315,7 +325,7 @@ impl BiosCall<Bit16> {
         if (self.registers_16.ax & 0xFF00 >> 8) == 0x86 {
             return BiosCallResult::Unsupported;
         }
-        
+
         BiosCallResult::Success(Nothing::default())
     }
 

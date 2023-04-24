@@ -28,16 +28,16 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #![no_main] // disable all Rust-level entry points
 #![allow(dead_code)]
 
+use bootloader::boot_info::{BootInfo, VideoInformation};
 use core::arch::asm;
 use core::panic::PanicInfo;
-use bootloader::boot_info::{BootInfo, VideoInformation};
+use quantum_lib::bytes::Bytes;
 use quantum_lib::debug::add_connection_to_global_stream;
 use quantum_lib::debug::stream_connection::StreamConnectionBuilder;
-use quantum_lib::{debug_print, debug_println};
-use quantum_lib::bytes::Bytes;
 use quantum_lib::elf::{ElfArch, ElfBits, ElfHeader, ElfSegmentType};
 use quantum_lib::ptr::entry_point::EntryPoint64;
 use quantum_lib::x86_64::registers::SegmentRegs;
+use quantum_lib::{debug_print, debug_println};
 
 use stage_2::debug::{display_string, setup_framebuffer};
 use stage_2::gdt::LONG_MODE_GDT;
@@ -77,7 +77,7 @@ pub extern "C" fn _start(boot_info: u32) -> ! {
     panic!("Stage2 should not finish!");
 }
 
-fn parse_kernel_elf(kernel_elf: ElfHeader) -> Option<()> {
+fn parse_kernel_elf(kernel_elf: ElfHeader) -> Option<u32> {
     let kernel_arch = kernel_elf.elf_arch()?;
     let kernel_bits = kernel_elf.elf_bits()?;
 
@@ -91,22 +91,25 @@ fn parse_kernel_elf(kernel_elf: ElfHeader) -> Option<()> {
     debug_println!("OK");
 
     let header_amount = kernel_elf.elf_number_of_entries_in_program_table()?;
+    let entry_point = kernel_elf.elf_entry_point()? as u32;
 
-    debug_println!("Kernel Info: p-header=(O: {} S: {} B: {}) s-header=(O: {}, S: {}, B: {}) e-point={}",
+    debug_println!(
+        "Kernel Info: p-header=(O: {} S: {} B: {}) s-header=(O: {}, S: {}, B: {}) e-point={:x}",
         kernel_elf.elf_program_header_table_position()?,
         header_amount,
         kernel_elf.elf_size_of_entry_in_program_table()?,
         kernel_elf.elf_section_header_table_position()?,
         kernel_elf.elf_number_of_entries_in_section_table()?,
         kernel_elf.elf_size_of_entry_in_section_table()?,
-        kernel_elf.elf_entry_point()?
+        entry_point
     );
 
     for i in 0..header_amount {
         let header_idx = i as usize;
         let header = kernel_elf.get_program_header(header_idx)?;
 
-        debug_println!("Header {} = '{:x?}' -- {:?} => F: {} M: {} O: {} Vaddr: {}",
+        debug_println!(
+            "Header {} = '{:x?}' -- {:?} => F: {} M: {} O: {} Vaddr: {:x}",
             header_idx,
             header.type_of_segment(),
             header.flags(),
@@ -133,12 +136,10 @@ fn parse_kernel_elf(kernel_elf: ElfHeader) -> Option<()> {
                     *loader_ptr.add(i) = *byte;
                 }
             }
-
         }
-
     }
 
-    Some(())
+    Some(entry_point)
 }
 
 fn main(boot_info: &BootInfo) {
@@ -160,8 +161,8 @@ fn main(boot_info: &BootInfo) {
     );
     debug_println!("Vga info: {:#?}", boot_info.vid);
 
-    unsafe { enable_paging() };
     LONG_MODE_GDT.load();
+    unsafe { enable_paging() };
 
     let kern_disc = &boot_info.ram_fs.unwrap().kernel;
     let kernel_elf_raw_data = unsafe {
@@ -170,54 +171,15 @@ fn main(boot_info: &BootInfo) {
 
     let kernel_elf = ElfHeader::from_bytes(kernel_elf_raw_data).unwrap();
 
-    parse_kernel_elf(kernel_elf).unwrap();
+    let entry_point = parse_kernel_elf(kernel_elf).unwrap();
 
-    let test_bytes = unsafe {
-        core::slice::from_raw_parts_mut(16777216 as *mut u8, 40)
-    };
+    let test_bytes = unsafe { core::slice::from_raw_parts_mut(entry_point as *mut u8, 10) };
 
     debug_println!("Jumping to Kernel!! {:x?}", test_bytes);
 
-    //loop {}
+    let entry_point_func = unsafe { &*(entry_point as *const fn()) };
 
-    unsafe {
-        test(16777216)
-    }
-
-}
-
-pub unsafe fn test(entry_point: u64) {
-    debug_println!("0");
-    asm!(
-
-
-    // push entry point address (extended to 64 bit)
-    "push 0",
-    "push {entry_point:e}",
-
-    entry_point = in(reg) entry_point as u32,
-    );
-    asm!("ljmp $0x8, $2f", "2:", options(att_syntax));
-
-    SegmentRegs::reload_all_to(0x10);
-
-    asm!(
-    ".code64",
-
-    "mov rsp, 0x0100000",
-
-    // jump to 4th stage
-
-    "jmp rax",
-
-    // enter endless loop in case 4th stage returns
-    "2:",
-    "jmp 2b",
-    out("rax") _,
-    out("rdi") _,
-    d = in(reg) 0x1000000
-    );
-
+    entry_point_func();
 }
 
 #[panic_handler]

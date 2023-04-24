@@ -9,14 +9,6 @@ quantum_lib = { path = "../../../../lib" }
 bootloader = { path = "../../../bootloader" }
 spin = "0.9.8"
 
-[profile.release]
-opt-level="s"
-lto = true
-codegen-units = 1
-debug = false
-overflow-checks = false
-panic = "abort"
-
 [dependencies.lazy_static]
 version = "1.4.0"
 features = ["spin_no_std"]
