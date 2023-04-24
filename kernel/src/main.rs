@@ -59,6 +59,29 @@ fn debug_output_char(char: u8) {
     }
 }
 
+#[no_mangle]
+#[link_section = ".start"]
+pub extern "C" fn _start() {
+    loop {};
+    // safely get the baud rate
+    let baud_rate = if let Some(serial) = SERIAL1.lock().as_ref() {
+        serial.get_baud()
+    } else {
+        0
+    };
+
+    // set the debug stream to the serial output
+    debug_output::set_debug_stream(StreamInfo {
+        output_stream: Some(debug_output_char),
+        name: Some("Serial"),
+        speed: Some(baud_rate as u64),
+        color: true,
+        message_header: true,
+    });
+
+    debug_println!("\nQuantum Hello!");
+}
+
 struct BootInfo {}
 
 //#[cfg(not(test))]

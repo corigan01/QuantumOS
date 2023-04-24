@@ -26,7 +26,6 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 use crate::x86_64::bios_call::BiosCallResult::{PreChecksFailed, Success};
 use core::arch::asm;
 use core::marker::PhantomData;
-use core::ptr::read;
 use crate::x86_64::registers::{EFLAGS, GPRegs16, GPRegs32, SegmentRegs};
 use crate::Nothing;
 use crate::x86_64::io::port::IOPort;
@@ -316,7 +315,7 @@ impl BiosCall<Bit16> {
         if (self.registers_16.ax & 0xFF00 >> 8) == 0x86 {
             return BiosCallResult::Unsupported;
         }
-
+        
         BiosCallResult::Success(Nothing::default())
     }
 

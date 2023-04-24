@@ -41,6 +41,7 @@ impl PageConfigable for PageMapLevel2Entry {}
 impl PageConfigable for PageMapLevel3Entry {}
 impl PageConfigable for PageMapLevel4Entry {}
 
+#[allow(dead_code)]
 pub struct PageConfigBuilder<Type = NonTypedPageConfig> {
     present: bool,
     rw: bool,

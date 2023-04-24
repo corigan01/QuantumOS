@@ -29,6 +29,7 @@ pub struct ReadWritePort;
 pub struct WriteOnlyPort;
 pub struct ReadOnlyPort;
 
+#[allow(dead_code)]
 pub struct IOPort<Flags = ReadWritePort> {
     port: u16,
     reserved: PhantomData<Flags>,

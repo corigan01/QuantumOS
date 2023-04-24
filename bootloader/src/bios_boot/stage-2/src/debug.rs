@@ -24,7 +24,6 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 */
 
-use core::mem;
 use lazy_static::lazy_static;
 use quantum_lib::basic_font::BUILT_IN_FONT;
 use spin::mutex::Mutex;

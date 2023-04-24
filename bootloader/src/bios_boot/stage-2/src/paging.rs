@@ -38,9 +38,9 @@ static mut LEVEL2: [PageMapLevel2; 5] = [PageMapLevel2::new(); 5];
 pub unsafe fn enable_paging() {
     debug_print!("building pages ...");
 
-    let mut level4 = &mut LEVEL4;
-    let mut level3 = &mut LEVEL3;
-    let mut level2_tables = &mut LEVEL2;
+    let level4 = &mut LEVEL4;
+    let level3 = &mut LEVEL3;
+    let level2_tables = &mut LEVEL2;
 
     for (offset, level2) in level2_tables.iter_mut().enumerate() {
         let offset_addition = offset as u64 * 1024 * 1024 * 1024;

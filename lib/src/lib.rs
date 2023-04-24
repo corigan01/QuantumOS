@@ -41,5 +41,7 @@ pub mod simple_allocator;
 pub mod time;
 pub mod x86_64;
 pub mod address_utils;
+pub mod elf;
+pub mod magic;
 
 pub type Nothing = ();

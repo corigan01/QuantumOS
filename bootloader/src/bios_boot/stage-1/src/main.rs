@@ -51,8 +51,7 @@ extern "C" fn bit16_entry(disk_number: u16) {
 }
 
 static mut TEMP_ALLOC: Option<SimpleBumpAllocator> = None;
-static mut boot_info: BootInfo = BootInfo::new();
-
+static mut BOOT_INFO: BootInfo = BootInfo::new();
 
 fn enter_rust(disk_id: u16) {
     BiosTextMode::print_int_bytes(b"Quantum Bootloader (Stage1)\n");
@@ -128,7 +127,7 @@ fn enter_rust(disk_id: u16) {
     BiosTextMode::print_int_bytes(b" OK\n");
 
     unsafe {
-        boot_info.ram_fs = Some(SimpleRamFs::new(
+        BOOT_INFO.ram_fs = Some(SimpleRamFs::new(
             BootMemoryDescriptor {
                 ptr: kernel_ptr.as_ptr() as u64,
                 size: kernel_filesize_bytes as u64,
@@ -161,7 +160,7 @@ fn enter_rust(disk_id: u16) {
     };
 
     unsafe {
-        boot_info.memory_map = Some(map_slice);
+        BOOT_INFO.memory_map = Some(map_slice);
     }
 
     BiosTextMode::print_int_bytes(b"OK\n");
@@ -182,7 +181,7 @@ fn enter_rust(disk_id: u16) {
     vesa.set_mode(&closest_mode).unwrap();
 
     unsafe {
-        boot_info.vid = Some(VideoInformation {
+        BOOT_INFO.vid = Some(VideoInformation {
             video_mode: 0,
             x: closest_mode.mode_data.width.into(),
             y: closest_mode.mode_data.height.into(),
@@ -194,7 +193,7 @@ fn enter_rust(disk_id: u16) {
     unsafe {
         enter_stage2(
             next_stage_ptr.as_ptr(),
-            &boot_info as *const BootInfo as *const u8,
+            &BOOT_INFO as *const BootInfo as *const u8,
         );
     }
 }
