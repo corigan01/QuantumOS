@@ -28,7 +28,9 @@ use core::ops::{RangeBounds, RangeFull};
 use crate::address_utils::{InvdAddress, VIRTUAL_ALLOWED_ADDRESS_SIZE};
 use crate::bitset::BitSet;
 
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
 pub struct Unaligned {}
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
 pub struct Aligned {}
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
@@ -46,7 +48,7 @@ impl VirtAddress {
     }
 
     pub fn new(addr: u64) -> Result<VirtAddress, InvdAddress> {
-        if Self::is_address_virtual_compatable(addr) {
+        if Self::is_address_virtual_compatible(addr) {
             return Ok(VirtAddress::x(addr));
         }
 
@@ -54,14 +56,14 @@ impl VirtAddress {
     }
 
     pub fn try_new(addr: u64) -> Option<VirtAddress> {
-        if Self::is_address_virtual_compatable(addr) {
+        if Self::is_address_virtual_compatible(addr) {
             return Some(VirtAddress::x(addr));
         }
 
         None
     }
 
-    pub fn is_address_virtual_compatable(address: u64) -> bool {
+    pub fn is_address_virtual_compatible(address: u64) -> bool {
         address.get_bits(VIRTUAL_ALLOWED_ADDRESS_SIZE..64)
             == u64::MAX.get_bits(VIRTUAL_ALLOWED_ADDRESS_SIZE..64) ||
             address.get_bits(VIRTUAL_ALLOWED_ADDRESS_SIZE..64) == 0
@@ -114,6 +116,10 @@ impl<Any, const ALIGNED_BITS: u64> VirtAddress<Any, ALIGNED_BITS> {
 
     pub fn as_u64(&self) -> u64 {
         self.value
+    }
+
+    pub fn is_32_bit_compatible(&self) -> bool {
+        self.value.get_bits(33..64) > 0
     }
 }
 

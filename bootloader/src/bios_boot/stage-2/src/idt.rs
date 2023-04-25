@@ -24,12 +24,23 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 */
 
-#![no_std] // don't link the Rust standard library
-#![no_main] // disable all Rust-level entry points
+use core::mem::size_of;
+use quantum_lib::{attach_interrupt, debug_println};
+use quantum_lib::x86_64::interrupts::Interrupts;
+use quantum_lib::x86_64::tables::idt::{ExtraHandlerInfo, Idt, InterruptFrame};
+use quantum_lib::x86_64::tables::INTERRUPT_DT;
 
-#![feature(abi_x86_interrupt)]
+fn idt_handler(iframe: InterruptFrame, interrupt: u8, error: Option<u64>) {
+    let extra_info = ExtraHandlerInfo::new(interrupt);
 
-pub mod debug;
-pub mod paging;
-pub mod gdt;
-pub mod idt;
+    panic!("CPU ERROR {:?} {:?} {:?}", iframe, extra_info.interrupt_name, error)
+}
+
+pub fn attach_interrupts() {
+    unsafe { Interrupts::enable() };
+    let mut idt = INTERRUPT_DT.lock();
+
+    debug_println!("Sizeof IDT: {}", size_of::<Idt>());
+
+    attach_interrupt!(idt, idt_handler, 0..255);
+}

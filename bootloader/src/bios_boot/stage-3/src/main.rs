@@ -28,8 +28,26 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #![no_main] // disable all Rust-level entry points
 #![allow(dead_code)]
 
+use core::panic::PanicInfo;
+use bootloader::boot_info::BootInfo;
+use quantum_lib::debug_println;
+
 #[no_mangle]
 #[link_section = ".start"]
 pub extern "C" fn _start(boot_info: u32) -> ! {
     let boot_info_ref = unsafe { &*(boot_info as *const BootInfo) };
+    main(boot_info_ref);
+    panic!("Stage3 should not return!");
+}
+
+fn main(boot_info: &BootInfo) {
+
+}
+
+#[panic_handler]
+#[cold]
+#[allow(dead_code)]
+fn panic(info: &PanicInfo) -> ! {
+    debug_println!("\nBootloader PANIC\n{}", info);
+    loop {}
 }

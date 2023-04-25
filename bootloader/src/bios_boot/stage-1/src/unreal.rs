@@ -28,7 +28,8 @@ use crate::bios_println;
 use core::arch::asm;
 use core::mem::size_of;
 use quantum_lib::x86_64::interrupts::Interrupts;
-use quantum_lib::x86_64::registers::{CpuStack, CR0, SegmentRegs};
+use quantum_lib::x86_64::PrivlLevel;
+use quantum_lib::x86_64::registers::{CpuStack, CR0, Segment, SegmentRegs};
 
 #[repr(C, packed(2))]
 pub struct SimpleGDTPtr {
@@ -98,7 +99,7 @@ pub unsafe fn enter_unreal_mode() {
 
     CR0::set_protected_mode(true);
 
-    SegmentRegs::reload_all_to(0x10);
+    SegmentRegs::reload_all_to(Segment::new(2, PrivlLevel::Ring0));
 
     CR0::set_protected_mode(false);
 
@@ -117,7 +118,7 @@ pub unsafe fn enter_stage2(entry_point: *const u8, info: *const u8) {
     CpuStack::push(info as u32);
     CpuStack::push(entry_point as u32);
 
-    SegmentRegs::reload_all_to(0x10);
+    SegmentRegs::reload_all_to(Segment::new(2, PrivlLevel::Ring0));
 
     asm!("ljmp $0x8, $2f", "2:", options(att_syntax));
     asm!(

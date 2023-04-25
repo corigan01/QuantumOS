@@ -66,7 +66,7 @@ use core::arch::asm;
 /// assert_eq!(regs.dl, 0x78);
 /// assert_eq!(regs.dh, 0x9A);
 /// ```
-#[derive(Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Default)]
+#[derive(Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Default, Debug)]
 #[repr(C)]
 pub struct GPRegs8 {
     pub al: u8,
@@ -118,7 +118,7 @@ pub struct GPRegs8 {
 /// assert_eq!(regs.si, 0x1357);
 /// assert_eq!(regs.di, 0x2468);
 /// ```
-#[derive(Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Default)]
+#[derive(Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Default, Debug)]
 #[repr(C)]
 pub struct GPRegs16 {
     pub ax: u16,
@@ -170,7 +170,7 @@ pub struct GPRegs16 {
 /// assert_eq!(regs.esi, 0xCCCC7777);
 /// assert_eq!(regs.edi, 0xDDDD8888);
 /// ```
-#[derive(Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Default)]
+#[derive(Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Default, Debug)]
 #[repr(C)]
 pub struct GPRegs32 {
     pub eax: u32,
@@ -246,7 +246,7 @@ pub struct GPRegs32 {
 /// assert_eq!(regs.r14, 0x5555666688889999);
 /// assert_eq!(regs.r15, 0x77778888AAAAFFFF);
 /// ```
-#[derive(Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Default)]
+#[derive(Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Default, Debug)]
 #[repr(C)]
 pub struct GPRegs64 {
     pub rax: u64,
@@ -282,6 +282,8 @@ pub struct GPRegs64 {
 /// # Example
 ///
 /// ```
+/// use quantum_lib::x86_64::registers::ControlRegs;
+///
 /// let mut regs = ControlRegs {
 ///     cr0: 0x12345678,
 ///     cr2: 0x9ABCDEF0,
@@ -294,7 +296,7 @@ pub struct GPRegs64 {
 /// assert_eq!(regs.cr3, 0x13579BDF);
 /// assert_eq!(regs.cr4, 0x2468ACE0);
 /// ```
-#[derive(Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Default)]
+#[derive(Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Default, Debug)]
 #[repr(C)]
 pub struct ControlRegs {
     pub cr0: u32,
@@ -302,6 +304,48 @@ pub struct ControlRegs {
     pub cr3: u32,
     pub cr4: u32,
 }
+
+#[derive(Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Default, Debug)]
+#[repr(C, packed)]
+pub struct Segment(u16);
+
+impl Segment {
+    pub fn new(gdt_index: u16, privl: PrivlLevel) -> Self {
+        let level = privl.to_usize() as u16;
+
+        Self(gdt_index << 3 | level)
+    }
+
+    pub fn as_u16(&self) -> u16 {
+        self.0
+    }
+
+    pub fn privl_level(&self) -> PrivlLevel {
+        PrivlLevel::new_from_usize((self.0 & 0b11) as usize).unwrap()
+    }
+
+    pub fn index_in_gdt(&self) -> u16 {
+        self.0 >> 3
+    }
+}
+
+macro_rules! segment_from_all_types {
+    ($($t:ty)*) => ($(
+        impl From<$t> for Segment {
+            fn from(value: $t) -> Self {
+                Segment(value as u16)
+            }
+        }
+
+        impl Into<$t> for Segment {
+            fn into(self) -> $t {
+                self.0 as $t
+            }
+        }
+    )*)
+}
+
+segment_from_all_types! {usize u8 u16 u32 u64 u128 i8 i16 i32 i64 i128 isize}
 
 /// A struct representing the segment registers in x86 architecture.
 ///
@@ -320,6 +364,8 @@ pub struct ControlRegs {
 /// # Example
 ///
 /// ```
+/// use quantum_lib::x86_64::registers::SegmentRegs;
+///
 /// let mut regs = SegmentRegs {
 ///     cs: 0x1234,
 ///     ds: 0x5678,
@@ -336,7 +382,7 @@ pub struct ControlRegs {
 /// assert_eq!(regs.fs, 0x1357);
 /// assert_eq!(regs.gs, 0x2468);
 /// ```
-#[derive(Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Default)]
+#[derive(Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Default, Debug)]
 #[repr(C)]
 pub struct SegmentRegs {
     pub cs: u16,
@@ -348,13 +394,13 @@ pub struct SegmentRegs {
 }
 
 impl SegmentRegs {
-    pub unsafe fn reload_all_to(seg: u16) {
+    pub unsafe fn reload_all_to(seg: Segment) {
         asm!(
             "mov ds, ax",
             "mov es, ax",
             "mov fs, ax",
             "mov gs, ax",
-            in("ax") seg
+            in("ax") seg.as_u16()
         )
     }
 
@@ -409,6 +455,19 @@ impl SegmentRegs {
 
         segment_registers
     }
+
+    pub fn cs() -> Segment {
+        let value: u16;
+
+        unsafe {
+            asm!(
+                "mov ax, cs",
+                out("ax") value
+            )
+        }
+
+        Segment::new(value, PrivlLevel::Ring0)
+    }
 }
 
 pub struct CpuStack {}
@@ -422,6 +481,7 @@ impl CpuStack {
         )
     }
 
+    #[cfg(not(target_pointer_width = "64"))]
     pub unsafe fn align_stack() {
         asm!("and esp, 0xffffff00",);
     }
@@ -452,6 +512,7 @@ pub struct CR0 {}
 impl CR0 {
     /// Reads the 32-bit value of the `CR0` register and returns it as a `u32`.
     #[inline(never)]
+    #[cfg(not(target_pointer_width = "64"))]
     pub fn read_to_32() -> u32 {
         let reading_value;
 
@@ -463,6 +524,22 @@ impl CR0 {
         }
 
         reading_value
+    }
+
+    /// Reads the 32-bit value of the `CR0` register and returns it as a `u32`.
+    #[inline(never)]
+    #[cfg(target_pointer_width = "64")]
+    pub fn read_to_32() -> u32 {
+        let reading_value: u64;
+
+        unsafe {
+            asm!(
+            "mov {output:r}, cr0",
+            output = out(reg) reading_value
+            );
+        }
+
+        reading_value as u32
     }
 
     /// Writes a single bit at a given position in the `CR0` register, as specified by the `bit_pos` parameter.
@@ -486,10 +563,19 @@ impl CR0 {
             read_value & moved_bit
         };
 
+        #[cfg(target_pointer_width = "64")]
         unsafe {
             asm!(
-                "mov cr0, {value:e}",
-                value = in(reg) new_value
+                "mov cr0, {value:r}",
+                value = in(reg) new_value as u64
+            );
+        }
+
+        #[cfg(not(target_pointer_width = "64"))]
+        unsafe {
+            asm!(
+            "mov cr0, {value:e}",
+            value = in(reg) new_value
             );
         }
     }
@@ -797,6 +883,7 @@ Bits 0-11 of the physical base address are assumed to be 0. Bits 3 and 4 of CR3 
 */
 
 impl CR3 {
+    #[cfg(not(target_pointer_width = "64"))]
     fn read_to_u32() -> u32 {
         let value: u32;
 
@@ -810,6 +897,20 @@ impl CR3 {
         value
     }
 
+    #[cfg(target_pointer_width = "64")]
+    fn read_to_u32() -> u32 {
+        let value: u64;
+
+        unsafe {
+            asm!(
+            "mov rax, cr3",
+            out("rax") value
+            );
+        }
+
+        value as u32
+    }
+
     fn read_flag(bit_pos: usize) -> bool {
         let value = Self::read_to_u32();
         let flag = 1 << bit_pos;
@@ -818,9 +919,18 @@ impl CR3 {
     }
 
     pub unsafe fn set_page_directory_base_register(ptr: *mut u8) {
+        #[cfg(target_pointer_width = "64")]
         unsafe {
             asm!(
-            "mov cr3, {value}",
+            "mov cr3, {value:r}",
+            value = in(reg) ptr
+            )
+        }
+
+        #[cfg(not(target_pointer_width = "64"))]
+        unsafe {
+            asm!(
+            "mov cr3, {value:e}",
             value = in(reg) ptr
             )
         }
@@ -867,6 +977,7 @@ pub struct CR4 {}
 impl CR4 {
     /// Reads the value of the CR4 register and returns it as an unsigned 32-bit integer.
     #[inline(never)]
+    #[cfg(not(target_pointer_width = "64"))]
     pub fn read_to_u32() -> u32 {
         let reading_value;
 
@@ -878,6 +989,22 @@ impl CR4 {
         }
 
         reading_value
+    }
+
+    /// Reads the value of the CR4 register and returns it as an unsigned 32-bit integer.
+    #[inline(never)]
+    #[cfg(target_pointer_width = "64")]
+    pub fn read_to_u32() -> u32 {
+        let reading_value: u64;
+
+        unsafe {
+            asm!(
+            "mov {output:r}, cr4",
+            output = out(reg) reading_value
+            );
+        }
+
+        reading_value as u32
     }
 
     /// Reads the value of a specific flag in the CR4 register and returns whether it is set or not.
@@ -909,6 +1036,15 @@ impl CR4 {
             read_value & moved_bit
         };
 
+        #[cfg(target_pointer_width = "64")]
+        unsafe {
+            asm!(
+            "mov cr4, {value:r}",
+            value = in(reg) new_value as u64
+            );
+        }
+
+        #[cfg(not(target_pointer_width = "64"))]
         unsafe {
             asm!(
             "mov cr4, {value:e}",
@@ -1157,7 +1293,7 @@ impl IA32_EFER {
         value & flag > 0
     }
 
-    pub fn is_system_call_extentions_set() -> bool {
+    pub fn is_system_call_extensions_set() -> bool {
         Self::read_flag(0)
     }
 
@@ -1181,7 +1317,7 @@ impl IA32_EFER {
         Self::read_flag(14)
     }
 
-    pub fn is_translation_cache_extention_set() -> bool {
+    pub fn is_translation_cache_extension_set() -> bool {
         Self::read_flag(15)
     }
 

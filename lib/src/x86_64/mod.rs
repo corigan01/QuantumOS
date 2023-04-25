@@ -28,6 +28,7 @@ pub mod interrupts;
 pub mod io;
 pub mod paging;
 pub mod registers;
+pub mod tables;
 
 /// Enumeration of possible privilege levels (rings) in x86 and x86_64 architectures.
 pub enum PrivlLevel {

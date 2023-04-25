@@ -112,7 +112,7 @@ fn enter_rust(disk_id: u16) {
         TEMP_ALLOC
             .as_mut()
             .unwrap()
-            .allocate_region(next_3_stage_bytes)
+            .allocate_region(next_3_stage_bytes + 0x10)
             .unwrap()
     };
 

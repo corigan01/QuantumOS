@@ -29,7 +29,8 @@ use quantum_lib::{debug_print, debug_println};
 use quantum_lib::address_utils::virtual_address::VirtAddress;
 use quantum_lib::x86_64::paging::config::PageConfigBuilder;
 use quantum_lib::x86_64::paging::structures::{PageMapLevel2, PageMapLevel3, PageMapLevel4};
-use quantum_lib::x86_64::registers::{CR0, CR3, CR4, IA32_EFER, SegmentRegs};
+use quantum_lib::x86_64::PrivlLevel;
+use quantum_lib::x86_64::registers::{CR0, CR3, CR4, IA32_EFER, Segment, SegmentRegs};
 
 static mut LEVEL4: PageMapLevel4 = PageMapLevel4::new();
 static mut LEVEL3: PageMapLevel3 = PageMapLevel3::new();
@@ -123,6 +124,6 @@ pub unsafe fn enable_paging() {
     debug_println!("OK");
 
     debug_print!("Reloading segment registers ...");
-    SegmentRegs::reload_all_to(0x10);
+    SegmentRegs::reload_all_to(Segment::new(2, PrivlLevel::Ring0));
     debug_println!("OK");
 }

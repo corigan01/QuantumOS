@@ -21,29 +21,43 @@ NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPO
 NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
 DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
 */
 
-#![feature(abi_x86_interrupt)]
+use crate::x86_64::tables::idt::InterruptFrame;
+use crate::remove_interrupt;
+use crate::attach_interrupt;
+use crate::{debug_print, debug_println};
 
-#![no_main]
-#![no_std]
+use lazy_static::lazy_static;
+use spin::Mutex;
+use core::arch::asm;
 
-pub mod basic_font;
-pub mod bitset;
-pub mod bytes;
-pub mod debug;
-//pub mod framebuffer_utils;
-pub mod heapless_string;
-pub mod heapless_vector;
-pub mod panic_utils;
-pub mod possibly_uninit;
-pub mod ptr;
-pub mod simple_allocator;
-pub mod time;
-pub mod x86_64;
-pub mod address_utils;
-pub mod elf;
-pub mod magic;
+pub mod idt;
 
-pub type Nothing = ();
+lazy_static! {
+    pub static ref INTERRUPT_DT: Mutex<idt::Idt> = {
+        let mut idt = idt::Idt::new();
+
+        debug_print!("Checking IDT ... ");
+
+        // Our little test handler to make sure it gets called when we cause a Divide by Zero
+        fn test_interrupt_dev0(_iframe: InterruptFrame, _interrupt: u8, _error: Option<u64>) {
+            debug_println!("OK");
+        }
+
+        attach_interrupt!(idt, test_interrupt_dev0, 0);
+
+        idt.submit_entries().expect("Unable to load IDT!").load();
+
+        // test the handler
+        unsafe {
+            asm!("int 0x0");
+        }
+
+        remove_interrupt!(idt, 0);
+
+        idt.submit_entries().expect("Unable to load IDT!").load();
+
+        Mutex::new(idt)
+    };
+}

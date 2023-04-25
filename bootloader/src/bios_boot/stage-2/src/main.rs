@@ -29,18 +29,16 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #![allow(dead_code)]
 
 use bootloader::boot_info::{BootInfo, VideoInformation};
-use core::arch::asm;
 use core::panic::PanicInfo;
 use quantum_lib::bytes::Bytes;
 use quantum_lib::debug::add_connection_to_global_stream;
 use quantum_lib::debug::stream_connection::StreamConnectionBuilder;
 use quantum_lib::elf::{ElfArch, ElfBits, ElfHeader, ElfSegmentType};
-use quantum_lib::ptr::entry_point::EntryPoint64;
-use quantum_lib::x86_64::registers::SegmentRegs;
 use quantum_lib::{debug_print, debug_println};
 
 use stage_2::debug::{display_string, setup_framebuffer};
 use stage_2::gdt::LONG_MODE_GDT;
+use stage_2::idt::attach_interrupts;
 use stage_2::paging::enable_paging;
 
 #[no_mangle]
@@ -142,6 +140,8 @@ fn parse_kernel_elf(kernel_elf: ElfHeader) -> Option<u32> {
     Some(entry_point)
 }
 
+
+
 fn main(boot_info: &BootInfo) {
     let mut total_memory = 0;
     for entry in boot_info.memory_map.unwrap() {
@@ -161,8 +161,11 @@ fn main(boot_info: &BootInfo) {
     );
     debug_println!("Vga info: {:#?}", boot_info.vid);
 
-    LONG_MODE_GDT.load();
+
+    attach_interrupts();
     unsafe { enable_paging() };
+    LONG_MODE_GDT.load();
+
 
     let kern_disc = &boot_info.ram_fs.unwrap().kernel;
     let kernel_elf_raw_data = unsafe {
