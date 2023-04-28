@@ -1,8 +1,8 @@
 /*
-  ____                 __               __   _ __
- / __ \__ _____ ____  / /___ ____ _    / /  (_) /
-/ /_/ / // / _ `/ _ \/ __/ // /  ' \  / /__/ / _ \
-\___\_\_,_/\_,_/_//_/\__/\_,_/_/_/_/ /____/_/_.__/
+  ____                 __               __                __
+ / __ \__ _____ ____  / /___ ____ _    / /  ___  ___ ____/ /__ ____
+/ /_/ / // / _ `/ _ \/ __/ // /  ' \  / /__/ _ \/ _ `/ _  / -_) __/
+\___\_\_,_/\_,_/_//_/\__/\_,_/_/_/_/ /____/\___/\_,_/\_,_/\__/_/
   Part of the Quantum OS Project
 
 Copyright 2023 Gavin Kellam
@@ -21,14 +21,10 @@ NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPO
 NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
 DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
 */
 
-use crate::framebuffer_utils::frame_info::FrameInfo;
-use crate::framebuffer_utils::FramebufferPixelLayout;
-use crate::ptr::normalization_ptr::NormPtr;
+#![no_std] // don't link the Rust standard library
+#![no_main] // disable all Rust-level entry points
 
-pub struct HeaplessFramebuffer {
-    ptr: NormPtr,
-    info: FrameInfo
-}
-
+pub mod debug;

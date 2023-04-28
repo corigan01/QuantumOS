@@ -33,7 +33,7 @@ pub mod basic_font;
 pub mod bitset;
 pub mod bytes;
 pub mod debug;
-//pub mod framebuffer_utils;
+pub mod framebuffer_utils;
 pub mod heapless_string;
 pub mod heapless_vector;
 pub mod panic_utils;
@@ -45,5 +45,6 @@ pub mod x86_64;
 pub mod address_utils;
 pub mod elf;
 pub mod magic;
+pub mod data_portal;
 
 pub type Nothing = ();

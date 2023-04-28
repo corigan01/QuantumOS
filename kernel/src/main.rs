@@ -28,21 +28,37 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #![no_main] // disable all Rust-level entry points
 #![allow(dead_code)]
 
+use quantum_lib::debug::add_connection_to_global_stream;
+use quantum_lib::debug::stream_connection::StreamConnectionBuilder;
+use quantum_lib::debug_println;
 use quantum_os::serial::BaudRate::Baud115200;
 use quantum_os::serial::{SerialCOM, SerialDevice};
+
+pub fn display_serial(string: &str) {
+    let serial = SerialDevice::new(SerialCOM::Com1, Baud115200).unwrap();
+    serial.write_string(string);
+}
 
 #[no_mangle]
 #[link_section = ".start"]
 pub extern "C" fn _start() {
-    main()
+    let connection = StreamConnectionBuilder::new()
+        .console_connection()
+        .add_connection_name("SERIAL")
+        .does_support_scrolling(true)
+        .add_outlet(display_serial)
+        .build();
+
+    add_connection_to_global_stream(connection).unwrap();
+
+    debug_println!("Welcome to Quantum OS!");
+
+
+    main();
+    panic!("Kernel Should not exit!!!");
 }
 
 fn main() {
-    let serial = SerialDevice::new(SerialCOM::Com1, Baud115200).unwrap();
 
-    loop {
-        serial.write_byte(b'Q');
-        serial.write_byte(b'O');
-        serial.write_byte(b'S');
-    }
+
 }

@@ -26,28 +26,151 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 #![no_std] // don't link the Rust standard library
 #![no_main] // disable all Rust-level entry points
-#![allow(dead_code)]
 
+use core::arch::asm;
 use core::panic::PanicInfo;
-use bootloader::boot_info::BootInfo;
-use quantum_lib::debug_println;
+use bootloader::boot_info::{BootInfo, VideoInformation};
+
+use quantum_lib::debug::add_connection_to_global_stream;
+use quantum_lib::debug::stream_connection::StreamConnectionBuilder;
+use quantum_lib::{debug_print, debug_println};
+use quantum_lib::elf::{ElfHeader, ElfArch, ElfBits, ElfSegmentType};
+use quantum_lib::x86_64::PrivlLevel;
+use quantum_lib::x86_64::registers::{Segment, SegmentRegs};
+
+use stage_3::debug::{clear_framebuffer, display_string, setup_framebuffer};
 
 #[no_mangle]
 #[link_section = ".start"]
-pub extern "C" fn _start(boot_info: u32) -> ! {
+pub extern "C" fn _start(boot_info: u64) -> ! {
     let boot_info_ref = unsafe { &*(boot_info as *const BootInfo) };
+
+    unsafe { SegmentRegs::reload_all_to(Segment::new(2, PrivlLevel::Ring0)); }
+
+    let video_info: &VideoInformation = boot_info_ref.vid.as_ref().unwrap();
+
+    let framebuffer = video_info.framebuffer;
+    let x_res = video_info.x;
+    let y_res = video_info.y;
+    let bbp = video_info.depth;
+
+    setup_framebuffer(
+        framebuffer,
+        x_res as usize,
+        y_res as usize,
+        bbp as usize,
+        true,
+    );
+
+    clear_framebuffer();
+
+    let stream_connection = StreamConnectionBuilder::new()
+        .console_connection()
+        .add_outlet(display_string)
+        .add_connection_name("VGA DEBUG")
+        .does_support_scrolling(true)
+        .build();
+
+    add_connection_to_global_stream(stream_connection).unwrap();
+
+    debug_println!("Quantum Bootloader! (Stage3) [64 bit]");
+
+    debug_println!("{:#?}", boot_info_ref.vid);
+
     main(boot_info_ref);
     panic!("Stage3 should not return!");
 }
 
-fn main(boot_info: &BootInfo) {
+fn parse_kernel_elf(kernel_elf: ElfHeader) -> Option<u32> {
+    let kernel_arch = kernel_elf.elf_arch()?;
+    let kernel_bits = kernel_elf.elf_bits()?;
 
+    debug_print!("Kernel arch={:?}, bits={:?} ...", kernel_arch, kernel_bits);
+
+    if !matches!(kernel_arch, ElfArch::X86_64) || !matches!(kernel_bits, ElfBits::Bit64) {
+        debug_println!("Err");
+        return None;
+    }
+
+    debug_println!("OK");
+
+    let header_amount = kernel_elf.elf_number_of_entries_in_program_table()?;
+    let entry_point = kernel_elf.elf_entry_point()? as u32;
+
+    debug_println!(
+        "Kernel Info: p-header=(O: {} S: {} B: {}) s-header=(O: {}, S: {}, B: {}) e-point={:x}",
+        kernel_elf.elf_program_header_table_position()?,
+        header_amount,
+        kernel_elf.elf_size_of_entry_in_program_table()?,
+        kernel_elf.elf_section_header_table_position()?,
+        kernel_elf.elf_number_of_entries_in_section_table()?,
+        kernel_elf.elf_size_of_entry_in_section_table()?,
+        entry_point
+    );
+
+    for i in 0..header_amount {
+        let header_idx = i as usize;
+        let header = kernel_elf.get_program_header(header_idx)?;
+
+        debug_println!(
+            "Header {} = '{:x?}' -- {:?} => F: {} M: {} O: {} Vaddr: {:x}",
+            header_idx,
+            header.type_of_segment(),
+            header.flags(),
+            header.size_in_elf(),
+            header.size_in_mem(),
+            header.data_offset(),
+            header.data_expected_address()
+        );
+
+        // Test code
+        let header_type = header.type_of_segment();
+        let kernel_raw_data = kernel_elf.get_raw_data_slice();
+
+        if matches!(header_type, ElfSegmentType::Load) {
+            let loader_ptr = header.data_expected_address() as *mut u8;
+
+            let data_size = header.size_in_elf() as usize;
+            let ac_data_offset = header.data_offset() as usize;
+
+            let data_slice = &kernel_raw_data[ac_data_offset..(data_size + ac_data_offset)];
+
+            for (i, byte) in data_slice.iter().enumerate() {
+                unsafe {
+                    *loader_ptr.add(i) = *byte;
+                }
+            }
+        }
+    }
+
+    Some(entry_point)
+}
+
+fn main(boot_info: &BootInfo) {
+    debug_println!("Starting to parse kernel ELF...");
+
+    let kernel_info = boot_info.ram_fs.unwrap().kernel;
+    let kernel_slice = unsafe { core::slice::from_raw_parts_mut(kernel_info.ptr as *mut u8, kernel_info.size as usize) };
+
+    let kernel_elf = ElfHeader::from_bytes(kernel_slice).unwrap();
+
+    let entry_point = parse_kernel_elf(kernel_elf).unwrap();
+
+    debug_println!("Kernel Entry Point 0x{:x}", entry_point);
+
+    debug_println!("Calling Kernel!");
+    unsafe {
+        asm!(
+            "jmp {kern:r}",
+            kern = in(reg) entry_point
+        );
+    }
 }
 
 #[panic_handler]
 #[cold]
 #[allow(dead_code)]
 fn panic(info: &PanicInfo) -> ! {
-    debug_println!("\nBootloader PANIC\n{}", info);
+    debug_println!("{}", info);
     loop {}
 }

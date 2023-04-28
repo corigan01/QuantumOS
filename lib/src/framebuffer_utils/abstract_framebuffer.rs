@@ -23,4 +23,19 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-pub mod idt;
+use crate::data_portal::{Portal, SendingPortal};
+use crate::framebuffer_utils::PixelLocation;
+
+pub trait DrawPacketHandler {
+    fn draw(packet: DrawPacket);
+}
+
+pub struct DrawPacket<'a> {
+    location: PixelLocation,
+    size: PixelLocation,
+    data: &'a [u8]
+}
+
+pub struct AbstractFramebuffer<'a, Func> {
+    handler: Portal<Func, SendingPortal, DrawPacket<'a>>
+}

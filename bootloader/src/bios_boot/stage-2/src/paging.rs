@@ -27,6 +27,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 use quantum_lib::{debug_print, debug_println};
 use quantum_lib::address_utils::virtual_address::VirtAddress;
+use quantum_lib::bytes::Bytes;
 use quantum_lib::x86_64::paging::config::PageConfigBuilder;
 use quantum_lib::x86_64::paging::structures::{PageMapLevel2, PageMapLevel3, PageMapLevel4};
 use quantum_lib::x86_64::PrivlLevel;
@@ -44,10 +45,10 @@ pub unsafe fn enable_paging() {
     let level2_tables = &mut LEVEL2;
 
     for (offset, level2) in level2_tables.iter_mut().enumerate() {
-        let offset_addition = offset as u64 * 1024 * 1024 * 1024;
+        let offset_addition = offset as u64 * Bytes::GIB as u64;
 
         for i in 0..512 {
-            let huge_address = VirtAddress::new(i * 2 * 1024 * 1024 + offset_addition)
+            let huge_address = VirtAddress::new((i * 2 * Bytes::MIB as u64 + offset_addition) as u64)
                 .unwrap()
                 .try_aligned()
                 .unwrap();
@@ -98,22 +99,21 @@ pub unsafe fn enable_paging() {
     let level4_address = level4.get_address().as_u64();
     debug_println!(" OK ({}Gib Mapped!)", level2_tables.len());
 
+    debug_print!("Loading CR3 ...");
+    CR3::set_page_directory_base_register(level4_address as *mut u8);
+    debug_println!("OK 0x{:x}", level4_address);
+
     debug_print!("Disabling paging ...");
     CR0::set_paging(false);
-    debug_println!("OK");
 
+    debug_println!("OK");
     debug_print!("Setting PAE ...");
     CR4::set_physical_address_extension(true);
-    CR4::set_page_size_extension(true);
     debug_println!("OK");
 
     debug_print!("Setting Long mode ...");
     IA32_EFER::set_long_mode_enable(true);
     debug_println!("OK");
-
-    debug_print!("Loading CR3 ...");
-    CR3::set_page_directory_base_register(level4_address as *mut u8);
-    debug_println!("OK 0x{:x}", level4_address);
 
     debug_print!("Enabling protected mode ...");
     CR0::set_protected_mode(true);

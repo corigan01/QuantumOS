@@ -45,8 +45,8 @@ impl PageConfigable for PageMapLevel4Entry {}
 pub struct PageConfigBuilder<Type = NonTypedPageConfig> {
     present: bool,
     rw: bool,
-    user_superviser: bool,
-    writh_through: bool,
+    user_supervisor: bool,
+    write_through: bool,
     cache_disable: bool,
     accessed: bool,
     page_size_select: bool,
@@ -67,8 +67,8 @@ impl PageConfigBuilder {
         Self {
             present: false,
             rw: false,
-            user_superviser: false,
-            writh_through: false,
+            user_supervisor: false,
+            write_through: false,
             cache_disable: false,
             accessed: false,
             page_size_select: false,
@@ -90,15 +90,12 @@ impl PageConfigBuilder<NonTypedPageConfig> {
     pub fn level1(self) -> PageConfigBuilder<PageMapLevel1Entry> {
         unsafe { transmute(self) }
     }
-
     pub fn level2(self) -> PageConfigBuilder<PageMapLevel2Entry> {
         unsafe { transmute(self) }
     }
-
     pub fn level3(self) -> PageConfigBuilder<PageMapLevel3Entry> {
         unsafe { transmute(self) }
     }
-
     pub fn level4(self) -> PageConfigBuilder<PageMapLevel4Entry> {
         unsafe { transmute(self) }
     }
@@ -133,13 +130,13 @@ where
     }
 
     pub fn write_through(mut self, flag: bool) -> Self {
-        self.writh_through = flag;
+        self.write_through = flag;
 
         self
     }
 
     pub fn user_page(mut self, flag: bool) -> Self {
-        self.user_superviser = flag;
+        self.user_supervisor = flag;
 
         self
     }
@@ -159,8 +156,8 @@ impl PageConfigBuilder<PageMapLevel1Entry> {
 
         compiled_options.set_bit(0, self.present);
         compiled_options.set_bit(1, self.rw);
-        compiled_options.set_bit(2, self.user_superviser);
-        compiled_options.set_bit(3, self.writh_through);
+        compiled_options.set_bit(2, self.user_supervisor);
+        compiled_options.set_bit(3, self.write_through);
         compiled_options.set_bit(4, self.cache_disable);
         compiled_options.set_bit(5, self.accessed);
         compiled_options.set_bit(6, self.dirty);
@@ -198,8 +195,8 @@ impl PageConfigBuilder<PageMapLevel2Entry> {
 
         compiled_options.set_bit(0, self.present);
         compiled_options.set_bit(1, self.rw);
-        compiled_options.set_bit(2, self.user_superviser);
-        compiled_options.set_bit(3, self.writh_through);
+        compiled_options.set_bit(2, self.user_supervisor);
+        compiled_options.set_bit(3, self.write_through);
         compiled_options.set_bit(4, self.cache_disable);
         compiled_options.set_bit(5, self.accessed);
         compiled_options.set_bit(7, self.page_size_select);
@@ -244,8 +241,8 @@ impl PageConfigBuilder<PageMapLevel3Entry> {
 
         compiled_options.set_bit(0, self.present);
         compiled_options.set_bit(1, self.rw);
-        compiled_options.set_bit(2, self.user_superviser);
-        compiled_options.set_bit(3, self.writh_through);
+        compiled_options.set_bit(2, self.user_supervisor);
+        compiled_options.set_bit(3, self.write_through);
         compiled_options.set_bit(4, self.cache_disable);
         compiled_options.set_bit(5, self.accessed);
         compiled_options.set_bit(7, self.page_size_select);
@@ -282,8 +279,8 @@ impl PageConfigBuilder<PageMapLevel4Entry> {
 
         compiled_options.set_bit(0, self.present);
         compiled_options.set_bit(1, self.rw);
-        compiled_options.set_bit(2, self.user_superviser);
-        compiled_options.set_bit(3, self.writh_through);
+        compiled_options.set_bit(2, self.user_supervisor);
+        compiled_options.set_bit(3, self.write_through);
         compiled_options.set_bit(4, self.cache_disable);
         compiled_options.set_bit(5, self.accessed);
         compiled_options.set_bits(12..(VIRTUAL_ALLOWED_ADDRESS_SIZE), self.address >> 12);

@@ -25,11 +25,11 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 #[derive(Clone, Copy, Ord, PartialOrd, Eq, PartialEq)]
-pub struct PossiblyUnit<Type> {
+pub struct PossiblyUninit<Type> {
     data: Option<Type>,
 }
 
-impl<Type> PossiblyUnit<Type> {
+impl<Type> PossiblyUninit<Type> {
     pub fn new() -> Self {
         Self { data: None }
     }

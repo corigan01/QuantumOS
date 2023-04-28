@@ -33,3 +33,23 @@ pub struct FrameInfo {
     stride: usize,
     total_bytes: usize,
 }
+
+impl FrameInfo {
+    pub fn new(
+        size_x: usize,
+        size_y: usize,
+        depth: usize,
+        pixel_layout: FramebufferPixelLayout,
+        stride: usize,
+        total_bytes: usize
+    ) -> Self {
+        FrameInfo {
+            depth,
+            size_y,
+            size_x,
+            pixel_layout,
+            stride,
+            total_bytes,
+        }
+    }
+}

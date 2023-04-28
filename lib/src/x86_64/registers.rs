@@ -307,7 +307,7 @@ pub struct ControlRegs {
 
 #[derive(Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Default, Debug)]
 #[repr(C, packed)]
-pub struct Segment(u16);
+pub struct Segment(pub u16);
 
 impl Segment {
     pub fn new(gdt_index: u16, privl: PrivlLevel) -> Self {
@@ -481,7 +481,6 @@ impl CpuStack {
         )
     }
 
-    #[cfg(not(target_pointer_width = "64"))]
     pub unsafe fn align_stack() {
         asm!("and esp, 0xffffff00",);
     }

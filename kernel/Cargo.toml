@@ -4,28 +4,10 @@ version = "0.1.0"
 edition = "2021"
 build="build.rs"
 
-
-
-[features]
-default = [ "nightly", "instructions" ]
-nightly = [ "const_fn", "abi_x86_interrupt" ]
-abi_x86_interrupt = []
-instructions = []
-const_fn = []
-
-[profile.dev]
-panic = "unwind"
-
 [dependencies]
-no-std-compat = "0.4.1"
-volatile = "0.4.5"
 spin = "0.9.8"
-
-# Should be implmented in Quantum down the line
-x86_64 = "0.14.9"
-owo-colors = "3.4.0"
-heapless = "0.7.16"
+quantum_lib = {path = "../lib"}
 
 [dependencies.lazy_static]
-version = "1.0"
+version = "1.4.0"
 features = ["spin_no_std"]

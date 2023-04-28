@@ -108,11 +108,13 @@ pub mod vga;
 #![no_main]
 
 use core::panic::PanicInfo;
+use quantum_lib::debug_println;
 
 pub mod port;
 pub mod serial;
 
 #[panic_handler]
-fn panic(_info: &PanicInfo) -> ! {
+fn panic(info: &PanicInfo) -> ! {
+    debug_println!("{}", info);
     loop {}
 }

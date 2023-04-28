@@ -25,6 +25,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 use core::fmt::{Debug, Display, Formatter};
+use core::ops::{Add, AddAssign, Mul, MulAssign, Sub, SubAssign};
 
 /// A type that represents a size in bytes, and can convert it to a human-readable string.
 ///
@@ -37,12 +38,12 @@ use core::fmt::{Debug, Display, Formatter};
 /// assert_eq!(format!("{}", size), "1 Kib");
 /// ```
 #[derive(Clone, Copy, PartialOrd, PartialEq, Default, Debug)]
-pub struct Bytes(u128);
+pub struct Bytes(u64);
 
 impl Bytes {
-    pub const KIB: u128 = 1024;
-    pub const MIB: u128 = 1024 * 1024;
-    pub const GIB: u128 = 1024 * 1024 * 1024;
+    pub const KIB: u64 = 1024;
+    pub const MIB: u64 = 1024 * 1024;
+    pub const GIB: u64 = 1024 * 1024 * 1024;
 
     /// Creates a new `Bytes` instance with zero bytes.
     pub fn new() -> Self {
@@ -78,26 +79,77 @@ impl Display for Bytes {
     }
 }
 
+impl Add for Bytes {
+    type Output = Bytes;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        Bytes::from(self.0 + rhs.0)
+    }
+}
+
+impl Mul for Bytes {
+    type Output = Bytes;
+
+    fn mul(self, rhs: Self) -> Self::Output {
+        Bytes::from(self.0 * rhs.0)
+    }
+}
+
+impl Sub for Bytes {
+    type Output = Bytes;
+
+    fn sub(self, rhs: Self) -> Self::Output {
+        Bytes::from(self.0 - rhs.0)
+    }
+}
+
+impl AddAssign for Bytes {
+    fn add_assign(&mut self, rhs: Self) {
+        self.0 = self.0 + rhs.0;
+    }
+}
+
+impl SubAssign for Bytes {
+    fn sub_assign(&mut self, rhs: Self) {
+        self.0 = self.0 - rhs.0;
+    }
+}
+
+impl MulAssign for Bytes {
+    fn mul_assign(&mut self, rhs: Self) {
+        self.0 = self.0 * rhs.0;
+    }
+}
+
+
 /// Converts the specified value to a `Bytes` instance.
 ///
 /// # Examples
 /// ```
 /// use quantum_lib::bytes::Bytes;
 ///
-/// let size: Bytes = 1024.into();
+/// let size: Bytes = 1024 ;
 ///
 /// assert_eq!(format!("{}", size), "1 Kib");
 /// ```
 macro_rules! from_all_types {
     ($($t:ty)*) => ($(
-        impl From<$t> for Bytes {
+        impl From<$t> for Bytes  {
             fn from(value: $t) -> Self {
                 Bytes {
-                    0: value as u128
+                    0: (value as u64) 
                 }
+            }
+        }
+
+        impl Into<$t> for Bytes {
+            fn into(self) -> $t {
+                self.0 as $t
             }
         }
     )*)
 }
 
-from_all_types! {usize u8 u16 u32 u64 u128}
+
+
+from_all_types! {usize u8 u16 u32 u64 u128 i8 i16 i32 i64 i128 isize}

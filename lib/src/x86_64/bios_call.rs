@@ -122,6 +122,7 @@ impl BiosCall {
     }
 }
 
+#[cfg(not(target_pointer_width = "64"))]
 impl BiosCall<NoCall> {
     pub fn bit16_call(self) -> BiosCall<Bit16> {
         BiosCall {

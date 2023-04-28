@@ -16,10 +16,11 @@ impl GdtLongMode {
                 | (1 << 47) // present
                 | (1 << 41) // writable
                 | (1 << 40) // accessed (to avoid changes by the CPU)
-        };
+
+            };
         Self {
             zero: 0,
-            code: common_flags | (1 << 43) | (1 << 53), // executable and long mode
+            code: common_flags  | (1 << 43) | (1 << 53), // executable and long mode
             data: common_flags,
         }
     }
@@ -31,7 +32,7 @@ impl GdtLongMode {
         };
 
         unsafe {
-            asm!("lgdt [{}]", in(reg) &pointer, options(readonly, nostack, preserves_flags));
+            asm!("lgdt [{}]", in(reg) &pointer);
         }
     }
 }

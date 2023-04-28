@@ -23,23 +23,27 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 */
-
-#![no_std] // don't link the Rust standard library
 #![no_main] // disable all Rust-level entry points
+#![no_std] // don't link the Rust standard library
 #![allow(dead_code)]
 
-use bootloader::boot_info::{BootInfo, VideoInformation};
+use core::arch::asm;
 use core::panic::PanicInfo;
+
+use quantum_lib::bitset::BitSet;
 use quantum_lib::bytes::Bytes;
 use quantum_lib::debug::add_connection_to_global_stream;
 use quantum_lib::debug::stream_connection::StreamConnectionBuilder;
-use quantum_lib::elf::{ElfArch, ElfBits, ElfHeader, ElfSegmentType};
-use quantum_lib::{debug_print, debug_println};
+use quantum_lib::debug_println;
+use quantum_lib::x86_64::interrupts::Interrupts;
+use quantum_lib::x86_64::{PrivlLevel};
+use quantum_lib::x86_64::registers::{CpuStack, CR0, IA32_EFER, Segment, SegmentRegs};
 
 use stage_2::debug::{display_string, setup_framebuffer};
 use stage_2::gdt::LONG_MODE_GDT;
-use stage_2::idt::attach_interrupts;
 use stage_2::paging::enable_paging;
+
+use bootloader::boot_info::{BootInfo, VideoInformation};
 
 #[no_mangle]
 #[link_section = ".start"]
@@ -69,78 +73,11 @@ pub extern "C" fn _start(boot_info: u32) -> ! {
         .build();
     add_connection_to_global_stream(stream_connection).unwrap();
 
-    debug_println!("Quantum Bootloader! (Stage2)");
+    debug_println!("Quantum Bootloader! (Stage2) [32 bit]");
 
     main(boot_info_ref);
     panic!("Stage2 should not finish!");
 }
-
-fn parse_kernel_elf(kernel_elf: ElfHeader) -> Option<u32> {
-    let kernel_arch = kernel_elf.elf_arch()?;
-    let kernel_bits = kernel_elf.elf_bits()?;
-
-    debug_print!("Kernel arch={:?}, bits={:?} ...", kernel_arch, kernel_bits);
-
-    if !matches!(kernel_arch, ElfArch::X86_64) || !matches!(kernel_bits, ElfBits::Bit64) {
-        debug_println!("Err");
-        return None;
-    }
-
-    debug_println!("OK");
-
-    let header_amount = kernel_elf.elf_number_of_entries_in_program_table()?;
-    let entry_point = kernel_elf.elf_entry_point()? as u32;
-
-    debug_println!(
-        "Kernel Info: p-header=(O: {} S: {} B: {}) s-header=(O: {}, S: {}, B: {}) e-point={:x}",
-        kernel_elf.elf_program_header_table_position()?,
-        header_amount,
-        kernel_elf.elf_size_of_entry_in_program_table()?,
-        kernel_elf.elf_section_header_table_position()?,
-        kernel_elf.elf_number_of_entries_in_section_table()?,
-        kernel_elf.elf_size_of_entry_in_section_table()?,
-        entry_point
-    );
-
-    for i in 0..header_amount {
-        let header_idx = i as usize;
-        let header = kernel_elf.get_program_header(header_idx)?;
-
-        debug_println!(
-            "Header {} = '{:x?}' -- {:?} => F: {} M: {} O: {} Vaddr: {:x}",
-            header_idx,
-            header.type_of_segment(),
-            header.flags(),
-            header.size_in_elf(),
-            header.size_in_mem(),
-            header.data_offset(),
-            header.data_expected_address()
-        );
-
-        // Test code
-        let header_type = header.type_of_segment();
-        let kernel_raw_data = kernel_elf.get_raw_data_slice();
-
-        if matches!(header_type, ElfSegmentType::Load) {
-            let loader_ptr = header.data_expected_address() as *mut u8;
-
-            let data_size = header.size_in_elf() as usize;
-            let ac_data_offset = header.data_offset() as usize;
-
-            let data_slice = &kernel_raw_data[ac_data_offset..(data_size + ac_data_offset)];
-
-            for (i, byte) in data_slice.iter().enumerate() {
-                unsafe {
-                    *loader_ptr.add(i) = *byte;
-                }
-            }
-        }
-    }
-
-    Some(entry_point)
-}
-
-
 
 fn main(boot_info: &BootInfo) {
     let mut total_memory = 0;
@@ -159,31 +96,47 @@ fn main(boot_info: &BootInfo) {
         boot_info.memory_map.unwrap().as_ptr(),
         Bytes::from(total_memory)
     );
+
     debug_println!("Vga info: {:#?}", boot_info.vid);
 
-
-    attach_interrupts();
     unsafe { enable_paging() };
     LONG_MODE_GDT.load();
 
+    let ptr = boot_info.ram_fs.unwrap().stage3.ptr;
+    let data_ref = unsafe { &*(ptr as *const [u8; 10]) };
 
-    let kern_disc = &boot_info.ram_fs.unwrap().kernel;
-    let kernel_elf_raw_data = unsafe {
-        core::slice::from_raw_parts_mut(kern_disc.ptr as *mut u8, kern_disc.size as usize)
-    };
+    debug_println!("Entering Stage3! 0x{:x} {:x?}", ptr, data_ref);
 
-    let kernel_elf = ElfHeader::from_bytes(kernel_elf_raw_data).unwrap();
-
-    let entry_point = parse_kernel_elf(kernel_elf).unwrap();
-
-    let test_bytes = unsafe { core::slice::from_raw_parts_mut(entry_point as *mut u8, 10) };
-
-    debug_println!("Jumping to Kernel!! {:x?}", test_bytes);
-
-    let entry_point_func = unsafe { &*(entry_point as *const fn()) };
-
-    entry_point_func();
+    unsafe { enter_stage3(boot_info); }
 }
+
+#[no_mangle]
+pub unsafe fn enter_stage3(boot_info: &BootInfo) {
+    SegmentRegs::reload_all_to(Segment::new(2, PrivlLevel::Ring0));
+
+    CpuStack::push(0);
+    CpuStack::push(boot_info as *const BootInfo as u32 - 8);
+    CpuStack::push(0);
+    CpuStack::push(boot_info.ram_fs.unwrap().stage3.ptr as u32);
+
+    asm!("ljmp $0x8, $2f", "2:", options(att_syntax));
+    asm!(
+        ".code64",
+        // jump to 3rd stage
+        "pop rax",
+        "pop rdi",
+
+        "call rax",
+
+        "2:",
+        "jmp 2b",
+        in("rax") 0,
+        in("rdi") 0
+    );
+
+}
+
+
 
 #[panic_handler]
 #[cold]

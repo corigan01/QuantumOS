@@ -35,6 +35,7 @@ fn main() {
     let noqemu = command_args.contains(&String::from("noqemu"));
     let kvm = command_args.contains(&String::from("kvm"));
     let debug_int = command_args.contains(&String::from("debug-int"));
+    let debug = command_args.contains(&String::from("debug"));
 
     if noqemu {
         println!("Build only mode!");
@@ -62,16 +63,29 @@ fn main() {
             user_extra_args.push(String::from("int"));
         }
 
+        if debug {
+            user_extra_args.push(String::from("-s"));
+            user_extra_args.push(String::from("-S"));
+        }
+
         let _qemu = Command::new("qemu-system-x86_64")
+            .args(user_extra_args)
             .arg("-d")
             .arg("cpu_reset")
             .arg("--no-shutdown")
             .arg("-m")
             .arg("256M")
-            .args(user_extra_args)
+            .arg("-display")
+            .arg("gtk")
+            .arg("-k")
+            .arg("en-us")
+            .arg("-serial")
+            .arg("stdio")
+            .arg("-nic")
+            .arg("none")
             .arg("-drive")
             .arg(format!("format=raw,file={}", build_status.unwrap()))
-            .stdout(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::inherit())
             .status();
     } else {
         println!("NOT RUNNING QEMU!");
@@ -84,6 +98,9 @@ fn clean_dont_care() {
     // Now clean up
     let _ = fs::remove_dir_all("target/bootloader_dir");
     let _ = fs::remove_file("target/i386-quantum_loader/release/stage-1");
+    let _ = fs::remove_file("target/i686-quantum_loader/release/stage-2");
+    let _ = fs::remove_file("target/x86_64-quantum_loader/release/stage-3");
+
     let _ = quantum::bios_disk::delete_disk_img("target/fat.img".into());
 }
 

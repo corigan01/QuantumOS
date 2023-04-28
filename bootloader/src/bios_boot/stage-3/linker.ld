@@ -1,7 +1,7 @@
 ENTRY(_start)
 
 SECTIONS {
-    . = 0x00200000;
+    . = 0x00300000;
 
     .start : {
         *(.start)
@@ -17,5 +17,11 @@ SECTIONS {
     }
     .bss : {
         *(.bss .bss.*)
+    }
+
+    . = ALIGN(512);
+
+    magic : {
+        SHORT(0x1254)
     }
 }

@@ -79,7 +79,7 @@ fn enter_rust(disk_id: u16) {
             .expect("Could detect bootloader partition, please add \'/bootloader/bootloader.cfg\' to the bootloader filesystem for a proper boot!");
 
     let bootloader_config_file_ptr =
-        unsafe { TEMP_ALLOC.as_mut().unwrap().allocate_region(511).unwrap() };
+        unsafe { TEMP_ALLOC.as_mut().unwrap().allocate_region(0x00100000 - 1).unwrap() };
     let bootloader_filename = "/bootloader/bootloader.cfg";
 
     fs.load_file_into_slice(bootloader_config_file_ptr, bootloader_filename)
@@ -100,7 +100,7 @@ fn enter_rust(disk_id: u16) {
         TEMP_ALLOC
             .as_mut()
             .unwrap()
-            .allocate_region(0x00100000 - 512)
+            .allocate_region(0x00100000)
             .unwrap()
     };
 

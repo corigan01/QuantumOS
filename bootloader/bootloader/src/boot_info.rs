@@ -43,21 +43,25 @@ pub struct VideoInformation {
 }
 
 #[derive(Clone, Copy, Debug)]
-#[repr(C)]
+#[repr(align(16), C)]
 pub struct BootInfo {
     pub booted_disk_id: u16,
     pub ram_fs: Option<SimpleRamFs>,
     pub vid: Option<VideoInformation>,
     pub memory_map: Option<&'static [E820Entry]>,
+    pub magic: u64
 }
 
 impl BootInfo {
+    const MAGIC: u64 = 0xdeadbeef;
+
     pub const fn new() -> Self {
         Self {
             booted_disk_id: 0,
             ram_fs: None,
             vid: None,
             memory_map: None,
+            magic: Self::MAGIC
         }
     }
 }

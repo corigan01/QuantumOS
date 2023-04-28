@@ -27,39 +27,25 @@ use crate::ptr::unsafe_ptr::UnsafePtr;
 
 pub struct NormPtr {
     ptr: UnsafePtr<u8>,
-    ptr_size_bytes: Option<usize>,
+    ptr_size_bytes: usize,
 }
 
 impl NormPtr {
-    pub fn new(ptr: u64) -> Self {
+    pub fn from_raw_parts<T>(ptr: *mut T, bytes: usize) -> Self {
         Self {
-            ptr: UnsafePtr::new(ptr),
-            ptr_size_bytes: None,
+            ptr: UnsafePtr::new(ptr as u64),
+            ptr_size_bytes: bytes,
         }
     }
 
-    pub fn set_ptr_from_u8(&mut self, ptr: *mut u8) {
-        self.ptr.set_ptr(ptr);
-        self.ptr_size_bytes = Some(1);
-    }
+    
+}
 
-    pub fn set_ptr_from_u16(&mut self, ptr: *mut u16) {
-        self.ptr.set_ptr(ptr as *mut u8);
-        self.ptr_size_bytes = Some(2);
-    }
-
-    pub fn set_ptr_from_u32(&mut self, ptr: *mut u32) {
-        self.ptr.set_ptr(ptr as *mut u8);
-        self.ptr_size_bytes = Some(4);
-    }
-
-    pub fn set_ptr_from_u64(&mut self, ptr: *mut u64) {
-        self.ptr.set_ptr(ptr as *mut u8);
-        self.ptr_size_bytes = Some(8);
-    }
-
-    pub fn set_ptr_from_unknown_type(&mut self, ptr: *mut u8, ptr_size_in_bytes: usize) {
-        self.ptr.set_ptr(ptr);
-        self.ptr_size_bytes = Some(ptr_size_in_bytes);
+impl From<&mut [u8]> for NormPtr {
+    fn from(value: &mut [u8]) -> Self {
+        Self {
+            ptr: UnsafePtr::new(value.as_mut_ptr() as u64),
+            ptr_size_bytes: value.len()
+        }
     }
 }
