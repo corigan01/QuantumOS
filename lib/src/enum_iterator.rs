@@ -184,6 +184,7 @@ macro_rules! enum_iterator {
             const ITEMS: [$name; <[$name]>::len(&[$($name::$val),*])] =
                 [$($name::$val),*];
 
+            #[allow(unused_variables)]
             pub fn get_index_of(item: $name) -> usize {
                 Self::ITEMS
                     .iter()

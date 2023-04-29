@@ -26,16 +26,19 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 use crate::data_portal::{Portal, SendingPortal};
 use crate::framebuffer_utils::PixelLocation;
 
+#[allow(dead_code)]
 pub trait DrawPacketHandler {
     fn draw(packet: DrawPacket);
 }
 
+#[allow(dead_code)]
 pub struct DrawPacket<'a> {
     location: PixelLocation,
     size: PixelLocation,
     data: &'a [u8]
 }
 
+#[allow(dead_code)]
 pub struct AbstractFramebuffer<'a, Func> {
     handler: Portal<Func, SendingPortal, DrawPacket<'a>>
 }

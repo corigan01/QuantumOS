@@ -25,6 +25,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 use crate::ptr::unsafe_ptr::UnsafePtr;
 
+#[allow(dead_code)]
 pub struct NormPtr {
     ptr: UnsafePtr<u8>,
     ptr_size_bytes: usize,

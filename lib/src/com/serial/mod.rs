@@ -31,6 +31,7 @@ use crate::x86_64::io::port::IOPort;
 pub mod options;
 pub mod registers;
 
+#[allow(dead_code)]
 pub struct SerialDevice {
     port: SerialPort,
     io_port: IOPort,

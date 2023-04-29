@@ -30,14 +30,12 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 use core::arch::asm;
 use core::panic::PanicInfo;
 
-use quantum_lib::bitset::BitSet;
 use quantum_lib::bytes::Bytes;
 use quantum_lib::debug::add_connection_to_global_stream;
 use quantum_lib::debug::stream_connection::StreamConnectionBuilder;
 use quantum_lib::debug_println;
-use quantum_lib::x86_64::interrupts::Interrupts;
 use quantum_lib::x86_64::{PrivlLevel};
-use quantum_lib::x86_64::registers::{CpuStack, CR0, IA32_EFER, Segment, SegmentRegs};
+use quantum_lib::x86_64::registers::{CpuStack, Segment, SegmentRegs};
 
 use stage_2::debug::{display_string, setup_framebuffer};
 use stage_2::gdt::LONG_MODE_GDT;

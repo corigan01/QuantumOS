@@ -25,6 +25,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 use crate::framebuffer_utils::FramebufferPixelLayout;
 
+#[allow(dead_code)]
 pub struct FrameInfo {
     depth: usize,
     size_y: usize,
