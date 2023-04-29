@@ -48,5 +48,6 @@ pub mod magic;
 pub mod data_portal;
 pub mod enum_iterator;
 pub mod com;
+pub mod enum_flags;
 
 pub type Nothing = ();

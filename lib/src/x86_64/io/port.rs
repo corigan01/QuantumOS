@@ -23,7 +23,6 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use core::marker::PhantomData;
 use crate::x86_64::raw_cpu_io_port::{byte_in, byte_out, word_in, word_out};
 
 pub struct ReadWritePort;
@@ -38,13 +37,22 @@ pub struct IOPort {
 
 impl IOPort {
     pub fn new(n: u16) -> IOPort {
-        IOPort {
-            port: n,
-        }
+        IOPort { port: n }
     }
 
     pub fn as_u16(&self) -> u16 {
         self.port
+    }
+
+    pub fn mutate_offset_by(&mut self, offset: i16) {
+        self.port = (offset as i32 + self.port as i32) as u16;
+    }
+    
+    pub fn clone_from_offset_by(&self, offset: i16) -> Self {
+        let mut cloned_value = self.clone();
+        cloned_value.mutate_offset_by(offset);
+        
+        cloned_value
     }
 
     pub unsafe fn read_u8(&self) -> u8 {

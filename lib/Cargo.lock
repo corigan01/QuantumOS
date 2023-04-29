@@ -29,7 +29,7 @@ dependencies = [
 
 [[package]]
 name = "quantum_lib"
-version = "0.1.0"
+version = "0.1.2"
 dependencies = [
  "lazy_static",
  "spin 0.9.8",
