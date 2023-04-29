@@ -53,7 +53,6 @@ pub extern "C" fn _start() {
 
     debug_println!("Welcome to Quantum OS!");
 
-
     main();
     panic!("Kernel Should not exit!!!");
 }

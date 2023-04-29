@@ -23,43 +23,4 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use core::marker::PhantomData;
-use crate::x86_64::raw_cpu_io_port::{byte_in, byte_out, word_in, word_out};
-
-pub struct ReadWritePort;
-pub struct WriteOnlyPort;
-pub struct ReadOnlyPort;
-
-#[allow(dead_code)]
-#[derive(Debug, Copy, Clone)]
-pub struct IOPort {
-    port: u16,
-}
-
-impl IOPort {
-    pub fn new(n: u16) -> IOPort {
-        IOPort {
-            port: n,
-        }
-    }
-
-    pub fn as_u16(&self) -> u16 {
-        self.port
-    }
-
-    pub unsafe fn read_u8(&self) -> u8 {
-        byte_in(self.port)
-    }
-
-    pub unsafe fn read_u16(&self) -> u16 {
-        word_in(self.port)
-    }
-
-    pub unsafe fn write_u8(&self, data: u8) {
-        byte_out(self.port, data);
-    }
-
-    pub unsafe fn write_u16(&self, data: u16) {
-        word_out(self.port, data);
-    }
-}
+pub mod serial;

@@ -25,6 +25,9 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 use crate::port;
+use lazy_static::lazy_static;
+use spin::Mutex;
+use core::fmt;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u16)]
@@ -34,7 +37,7 @@ pub enum SerialCOM {
     Com2 = 0x2F8,
     Com3 = 0x3E8,
     Com4 = 0x2E8,
-    None = 0x00,
+    None = 0x00
 }
 
 impl SerialCOM {
@@ -55,25 +58,27 @@ impl SerialCOM {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BaudRate {
     Baud115200 = 1,
-    Baud57600 = 2,
-    Baud38400 = 3,
-    Baud19200 = 6,
-    Baud14400 = 8,
-    Baud9600 = 12,
-    Baud4800 = 24,
-    Baud2400 = 48,
-    Baud1200 = 96,
-    Baud600 = 192,
-    Baud300 = 384,
+    Baud57600  = 2,
+    Baud38400  = 3,
+    Baud19200  = 6,
+    Baud14400  = 8,
+    Baud9600   = 12,
+    Baud4800   = 24,
+    Baud2400   = 48,
+    Baud1200   = 96,
+    Baud600    = 192,
+    Baud300    = 384
 }
+
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SerialDevice {
     port: SerialCOM,
-    baud: BaudRate,
+    baud: BaudRate
 }
 
 impl SerialDevice {
+
     // Constructs a new SerialDevice
     // This function will return a `Option<T>` in the event that
     pub fn new(port: SerialCOM, baud: BaudRate) -> Option<SerialDevice> {
@@ -104,7 +109,7 @@ impl SerialDevice {
             let baud_low = baud as u8;
             let baud_high = ((baud as u16) >> 8) as u8;
 
-            port::byte_out(mode + 0, baud_low); // Set the baud rate         (lo byte)
+            port::byte_out(mode + 0, baud_low);  // Set the baud rate         (lo byte)
             port::byte_out(mode + 1, baud_high); //                           (hi byte)
 
             port::byte_out(mode + 3, 0x03); // Use 8 bits, no parity bits, and one stop bit
@@ -126,7 +131,7 @@ impl SerialDevice {
             port::byte_out(mode + 4, 0x0F); // Set Serial to normal mode
         }
 
-        Some(SerialDevice { port, baud })
+        Some(SerialDevice { port , baud })
     }
 
     unsafe fn is_transmit_empty(&self) -> bool {
@@ -158,8 +163,46 @@ impl SerialDevice {
     pub fn write_string(&self, string: &str) {
         for byte in string.bytes() {
             match byte {
-                _ => self.write_byte(byte),
+                _ => self.write_byte(byte)
             }
         }
     }
+}
+
+impl fmt::Write for SerialDevice {
+    fn write_str(&mut self, s: &str) -> fmt::Result {
+        self.write_string(s);
+        Ok(())
+    }
+}
+
+lazy_static! {
+    pub static ref SERIAL1: Mutex<Option<SerialDevice>> =
+        Mutex::new(SerialDevice::new(SerialCOM::Com1, BaudRate::Baud115200));
+}
+
+
+#[doc(hidden)]
+pub fn _print(args: ::core::fmt::Arguments) {
+    use core::fmt::Write;
+    if SERIAL1.lock().as_ref() != None {
+        SERIAL1.lock().unwrap().write_fmt(args).unwrap();
+    }
+}
+
+/// Prints to the host through the serial interface.
+#[macro_export]
+macro_rules! serial_print {
+    ($($arg:tt)*) => {
+        $crate::serial::_print(format_args!($($arg)*));
+    };
+}
+
+/// Prints to the host through the serial interface, appending a newline.
+#[macro_export]
+macro_rules! serial_println {
+    () => ($crate::debug_print!("\n"));
+    ($fmt:expr) => ($crate::debug_print!(concat!($fmt, "\n")));
+    ($fmt:expr, $($arg:tt)*) => ($crate::debug_print!(
+        concat!($fmt, "\n"), $($arg)*));
 }

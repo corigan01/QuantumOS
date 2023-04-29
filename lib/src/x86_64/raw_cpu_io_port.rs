@@ -84,6 +84,7 @@ use core::arch::asm;
 ///
 /// This function is unsafe! Please use a wrapper to assure memory safety whenever possible.
 #[inline]
+#[warn(unstable_features)]
 pub unsafe fn byte_in(port: u16) -> u8 {
     let mut _port_value: u8 = 0;
 
@@ -104,6 +105,7 @@ pub unsafe fn byte_in(port: u16) -> u8 {
 ///
 /// This function is unsafe! Please use a wrapper to assure memory safety whenever possible.
 #[inline]
+#[warn(unstable_features)]
 pub unsafe fn byte_out(port: u16, data: u8) {
     asm!("out dx, al", in("dx") port, in("al") data, options(nomem, nostack, preserves_flags));
 }
@@ -121,6 +123,7 @@ pub unsafe fn byte_out(port: u16, data: u8) {
 ///
 /// This function is unsafe! Please use a wrapper to assure memory safety whenever possible.
 #[inline]
+#[warn(unstable_features)]
 pub unsafe fn word_in(port: u16) -> u16 {
     let mut _port_value: u16 = 0;
 
@@ -142,6 +145,7 @@ pub unsafe fn word_in(port: u16) -> u16 {
 ///
 /// This function is unsafe! Please use a wrapper to assure memory safety whenever possible.
 #[inline]
+#[warn(unstable_features)]
 pub unsafe fn word_out(port: u16, data: u16) {
     asm!("out dx, ax", in("dx") port, in("ax") data, options(nomem, nostack, preserves_flags));
 }
