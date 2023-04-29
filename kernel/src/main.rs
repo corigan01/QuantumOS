@@ -28,14 +28,18 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #![no_main] // disable all Rust-level entry points
 #![allow(dead_code)]
 
+use quantum_lib::com::serial::{SerialBaud, SerialDevice, SerialPort};
 use quantum_lib::debug::add_connection_to_global_stream;
 use quantum_lib::debug::stream_connection::StreamConnectionBuilder;
 use quantum_lib::debug_println;
-use quantum_os::serial::BaudRate::Baud115200;
-use quantum_os::serial::{SerialCOM, SerialDevice};
+use quantum_lib::x86_64::bios_call::BiosCall;
 
 pub fn display_serial(string: &str) {
-    let serial = SerialDevice::new(SerialCOM::Com1, Baud115200).unwrap();
+    let serial = quantum_os::serial::SerialDevice::new(
+        quantum_os::serial::SerialCOM::Com1,
+        quantum_os::serial::BaudRate::Baud115200,
+    )
+    .unwrap();
     serial.write_string(string);
 }
 
@@ -53,11 +57,17 @@ pub extern "C" fn _start() {
 
     debug_println!("Welcome to Quantum OS!");
 
+    debug_println!("Serial Registers {:#x?}", BiosCall::get_serial_io_ports());
+
     main();
     panic!("Kernel Should not exit!!!");
 }
 
 fn main() {
+    let serial_device = SerialDevice::new(SerialPort::Com1, SerialBaud::Baud115200)
+        .expect("Serial Failed to INIT!");
 
-
+    serial_device.send_byte_sync(b'Q');
+    serial_device.send_byte_sync(b'O');
+    serial_device.send_byte_sync(b'S');
 }
