@@ -23,98 +23,11 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 Quantum OS Lib file, documentation coming soon!
-
-
-#![no_std] // don't link the Rust standard library
-#![no_main] // disable all Rust-level entry points
-#![allow(dead_code)]
-#![cfg_attr(test, no_main)]
-#![feature(custom_test_frameworks)]
-#![test_runner(crate::test_handler::test_runner)]
-#![feature(abi_x86_interrupt)]
-#![feature(inherent_associated_types)]
-#![feature(exclusive_range_pattern)]
-#![reexport_test_harness_main = "run_test"]
-
-#[cfg(test)]
-use bootloader::{entry_point, BootInfo};
-
-#[cfg(test)]
-use owo_colors::OwoColorize;
-
-#[cfg(test)]
-use crate::debug_output::{set_debug_stream, StreamInfo};
-
-#[cfg(test)]
-use crate::serial::SERIAL1;
-
-#[cfg(test)]
-entry_point!(test_main);
-
-#[cfg(test)]
-fn debug_output_char(char: u8) {
-    if let Some(serial_info) = SERIAL1.lock().as_ref() {
-        serial_info.write_byte(char);
-    }
-}
-
-#[cfg(test)]
-/// Entry point for `cargo test`
-fn test_main(boot_info: &'static mut BootInfo) -> ! {
-    let baud_rate = if let Some(serial) = SERIAL1.lock().as_ref() {
-        serial.get_baud()
-    } else {
-        0
-    };
-
-    set_debug_stream(StreamInfo {
-        output_stream: Some(debug_output_char),
-        name: Some("Serial"),
-        speed: Some(baud_rate as u64),
-        color: true,
-        message_header: false,
-    });
-
-    debug_println!(
-        "\n\n{} {}\n",
-        "                                                     ",
-        "QuantumOS in Test Mode".bright_green().bold()
-    );
-
-    run_test();
-
-    loop {}
-}
-
-pub mod test_handler;
-
-pub mod arch_x86_64;
-pub mod bitset;
-pub mod clock;
-pub mod debug_output;
-pub mod enum_iterator;
-pub mod error_utils;
-pub mod memory;
-pub mod memory_utils;
-pub mod panic;
-pub mod port;
-pub mod post_hal;
-pub mod qemu;
-pub mod serial;
-pub mod vga;
 */
 
 #![no_std]
 #![no_main]
 
-use core::panic::PanicInfo;
-use quantum_lib::debug_println;
+pub mod clock;
 
-pub mod port;
-pub mod serial;
 
-#[panic_handler]
-fn panic(info: &PanicInfo) -> ! {
-    debug_println!("{}", info);
-    loop {}
-}

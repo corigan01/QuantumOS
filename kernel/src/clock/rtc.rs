@@ -25,9 +25,10 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 use lazy_static::lazy_static;
-use spin::Mutex;
-use crate::{debug_println, port};
+use quantum_lib::debug_println;
+use quantum_lib::x86_64::raw_cpu_io_port::{byte_in, byte_out};
 use crate::clock::Time;
+use spin::Mutex;
 
 const CURRENT_CENTURY: u16 = 2000;
 
@@ -129,13 +130,13 @@ impl RealTimeClock {
     }
 
     fn get_register(reg: u8) -> u8 {
-        unsafe { port::byte_out(RealTimeClock::CMOS_ADDRESS, reg); };
-        unsafe { port::byte_in(RealTimeClock::CMOS_DATA) }
+        unsafe { byte_out(RealTimeClock::CMOS_ADDRESS, reg); };
+        unsafe { byte_in(RealTimeClock::CMOS_DATA) }
     }
 
     fn get_update_flag() -> u8 {
-        unsafe { port::byte_out(RealTimeClock::CMOS_ADDRESS, 0x0A); };
-        unsafe { port::byte_in(RealTimeClock::CMOS_DATA) & 0x80 }
+        unsafe { byte_out(RealTimeClock::CMOS_ADDRESS, 0x0A); };
+        unsafe { byte_in(RealTimeClock::CMOS_DATA) & 0x80 }
     }
 
     fn wait_for_update_flag() {

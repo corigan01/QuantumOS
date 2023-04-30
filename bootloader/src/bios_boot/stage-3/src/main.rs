@@ -66,7 +66,7 @@ pub extern "C" fn _start(boot_info: u64) -> ! {
 
     let stream_connection = StreamConnectionBuilder::new()
         .console_connection()
-        .add_outlet(display_string)
+        .add_simple_outlet(display_string)
         .add_connection_name("VGA DEBUG")
         .does_support_scrolling(true)
         .build();

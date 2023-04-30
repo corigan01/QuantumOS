@@ -33,7 +33,16 @@ use spin::Mutex;
 pub mod heapless_stream_collections;
 pub mod stream_connection;
 
-type StreamOutlet = fn(&str);
+pub type SimpleStreamFunction = fn(&str);
+
+pub trait StreamableConnection {
+    fn display_char(&self, c: char);
+    fn display_string(&self, string: &str) {
+        for c in string.chars() {
+            self.display_char(c);
+        }
+    }
+}
 
 pub fn add_connection_to_global_stream(stream: StreamConnection) -> Result<(), HeaplessVecErr> {
     let does_stream_want_welcome = !stream.ignore_welcome;

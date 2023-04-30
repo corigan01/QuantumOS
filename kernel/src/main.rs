@@ -28,46 +28,45 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #![no_main] // disable all Rust-level entry points
 #![allow(dead_code)]
 
+use core::panic::PanicInfo;
+use lazy_static::lazy_static;
 use quantum_lib::com::serial::{SerialBaud, SerialDevice, SerialPort};
-use quantum_lib::debug::add_connection_to_global_stream;
+use quantum_lib::debug::{add_connection_to_global_stream, StreamableConnection};
 use quantum_lib::debug::stream_connection::StreamConnectionBuilder;
 use quantum_lib::debug_println;
 use quantum_lib::x86_64::bios_call::BiosCall;
+use quantum_os::clock::rtc::{set_time_zone, update_and_get_time};
 
-pub fn display_serial(string: &str) {
-    let serial = quantum_os::serial::SerialDevice::new(
-        quantum_os::serial::SerialCOM::Com1,
-        quantum_os::serial::BaudRate::Baud115200,
-    )
-    .unwrap();
-    serial.write_string(string);
-}
+static mut SERIAL_CONNECTION: Option<SerialDevice> = None;
 
 #[no_mangle]
 #[link_section = ".start"]
 pub extern "C" fn _start() {
+    let connection = unsafe { &mut SERIAL_CONNECTION };
+    *connection = Some(SerialDevice::new(SerialPort::Com1, SerialBaud::Baud115200).unwrap());
+
     let connection = StreamConnectionBuilder::new()
         .console_connection()
         .add_connection_name("SERIAL")
         .does_support_scrolling(true)
-        .add_outlet(display_serial)
+        .add_outlet(unsafe { SERIAL_CONNECTION.as_ref().unwrap() })
         .build();
 
     add_connection_to_global_stream(connection).unwrap();
 
-    debug_println!("Welcome to Quantum OS!");
-
-    debug_println!("Serial Registers {:#x?}", BiosCall::get_serial_io_ports());
+    set_time_zone(7);
+    debug_println!("Welcome to Quantum OS! {}", update_and_get_time());
 
     main();
     panic!("Kernel Should not exit!!!");
 }
 
 fn main() {
-    let serial_device = SerialDevice::new(SerialPort::Com1, SerialBaud::Baud115200)
-        .expect("Serial Failed to INIT!");
 
-    serial_device.send_byte_sync(b'Q');
-    serial_device.send_byte_sync(b'O');
-    serial_device.send_byte_sync(b'S');
+}
+
+#[panic_handler]
+fn panic(info: &PanicInfo) -> ! {
+    debug_println!("{}", info);
+    loop {}
 }

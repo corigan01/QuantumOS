@@ -51,9 +51,17 @@ impl ::core::fmt::Write for HeaplessStreamCollections {
         let broken_down_slice = &mut slice[..len];
 
         for stream in broken_down_slice {
-            let outlet = stream.outlet as fn(&str);
+            if let Some(outlet) = stream.outlet {
+                outlet.display_string(s);
+                continue;
+            }
 
-            outlet(s);
+            if let Some(outlet) = stream.simple_outlet {
+                let func = outlet as fn(&str);
+                func(s);
+
+                continue;
+            }
         }
 
         Ok(())

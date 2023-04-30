@@ -31,21 +31,19 @@ pub struct ReadOnlyPort;
 
 #[allow(dead_code)]
 #[derive(Debug, Copy, Clone)]
-pub struct IOPort {
-    port: u16,
-}
+pub struct IOPort(u16);
 
 impl IOPort {
     pub fn new(n: u16) -> IOPort {
-        IOPort { port: n }
+        IOPort ( n )
     }
 
     pub fn as_u16(&self) -> u16 {
-        self.port
+        self.0
     }
 
     pub fn mutate_offset_by(&mut self, offset: i16) {
-        self.port = (offset as i32 + self.port as i32) as u16;
+        self.0 = (offset as i32 + self.0 as i32) as u16;
     }
     
     pub fn clone_from_offset_by(&self, offset: i16) -> Self {
@@ -56,18 +54,18 @@ impl IOPort {
     }
 
     pub unsafe fn read_u8(&self) -> u8 {
-        byte_in(self.port)
+        byte_in(self.0)
     }
 
     pub unsafe fn read_u16(&self) -> u16 {
-        word_in(self.port)
+        word_in(self.0)
     }
 
     pub unsafe fn write_u8(&self, data: u8) {
-        byte_out(self.port, data);
+        byte_out(self.0, data);
     }
 
     pub unsafe fn write_u16(&self, data: u16) {
-        word_out(self.port, data);
+        word_out(self.0, data);
     }
 }
