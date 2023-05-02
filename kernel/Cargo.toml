@@ -6,7 +6,8 @@ build="build.rs"
 
 [dependencies]
 spin = "0.9.8"
-quantum_lib = {path = "../lib"}
+quantum_lib = {path = "../lib" }
+bootloader = {path = "../bootloader/bootloader"}
 
 [dependencies.lazy_static]
 version = "1.4.0"

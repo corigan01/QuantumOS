@@ -25,7 +25,6 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 use lazy_static::lazy_static;
-use quantum_lib::debug_println;
 use quantum_lib::x86_64::raw_cpu_io_port::{byte_in, byte_out};
 use crate::clock::Time;
 use spin::Mutex;

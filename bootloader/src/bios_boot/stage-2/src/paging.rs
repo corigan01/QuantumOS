@@ -124,6 +124,6 @@ pub unsafe fn enable_paging() {
     debug_println!("OK");
 
     debug_print!("Reloading segment registers ...");
-    SegmentRegs::reload_all_to(Segment::new(2, PrivlLevel::Ring0));
+    SegmentRegs::set_data_segments(Segment::new(2, PrivlLevel::Ring0));
     debug_println!("OK");
 }

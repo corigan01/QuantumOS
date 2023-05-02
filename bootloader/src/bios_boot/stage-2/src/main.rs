@@ -31,7 +31,7 @@ use core::arch::asm;
 use core::panic::PanicInfo;
 
 use quantum_lib::bytes::Bytes;
-use quantum_lib::debug::add_connection_to_global_stream;
+use quantum_lib::debug::{add_connection_to_global_stream, StreamableConnection};
 use quantum_lib::debug::stream_connection::StreamConnectionBuilder;
 use quantum_lib::debug_println;
 use quantum_lib::x86_64::{PrivlLevel};
@@ -41,14 +41,15 @@ use stage_2::debug::{display_string, setup_framebuffer};
 use stage_2::gdt::LONG_MODE_GDT;
 use stage_2::paging::enable_paging;
 
-use bootloader::boot_info::{BootInfo, VideoInformation};
+use bootloader::boot_info::BootInfo;
+use quantum_lib::com::serial::{SerialBaud, SerialDevice, SerialPort};
 
 #[no_mangle]
 #[link_section = ".start"]
 pub extern "C" fn _start(boot_info: u32) -> ! {
     let boot_info_ref = unsafe { &*(boot_info as *const BootInfo) };
 
-    let video_info: &VideoInformation = boot_info_ref.vid.as_ref().unwrap();
+    let video_info = boot_info_ref.get_video_information();
 
     let framebuffer = video_info.framebuffer;
     let x_res = video_info.x;
@@ -79,7 +80,8 @@ pub extern "C" fn _start(boot_info: u32) -> ! {
 
 fn main(boot_info: &BootInfo) {
     let mut total_memory = 0;
-    for entry in boot_info.memory_map.unwrap() {
+    let memory_map = unsafe { boot_info.get_memory_map() };
+    for entry in memory_map {
         if entry.len == 0 && entry.address == 0 {
             break;
         }
@@ -90,17 +92,16 @@ fn main(boot_info: &BootInfo) {
     }
 
     debug_println!(
-        "Memory Avl: {:?} {}",
-        boot_info.memory_map.unwrap().as_ptr(),
+        "Memory Avl: {}",
         Bytes::from(total_memory)
     );
 
-    debug_println!("Vga info: {:#?}", boot_info.vid);
+    debug_println!("Vga info: {:#?}", boot_info.get_video_information());
 
     unsafe { enable_paging() };
     LONG_MODE_GDT.load();
 
-    let ptr = boot_info.ram_fs.unwrap().stage3.ptr;
+    let ptr = boot_info.get_stage_3_entry().ptr;
     let data_ref = unsafe { &*(ptr as *const [u8; 10]) };
 
     debug_println!("Entering Stage3! 0x{:x} {:x?}", ptr, data_ref);
@@ -110,12 +111,12 @@ fn main(boot_info: &BootInfo) {
 
 #[no_mangle]
 pub unsafe fn enter_stage3(boot_info: &BootInfo) {
-    SegmentRegs::reload_all_to(Segment::new(2, PrivlLevel::Ring0));
+    SegmentRegs::set_data_segments(Segment::new(2, PrivlLevel::Ring0));
 
     CpuStack::push(0);
-    CpuStack::push(boot_info as *const BootInfo as u32 - 8);
+    CpuStack::push(boot_info as *const BootInfo as u32 );
     CpuStack::push(0);
-    CpuStack::push(boot_info.ram_fs.unwrap().stage3.ptr as u32);
+    CpuStack::push(boot_info.get_stage_3_entry().ptr as u32);
 
     asm!("ljmp $0x8, $2f", "2:", options(att_syntax));
     asm!(
@@ -134,12 +135,23 @@ pub unsafe fn enter_stage3(boot_info: &BootInfo) {
 
 }
 
-
-
 #[panic_handler]
 #[cold]
 #[allow(dead_code)]
 fn panic(info: &PanicInfo) -> ! {
-    debug_println!("\nBootloader PANIC\n{}", info);
+    fn outlet(msg: &str) {
+        SerialDevice::new(SerialPort::Com1, SerialBaud::Baud115200).unwrap().display_string(msg);
+    }
+
+    let stream_connection = StreamConnectionBuilder::new()
+        .console_connection()
+        .add_simple_outlet(outlet)
+        .add_connection_name("SERIAL ERROR")
+        .does_support_scrolling(true)
+        .build();
+
+    add_connection_to_global_stream(stream_connection).unwrap();
+
+    debug_println!("\nStage-2 PANIC ============\n{}\n\n", info);
     loop {}
 }

@@ -30,7 +30,8 @@ pub mod boot_info;
 pub mod error;
 pub mod e820_memory;
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Default)]
+#[repr(C)]
 pub struct BootMemoryDescriptor {
     pub ptr: u64,
     pub size: u64,

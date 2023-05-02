@@ -27,6 +27,7 @@ Quantum OS Lib file, documentation coming soon!
 
 #![no_std]
 #![no_main]
+#![allow(dead_code)]
 
 pub mod clock;
 

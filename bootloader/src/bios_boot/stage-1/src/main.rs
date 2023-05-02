@@ -28,7 +28,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #[cfg(debug)]
 use stage_1::bios_println;
 
-use bootloader::boot_info::{BootInfo, SimpleRamFs, VideoInformation};
+use bootloader::boot_info::{BootInfo, VideoInformation};
 use bootloader::e820_memory::E820Entry;
 use bootloader::BootMemoryDescriptor;
 use core::arch::global_asm;
@@ -51,11 +51,9 @@ extern "C" fn bit16_entry(disk_number: u16) {
 }
 
 static mut TEMP_ALLOC: Option<SimpleBumpAllocator> = None;
-static mut BOOT_INFO: BootInfo = BootInfo::new();
 
 fn enter_rust(disk_id: u16) {
     BiosTextMode::print_int_bytes(b"Quantum Bootloader (Stage1)\n");
-
     BiosTextMode::print_int_bytes(b"Unreal ...");
     unsafe {
         enter_unreal_mode();
@@ -70,6 +68,19 @@ fn enter_rust(disk_id: u16) {
         BiosTextMode::print_int_bytes(b"Allocator is broken :(");
     }
 
+    let boot_info: &mut BootInfo = unsafe {
+        &mut *(
+            TEMP_ALLOC
+                .as_mut()
+                .unwrap()
+                .allocate_region(size_of::<BootInfo>() + 0x10 - 1)
+                .unwrap()
+                .as_mut_ptr()
+                as *mut BootInfo)
+    };
+
+    *boot_info = BootInfo::new();
+
     BiosTextMode::print_int_bytes(b"Loading files ");
     let fs =
         FileSystem::new(BiosDisk::new(disk_id as u8))
@@ -79,7 +90,7 @@ fn enter_rust(disk_id: u16) {
             .expect("Could detect bootloader partition, please add \'/bootloader/bootloader.cfg\' to the bootloader filesystem for a proper boot!");
 
     let bootloader_config_file_ptr =
-        unsafe { TEMP_ALLOC.as_mut().unwrap().allocate_region(0x00100000 - 1).unwrap() };
+        unsafe { TEMP_ALLOC.as_mut().unwrap().allocate_region(0x00100000 - (size_of::<BootInfo>() + 0x10)).unwrap() };
     let bootloader_filename = "/bootloader/bootloader.cfg";
 
     fs.load_file_into_slice(bootloader_config_file_ptr, bootloader_filename)
@@ -142,22 +153,26 @@ fn enter_rust(disk_id: u16) {
 
     BiosTextMode::print_int_bytes(b" OK\n");
 
-    unsafe {
-        BOOT_INFO.ram_fs = Some(SimpleRamFs::new(
-            BootMemoryDescriptor {
-                ptr: kernel_ptr.as_ptr() as u64,
-                size: kernel_filesize_bytes as u64,
-            },
-            BootMemoryDescriptor {
-                ptr: next_2_stage_ptr.as_ptr() as u64,
-                size: next_2_stage_bytes as u64,
-            },
-            BootMemoryDescriptor {
-                ptr: next_3_stage_ptr.as_ptr() as u64,
-                size: next_3_stage_bytes as u64,
-            },
-        ));
-    }
+    boot_info.set_kernel_entry(
+        BootMemoryDescriptor {
+            ptr: kernel_ptr.as_ptr() as u64,
+            size: kernel_filesize_bytes as u64,
+        }
+    );
+
+    boot_info.set_stage_2_entry(
+        BootMemoryDescriptor {
+            ptr: next_2_stage_ptr.as_ptr() as u64,
+            size: next_2_stage_bytes as u64,
+        }
+    );
+
+    boot_info.set_stage_3_entry(
+        BootMemoryDescriptor {
+            ptr: next_3_stage_ptr.as_ptr() as u64,
+            size: next_3_stage_bytes as u64,
+        }
+    );
 
     BiosTextMode::print_int_bytes(b"Getting memory map ... ");
 
@@ -177,11 +192,16 @@ fn enter_rust(disk_id: u16) {
 
     get_memory_map(e820_ref);
 
-    let map_slice: &'static [E820Entry] = unsafe { core::mem::transmute(e820_ref) };
-
-    unsafe {
-        BOOT_INFO.memory_map = Some(map_slice);
+    let mut amount_of_entries_found = 0;
+    for entry in e820_ref {
+        if entry.address > 0 || entry.len > 0 {
+            amount_of_entries_found += 1;
+        } else {
+            break;
+        }
     }
+
+    boot_info.set_memory_map(e820_ptr, amount_of_entries_found);
 
     BiosTextMode::print_int_bytes(b"OK\n");
 
@@ -197,23 +217,22 @@ fn enter_rust(disk_id: u16) {
     let closest_mode = vesa.find_closest_mode(expected_res).unwrap();
     BiosTextMode::print_int_bytes(b"OK\n");
 
-    BiosTextMode::print_int_bytes(b"Setting Mode and jumping to stage2! ");
+    BiosTextMode::print_int_bytes(b"Setting Video Mode and jumping to stage2! ");
     vesa.set_mode(&closest_mode).unwrap();
 
-    unsafe {
-        BOOT_INFO.vid = Some(VideoInformation {
-            video_mode: 0,
-            x: closest_mode.mode_data.width.into(),
-            y: closest_mode.mode_data.height.into(),
-            depth: closest_mode.mode_data.bpp.into(),
-            framebuffer: closest_mode.mode_data.framebuffer,
-        });
-    }
+    boot_info.set_video_information(VideoInformation {
+        video_mode: 0,
+        x: closest_mode.mode_data.width.into(),
+        y: closest_mode.mode_data.height.into(),
+        depth: closest_mode.mode_data.bpp.into(),
+        framebuffer: closest_mode.mode_data.framebuffer,
+    });
+
 
     unsafe {
         enter_stage2(
             next_2_stage_ptr.as_ptr(),
-            &BOOT_INFO as *const BootInfo as *const u8,
+            boot_info as *const BootInfo as *const u8,
         );
     }
 }

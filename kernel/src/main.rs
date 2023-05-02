@@ -29,22 +29,21 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #![allow(dead_code)]
 
 use core::panic::PanicInfo;
-use lazy_static::lazy_static;
+use bootloader::boot_info::BootInfo;
 use quantum_lib::com::serial::{SerialBaud, SerialDevice, SerialPort};
-use quantum_lib::debug::{add_connection_to_global_stream, StreamableConnection};
+use quantum_lib::debug::{add_connection_to_global_stream};
 use quantum_lib::debug::stream_connection::StreamConnectionBuilder;
 use quantum_lib::debug_println;
-use quantum_lib::x86_64::bios_call::BiosCall;
 use quantum_os::clock::rtc::{set_time_zone, update_and_get_time};
 
 static mut SERIAL_CONNECTION: Option<SerialDevice> = None;
 
 #[no_mangle]
 #[link_section = ".start"]
-pub extern "C" fn _start() {
+pub extern "C" fn _start(boot_info_ptr: u64) {
     let connection = unsafe { &mut SERIAL_CONNECTION };
-    *connection = Some(SerialDevice::new(SerialPort::Com1, SerialBaud::Baud115200).unwrap());
 
+    *connection = Some(SerialDevice::new(SerialPort::Com1, SerialBaud::Baud115200).unwrap());
     let connection = StreamConnectionBuilder::new()
         .console_connection()
         .add_connection_name("SERIAL")
@@ -55,13 +54,19 @@ pub extern "C" fn _start() {
     add_connection_to_global_stream(connection).unwrap();
 
     set_time_zone(7);
-    debug_println!("Welcome to Quantum OS! {}", update_and_get_time());
 
-    main();
+    debug_println!("Welcome to Quantum OS! {}\n\n", update_and_get_time());
+    debug_println!("Bootloader info ptr 0x{:x}", boot_info_ptr);
+
+    let bootloader_info = BootInfo::from_ptr(boot_info_ptr as usize);
+
+    debug_println!("{:#?}", bootloader_info.get_video_information());
+
+    main(bootloader_info);
     panic!("Kernel Should not exit!!!");
 }
 
-fn main() {
+fn main(boot_info: &BootInfo) {
 
 }
 

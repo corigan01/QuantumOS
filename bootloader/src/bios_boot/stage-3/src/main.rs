@@ -29,11 +29,12 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 use core::arch::asm;
 use core::panic::PanicInfo;
-use bootloader::boot_info::{BootInfo, VideoInformation};
+use bootloader::boot_info::BootInfo;
 
-use quantum_lib::debug::add_connection_to_global_stream;
+use quantum_lib::debug::{add_connection_to_global_stream, StreamableConnection};
 use quantum_lib::debug::stream_connection::StreamConnectionBuilder;
 use quantum_lib::{debug_print, debug_println};
+use quantum_lib::com::serial::{SerialBaud, SerialDevice, SerialPort};
 use quantum_lib::elf::{ElfHeader, ElfArch, ElfBits, ElfSegmentType};
 use quantum_lib::x86_64::PrivlLevel;
 use quantum_lib::x86_64::registers::{Segment, SegmentRegs};
@@ -43,11 +44,11 @@ use stage_3::debug::{clear_framebuffer, display_string, setup_framebuffer};
 #[no_mangle]
 #[link_section = ".start"]
 pub extern "C" fn _start(boot_info: u64) -> ! {
-    let boot_info_ref = unsafe { &*(boot_info as *const BootInfo) };
+    let boot_info_ref = BootInfo::from_ptr(boot_info as usize);
 
-    unsafe { SegmentRegs::reload_all_to(Segment::new(2, PrivlLevel::Ring0)); }
+    unsafe { SegmentRegs::set_data_segments(Segment::new(2, PrivlLevel::Ring0)); }
 
-    let video_info: &VideoInformation = boot_info_ref.vid.as_ref().unwrap();
+    let video_info = boot_info_ref.get_video_information();
 
     let framebuffer = video_info.framebuffer;
     let x_res = video_info.x;
@@ -75,7 +76,7 @@ pub extern "C" fn _start(boot_info: u64) -> ! {
 
     debug_println!("Quantum Bootloader! (Stage3) [64 bit]");
 
-    debug_println!("{:#?}", boot_info_ref.vid);
+    debug_println!("{:#?}", boot_info_ref.get_video_information());
 
     main(boot_info_ref);
     panic!("Stage3 should not return!");
@@ -112,7 +113,7 @@ fn parse_kernel_elf(kernel_elf: ElfHeader) -> Option<u32> {
         let header_idx = i as usize;
         let header = kernel_elf.get_program_header(header_idx)?;
 
-        debug_println!(
+        debug_print!(
             "Header {} = '{:x?}' -- {:?} => F: {} M: {} O: {} Vaddr: {:x}",
             header_idx,
             header.type_of_segment(),
@@ -140,6 +141,11 @@ fn parse_kernel_elf(kernel_elf: ElfHeader) -> Option<u32> {
                     *loader_ptr.add(i) = *byte;
                 }
             }
+
+            debug_println!("      LOADED");
+
+        } else {
+            debug_println!("       SKIP");
         }
     }
 
@@ -147,9 +153,11 @@ fn parse_kernel_elf(kernel_elf: ElfHeader) -> Option<u32> {
 }
 
 fn main(boot_info: &BootInfo) {
+    let boot_info_ptr = boot_info as *const BootInfo as u64;
+
     debug_println!("Starting to parse kernel ELF...");
 
-    let kernel_info = boot_info.ram_fs.unwrap().kernel;
+    let kernel_info = boot_info.get_kernel_entry();
     let kernel_slice = unsafe { core::slice::from_raw_parts_mut(kernel_info.ptr as *mut u8, kernel_info.size as usize) };
 
     let kernel_elf = ElfHeader::from_bytes(kernel_slice).unwrap();
@@ -159,10 +167,12 @@ fn main(boot_info: &BootInfo) {
     debug_println!("Kernel Entry Point 0x{:x}", entry_point);
 
     debug_println!("Calling Kernel!");
+    clear_framebuffer();
     unsafe {
         asm!(
             "jmp {kern:r}",
-            kern = in(reg) entry_point
+            in("rdi") boot_info_ptr,
+            kern = in(reg) entry_point,
         );
     }
 }
@@ -171,6 +181,19 @@ fn main(boot_info: &BootInfo) {
 #[cold]
 #[allow(dead_code)]
 fn panic(info: &PanicInfo) -> ! {
-    debug_println!("{}", info);
+    fn outlet(msg: &str) {
+        SerialDevice::new(SerialPort::Com1, SerialBaud::Baud115200).unwrap().display_string(msg);
+    }
+
+    let stream_connection = StreamConnectionBuilder::new()
+        .console_connection()
+        .add_simple_outlet(outlet)
+        .add_connection_name("SERIAL ERROR")
+        .does_support_scrolling(true)
+        .build();
+
+    add_connection_to_global_stream(stream_connection).unwrap();
+
+    debug_println!("\nStage-3 PANIC ============\n{}\n\n", info);
     loop {}
 }

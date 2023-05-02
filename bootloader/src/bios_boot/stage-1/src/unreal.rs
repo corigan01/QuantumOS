@@ -99,7 +99,7 @@ pub unsafe fn enter_unreal_mode() {
 
     CR0::set_protected_mode(true);
 
-    SegmentRegs::reload_all_to(Segment::new(2, PrivlLevel::Ring0));
+    SegmentRegs::set_data_segments(Segment::new(2, PrivlLevel::Ring0));
 
     CR0::set_protected_mode(false);
 
@@ -118,7 +118,7 @@ pub unsafe fn enter_stage2(entry_point: *const u8, info: *const u8) {
     CpuStack::push(info as u32);
     CpuStack::push(entry_point as u32);
 
-    SegmentRegs::reload_all_to(Segment::new(2, PrivlLevel::Ring0));
+    SegmentRegs::set_data_segments(Segment::new(2, PrivlLevel::Ring0));
 
     asm!("ljmp $0x8, $2f", "2:", options(att_syntax));
     asm!(

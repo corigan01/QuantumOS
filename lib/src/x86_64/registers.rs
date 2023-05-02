@@ -394,7 +394,7 @@ pub struct SegmentRegs {
 }
 
 impl SegmentRegs {
-    pub unsafe fn reload_all_to(seg: Segment) {
+    pub unsafe fn set_data_segments(seg: Segment) {
         asm!(
             "mov ds, ax",
             "mov es, ax",
