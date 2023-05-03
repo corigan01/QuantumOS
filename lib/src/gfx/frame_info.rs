@@ -23,20 +23,33 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-pub mod frame_info;
-pub mod abstract_framebuffer;
+use crate::gfx::FramebufferPixelLayout;
 
-pub enum FramebufferPixelLayout {
-    RGB,
-    GRB,
-    BGR,
-    WB,
-
-    Unknown,
+pub struct FrameInfo {
+    depth: usize,
+    size_y: usize,
+    size_x: usize,
+    stride: usize,
+    total_bytes: usize,
+    pixel_layout: FramebufferPixelLayout,
 }
 
-
-pub struct PixelLocation {
-    pub x: usize,
-    pub y: usize,
+impl FrameInfo {
+    pub fn new(
+        size_x: usize,
+        size_y: usize,
+        depth: usize,
+        stride: usize,
+        total_bytes: usize,
+        pixel_layout: FramebufferPixelLayout,
+    ) -> Self {
+        FrameInfo {
+            depth,
+            size_y,
+            size_x,
+            stride,
+            total_bytes,
+            pixel_layout,
+        }
+    }
 }

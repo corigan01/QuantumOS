@@ -55,18 +55,18 @@ pub extern "C" fn _start(boot_info_ptr: u64) {
 
     set_time_zone(7);
 
-    debug_println!("Welcome to Quantum OS! {}\n\n", update_and_get_time());
+    debug_println!("Welcome to Quantum OS! {}\n", update_and_get_time());
     debug_println!("Bootloader info ptr 0x{:x}", boot_info_ptr);
 
     let bootloader_info = BootInfo::from_ptr(boot_info_ptr as usize);
 
-    debug_println!("{:#?}", bootloader_info.get_video_information());
-
     main(bootloader_info);
+
     panic!("Kernel Should not exit!!!");
 }
 
 fn main(boot_info: &BootInfo) {
+    debug_println!("{:#?}", boot_info.get_video_information());
 
 }
 

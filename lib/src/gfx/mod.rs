@@ -23,22 +23,30 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use crate::data_portal::{Portal, SendingPortal};
-use crate::framebuffer_utils::PixelLocation;
+#![allow(dead_code)]
 
-#[allow(dead_code)]
-pub trait DrawPacketHandler {
-    fn draw(packet: DrawPacket);
+pub mod frame_info;
+pub mod draw_packet;
+pub mod rectangle;
+
+pub enum FramebufferPixelLayout {
+    RGB,
+    GRB,
+    BGR,
+    WB,
+
+    Unknown,
 }
 
-#[allow(dead_code)]
-pub struct DrawPacket<'a> {
-    location: PixelLocation,
-    size: PixelLocation,
-    data: &'a [u8]
+pub struct PixelLocation {
+    pub x: usize,
+    pub y: usize,
 }
 
-#[allow(dead_code)]
-pub struct AbstractFramebuffer<'a, Func> {
-    handler: Portal<Func, SendingPortal, DrawPacket<'a>>
+#[repr(C, packed)]
+pub struct Pixel {
+    red: u8,
+    green: u8,
+    blue: u8,
+    alpha: u8
 }

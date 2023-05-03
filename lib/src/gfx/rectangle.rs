@@ -21,33 +21,11 @@ NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPO
 NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
 DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
 */
 
-#![feature(abi_x86_interrupt)]
+use crate::gfx::PixelLocation;
 
-#![no_main]
-#![no_std]
-
-pub mod basic_font;
-pub mod bitset;
-pub mod bytes;
-pub mod debug;
-pub mod gfx;
-pub mod heapless_string;
-pub mod heapless_vector;
-pub mod panic_utils;
-pub mod possibly_uninit;
-pub mod ptr;
-pub mod simple_allocator;
-pub mod time;
-pub mod x86_64;
-pub mod address_utils;
-pub mod elf;
-pub mod magic;
-pub mod data_portal;
-pub mod enum_iterator;
-pub mod com;
-pub mod enum_flags;
-
-pub type Nothing = ();
+pub struct Rect {
+    start: PixelLocation,
+    end: PixelLocation
+}

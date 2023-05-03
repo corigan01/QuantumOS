@@ -27,9 +27,10 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 use quantum::bios_boot::BiosBootConfig;
 use std::fs;
 use std::process::Command;
+use owo_colors::OwoColorize;
 
 fn main() {
-    println!("Welcome to the Quantum World");
+    println!("     {} Welcome to the Quantum World", "Quantum".green().bold());
 
     let command_args: Vec<String> = std::env::args().collect();
     let noqemu = command_args.contains(&String::from("noqemu"));
@@ -38,7 +39,7 @@ fn main() {
     let debug = command_args.contains(&String::from("debug"));
 
     if noqemu {
-        println!("Build only mode!");
+        println!("     {} Build only mode!", "Quantum".green().bold());
     }
 
     let mut build_status = bios_boot();
@@ -68,6 +69,8 @@ fn main() {
             user_extra_args.push(String::from("-S"));
         }
 
+        println!("     {} Starting QEMU", "Quantum".green().bold());
+
         let _qemu = Command::new("qemu-system-x86_64")
             .args(user_extra_args)
             .arg("-d")
@@ -88,10 +91,10 @@ fn main() {
             .stdout(std::process::Stdio::inherit())
             .status();
     } else {
-        println!("NOT RUNNING QEMU!");
+        println!("     {} NOT RUNNING QEMU!", "Quantum".yellow().bold());
     }
 
-    println!("Done :)");
+    println!("\n{} All Jobs Complete!", "Quantum".green().bold());
 }
 
 fn clean_dont_care() {
@@ -109,6 +112,8 @@ fn bios_boot() -> Result<String, Box<dyn std::error::Error>> {
         eprintln!("Unable to get the `target` for which to build into.");
         err
     })?;
+
+    let _ = fs::remove_dir_all("target/bootloader_dir");
 
     let bootloader_directory = quantum::bios_boot::make_bootloader_dir(&target).map_err(|err| {
         eprintln!("Unable to create bootloader directory! {err}");

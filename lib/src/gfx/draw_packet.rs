@@ -23,34 +23,10 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use crate::framebuffer_utils::FramebufferPixelLayout;
+use crate::gfx::Pixel;
+use crate::gfx::rectangle::Rect;
 
-#[allow(dead_code)]
-pub struct FrameInfo {
-    depth: usize,
-    size_y: usize,
-    size_x: usize,
-    pixel_layout: FramebufferPixelLayout,
-    stride: usize,
-    total_bytes: usize,
-}
-
-impl FrameInfo {
-    pub fn new(
-        size_x: usize,
-        size_y: usize,
-        depth: usize,
-        pixel_layout: FramebufferPixelLayout,
-        stride: usize,
-        total_bytes: usize
-    ) -> Self {
-        FrameInfo {
-            depth,
-            size_y,
-            size_x,
-            pixel_layout,
-            stride,
-            total_bytes,
-        }
-    }
+pub struct DrawPacket<'a> {
+    rect: Rect,
+    raw_data: &'a [Pixel]
 }

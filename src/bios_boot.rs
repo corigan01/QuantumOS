@@ -57,7 +57,8 @@ pub fn build_stage_1() -> Result<String, Box<dyn std::error::Error>> {
         .arg("-O")
         .arg("binary")
         .arg(&stage1_path)
-        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
         .status()?;
 
     Ok(stage1_path)
@@ -91,7 +92,8 @@ pub fn build_stage_2() -> Result<String, Box<dyn std::error::Error>> {
         .arg("-O")
         .arg("binary")
         .arg(&stage2_path)
-        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
         .status()?;
 
     Ok(stage2_path)
@@ -125,7 +127,8 @@ pub fn build_stage_3() -> Result<String, Box<dyn std::error::Error>> {
         .arg("-O")
         .arg("binary")
         .arg(&stage3_path)
-        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
         .status()?;
 
     Ok(stage3_path)

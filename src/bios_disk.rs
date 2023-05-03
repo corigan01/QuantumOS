@@ -29,6 +29,7 @@ use fatfs::{FileSystem, FormatVolumeOptions, FsOptions};
 use std::fs;
 use std::fs::OpenOptions;
 use std::io::{Read, Seek, SeekFrom, Write};
+use owo_colors::OwoColorize;
 
 pub fn delete_disk_img(disk_name: String) -> Result<(), Box<dyn std::error::Error>> {
     fs::remove_file(disk_name)?;
@@ -164,12 +165,13 @@ pub fn make_mbr_disk(
     mbr.write_into(&mut disk_img)?;
     disk_img.sync_all()?;
 
-    println!("Done formatting disk!");
+    println!("     {} Done formatting disk!", "Quantum".green().bold());
 
     for (i, p) in mbr.iter() {
         if p.is_used() {
             println!(
-                "Partition #{}: type = {:?}, size = {}MiB, starting lba = {}",
+                "     {} Partition #{}: type = {:?}, size = {}MiB, starting lba = {}",
+                "Quantum".green().bold(),
                 i,
                 p.sys,
                 (p.sectors * mbr.sector_size) / (1024 * 1024),
