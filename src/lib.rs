@@ -37,7 +37,7 @@ pub fn get_build_directory() -> Result<String, Box<dyn std::error::Error>> {
 
 pub fn build_kernel() -> Result<String, Box<dyn std::error::Error>> {
     let current_dir = env::current_dir()?;
-    let target = format!("{}/kernel/target", current_dir.display());
+    let target = format!("{}/target/kernel", current_dir.display());
     let cargo = env::var("CARGO").unwrap_or("cargo".into());
 
     let kernel_path = format!("{}/x86_64-quantum_os/release/quantum_os", target);

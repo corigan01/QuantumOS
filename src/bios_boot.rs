@@ -32,7 +32,7 @@ use std::{env, fs};
 
 pub fn build_stage_1() -> Result<String, Box<dyn std::error::Error>> {
     let current_dir = env::current_dir()?;
-    let target = format!("{}/stage-1/target", current_dir.display());
+    let target = format!("{}/target/stage-1", current_dir.display());
     let cargo = env::var("CARGO").unwrap_or("cargo".into());
 
     let stage1_path = format!("{}/i386-quantum_loader/release/stage-1", target);
@@ -66,7 +66,7 @@ pub fn build_stage_1() -> Result<String, Box<dyn std::error::Error>> {
 
 pub fn build_stage_2() -> Result<String, Box<dyn std::error::Error>> {
     let current_dir = env::current_dir()?;
-    let target = format!("{}/stage-2/target", current_dir.display());
+    let target = format!("{}/target/stage-2", current_dir.display());
     let cargo = env::var("CARGO").unwrap_or("cargo".into());
 
     let stage2_path = format!("{}/i686-quantum_loader/release/stage-2", target);
@@ -101,7 +101,7 @@ pub fn build_stage_2() -> Result<String, Box<dyn std::error::Error>> {
 
 pub fn build_stage_3() -> Result<String, Box<dyn std::error::Error>> {
     let current_dir = env::current_dir()?;
-    let target = format!("{}/stage-3/target", current_dir.display());
+    let target = format!("{}/target/stage-3", current_dir.display());
     let cargo = env::var("CARGO").unwrap_or("cargo".into());
 
     let stage3_path = format!("{}/x86_64-quantum_loader/release/stage-3", target);
