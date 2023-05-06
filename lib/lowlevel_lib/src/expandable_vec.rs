@@ -23,14 +23,4 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-pub struct EntryPoint64(u64);
-
-impl EntryPoint64 {
-    pub fn from_address(addr: u64) -> Self {
-        Self { 0: addr }
-    }
-
-    pub fn execute() -> ! {
-        todo!()
-    }
-}
+// TODO Make a expandable Vec that allocates a large region each time

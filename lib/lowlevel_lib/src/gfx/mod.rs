@@ -25,8 +25,8 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 #![allow(dead_code)]
 
-pub mod frame_info;
 pub mod draw_packet;
+pub mod frame_info;
 pub mod rectangle;
 
 pub enum FramebufferPixelLayout {
@@ -48,5 +48,5 @@ pub struct Pixel {
     red: u8,
     green: u8,
     blue: u8,
-    alpha: u8
+    alpha: u8,
 }

@@ -25,29 +25,29 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 #![feature(abi_x86_interrupt)]
-
 #![no_main]
 #![no_std]
 
+pub mod address_utils;
 pub mod basic_font;
 pub mod bitset;
 pub mod bytes;
+pub mod com;
+pub mod data_portal;
 pub mod debug;
+pub mod elf;
+pub mod enum_flags;
+pub mod enum_iterator;
 pub mod gfx;
 pub mod heapless_string;
 pub mod heapless_vector;
+pub mod magic;
 pub mod panic_utils;
 pub mod possibly_uninit;
 pub mod ptr;
 pub mod simple_allocator;
 pub mod time;
 pub mod x86_64;
-pub mod address_utils;
-pub mod elf;
-pub mod magic;
-pub mod data_portal;
-pub mod enum_iterator;
-pub mod com;
-pub mod enum_flags;
+pub mod expandable_vec;
 
 pub type Nothing = ();

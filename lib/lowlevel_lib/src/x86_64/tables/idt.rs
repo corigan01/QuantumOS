@@ -25,29 +25,29 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 use crate::bitset::BitSet;
 
+use crate::address_utils::virtual_address::VirtAddress;
+use crate::debug_println;
+use crate::x86_64::registers::{Segment, SegmentRegs};
+use crate::x86_64::PrivlLevel;
 use core::arch::asm;
 use core::mem::size_of;
 use core::ops::{Deref, Range};
 use lazy_static::lazy_static;
 use spin::Mutex;
-use crate::address_utils::virtual_address::VirtAddress;
-use crate::debug_println;
-use crate::x86_64::PrivlLevel;
-use crate::x86_64::registers::{Segment, SegmentRegs};
 
-
-type RawHandlerFuncNe  /* No Error             */ = extern "x86-interrupt" fn(InterruptFrame);
+type RawHandlerFuncNe /* No Error             */ = extern "x86-interrupt" fn(InterruptFrame);
 #[cfg(target_pointer_width = "64")]
-type RawHandlerFuncE   /* With Error           */ = extern "x86-interrupt" fn(InterruptFrame, u64);
+type RawHandlerFuncE /* With Error           */ = extern "x86-interrupt" fn(InterruptFrame, u64);
 type RawHandlerFuncDne /* Diverging No Error   */ = extern "x86-interrupt" fn(InterruptFrame) -> !;
 #[cfg(target_pointer_width = "64")]
-type RawHandlerFuncDe  /* Diverging With Error */ = extern "x86-interrupt" fn(InterruptFrame, u64) -> !;
+type RawHandlerFuncDe /* Diverging With Error */ =
+    extern "x86-interrupt" fn(InterruptFrame, u64) -> !;
 
 #[cfg(not(target_pointer_width = "64"))]
-type RawHandlerFuncE   /* With Error           */ = extern "x86-interrupt" fn(InterruptFrame, u32);
+type RawHandlerFuncE /* With Error           */ = extern "x86-interrupt" fn(InterruptFrame, u32);
 #[cfg(not(target_pointer_width = "64"))]
-type RawHandlerFuncDe  /* Diverging With Error */ = extern "x86-interrupt" fn(InterruptFrame, u32) -> !;
-
+type RawHandlerFuncDe /* Diverging With Error */ =
+    extern "x86-interrupt" fn(InterruptFrame, u32) -> !;
 
 /// # General Handler Function type
 /// This is the function you will use when a interrupt gets called, the idt should abstract the
@@ -104,7 +104,6 @@ pub type GeneralHandlerFunc = fn(InterruptFrame, u8, Option<u64>);
 /// ```
 pub struct Idt([Entry; 256]);
 
-
 /// # Entry
 /// This is the most basic form of the IDT. Each entry is made up of a few parts that the cpu needs
 /// in a very specific order to understand. This order is as follows
@@ -152,7 +151,6 @@ pub struct Entry {
     reserved: u32,
 }
 
-
 /// # Entry
 /// This is the most basic form of the IDT. Each entry is made up of a few parts that the cpu needs
 /// in a very specific order to understand. This order is as follows
@@ -198,7 +196,6 @@ pub struct Entry {
     options: EntryOptions,
     pointer_middle: u16,
 }
-
 
 /// # Interrupt Frame
 /// This is probably the struct most people will need to learn. This struct is very important as it
@@ -246,14 +243,16 @@ pub struct InterruptFrame {
     pub stack_segment: u32,
 }
 
-
 /// # Fall Back Missing handler
 /// This handler is attached when the IDT is created, but the missing_handler should be attached
 /// once the interrupt table is loaded. This makes sure that there can be no interrupt without a
 /// handler so matter where the error takes place. We want to make sure the nicer missing_handler
 /// gets called, because that one is formatted currently for each and every interrupt.
 extern "x86-interrupt" fn fallback_missing_handler(i_frame: InterruptFrame) -> ! {
-    panic!("Fall back Missing Interrupt (UNKNOWN) handler was called!\n {:#x?}", i_frame);
+    panic!(
+        "Fall back Missing Interrupt (UNKNOWN) handler was called!\n {:#x?}",
+        i_frame
+    );
 }
 
 /// # Missing handler
@@ -262,7 +261,10 @@ extern "x86-interrupt" fn fallback_missing_handler(i_frame: InterruptFrame) -> !
 /// it causes the system to crash to make sure undefined behavior or a protection fault occurred.
 #[cfg(not(test))]
 fn missing_handler(i_frame: InterruptFrame, interrupt: u8, _error: Option<u64>) {
-    panic!("Missing Interrupt ({}) handler was called!\n {:#x?}", interrupt, i_frame);
+    panic!(
+        "Missing Interrupt ({}) handler was called!\n {:#x?}",
+        interrupt, i_frame
+    );
 }
 
 impl Entry {
@@ -342,14 +344,9 @@ impl Entry {
         self.pointer_middle = (pointer >> 16) as u16;
     }
 
-
     pub fn missing() -> Self {
-        Self::new_raw_dne(
-            Segment::new(1, PrivlLevel::Ring0),
-            fallback_missing_handler,
-        )
+        Self::new_raw_dne(Segment::new(1, PrivlLevel::Ring0), fallback_missing_handler)
     }
-
 
     /// # Safety
     /// Super unsafe function as it sets all entry fields to null!
@@ -368,30 +365,27 @@ impl Entry {
     pub fn is_fallback_missing(&self) -> bool {
         let missing_ref = Self::missing();
 
-        self.pointer_low == missing_ref.pointer_low &&
-            self.pointer_middle == missing_ref.pointer_middle &&
-            self.pointer_high == missing_ref.pointer_high
+        self.pointer_low == missing_ref.pointer_low
+            && self.pointer_middle == missing_ref.pointer_middle
+            && self.pointer_high == missing_ref.pointer_high
     }
 
     #[cfg(not(target_pointer_width = "64"))]
     pub fn is_fallback_missing(&self) -> bool {
         let missing_ref = Self::missing();
 
-        self.pointer_low == missing_ref.pointer_low &&
-            self.pointer_middle == missing_ref.pointer_middle
+        self.pointer_low == missing_ref.pointer_low
+            && self.pointer_middle == missing_ref.pointer_middle
     }
 
     #[cfg(target_pointer_width = "64")]
     pub fn is_null(&self) -> bool {
-        self.pointer_low == 0 &&
-            self.pointer_middle == 0 &&
-            self.pointer_high == 0
+        self.pointer_low == 0 && self.pointer_middle == 0 && self.pointer_high == 0
     }
 
     #[cfg(not(target_pointer_width = "64"))]
     pub fn is_null(&self) -> bool {
-        self.pointer_low == 0 &&
-            self.pointer_middle == 0
+        self.pointer_low == 0 && self.pointer_middle == 0
     }
 }
 
@@ -430,14 +424,17 @@ impl Idt {
 
         for i in self.0.iter() {
             // if the entry is missing, the missing type will take care of being safe
-            if i.is_fallback_missing() { continue; }
+            if i.is_fallback_missing() {
+                continue;
+            }
 
             // make sure that when we load a **valid** entry, it has a GDT selector that isn't 0
             // and do this for all possible rings, we dont want to have any loop-holes
             let gdt_selector = i.gdt_selector;
 
-            if gdt_selector.index_in_gdt() == 0
-            { return Err("GDT_Selector is malformed and does not contain a valid index"); }
+            if gdt_selector.index_in_gdt() == 0 {
+                return Err("GDT_Selector is malformed and does not contain a valid index");
+            }
 
             // make sure the reserved bits are **always** zero
             if i.reserved != 0 {
@@ -491,7 +488,7 @@ impl Idt {
         if self.check_for_entry(interrupt) {
             self.0[interrupt as usize] = Entry::missing();
 
-            crate::attach_interrupt!(self, missing_handler, interrupt..(interrupt+1));
+            crate::attach_interrupt!(self, missing_handler, interrupt..(interrupt + 1));
         }
     }
 }
@@ -524,7 +521,11 @@ pub struct IdtTablePointer {
 
 lazy_static! {
     pub static ref IDT_TABLE_POINTER: Mutex<IdtTablePointer> = {
-        Mutex::new(Idt::new().submit_entries().expect("Could not Init temp IDT!"))
+        Mutex::new(
+            Idt::new()
+                .submit_entries()
+                .expect("Could not Init temp IDT!"),
+        )
     };
 }
 
@@ -532,7 +533,9 @@ impl IdtTablePointer {
     pub fn load(&self) {
         IDT_TABLE_POINTER.lock().copy_from(*self);
 
-        unsafe { asm!("lidt [{}]", in(reg) IDT_TABLE_POINTER.lock().deref(), options(readonly, nostack, preserves_flags)); };
+        unsafe {
+            asm!("lidt [{}]", in(reg) IDT_TABLE_POINTER.lock().deref(), options(readonly, nostack, preserves_flags));
+        };
     }
 
     pub fn copy_from(&mut self, other: Self) {
@@ -571,9 +574,7 @@ impl EntryOptions {
         let mut new_s = Self::new_minimal();
 
         // set the default options for the struct that the user might want
-        new_s
-            .set_cpu_prv(PrivlLevel::Ring0)
-            .set_present_flag(true);
+        new_s.set_cpu_prv(PrivlLevel::Ring0).set_present_flag(true);
 
         new_s
     }
@@ -703,41 +704,105 @@ impl ExtraHandlerInfo {
         };
 
         match interrupt_id {
-            0 => { ExtraHandlerInfo { interrupt_name: "Divide by Zero", ..info } },
-            1 => { ExtraHandlerInfo { interrupt_name: "Debug", ..info } },
-            2 => { ExtraHandlerInfo { interrupt_name: "NON Maskable Interrupt", ..info } },
-            3 => { ExtraHandlerInfo { interrupt_name: "BreakPoint", ..info } },
-            4 => { ExtraHandlerInfo { interrupt_name: "OverFlow", ..info } },
-            5 => { ExtraHandlerInfo { interrupt_name: "Bound Range Exceeded", ..info } },
-            6 => { ExtraHandlerInfo { interrupt_name: "Invalid Opcode", ..info } },
-            7 => { ExtraHandlerInfo { interrupt_name: "Device not Available", ..info } },
-            8 => { ExtraHandlerInfo { should_handler_diverge: true, interrupt_name: "Double Fault", ..info } },
-            10 => { ExtraHandlerInfo { interrupt_name: "Invalid TSS", ..info } },
-            11 => { ExtraHandlerInfo { interrupt_name: "Segment not Present", ..info } },
-            12 => { ExtraHandlerInfo { interrupt_name: "Stack Segment Fault", ..info } },
-            13 => { ExtraHandlerInfo { interrupt_name: "General Protection Fault", ..info } },
-            14 => { ExtraHandlerInfo { interrupt_name: "Page Fault", ..info } },
-            16 => { ExtraHandlerInfo { interrupt_name: "X87 Floating Point", ..info } },
-            17 => { ExtraHandlerInfo { interrupt_name: "Alignment Check", ..info } },
-            18 => { ExtraHandlerInfo { should_handler_diverge: true, interrupt_name: "Machine Check", ..info } },
-            19 => { ExtraHandlerInfo { interrupt_name: "SIMD Floating Point", ..info } },
-            20 => { ExtraHandlerInfo { interrupt_name: "Virtualization", ..info } },
-            29 => { ExtraHandlerInfo { interrupt_name: "VMM Comm Exception", ..info } },
-            30 => { ExtraHandlerInfo { interrupt_name: "Security Exception", ..info } },
+            0 => ExtraHandlerInfo {
+                interrupt_name: "Divide by Zero",
+                ..info
+            },
+            1 => ExtraHandlerInfo {
+                interrupt_name: "Debug",
+                ..info
+            },
+            2 => ExtraHandlerInfo {
+                interrupt_name: "NON Maskable Interrupt",
+                ..info
+            },
+            3 => ExtraHandlerInfo {
+                interrupt_name: "BreakPoint",
+                ..info
+            },
+            4 => ExtraHandlerInfo {
+                interrupt_name: "OverFlow",
+                ..info
+            },
+            5 => ExtraHandlerInfo {
+                interrupt_name: "Bound Range Exceeded",
+                ..info
+            },
+            6 => ExtraHandlerInfo {
+                interrupt_name: "Invalid Opcode",
+                ..info
+            },
+            7 => ExtraHandlerInfo {
+                interrupt_name: "Device not Available",
+                ..info
+            },
+            8 => ExtraHandlerInfo {
+                should_handler_diverge: true,
+                interrupt_name: "Double Fault",
+                ..info
+            },
+            10 => ExtraHandlerInfo {
+                interrupt_name: "Invalid TSS",
+                ..info
+            },
+            11 => ExtraHandlerInfo {
+                interrupt_name: "Segment not Present",
+                ..info
+            },
+            12 => ExtraHandlerInfo {
+                interrupt_name: "Stack Segment Fault",
+                ..info
+            },
+            13 => ExtraHandlerInfo {
+                interrupt_name: "General Protection Fault",
+                ..info
+            },
+            14 => ExtraHandlerInfo {
+                interrupt_name: "Page Fault",
+                ..info
+            },
+            16 => ExtraHandlerInfo {
+                interrupt_name: "X87 Floating Point",
+                ..info
+            },
+            17 => ExtraHandlerInfo {
+                interrupt_name: "Alignment Check",
+                ..info
+            },
+            18 => ExtraHandlerInfo {
+                should_handler_diverge: true,
+                interrupt_name: "Machine Check",
+                ..info
+            },
+            19 => ExtraHandlerInfo {
+                interrupt_name: "SIMD Floating Point",
+                ..info
+            },
+            20 => ExtraHandlerInfo {
+                interrupt_name: "Virtualization",
+                ..info
+            },
+            29 => ExtraHandlerInfo {
+                interrupt_name: "VMM Comm Exception",
+                ..info
+            },
+            30 => ExtraHandlerInfo {
+                interrupt_name: "Security Exception",
+                ..info
+            },
 
-            9 | 21..=28 | 31 | 15 => { ExtraHandlerInfo { reserved_interrupt: true, ..info } },
+            9 | 21..=28 | 31 | 15 => ExtraHandlerInfo {
+                reserved_interrupt: true,
+                ..info
+            },
 
-            _ => {
-                info
-            }
+            _ => info,
         }
     }
 }
 
 lazy_static! {
-    static ref QUIET_INTERRUPT_VECTOR: Mutex<[bool; 255]> = {
-        Mutex::new([false; 255])
-    };
+    static ref QUIET_INTERRUPT_VECTOR: Mutex<[bool; 255]> = Mutex::new([false; 255]);
 }
 
 /// # Set Quite Interrupt
@@ -780,7 +845,6 @@ pub fn set_quiet_interrupt_range(interrupt_id: Range<u8>, quiet: bool) {
     }
 }
 
-
 /// # Interrupt Tester
 /// This will simply just call a basic interrupt to test your IDT. This interrupt will call
 /// interrupt 1 - or simply known as 'Debug'.
@@ -790,7 +854,6 @@ pub fn debug_interrupt() {
         asm!("int $0x01");
     }
 }
-
 
 /// # General Function To Interrupt (No Error)
 /// This is a general wrapper around a `GeneralHandlerFunc` type and the corresponding interrupt
@@ -805,7 +868,6 @@ pub fn debug_interrupt() {
 macro_rules! general_function_to_interrupt_ne {
     ($name: ident, $int_num: expr) => {{
         extern "x86-interrupt" fn wrapper(i_frame: InterruptFrame) {
-
             let function = $name as $crate::x86_64::tables::idt::GeneralHandlerFunc;
 
             function(i_frame, $int_num, None);
@@ -827,10 +889,8 @@ macro_rules! general_function_to_interrupt_ne {
 #[macro_export]
 macro_rules! general_function_to_interrupt_e {
     ($name: ident, $int_num: expr) => {{
-
         #[cfg(target_pointer_width = "64")]
         extern "x86-interrupt" fn wrapper(i_frame: InterruptFrame, error_code: u64) {
-
             let function = $name as $crate::x86_64::tables::idt::GeneralHandlerFunc;
 
             function(i_frame, $int_num, Some(error_code));
@@ -838,7 +898,6 @@ macro_rules! general_function_to_interrupt_e {
 
         #[cfg(not(target_pointer_width = "64"))]
         extern "x86-interrupt" fn wrapper(i_frame: InterruptFrame, error_code: u32) {
-
             let function = $name as $crate::x86_64::tables::idt::GeneralHandlerFunc;
 
             function(i_frame, $int_num, Some(error_code as u64));
@@ -861,7 +920,6 @@ macro_rules! general_function_to_interrupt_e {
 macro_rules! general_function_to_interrupt_dne {
     ($name: ident, $int_num: expr) => {{
         extern "x86-interrupt" fn wrapper(i_frame: InterruptFrame) -> ! {
-
             let function = $name as $crate::x86_64::tables::idt::GeneralHandlerFunc;
 
             function(i_frame, $int_num, None);
@@ -887,7 +945,6 @@ macro_rules! general_function_to_interrupt_de {
     ($name: ident, $int_num: expr) => {{
         #[cfg(target_pointer_width = "64")]
         extern "x86-interrupt" fn wrapper(i_frame: InterruptFrame, error_code: u64) -> ! {
-
             let function = $name as $crate::x86_64::tables::idt::GeneralHandlerFunc;
 
             function(i_frame, $int_num, Some(error_code));
@@ -897,7 +954,6 @@ macro_rules! general_function_to_interrupt_de {
 
         #[cfg(not(target_pointer_width = "64"))]
         extern "x86-interrupt" fn wrapper(i_frame: InterruptFrame, error_code: u32) -> ! {
-
             let function = $name as $crate::x86_64::tables::idt::GeneralHandlerFunc;
 
             function(i_frame, $int_num, Some(error_code as u64));
@@ -915,16 +971,27 @@ macro_rules! general_function_to_interrupt_de {
 #[macro_export]
 macro_rules! interrupt_match_wrapper {
     ($idt: expr, $name: ident, $int_n: tt) => {
-        match $int_n  {
+        match $int_n {
             8 | 18 => {
-                $idt.raw_set_handler_de($int_n, $crate::general_function_to_interrupt_de!($name, $int_n));
-            },
+                $idt.raw_set_handler_de(
+                    $int_n,
+                    $crate::general_function_to_interrupt_de!($name, $int_n),
+                );
+            }
             10..=14 | 17 | 29 | 30 => {
-                 $idt.raw_set_handler_e($int_n, $crate::general_function_to_interrupt_e!($name, $int_n));
-            },
-            9 | 21..=28 | 31 => { panic!("Tried to set a reserved handler"); }
+                $idt.raw_set_handler_e(
+                    $int_n,
+                    $crate::general_function_to_interrupt_e!($name, $int_n),
+                );
+            }
+            9 | 21..=28 | 31 => {
+                panic!("Tried to set a reserved handler");
+            }
             _ => {
-                $idt.raw_set_handler_ne($int_n, $crate::general_function_to_interrupt_ne!($name, $int_n));
+                $idt.raw_set_handler_ne(
+                    $int_n,
+                    $crate::general_function_to_interrupt_ne!($name, $int_n),
+                );
             }
         }
     };
@@ -959,8 +1026,6 @@ macro_rules! interrupt_match_wrapper_recursive {
         $crate::interrupt_match_wrapper_recursive!($idt, $name, $range $(, $bits)*, 1);
     };
 }
-
-
 
 /// # Attach Interrupt
 /// This macro will attach a `GeneralHandlerFunc` type of function to the IDT. It will automatically
@@ -1041,7 +1106,6 @@ macro_rules! attach_interrupt {
     };
 }
 
-
 /// # Remove Interrupt
 /// This macro will remove the current interrupt handler that was set.
 ///
@@ -1067,7 +1131,7 @@ macro_rules! remove_interrupt {
 }
 
 #[cfg(test)]
-fn missing_handler(_i_frame: InterruptFrame, _interrupt: u8, _error: Option<u64>) { }
+fn missing_handler(_i_frame: InterruptFrame, _interrupt: u8, _error: Option<u64>) {}
 
 #[cfg(test)]
 mod test_case {
@@ -1077,9 +1141,9 @@ mod test_case {
     use spin::Mutex;
     use x86_64::PrivilegeLevel;
 
-    use crate::{serial_print, serial_println};
-    use crate::arch_x86_64::idt::{EntryOptions, InterruptFrame};
     use crate::arch_x86_64::idt::Idt;
+    use crate::arch_x86_64::idt::{EntryOptions, InterruptFrame};
+    use crate::{serial_print, serial_println};
 
     fn dv0_handler(i_frame: InterruptFrame, intn: u8, error: Option<u64>) {
         // We want this to be called and returned!
@@ -1093,7 +1157,6 @@ mod test_case {
         i -= 101;
 
         let d = i == intn;
-
     }
 
     lazy_static! {
@@ -1134,8 +1197,6 @@ mod test_case {
 
     #[test_case]
     fn test_handler_by_not_valid() {
-
-
         let mut m_idt = IDT_TEST.lock();
 
         m_idt.submit_entries().unwrap().load();
@@ -1162,17 +1223,19 @@ mod test_case {
         remove_interrupt!(m_idt, 0..255);
 
         m_idt.submit_entries().unwrap().load();
-
-
     }
 
     #[test_case]
     fn test_entry_options() {
-        unsafe { assert_eq!(EntryOptions::new_zero().0, 0x00); }
+        unsafe {
+            assert_eq!(EntryOptions::new_zero().0, 0x00);
+        }
         assert_eq!(EntryOptions::new_minimal().0, 0xE00);
         assert_eq!(EntryOptions::new().0, 0x8E00);
-        assert_ne!(EntryOptions::new().set_present_flag(false).0, EntryOptions::new().0);
+        assert_ne!(
+            EntryOptions::new().set_present_flag(false).0,
+            EntryOptions::new().0
+        );
         assert_ne!(EntryOptions::new().0, EntryOptions::new_minimal().0);
     }
 }
-

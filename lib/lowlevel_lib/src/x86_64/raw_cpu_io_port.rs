@@ -71,7 +71,6 @@ Port range      Summary
 
 use core::arch::asm;
 
-
 /// # byte_in
 ///
 /// ### Operation
@@ -110,7 +109,6 @@ pub unsafe fn byte_out(port: u16, data: u8) {
     asm!("out dx, al", in("dx") port, in("al") data, options(nomem, nostack, preserves_flags));
 }
 
-
 /// # word_in
 ///
 /// ### Operation
@@ -132,7 +130,6 @@ pub unsafe fn word_in(port: u16) -> u16 {
     _port_value
 }
 
-
 /// # word_out
 ///
 /// ### Operation
@@ -149,5 +146,3 @@ pub unsafe fn word_in(port: u16) -> u16 {
 pub unsafe fn word_out(port: u16, data: u16) {
     asm!("out dx, ax", in("dx") port, in("ax") data, options(nomem, nostack, preserves_flags));
 }
-
-

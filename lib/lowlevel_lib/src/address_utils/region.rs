@@ -23,10 +23,9 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-
-use core::fmt::{Debug, Formatter};
 use crate::address_utils::addressable::Addressable;
 use crate::bytes::Bytes;
+use core::fmt::{Debug, Formatter};
 
 #[derive(Debug)]
 pub enum MemoryRegionType {
@@ -35,7 +34,7 @@ pub enum MemoryRegionType {
     Reserved,
     Bios,
     Uefi,
-    Unknown
+    Unknown,
 }
 
 pub struct MemoryRegion<Type = u64> {
@@ -45,14 +44,15 @@ pub struct MemoryRegion<Type = u64> {
 }
 
 impl<Type> MemoryRegion<Type>
-    where Type: Addressable + Copy {
-
+where
+    Type: Addressable + Copy,
+{
     pub fn new(start: Type, end: Type, region_type: MemoryRegionType) -> Self {
         assert!(start.address_as_u64() < end.address_as_u64());
         Self {
             start,
             end,
-            region_type
+            region_type,
         }
     }
 
@@ -74,12 +74,21 @@ impl<Type> MemoryRegion<Type>
 }
 
 impl<Type> Debug for MemoryRegion<Type>
-    where Type: Debug + Addressable + Copy {
+where
+    Type: Debug + Addressable + Copy,
+{
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         if f.alternate() {
             write!(f, "MemoryRegion {{\n    type:  {:?}\n    start: 0x{:x},\n    end:   0x{:x},\n    size:  {}\n}}", self.region_type, self.start.address_as_u64(), self.end.address_as_u64(), Bytes::from(self.size()))
         } else {
-            write!(f, "MemoryRegion {{ type: {:?}, start: 0x{:x}, end: 0x{:x}, size: {} }}", self.region_type, self.start.address_as_u64(), self.end.address_as_u64(), Bytes::from(self.size()))
+            write!(
+                f,
+                "MemoryRegion {{ type: {:?}, start: 0x{:x}, end: 0x{:x}, size: {} }}",
+                self.region_type,
+                self.start.address_as_u64(),
+                self.end.address_as_u64(),
+                Bytes::from(self.size())
+            )
         }
     }
 }

@@ -27,8 +27,8 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #![no_std]
 
 pub mod boot_info;
-pub mod error;
 pub mod e820_memory;
+pub mod error;
 
 #[derive(Clone, Copy, Debug, Default)]
 #[repr(C)]

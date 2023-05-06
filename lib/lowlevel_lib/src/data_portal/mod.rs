@@ -23,8 +23,8 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use core::marker::PhantomData;
 use crate::Nothing;
+use core::marker::PhantomData;
 
 pub struct SendingPortal;
 pub struct ReceivingPortal;
@@ -35,13 +35,13 @@ pub struct Portal<FunctionType, PortalType = PortalUnknown, Bi = Nothing, Other 
     stream: FunctionType,
     inlet_data: PhantomData<Bi>,
     outlet_data: PhantomData<Other>,
-    portal_type: PhantomData<PortalType>
+    portal_type: PhantomData<PortalType>,
 }
 
-
 impl<FunctionType, Inlet> Portal<FunctionType, PortalUnknown, Inlet>
-    where FunctionType: FnMut(Inlet) {
-
+where
+    FunctionType: FnMut(Inlet),
+{
     pub fn new_sending_portal(func: FunctionType) -> Portal<FunctionType, SendingPortal, Inlet> {
         Portal {
             stream: func,
@@ -53,8 +53,9 @@ impl<FunctionType, Inlet> Portal<FunctionType, PortalUnknown, Inlet>
 }
 
 impl<FunctionType, Outlet> Portal<FunctionType, PortalUnknown, Outlet>
-    where FunctionType: FnMut() -> Outlet {
-
+where
+    FunctionType: FnMut() -> Outlet,
+{
     pub fn new_recv_portal(func: FunctionType) -> Portal<FunctionType, ReceivingPortal, Outlet> {
         Portal {
             stream: func,
@@ -66,8 +67,9 @@ impl<FunctionType, Outlet> Portal<FunctionType, PortalUnknown, Outlet>
 }
 
 impl<FunctionType, Inlet, Outlet> Portal<FunctionType, PortalUnknown, Inlet, Outlet>
-    where FunctionType: FnMut(Inlet) -> Outlet {
-
+where
+    FunctionType: FnMut(Inlet) -> Outlet,
+{
     pub fn new_both_portal(func: FunctionType) -> Portal<FunctionType, BothPortal, Inlet, Outlet> {
         Portal {
             stream: func,
@@ -79,24 +81,27 @@ impl<FunctionType, Inlet, Outlet> Portal<FunctionType, PortalUnknown, Inlet, Out
 }
 
 impl<FunctionType, Inlet> Portal<FunctionType, SendingPortal, Inlet>
-    where FunctionType: FnMut(Inlet) {
-
+where
+    FunctionType: FnMut(Inlet),
+{
     pub fn send_data(&mut self, data: Inlet) {
         (self.stream)(data);
     }
 }
 
 impl<FunctionType, Outlet> Portal<FunctionType, ReceivingPortal, Outlet>
-    where FunctionType: FnMut() -> Outlet {
-
+where
+    FunctionType: FnMut() -> Outlet,
+{
     pub fn recv_data(&mut self) -> Outlet {
         (self.stream)()
     }
 }
 
 impl<FunctionType, Inlet, Outlet> Portal<FunctionType, BothPortal, Inlet, Outlet>
-    where FunctionType: FnMut(Inlet) -> Outlet {
-
+where
+    FunctionType: FnMut(Inlet) -> Outlet,
+{
     pub fn both_data(&mut self, data: Inlet) -> Outlet {
         (self.stream)(data)
     }

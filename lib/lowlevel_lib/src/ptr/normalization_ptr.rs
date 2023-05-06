@@ -38,15 +38,13 @@ impl NormPtr {
             ptr_size_bytes: bytes,
         }
     }
-
-    
 }
 
 impl From<&mut [u8]> for NormPtr {
     fn from(value: &mut [u8]) -> Self {
         Self {
             ptr: UnsafePtr::new(value.as_mut_ptr() as u64),
-            ptr_size_bytes: value.len()
+            ptr_size_bytes: value.len(),
         }
     }
 }

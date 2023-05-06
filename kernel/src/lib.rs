@@ -30,5 +30,3 @@ Quantum OS Lib file, documentation coming soon!
 #![allow(dead_code)]
 
 pub mod clock;
-
-

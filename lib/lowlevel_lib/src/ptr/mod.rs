@@ -23,7 +23,7 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-pub mod normalization_ptr;
-pub mod unsafe_ptr;
-pub mod segmented_ptr;
 pub mod entry_point;
+pub mod normalization_ptr;
+pub mod segmented_ptr;
+pub mod unsafe_ptr;

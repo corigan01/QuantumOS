@@ -27,17 +27,19 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #![no_std] // don't link the Rust standard library
 #![no_main] // disable all Rust-level entry points
 #![allow(dead_code)]
+#![feature(alloc)]
 
-use core::panic::PanicInfo;
 use bootloader::boot_info::BootInfo;
+use core::panic::PanicInfo;
 use quantum_lib::address_utils::physical_address::PhyAddress;
 use quantum_lib::address_utils::region::{MemoryRegion, MemoryRegionType};
 use quantum_lib::bytes::Bytes;
 use quantum_lib::com::serial::{SerialBaud, SerialDevice, SerialPort};
-use quantum_lib::debug::{add_connection_to_global_stream};
+use quantum_lib::debug::add_connection_to_global_stream;
 use quantum_lib::debug::stream_connection::StreamConnectionBuilder;
 use quantum_lib::debug_println;
 use quantum_os::clock::rtc::{set_time_zone, update_and_get_time};
+
 
 static mut SERIAL_CONNECTION: Option<SerialDevice> = None;
 
@@ -70,12 +72,15 @@ pub extern "C" fn _start(boot_info_ptr: u64) {
 
 fn main(boot_info: &BootInfo) {
     let memory_regions = unsafe { boot_info.get_memory_map() };
-    
+
     for bios_memory_region in memory_regions {
         let address = match PhyAddress::new(bios_memory_region.address) {
             Ok(value) => value,
             Err(invl) => {
-                debug_println!("Invalid address that was given in `memory_regions` {:?}, skipping... ", invl);
+                debug_println!(
+                    "Invalid address that was given in `memory_regions` {:?}, skipping... ",
+                    invl
+                );
                 continue;
             }
         };
@@ -91,7 +96,6 @@ fn main(boot_info: &BootInfo) {
 
         debug_println!("{:#?}", region);
     }
-
 }
 
 #[panic_handler]

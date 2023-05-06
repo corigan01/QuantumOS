@@ -52,7 +52,7 @@ pub struct BootInfo {
     pub vid: VideoInformation,
     pub memory_map_ptr: u64,
     pub memory_map_size: u64,
-    pub magic: u64
+    pub magic: u64,
 }
 
 impl BootInfo {
@@ -65,7 +65,7 @@ impl BootInfo {
             vid: VideoInformation::default(),
             memory_map_ptr: 0,
             memory_map_size: 0,
-            magic: Self::MAGIC
+            magic: Self::MAGIC,
         }
     }
 
@@ -73,8 +73,17 @@ impl BootInfo {
         let self_ref = unsafe { &*(ptr as *const Self) };
         let magic = self_ref.magic;
 
-        assert!(ptr >= 0x100000, "BootInfo Struct Malformed - The address is not what is expected 0x{:x}", ptr);
-        assert!(self_ref.check_magic(), "BootInfo Struct Magic FAILED, Got=0x{:x} Expected=0x{:x}", magic, Self::MAGIC);
+        assert!(
+            ptr >= 0x100000,
+            "BootInfo Struct Malformed - The address is not what is expected 0x{:x}",
+            ptr
+        );
+        assert!(
+            self_ref.check_magic(),
+            "BootInfo Struct Magic FAILED, Got=0x{:x} Expected=0x{:x}",
+            magic,
+            Self::MAGIC
+        );
 
         self_ref
     }
@@ -131,7 +140,8 @@ impl BootInfo {
     pub unsafe fn get_memory_map(&self) -> &[E820Entry] {
         core::slice::from_raw_parts(
             self.memory_map_ptr as *const E820Entry,
-            self.memory_map_size as usize)
+            self.memory_map_size as usize,
+        )
     }
 }
 

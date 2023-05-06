@@ -23,11 +23,11 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-pub mod virtual_address;
+pub mod addressable;
 pub mod physical_address;
 pub mod region;
-pub mod addressable;
-
+pub mod virtual_address;
+pub mod memory_allocator;
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
 pub struct InvdAddress(u64);

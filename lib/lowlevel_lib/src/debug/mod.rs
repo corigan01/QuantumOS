@@ -54,7 +54,10 @@ pub fn add_connection_to_global_stream(stream: StreamConnection) -> Result<(), H
         .push_within_capsity(stream);
 
     if does_stream_want_welcome {
-        crate::debug_println!("New Stream added to Global Debug! '{}'", stream_info_copy.connection_name);
+        crate::debug_println!(
+            "New Stream added to Global Debug! '{}'",
+            stream_info_copy.connection_name
+        );
     }
 
     status
