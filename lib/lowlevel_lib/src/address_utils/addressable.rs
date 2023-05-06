@@ -23,4 +23,32 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-pub mod tables;
+pub trait Addressable {
+    fn address_as_u64(&self) -> u64;
+
+    fn copy_by_offset(&self, distance: u64) -> Self;
+
+    fn distance_from_address(&self, addr: &Self) -> u64 {
+        let our_value = self.address_as_u64();
+        let rhs_value = addr.address_as_u64();
+
+        our_value.abs_diff(rhs_value)
+    }
+}
+
+
+macro_rules! impl_all_types {
+    ($($t:ty)*) => ($(
+        impl Addressable for $t {
+            fn address_as_u64(&self) -> u64 {
+                *self as u64
+            }
+
+            fn copy_by_offset(&self, distance: u64) -> $t {
+                (self.address_as_u64() + distance) as $t
+            }
+        }
+    )*)
+}
+
+impl_all_types! { u8 u16 u32 u64 u128 i8 i16 i32 i64 i128 usize isize }

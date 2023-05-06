@@ -30,6 +30,9 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 use core::panic::PanicInfo;
 use bootloader::boot_info::BootInfo;
+use quantum_lib::address_utils::physical_address::PhyAddress;
+use quantum_lib::address_utils::region::{MemoryRegion, MemoryRegionType};
+use quantum_lib::bytes::Bytes;
 use quantum_lib::com::serial::{SerialBaud, SerialDevice, SerialPort};
 use quantum_lib::debug::{add_connection_to_global_stream};
 use quantum_lib::debug::stream_connection::StreamConnectionBuilder;
@@ -42,8 +45,8 @@ static mut SERIAL_CONNECTION: Option<SerialDevice> = None;
 #[link_section = ".start"]
 pub extern "C" fn _start(boot_info_ptr: u64) {
     let connection = unsafe { &mut SERIAL_CONNECTION };
-
     *connection = Some(SerialDevice::new(SerialPort::Com1, SerialBaud::Baud115200).unwrap());
+
     let connection = StreamConnectionBuilder::new()
         .console_connection()
         .add_connection_name("SERIAL")
@@ -66,7 +69,28 @@ pub extern "C" fn _start(boot_info_ptr: u64) {
 }
 
 fn main(boot_info: &BootInfo) {
-    debug_println!("{:#?}", boot_info.get_video_information());
+    let memory_regions = unsafe { boot_info.get_memory_map() };
+    
+    for bios_memory_region in memory_regions {
+        let address = match PhyAddress::new(bios_memory_region.address) {
+            Ok(value) => value,
+            Err(invl) => {
+                debug_println!("Invalid address that was given in `memory_regions` {:?}, skipping... ", invl);
+                continue;
+            }
+        };
+
+        let region_type = match bios_memory_region.entry_type {
+            1 => MemoryRegionType::Usable,
+            2 => MemoryRegionType::Reserved,
+            _ => MemoryRegionType::Unknown,
+        };
+
+        let size = Bytes::from(bios_memory_region.len);
+        let region = MemoryRegion::from_distance(address, size, region_type);
+
+        debug_println!("{:#?}", region);
+    }
 
 }
 

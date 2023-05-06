@@ -128,7 +128,7 @@ impl MulAssign for Bytes {
 /// ```
 /// use quantum_lib::bytes::Bytes;
 ///
-/// let size: Bytes = 1024 ;
+/// let size: Bytes = 1024.into();
 ///
 /// assert_eq!(format!("{}", size), "1 Kib");
 /// ```

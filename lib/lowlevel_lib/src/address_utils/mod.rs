@@ -24,6 +24,10 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 pub mod virtual_address;
+pub mod physical_address;
+pub mod region;
+pub mod addressable;
+
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
 pub struct InvdAddress(u64);

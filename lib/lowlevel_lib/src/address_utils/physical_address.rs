@@ -23,9 +23,10 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+
 use core::marker::PhantomData;
 use core::ops::{RangeBounds, RangeFull};
-use crate::address_utils::{InvdAddress, VIRTUAL_ALLOWED_ADDRESS_SIZE};
+use crate::address_utils::{InvdAddress, PHYSICAL_ALLOWED_ADDRESS_SIZE};
 use crate::address_utils::addressable::Addressable;
 use crate::bitset::BitSet;
 
@@ -35,56 +36,56 @@ pub struct Unaligned {}
 pub struct Aligned {}
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
-pub struct VirtAddress<Type = Unaligned, const ALIGNED_BITS: u64 = 12>{
+pub struct PhyAddress<Type = Unaligned, const ALIGNED_BITS: u64 = 12>{
     value: u64,
     reserved: PhantomData<Type>
 }
 
-impl VirtAddress {
-    fn x(addr: u64) -> VirtAddress {
+impl PhyAddress {
+    fn x(addr: u64) -> PhyAddress {
         Self {
             value: addr,
             reserved: Default::default(),
         }
     }
 
-    pub fn new(addr: u64) -> Result<VirtAddress, InvdAddress> {
-        if Self::is_address_virtual_compatible(addr) {
-            return Ok(VirtAddress::x(addr));
+    pub fn new(addr: u64) -> Result<PhyAddress, InvdAddress> {
+        if Self::is_address_physical_compatible(addr) {
+            return Ok(PhyAddress::x(addr));
         }
 
         Err(InvdAddress(addr))
     }
 
-    pub fn try_new(addr: u64) -> Option<VirtAddress> {
-        if Self::is_address_virtual_compatible(addr) {
-            return Some(VirtAddress::x(addr));
+    pub fn try_new(addr: u64) -> Option<PhyAddress> {
+        if Self::is_address_physical_compatible(addr) {
+            return Some(PhyAddress::x(addr));
         }
 
         None
     }
 
-    pub fn is_address_virtual_compatible(address: u64) -> bool {
-        address.get_bits(VIRTUAL_ALLOWED_ADDRESS_SIZE..64)
-            == u64::MAX.get_bits(VIRTUAL_ALLOWED_ADDRESS_SIZE..64) ||
-            address.get_bits(VIRTUAL_ALLOWED_ADDRESS_SIZE..64) == 0
+    pub fn is_address_physical_compatible(address: u64) -> bool {
+        address.get_bits(PHYSICAL_ALLOWED_ADDRESS_SIZE..64)
+            == u64::MAX.get_bits(PHYSICAL_ALLOWED_ADDRESS_SIZE..64) ||
+            address.get_bits(PHYSICAL_ALLOWED_ADDRESS_SIZE..64) == 0
     }
 
     pub fn is_address_aligned(address: u64, alignment: usize) -> bool {
         address & (2_u64.pow(alignment as u32) - 1) == 0
     }
 
-    pub fn strip_unaligned_bits_to_align_address<const ALIGNED_BITS: u64>(mut self) -> VirtAddress<Aligned, ALIGNED_BITS> {
-        VirtAddress {
+    pub fn strip_unaligned_bits_to_align_address<const ALIGNED_BITS: u64>(mut self) -> PhyAddress<Aligned, ALIGNED_BITS> {
+        PhyAddress {
             value: self.value.set_bits(0..((ALIGNED_BITS + 1) as u8), 0),
             reserved: Default::default()
         }
     }
 
-    pub fn try_aligned<const ALIGNED_BITS: u64>(self) -> Result<VirtAddress<Aligned, ALIGNED_BITS>, InvdAddress> {
+    pub fn try_aligned<const ALIGNED_BITS: u64>(self) -> Result<PhyAddress<Aligned, ALIGNED_BITS>, InvdAddress> {
         if Self::is_address_aligned(self.value, ALIGNED_BITS as usize) {
             return Ok(
-                VirtAddress {
+                PhyAddress {
                     value: self.value,
                     reserved: Default::default()
                 }
@@ -94,7 +95,7 @@ impl VirtAddress {
         Err(InvdAddress(self.value))
     }
 }
-impl<Any, const ALIGNED_BITS: u64> VirtAddress<Any, ALIGNED_BITS> {
+impl<Any, const ALIGNED_BITS: u64> PhyAddress<Any, ALIGNED_BITS> {
     pub fn is_null(&self) -> bool {
         self.value == 0
     }
@@ -124,23 +125,23 @@ impl<Any, const ALIGNED_BITS: u64> VirtAddress<Any, ALIGNED_BITS> {
     }
 }
 
-impl Addressable for VirtAddress {
+impl Addressable for PhyAddress {
     fn address_as_u64(&self) -> u64 {
         self.as_u64()
     }
 
     fn copy_by_offset(&self, distance: u64) -> Self {
-        VirtAddress::new(self.as_u64() + distance).unwrap()
+        PhyAddress::new(self.as_u64() + distance).unwrap()
     }
 }
 
 macro_rules! from_all_types {
     ($($t:ty)*) => ($(
-        impl TryFrom<$t> for VirtAddress<Unaligned> {
+        impl TryFrom<$t> for PhyAddress<Unaligned> {
             type Error = InvdAddress;
 
             fn try_from(value: $t) -> Result<Self, Self::Error> {
-                VirtAddress::new(value as u64)
+                PhyAddress::new(value as u64)
             }
         }
     )*)
@@ -148,7 +149,7 @@ macro_rules! from_all_types {
 
 macro_rules! to_all_types {
     ($($t:ty)*) => ($(
-        impl<Any, const ALIGNED_BITS: u64> TryInto<$t> for VirtAddress<Any, ALIGNED_BITS> {
+        impl<Any, const ALIGNED_BITS: u64> TryInto<$t> for PhyAddress<Any, ALIGNED_BITS> {
             type Error = InvdAddress;
 
             fn try_into(self) -> Result<$t, Self::Error> {
