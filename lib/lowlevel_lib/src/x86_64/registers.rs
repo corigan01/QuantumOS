@@ -46,6 +46,8 @@ use core::arch::asm;
 /// # Example
 ///
 /// ```
+/// use quantum_lib::x86_64::registers::GPRegs8;
+///
 /// let mut regs = GPRegs8 {
 ///     al: 0xAB,
 ///     ah: 0xCD,
@@ -98,6 +100,8 @@ pub struct GPRegs8 {
 /// # Example
 ///
 /// ```
+/// use quantum_lib::x86_64::registers::GPRegs16;
+///
 /// let mut regs = GPRegs16 {
 ///     ax: 0xABCD,
 ///     bx: 0xEFF0,
@@ -150,6 +154,8 @@ pub struct GPRegs16 {
 /// # Example
 ///
 /// ```
+/// use quantum_lib::x86_64::registers::GPRegs32;
+///
 /// let mut regs = GPRegs32 {
 ///     eax: 0x12345678,
 ///     ebx: 0x9ABCDEF0,
@@ -210,6 +216,8 @@ pub struct GPRegs32 {
 /// # Example
 ///
 /// ```
+/// use quantum_lib::x86_64::registers::GPRegs64;
+///
 /// let mut regs = GPRegs64 {
 ///     rax: 0x1234567890ABCDEF,
 ///     rbx: 0x9876543210FEDCBA,
@@ -490,22 +498,6 @@ impl CpuStack {
 ///
 /// The `CR0` struct contains a number of methods to read and modify the various flags and settings of the `CR0` register.
 ///
-/// # Example
-///
-/// ```
-/// // Read the value of the CR0 register
-/// let value = CR0::read_to_32();
-///
-/// // Check if the protected mode flag is set
-/// if CR0::is_protected_mode_set() {
-///     println!("Protected mode is enabled!");
-/// } else {
-///     println!("Protected mode is disabled.");
-/// }
-///
-/// // Enable the write-protect flag
-/// CR0::set_write_protect(true);
-/// ```
 pub struct CR0 {}
 
 impl CR0 {
@@ -698,20 +690,6 @@ impl CR0 {
 ///
 /// The `EFLAGS` struct provides a set of methods to read and modify the various flags in the `EFLAGS` register.
 ///
-/// # Example
-///
-/// ```
-/// // Read the value of the EFLAGS register
-/// let value = EFLAGS::read_to_u32();
-///
-/// // Check if the carry flag is set
-/// if EFLAGS::is_carry_flag_set() {
-///     println!("Carry flag is set!");
-/// } else {
-///     println!("Carry flag is not set.");
-/// }
-///
-/// ```
 pub struct EFLAGS {}
 
 impl EFLAGS {

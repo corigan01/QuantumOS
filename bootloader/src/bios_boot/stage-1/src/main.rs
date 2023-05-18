@@ -32,7 +32,7 @@ use bootloader::boot_info::{BootInfo, VideoInformation};
 use bootloader::e820_memory::E820Entry;
 use bootloader::BootMemoryDescriptor;
 use core::arch::global_asm;
-use core::mem::size_of;
+use core::mem::{MaybeUninit, size_of};
 use core::panic::PanicInfo;
 use quantum_lib::simple_allocator::SimpleBumpAllocator;
 use stage_1::bios_disk::BiosDisk;
@@ -50,7 +50,7 @@ extern "C" fn bit16_entry(disk_number: u16) {
     enter_rust(disk_number);
 }
 
-static mut TEMP_ALLOC: Option<SimpleBumpAllocator> = None;
+static mut TEMP_ALLOC: MaybeUninit<SimpleBumpAllocator> = MaybeUninit::uninit();
 
 fn enter_rust(disk_id: u16) {
     BiosTextMode::print_int_bytes(b"Quantum Bootloader (Stage1)\n");
@@ -61,19 +61,15 @@ fn enter_rust(disk_id: u16) {
     BiosTextMode::print_int_bytes(b" OK\n");
 
     unsafe {
-        TEMP_ALLOC = SimpleBumpAllocator::new_from_ptr((0x00100000) as *mut u8, 0x03200000);
+        TEMP_ALLOC.write(SimpleBumpAllocator::new_from_ptr((0x00100000) as *mut u8, 0x03200000));
     }
 
-    if unsafe { &TEMP_ALLOC }.is_none() {
-        BiosTextMode::print_int_bytes(b"Allocator is broken :(");
-    }
+    let temp_alloc = unsafe { TEMP_ALLOC.assume_init_mut() };
 
     let boot_info: &mut BootInfo = unsafe {
         &mut *(
-            TEMP_ALLOC
-                .as_mut()
-                .unwrap()
-                .allocate_region(size_of::<BootInfo>() + 0x10 - 1)
+            temp_alloc
+                .allocate_region(size_of::<BootInfo>() + 0x10)
                 .unwrap()
                 .as_mut_ptr()
                 as *mut BootInfo)
@@ -90,7 +86,7 @@ fn enter_rust(disk_id: u16) {
             .expect("Could detect bootloader partition, please add \'/bootloader/bootloader.cfg\' to the bootloader filesystem for a proper boot!");
 
     let bootloader_config_file_ptr =
-        unsafe { TEMP_ALLOC.as_mut().unwrap().allocate_region(0x00100000 - (size_of::<BootInfo>() + 0x10)).unwrap() };
+        temp_alloc.allocate_region(0x00100000 - (size_of::<BootInfo>() + 0x10)).unwrap();
     let bootloader_filename = "/bootloader/bootloader.cfg";
 
     fs.load_file_into_slice(bootloader_config_file_ptr, bootloader_filename)
@@ -107,37 +103,28 @@ fn enter_rust(disk_id: u16) {
         .get_filesize_bytes(bootloader_config.get_stage2_file_path())
         .expect("Could not get stage2 filesize");
 
-    let next_2_stage_ptr = unsafe {
-        TEMP_ALLOC
-            .as_mut()
-            .unwrap()
+    let next_2_stage_ptr =
+        temp_alloc
             .allocate_region(0x00100000)
-            .unwrap()
-    };
+            .unwrap();
 
     let next_3_stage_bytes = fs
         .get_filesize_bytes(bootloader_config.get_stage3_file_path())
         .expect("Could not get stage3 filesize");
 
-    let next_3_stage_ptr = unsafe {
-        TEMP_ALLOC
-            .as_mut()
-            .unwrap()
+    let next_3_stage_ptr =
+        temp_alloc
             .allocate_region(next_3_stage_bytes + 0x10)
-            .unwrap()
-    };
+            .unwrap();
 
     let kernel_filesize_bytes = fs
         .get_filesize_bytes(bootloader_config.get_kernel_file_path())
         .expect("Could not get kernel filesize");
 
-    let kernel_ptr = unsafe {
-        TEMP_ALLOC
-            .as_mut()
-            .unwrap()
+    let kernel_ptr =
+        temp_alloc
             .allocate_region(kernel_filesize_bytes + 0x10)
-            .unwrap()
-    };
+            .unwrap();
 
     BiosTextMode::print_int_bytes(b"...stage2...");
     fs.load_file_into_slice(next_2_stage_ptr, bootloader_config.get_stage2_file_path())
@@ -179,13 +166,10 @@ fn enter_rust(disk_id: u16) {
     let amount_of_entries_allowed = 10;
     let memory_region_len = amount_of_entries_allowed * size_of::<E820Entry>();
 
-    let memory_region = unsafe {
-        TEMP_ALLOC
-            .as_mut()
-            .unwrap()
+    let memory_region =
+        temp_alloc
             .allocate_region(memory_region_len + 0x10)
-            .unwrap()
-    };
+            .unwrap();
 
     let e820_ptr = memory_region as *mut [u8] as *mut E820Entry;
     let e820_ref = unsafe { core::slice::from_raw_parts_mut(e820_ptr, amount_of_entries_allowed) };

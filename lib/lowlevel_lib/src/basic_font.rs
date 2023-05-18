@@ -41,7 +41,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 /// // Get the index into the array
 /// let offset_char = b'A' - first_font_char_offset;
 ///
-/// let pixels = &BUILT_IN_FONT[offset_char];
+/// let pixels = &BUILT_IN_FONT[offset_char as usize];
 ///
 /// // Now paint the pixels to the screen from bottom to top, and from right to left
 /// // ...

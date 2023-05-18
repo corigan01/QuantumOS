@@ -24,17 +24,19 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 
+use core::any::{type_name};
 use core::fmt::{Debug, Formatter};
 use crate::address_utils::addressable::Addressable;
 use crate::bytes::Bytes;
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum MemoryRegionType {
     Usable,
     KernelCode,
     Reserved,
     Bios,
     Uefi,
+    UnavailableMemory,
     Unknown
 }
 
@@ -71,15 +73,24 @@ impl<Type> MemoryRegion<Type>
     pub fn get_end_address(&self) -> &Type {
         &self.end
     }
+
+    pub fn region_type(&self) -> MemoryRegionType {
+        self.region_type
+    }
+
+    pub fn bytes(&self) -> Bytes {
+        Bytes::from(self.size())
+    }
 }
 
 impl<Type> Debug for MemoryRegion<Type>
     where Type: Debug + Addressable + Copy {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        let type_name = type_name::<Type>().split("::").last().unwrap_or("");
         if f.alternate() {
-            write!(f, "MemoryRegion {{\n    type:  {:?}\n    start: 0x{:x},\n    end:   0x{:x},\n    size:  {}\n}}", self.region_type, self.start.address_as_u64(), self.end.address_as_u64(), Bytes::from(self.size()))
+            write!(f, "MemoryRegion<{}> {{\n    type:  {:?}\n    start: 0x{:x},\n    end:   0x{:x},\n    size:  {}\n}}", type_name, self.region_type, self.start.address_as_u64(), self.end.address_as_u64(), Bytes::from(self.size()))
         } else {
-            write!(f, "MemoryRegion {{ type: {:?}, start: 0x{:x}, end: 0x{:x}, size: {} }}", self.region_type, self.start.address_as_u64(), self.end.address_as_u64(), Bytes::from(self.size()))
+            write!(f, "MemoryRegion<{}> {{ type: {:?}, start: 0x{:x}, end: 0x{:x}, size: {} }}", type_name,  self.region_type, self.start.address_as_u64(), self.end.address_as_u64(), Bytes::from(self.size()))
         }
     }
 }

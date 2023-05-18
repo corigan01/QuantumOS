@@ -25,7 +25,9 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 use core::fmt::{Debug, Formatter};
-use core::ops::Index;
+use core::mem;
+use core::mem::{MaybeUninit};
+use core::slice::{Iter, IterMut};
 
 /// # Heapless Vector Error
 /// This is the errors that heapless vector can encounter while using it.
@@ -39,7 +41,7 @@ use core::ops::Index;
 /// `VectorFull` is probebly the most common error that you might encourter as it is called
 /// when you try to push an element into a full vector. Since this vector is not heap allocated
 /// and instead lives on the stack, it must have a known size know at compile time. This is
-/// unfornatate as it limites the user to the size defined at compile time.
+/// unfortunate as it limits the user to the size defined at compile time.
 ///
 /// `OutOfBouds` is going to be another big one that users might encourter while using
 /// this structure as it is returned when you try to access something in the vector that is
@@ -65,46 +67,37 @@ pub enum HeaplessVecErr {
 /// use quantum_lib::heapless_vector::HeaplessVec;
 ///
 /// fn main() {
-///     let my_vector: HeaplessVec<usize, 10> = HeaplessVec::new();
+///     let mut  my_vector: HeaplessVec<usize, 10> = HeaplessVec::new();
 ///
-///     my_vector.push_within_capsity(2).unwrap();
-///     my_vector.push_within_capsity(6).unwrap();
+///     my_vector.push_within_capacity(2).unwrap();
+///     my_vector.push_within_capacity(6).unwrap();
 ///
-///     assert_eq!(my_vector.get(0).unwrap(), 2);
-///     assert_eq!(my_vector.get(1).unwrap(), 6);
-///     assert_eq!(my_vector.len(), 2);
+///     assert_eq!(my_vector.get(0).unwrap(), &2_usize);
+///     assert_eq!(my_vector.get(1).unwrap(), &6_usize);
+///     assert_eq!(my_vector.len(), 2_usize);
 ///
 /// }
 pub struct HeaplessVec<Type, const SIZE: usize> {
     /// # Internal Data
     /// This is the raw array that stores the data with type `Type` and size `SIZE`.
     ///
-    /// Rust is very conventent as it already has many helper functions in its most
+    /// Rust is very convenient as it already has many helper functions in its most
     /// primitive types, which aids in the development in in this type.
-    internal_data: [Type; SIZE],
+    internal_data: [MaybeUninit<Type>; SIZE],
 
     /// # Used Data
-    /// `used_data` repersents the amount of data inside `internal_data`. This helps
+    /// `used_data` represents the amount of data inside `internal_data`. This helps
     /// us know how many positions are populated and which ones are free for use.
     used_data: usize,
 }
 
-impl<Type, const SIZE: usize> HeaplessVec<Type, SIZE>
-where
-    Type: Default,
-    Type: Copy,
-{
+impl<Type, const SIZE: usize> HeaplessVec<Type, SIZE> {
     /// # New
     /// Construct a new empty heapless vector.
     ///
-    /// # Required Types
-    /// Your type must include `Default` and `Copy` because this vector needs to be pre-filled
-    /// with some data even though the user 'cant' access it. This is because of rusts saftey and
-    /// type system.
-    ///
     pub fn new() -> Self {
         Self {
-            internal_data: [Default::default(); SIZE],
+            internal_data: unsafe { mem::zeroed() },
             used_data: 0,
         }
     }
@@ -126,16 +119,16 @@ where
         SIZE
     }
 
-    /// # Push within Capsity
+    /// # Push within Capacity
     /// Gets a value from the user and will append it to the end of the vector. This will also
-    /// increase the len() of the vector to repersent the newly added data.
-    pub fn push_within_capsity(&mut self, value: Type) -> Result<(), HeaplessVecErr> {
+    /// increase the len() of the vector to represent the newly added data.
+    pub fn push_within_capacity(&mut self, value: Type) -> Result<(), HeaplessVecErr> {
         if self.used_data >= self.internal_data.len() {
             return Err(HeaplessVecErr::VectorFull);
         }
 
         let index = self.used_data;
-        self.internal_data[index] = value;
+        self.internal_data[index].write(value);
 
         self.used_data += 1;
 
@@ -153,53 +146,121 @@ where
 
         self.used_data -= 1;
 
-        Some(self.internal_data[self.used_data + 1])
+        Some(unsafe { self.internal_data[self.used_data + 1].assume_init_read() })
+    }
+
+    pub fn remove(&mut self, index: usize) -> Option<Type> {
+        if self.used_data == 0 && index > self.used_data {
+            return None;
+        }
+
+        let moved_out_data = unsafe { self.internal_data[index].assume_init_read() };
+
+        for i in index..(self.used_data - 1) {
+            self.internal_data.swap(i, i + 1);
+        }
+
+        self.used_data -= 1;
+
+        Some(moved_out_data)
+    }
+
+    pub fn retain<Function>(&mut self, runner: &mut Function)
+        where Function: FnMut(&Type) -> bool {
+
+        let mut removed_indexes: HeaplessVec<bool, SIZE> = HeaplessVec::new();
+
+        for value in self.iter() {
+            let run_result = runner(value);
+
+            removed_indexes.push_within_capacity(run_result).unwrap();
+        }
+
+        let mut deletion_offset = 0;
+        for (index, should_keep) in removed_indexes.iter().enumerate() {
+            if !should_keep {
+                self.remove(index - deletion_offset);
+                deletion_offset += 1;
+            }
+        }
+    }
+    
+    pub fn insert(&mut self, index: usize, element: Type) -> Result<(), HeaplessVecErr> {
+        if self.used_data >= SIZE {
+            return Err(HeaplessVecErr::VectorFull);
+        }
+        if index > self.used_data {
+            return Err(HeaplessVecErr::OutOfBounds);
+        }
+        if index == self.used_data {
+            return self.push_within_capacity(element);
+        }
+        
+        for i in index..(self.used_data - 1) {
+            self.internal_data.swap(i, i + 1);
+        }
+        
+        self.used_data += 1;
+        
+        self.internal_data[index].write(element);
+        
+        Ok(())
     }
 
     /// # Get
     /// Gets the data at the index provided. If the index is invalid or out of bounds, then it will
     /// return `Err(OutOfBounds)`. Otherwise it will return a reference to the data with the same
     /// lifetime as self.
-    pub fn get<'a>(&'a self, index: usize) -> Result<&'a Type, HeaplessVecErr> {
+    pub fn get(&self, index: usize) -> Result<&Type, HeaplessVecErr> {
         if index > self.used_data {
             return Err(HeaplessVecErr::OutOfBounds);
         }
 
-        return Ok(&self.internal_data[index]);
+        return Ok(unsafe { self.internal_data[index].assume_init_ref() });
     }
 
     /// # Get Mut
     /// Gets the data at the index provided, but mutable. If the index is invalid or out of bounds,
     /// then it will return `Err(OutOfBounds)` just like get. Otherwise it will return a mutable
     /// reference to the data with the same lifetime as self.
-    pub fn get_mut<'a>(&'a mut self, index: usize) -> Result<&'a mut Type, HeaplessVecErr> {
+    pub fn get_mut(&mut self, index: usize) -> Result<&mut Type, HeaplessVecErr> {
         if index > self.used_data {
             return Err(HeaplessVecErr::OutOfBounds);
         }
 
-        return Ok(&mut self.internal_data[index]);
+        return Ok(unsafe { self.internal_data[index].assume_init_mut() });
     }
 
     /// # As Slice
     /// Returns the raw internal data for minupulation.
-    pub fn as_slice<'a>(&'a self) -> &'a [Type] {
-        self.internal_data.as_slice()
+    pub fn as_slice(&self) -> &[Type] {
+        unsafe {
+            core::slice::from_raw_parts(
+                self.internal_data.as_ptr() as *const Type,
+                self.used_data
+            )
+        }
     }
 
     /// # As Mut Slice
     /// Returns the raw internal data for minupulation but mutable with the data inside this
     /// vector.
     ///
-    /// # Saftey
+    /// # Safety
     /// Because its returning a mutable reference to the data thats included in the vector,
     /// we have no way of updating the size if you go out of bounds from the orignal size.
     ///
     /// So its up to the caller to not add elements to the array if possible. If however,
     /// elements are added to interal_data, we will not repersent the new data and override it
     /// as soon as the caller calls `push`. Furthermore, a call to get will return `OutOfBounds`
-    /// if data was miniupulated out of bounds from len.
-    pub unsafe fn as_mut_slice<'a>(&'a mut self) -> &'a mut [Type] {
-        self.internal_data.as_mut_slice()
+    /// if data was manipulated out of bounds from len.
+    pub fn as_mut_slice(&mut self) -> &mut [Type] {
+        unsafe {
+            core::slice::from_raw_parts_mut(
+                self.internal_data.as_mut_ptr() as *mut Type,
+                self.used_data
+            )
+        }
     }
 
     /// # As Ptr
@@ -211,7 +272,7 @@ where
     /// unsafe as it doesn't directly cause any unsafe behavour. However, the caller can derefrence
     /// this ptr which will cause issues if the data is malformed.
     pub fn as_ptr(&self) -> *const Type {
-        return self.internal_data.as_ptr();
+        return self.internal_data.as_ptr() as *const Type;
     }
 
     /// # As Mut Ptr
@@ -223,7 +284,15 @@ where
     /// unsafe as it doesn't directly cause any unsafe behavour. However, the caller can derefrence
     /// this ptr which will cause issues if the data is malformed.
     pub fn as_mut_ptr(&mut self) -> *mut Type {
-        return self.internal_data.as_mut_ptr();
+        return self.internal_data.as_mut_ptr() as *mut Type;
+    }
+
+    pub fn iter(&self) -> Iter<Type> {
+        self.as_slice().iter()
+    }
+
+    pub fn mut_iter(&mut self) -> IterMut<Type> {
+        self.as_mut_slice().iter_mut()
     }
 }
 
@@ -237,56 +306,61 @@ where
     }
 }
 
-pub struct HeaplessVecIter<Type, const SIZE: usize> {
-    vec: HeaplessVec<Type, SIZE>,
-    index: usize,
-}
-
-impl<Type, const SIZE: usize> IntoIterator for HeaplessVec<Type, SIZE>
-where
-    Type: Default,
-    Type: Copy,
-{
-    type IntoIter = HeaplessVecIter<Type, SIZE>;
-    type Item = Type;
-
-    fn into_iter(self) -> Self::IntoIter {
-        return HeaplessVecIter {
-            vec: self,
-            index: 0,
-        };
+impl<Type, const SIZE: usize> Default for HeaplessVec<Type, SIZE> {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
-impl<Type, const SIZE: usize> Iterator for HeaplessVecIter<Type, SIZE>
-where
-    Type: Default,
-    Type: Copy,
-{
-    type Item = Type;
 
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.index > self.vec.used_data {
-            return None;
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn new_vector_test() {
+        let mut new_vector: HeaplessVec<i32, 10> = HeaplessVec::new();
+
+        assert_eq!(new_vector.capacity(), 10);
+        assert_eq!(new_vector.len(), 0);
+
+        new_vector.push_within_capacity(120).unwrap();
+
+        assert_eq!(new_vector.capacity(), 10);
+        assert_eq!(new_vector.len(), 1);
+
+        assert_eq!(new_vector.iter().next(), Some(&120));
+    }
+
+    #[test]
+    fn remove_element_from_vector() {
+        let mut vec: HeaplessVec<i32, 10> = HeaplessVec::new();
+
+        for i in 0..10 {
+            vec.push_within_capacity(i).unwrap();
         }
 
-        let data = self.vec.internal_data[self.index];
-        self.index += 1;
+        assert_eq!(vec.len(), 10);
+        assert_eq!(vec.capacity(), 10);
+        assert_eq!(vec.as_slice(), &[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
 
-        return Some(data);
+        vec.remove(0).unwrap();
+
+        assert_eq!(vec.len(), 9);
+        assert_eq!(vec.as_slice(), &[1, 2, 3, 4, 5, 6, 7, 8, 9]);
     }
-}
 
-impl<Type, const SIZE: usize> Index<usize> for HeaplessVec<Type, SIZE>
-where
-    Type: Default,
-    Type: Copy,
-    Type: Debug,
-    Type: Sized,
-{
-    type Output = Type;
+    #[test]
+    fn insert_element_into_vector() {
+        let mut vec: HeaplessVec<i32, 10> = HeaplessVec::new();
 
-    fn index(&self, index: usize) -> &Self::Output {
-        self.get(index).expect("Index out of bounds!")
+        assert_eq!(vec.len(), 0);
+
+        vec.insert(0, 69).unwrap();
+
+        assert_eq!(vec.len(), 1);
+        assert_eq!(vec.get(0), Ok(&69));
+
+        assert_eq!(vec.insert(10, 320), Err(HeaplessVecErr::OutOfBounds));
     }
 }

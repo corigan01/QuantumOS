@@ -40,13 +40,14 @@ enum. This is then used by the user with the `::iter()` type given by `EnumIntoI
 
 ### Example Usage
 ```rust
-use quantum_os::enum_iterator;
-use quantum_os::enum_iterator::EnumIntoIterator;
+use quantum_lib::enum_iterator;
+use quantum_lib::enum_iterator::EnumIntoIterator;
 
 enum_iterator! {
     // The extra () in `MyEnum` is to define the Iterator for your enum!
     // This is due to Rust's hygiene that makes it such that macros cannot construct new types
     // with concat_ident!(). Note: `concat_ident!()` is a nightly feature and was emitted
+    #[derive(Clone, Copy, Debug)]
     pub enum MyEnum(MyEnumIter) {
         SomeVal,
         SomeOtherVal,
@@ -58,7 +59,7 @@ fn main() {
     println!("All of the possible values in MyEnum are: ");
 
     for i in MyEnum::iter() {
-        println!("\t{}", i);
+        println!("\t{:?}", i);
     }
 }
 ```
@@ -160,10 +161,11 @@ macro_rules! enum_iterator {
             /// # How to use
             ///
             /// ```rust
-            /// use quantum_os::enum_iterator;
-            /// use quantum_os::enum_iterator::EnumIntoIterator;
+            /// use quantum_lib::enum_iterator;
+            /// use quantum_lib::enum_iterator::EnumIntoIterator;
             ///
             /// enum_iterator! {
+            ///     #[derive(Clone, Copy, Debug, PartialEq)]
             ///     pub enum MyEnum(MyEnumIter) {
             ///         SomeVal,
             ///         SomeOtherVal,
@@ -173,11 +175,7 @@ macro_rules! enum_iterator {
             ///
             /// fn main() {
             ///     // MyEnum::ITEMS is this array!
-            ///     let all_items_in_my_enum = MyEnum::ITEMS;
-            ///
-            ///     for i in all_items_in_my_enum {
-            ///         todo!()
-            ///     }
+            ///     assert_eq!(MyEnum::iter().next().unwrap(), MyEnum::SomeVal);
             /// }
             ///
             /// ```

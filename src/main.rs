@@ -37,19 +37,20 @@ fn main() {
     let kvm = command_args.contains(&String::from("kvm"));
     let debug_int = command_args.contains(&String::from("debug-int"));
     let debug = command_args.contains(&String::from("debug"));
+    let kernel_test = command_args.contains(&String::from("kernel-test"));
 
     if noqemu {
         println!("     {} Build only mode!", "Quantum".green().bold());
     }
 
-    let mut build_status = bios_boot();
+    let mut build_status = bios_boot(kernel_test);
 
     if build_status.is_err() {
         println!("Failed to build --> {:?}", build_status.err());
         clean_dont_care();
 
         println!("Attempting to re-run build...");
-        build_status = bios_boot();
+        build_status = bios_boot(kernel_test);
     }
 
     if !noqemu {
@@ -107,7 +108,7 @@ fn clean_dont_care() {
     let _ = quantum::bios_disk::delete_disk_img("target/fat.img".into());
 }
 
-fn bios_boot() -> Result<String, Box<dyn std::error::Error>> {
+fn bios_boot(kernel_in_test_mode: bool) -> Result<String, Box<dyn std::error::Error>> {
     let target = quantum::get_build_directory().map_err(|err| {
         eprintln!("Unable to get the `target` for which to build into.");
         err
@@ -125,7 +126,10 @@ fn bios_boot() -> Result<String, Box<dyn std::error::Error>> {
     let stage_1_path = quantum::bios_boot::build_stage_1().unwrap();
     let stage_2_path = quantum::bios_boot::build_stage_2().unwrap();
     let stage_3_path = quantum::bios_boot::build_stage_3().unwrap();
-    let kernel = quantum::build_kernel().unwrap();
+
+    let kernel = quantum::build_kernel(kernel_in_test_mode).unwrap();
+
+
 
     let bootloader_config = BiosBootConfig {
         stage2_filepath: "/bootloader/stage2.bin".to_string(),

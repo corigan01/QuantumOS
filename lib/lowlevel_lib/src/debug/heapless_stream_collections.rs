@@ -46,11 +46,7 @@ impl Default for HeaplessStreamCollections {
 
 impl ::core::fmt::Write for HeaplessStreamCollections {
     fn write_str(&mut self, s: &str) -> ::core::fmt::Result {
-        let len = self.stream_connections.len();
-        let slice = unsafe { self.stream_connections.as_mut_slice() };
-        let broken_down_slice = &mut slice[..len];
-
-        for stream in broken_down_slice {
+        for stream in self.stream_connections.mut_iter() {
             if let Some(outlet) = stream.outlet {
                 outlet.display_string(s);
                 continue;

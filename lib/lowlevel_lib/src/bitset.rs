@@ -35,14 +35,14 @@ the operation will happen correctly as performed.
 ## Usage
 A basic rust example is as follows for setting bit 2 to true
 ```rust
-use quantum_os::bitset::BitSet;
+use quantum_lib::bitset::BitSet;
 
 let output = 0_u8.set_bit(2, true);
 ```
 
 Bitset can also be used to set a range of bits!
 ```rust
-use quantum_os::bitset::BitSet;
+use quantum_lib::bitset::BitSet;
 
 let output = 255_u8.set_bits(0..8, 0);
 ```
@@ -81,10 +81,10 @@ macro_rules! bitset_impl {
             ///
             /// # Use
             /// ```rust
-            /// use quantum_os::bitset::BitSet;
+            /// use quantum_lib::bitset::BitSet;
             ///
             /// let value = 16_u8.set_bit(0, true);
-            /// assert_eq!(value, 17);
+            /// assert_eq!(value, 17_u8);
             ///
             /// ```
             fn set_bit(&mut self, bit: u8, v: bool) -> Self {
@@ -119,10 +119,10 @@ macro_rules! bitset_impl {
             ///
             /// # Use
             /// ```rust
-            /// use quantum_os::bitset::BitSet;
+            /// use quantum_lib::bitset::BitSet;
             ///
             /// let value = 16_u8.set_bits(0..2, 0b01);
-            /// assert_eq!(value, 17);
+            /// assert_eq!(value, 17_u8);
             ///
             /// ```
             fn set_bits(&mut self, r: Range<u8>, bits: u64) -> Self {
@@ -154,10 +154,10 @@ macro_rules! bitset_impl {
             ///
             /// # Use
             /// ```rust
-            /// use quantum_os::bitset::BitSet;
+            /// use quantum_lib::bitset::BitSet;
             ///
             /// let value = 16_u8.get_bit(0);
-            /// assert_eq!(value, 0);
+            /// assert_eq!(value, false);
             ///
             /// ```
             fn get_bit(&self, bit: u8) -> bool {
@@ -185,10 +185,10 @@ macro_rules! bitset_impl {
             ///
             /// # Use
             /// ```rust
-            /// use quantum_os::bitset::BitSet;
+            /// use quantum_lib::bitset::BitSet;
             ///
             /// let value = 4_u8.get_bits(0..2);
-            /// assert_eq!(value, 0);
+            /// assert_eq!(value, 0_u8);
             ///
             /// ```
             fn get_bits(&self, r: Range<u8>) -> Self {
@@ -206,31 +206,31 @@ macro_rules! bitset_impl {
 bitset_impl! {  u8 u16 u32 u64 u128 i8 i16 i32 i64 i128 usize isize  }
 
 #[cfg(test)]
-mod test_case {
+mod tests {
     use crate::bitset::BitSet;
 
-    #[test_case]
+    #[test]
     fn set_bit_test() {
         assert_eq!(0_u8.set_bit(7, true), 128_u8);
         assert_eq!(123_u16.set_bit(5, false), 91_u16);
         assert_eq!(141742579807_u64.set_bit(38, true), 416620486751_u64);
     }
 
-    #[test_case]
+    #[test]
     fn set_bits_test() {
         assert_eq!(0_u8.set_bits(3..7, 0b101), 40_u8);
         assert_eq!(255_u16.set_bits(0..8, 0), 0_u16);
         assert_eq!(0_u8.set_bits(0..8, 255), 255_u8);
     }
 
-    #[test_case]
+    #[test]
     fn get_bit_test() {
         assert_eq!(138.get_bit(3), true);
         assert_eq!(412.get_bit(6), false);
         assert_eq!(141742579807_u64.get_bit(37), true);
     }
 
-    #[test_case]
+    #[test]
     fn get_bits_test() {
         assert_eq!(321_u32.get_bits(0..9), 321_u32);
         assert_eq!(42_u32.get_bits(6..8), 0_u32);

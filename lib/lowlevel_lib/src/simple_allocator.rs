@@ -46,23 +46,6 @@ pub struct SimpleBumpAllocator<'a> {
 }
 
 impl<'a> SimpleBumpAllocator<'a> {
-    /// Tests whether this allocator is able to allocate a memory region of size 1.
-    ///
-    /// This is used to verify that the allocator has been initialized correctly and is working properly.
-    /// Returns true if a region of size 1 was successfully allocated, written to, and read back with the correct value.
-    /// Otherwise, returns false.
-    fn test_allocation(&mut self) -> bool {
-        if let Some(region) = self.allocate_region(1) {
-            let test_byte = 0xde;
-
-            region[0] = test_byte;
-            region[0] += 1;
-
-            region[0] == test_byte + 1
-        } else {
-            false
-        }
-    }
 
     /// Creates a new `SimpleBumpAllocator` that will allocate memory regions from the given memory slice.
     ///
@@ -71,6 +54,8 @@ impl<'a> SimpleBumpAllocator<'a> {
     ///
     /// # Examples
     /// ```
+    /// use quantum_lib::simple_allocator::SimpleBumpAllocator;
+    ///
     /// let mut memory = [0u8; 1024];
     /// let allocator = SimpleBumpAllocator::new(&mut memory);
     /// ```
@@ -97,23 +82,18 @@ impl<'a> SimpleBumpAllocator<'a> {
     /// # Examples
     /// ```
     /// use core::mem::size_of;
+    /// use quantum_lib::simple_allocator::SimpleBumpAllocator;
     ///
     /// let mut memory = [0u8; 1024];
     ///
     /// let ptr = memory.as_mut_ptr();
-    /// let allocator = unsafe { SimpleBumpAllocator::new_from_ptr(ptr, size) }.unwrap();
+    /// let allocator = unsafe { SimpleBumpAllocator::new_from_ptr(ptr, memory.len()) };
     /// ```
-    pub unsafe fn new_from_ptr(ptr: *mut u8, size: usize) -> Option<Self> {
-        let mut allocator = Self {
+    pub unsafe fn new_from_ptr(ptr: *mut u8, size: usize) -> Self {
+        Self {
             memory_slice: core::slice::from_raw_parts_mut(ptr, size),
             used_memory: 0,
-        };
-
-        if !allocator.test_allocation() {
-            return None;
         }
-
-        return Some(allocator);
     }
 
     /// Allocates a new region of memory of the specified size.
@@ -139,6 +119,8 @@ impl<'a> SimpleBumpAllocator<'a> {
     /// # Examples
     ///
     /// ```rust
+    /// use quantum_lib::simple_allocator::SimpleBumpAllocator;
+    ///
     /// let mut memory = [0u8; 1024];
     /// let mut allocator = SimpleBumpAllocator::new(&mut memory);
     ///
@@ -171,23 +153,24 @@ impl<'a> SimpleBumpAllocator<'a> {
 mod tests {
     use crate::simple_allocator::SimpleBumpAllocator;
 
-    #[test_case]
+    #[test]
     fn test_allocate_region() {
-        let mut allocator = SimpleBumpAllocator::new(&mut [0; 1024]);
+        let mut binding = [0; 1024];
+        let mut allocator = SimpleBumpAllocator::new(&mut binding);
 
         assert!(allocator.allocate_region(512).is_some());
         assert!(allocator.allocate_region(512).is_some());
         assert!(allocator.allocate_region(1).is_none());
     }
 
-    #[test_case]
+    #[test]
     fn test_new_from_ptr() {
         let mut memory = [0; 1024];
 
         let ptr = memory.as_mut_ptr();
         let size = memory.len();
 
-        let mut allocator = unsafe { SimpleBumpAllocator::new_from_ptr(ptr, size).unwrap() };
+        let mut allocator = unsafe { SimpleBumpAllocator::new_from_ptr(ptr, size) };
 
         assert!(allocator.allocate_region(512).is_some());
         assert!(allocator.allocate_region(512).is_some());

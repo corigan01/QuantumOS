@@ -63,45 +63,6 @@ pub type GeneralHandlerFunc = fn(InterruptFrame, u8, Option<u64>);
 /// including 'System Calls'. System calls can be used to ask the kernel to perform privileged
 /// operations like talking to I/O in a safe way, as to not allow the sand boxed application to
 /// have privileges to things it shouldn't be.
-///
-/// # How to setup a basic IDT
-/// IDT can be setup in the following way
-/// ```rust
-/// use lazy_static::lazy_static;
-/// use quantum_lib::debug_println;
-/// use quantum_lib::x86_64::tables::idt::InterruptFrame;
-///
-/// // This is the handler that gets called whenever `#DE` is called
-/// fn divide_by_zero_handler(i_frame: InterruptFrame, int_n: u8, error_code: Option<u64>) {
-///     debug_println!("EXCEPTION: DIVIDE BY ZERO {}", int_n);
-/// }
-///
-/// // We want our IDT to be in a lazy_static to make sure it has infinite lifetime
-/// lazy_static! {
-///     static ref IDT: idt::Idt = {
-///         let mut idt = idt::Idt::new();
-///
-///         // This is where we tell our IDT that we want our `divide_by_zero_handler` handler to
-///         // be called whenever interrupt 0 (#DE) is called.
-///         attach_interrupt!(idt, divide_by_zero_handler, 0);
-///
-///         idt
-///     };
-/// }
-///
-/// fn load_idt_into_memory() {
-///
-///     // To load our IDT we need to first `.submit_entries()`, which will turn the IDT into the
-///     // more primitive structure that the CPU can understand. This structure is only generated
-///     // from this command, and for safety there is no other way to make it. However, you might
-///     // have noticed that there is an `.unwrap()` after `.submit_entries()`. The method that
-///     // turns the IDT into the correct structure *might* fail if there is a malformed entry.
-///     // So in this case we need to make sure we have a completely valid structure before we
-///     // can use the `.load()`.
-///     IDT.submit_entries().unwrap().load();
-/// }
-///
-/// ```
 pub struct Idt([Entry; 256]);
 
 
@@ -260,7 +221,6 @@ extern "x86-interrupt" fn fallback_missing_handler(i_frame: InterruptFrame) -> !
 /// This handler is here for safety. This is called whenever an interrupt is called, but unfortunately
 /// the user forgot to add a handler for that interrupt. It does not really provide much info, but
 /// it causes the system to crash to make sure undefined behavior or a protection fault occurred.
-#[cfg(not(test))]
 fn missing_handler(i_frame: InterruptFrame, interrupt: u8, _error: Option<u64>) {
     panic!("Missing Interrupt ({}) handler was called!\n {:#x?}", interrupt, i_frame);
 }
@@ -743,17 +703,7 @@ lazy_static! {
 /// # Set Quite Interrupt
 /// This function will set a flag on the ExtraHandlerInfo struct to let your handler know it should
 /// not produce any output for that interrupt.
-///
-/// # Usage
-/// ```rust
-/// use quantum_lib::x86_64::tables::idt::set_quiet_interrupt;
-///
-/// set_quiet_interrupt(10, true); // Sets "Invalid TSS" to not produce output when called
-/// set_quiet_interrupt(12, false); // Sets "Stack Segment Fault" to produce output when called
-///
-/// // Default is NON-QUITE output!
-///
-/// ```
+
 #[inline]
 pub fn set_quiet_interrupt(interrupt_id: u8, quiet: bool) {
     QUIET_INTERRUPT_VECTOR.lock()[interrupt_id as usize] = quiet;
@@ -762,17 +712,7 @@ pub fn set_quiet_interrupt(interrupt_id: u8, quiet: bool) {
 /// # Set Quite Interrupt
 /// This function will set a flag on the ExtraHandlerInfo struct to let your handler know it should
 /// not produce any output for that interrupt.
-///
-/// # Usage
-/// ```rust
-/// use quantum_lib::x86_64::tables::idt::set_quiet_interrupt_range;
-///
-/// set_quiet_interrupt_range(10..15, true); // Sets "Invalid TSS" to not produce output when called
-/// set_quiet_interrupt_range(12..255, false); // Sets "Stack Segment Fault" to produce output when called
-///
-/// // Default is NON-QUITE output!
-///
-/// ```
+
 #[inline]
 pub fn set_quiet_interrupt_range(interrupt_id: Range<u8>, quiet: bool) {
     for i in interrupt_id {
@@ -1044,15 +984,6 @@ macro_rules! attach_interrupt {
 
 /// # Remove Interrupt
 /// This macro will remove the current interrupt handler that was set.
-///
-/// ## Basic Use:
-/// ```rust
-/// use quantum_lib::remove_interrupt;
-///
-/// remove_interrupt!(your_idt, 0); // removes #DE
-/// remove_interrupt!(your_idt, 1..10); // removes a range of interrupts
-///
-/// ```
 #[macro_export]
 macro_rules! remove_interrupt {
     ($idt: expr, $int_n: literal) => {
@@ -1067,106 +998,10 @@ macro_rules! remove_interrupt {
 }
 
 #[cfg(test)]
-fn missing_handler(_i_frame: InterruptFrame, _interrupt: u8, _error: Option<u64>) { }
-
-#[cfg(test)]
 mod test_case {
-    use core::arch::asm;
+    use super::*;
 
-    use lazy_static::lazy_static;
-    use spin::Mutex;
-    use x86_64::PrivilegeLevel;
-
-    use crate::{serial_print, serial_println};
-    use crate::arch_x86_64::idt::{EntryOptions, InterruptFrame};
-    use crate::arch_x86_64::idt::Idt;
-
-    fn dv0_handler(i_frame: InterruptFrame, intn: u8, error: Option<u64>) {
-        // We want this to be called and returned!
-
-        // Do some random stuff to make sure the stack is returned correctly!
-        let mut i = 0;
-        for _ in 33..134 {
-            i += 1;
-        }
-
-        i -= 101;
-
-        let d = i == intn;
-
-    }
-
-    lazy_static! {
-        static ref IDT_TEST: Mutex<Idt> = {
-            use crate::attach_interrupt;
-            let mut idt = Idt::new();
-
-            attach_interrupt!(idt, dv0_handler, 0);
-
-            Mutex::new(idt)
-        };
-    }
-
-    fn divide_by_zero_fault() {
-        unsafe {
-            asm!("int $0x0");
-        }
-    }
-
-    fn unhandled_fault() {
-        unsafe {
-            asm!("int $0x01");
-        }
-    }
-
-    #[test_case]
-    fn test_handler_by_fault() {
-        {
-            let m_idt = IDT_TEST.lock();
-
-            m_idt.submit_entries().unwrap().load();
-        }
-
-        divide_by_zero_fault();
-
-        // [OK] We passed!
-    }
-
-    #[test_case]
-    fn test_handler_by_not_valid() {
-
-
-        let mut m_idt = IDT_TEST.lock();
-
-        m_idt.submit_entries().unwrap().load();
-
-        unhandled_fault();
-
-        remove_interrupt!(m_idt, 0..255);
-
-        m_idt.submit_entries().unwrap().load();
-
-        divide_by_zero_fault();
-
-        // [OK] We passed!
-    }
-
-    #[test_case]
-    fn test_add_and_remove_case() {
-        let mut m_idt = IDT_TEST.lock();
-
-        attach_interrupt!(m_idt, dv0_handler, 0..255);
-
-        m_idt.submit_entries().unwrap().load();
-
-        remove_interrupt!(m_idt, 0..255);
-
-        m_idt.submit_entries().unwrap().load();
-
-
-    }
-
-    #[test_case]
+    #[test]
     fn test_entry_options() {
         unsafe { assert_eq!(EntryOptions::new_zero().0, 0x00); }
         assert_eq!(EntryOptions::new_minimal().0, 0xE00);

@@ -27,6 +27,7 @@ pub mod virtual_address;
 pub mod physical_address;
 pub mod region;
 pub mod addressable;
+pub mod region_map;
 
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]

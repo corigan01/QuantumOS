@@ -35,16 +35,22 @@ pub fn get_build_directory() -> Result<String, Box<dyn std::error::Error>> {
     Ok(format!("{}/target", current_directory.display()))
 }
 
-pub fn build_kernel() -> Result<String, Box<dyn std::error::Error>> {
+pub fn build_kernel(is_in_test_mode: bool) -> Result<String, Box<dyn std::error::Error>> {
     let current_dir = env::current_dir()?;
     let target = format!("{}/target/kernel", current_dir.display());
     let cargo = env::var("CARGO").unwrap_or("cargo".into());
 
     let kernel_path = format!("{}/x86_64-quantum_os/release/quantum_os", target);
 
+    let build_string = if is_in_test_mode {
+        "test"
+    } else {
+        "build"
+    };
+
     let cargo_status = Command::new(cargo)
         .current_dir("kernel/")
-        .arg("build")
+        .arg(build_string)
         .arg("--release")
         .arg("--target")
         .arg("x86_64-quantum_os.json")
@@ -58,3 +64,4 @@ pub fn build_kernel() -> Result<String, Box<dyn std::error::Error>> {
 
     Ok(kernel_path)
 }
+

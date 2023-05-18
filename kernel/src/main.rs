@@ -32,12 +32,13 @@ use core::panic::PanicInfo;
 use bootloader::boot_info::BootInfo;
 use quantum_lib::address_utils::physical_address::PhyAddress;
 use quantum_lib::address_utils::region::{MemoryRegion, MemoryRegionType};
+use quantum_lib::address_utils::region_map::RegionMap;
 use quantum_lib::bytes::Bytes;
 use quantum_lib::com::serial::{SerialBaud, SerialDevice, SerialPort};
 use quantum_lib::debug::{add_connection_to_global_stream};
 use quantum_lib::debug::stream_connection::StreamConnectionBuilder;
 use quantum_lib::debug_println;
-use quantum_os::clock::rtc::{set_time_zone, update_and_get_time};
+use quantum_os::clock::rtc::{update_and_get_time};
 
 static mut SERIAL_CONNECTION: Option<SerialDevice> = None;
 
@@ -56,12 +57,23 @@ pub extern "C" fn _start(boot_info_ptr: u64) {
 
     add_connection_to_global_stream(connection).unwrap();
 
-    set_time_zone(7);
-
     debug_println!("Welcome to Quantum OS! {}\n", update_and_get_time());
     debug_println!("Bootloader info ptr 0x{:x}", boot_info_ptr);
 
     let bootloader_info = BootInfo::from_ptr(boot_info_ptr as usize);
+    #[cfg(test)]
+    {
+        debug_println!("Running tests!");
+
+        use quantum_os::test_main;
+        use quantum_os::qemu::{exit_qemu, QemuExitCode};
+
+        test_main();
+
+        debug_println!("Exiting Qemu...");
+
+        exit_qemu(QemuExitCode::Success);
+    }
 
     main(bootloader_info);
 
@@ -70,7 +82,8 @@ pub extern "C" fn _start(boot_info_ptr: u64) {
 
 fn main(boot_info: &BootInfo) {
     let memory_regions = unsafe { boot_info.get_memory_map() };
-    
+
+    let mut region_map = RegionMap::new();
     for bios_memory_region in memory_regions {
         let address = match PhyAddress::new(bios_memory_region.address) {
             Ok(value) => value,
@@ -90,7 +103,12 @@ fn main(boot_info: &BootInfo) {
         let region = MemoryRegion::from_distance(address, size, region_type);
 
         debug_println!("{:#?}", region);
+
+        region_map.add_new_region(region).unwrap();
     }
+
+    debug_println!("Total Usable Memory {} ", region_map.total_mem_for_type(MemoryRegionType::Usable));
+
 
 }
 

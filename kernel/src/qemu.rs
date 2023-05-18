@@ -24,7 +24,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 */
 
-use crate::port;
+use quantum_lib::x86_64::raw_cpu_io_port::byte_out;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u32)]
@@ -35,6 +35,6 @@ pub enum QemuExitCode {
 
 pub fn exit_qemu(exit_code: QemuExitCode) {
     unsafe {
-        port::byte_out(0xF4, exit_code as u8);
+        byte_out(0xF4, exit_code as u8);
     }
 }
