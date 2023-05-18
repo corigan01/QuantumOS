@@ -27,5 +27,5 @@ use crate::gfx::PixelLocation;
 
 pub struct Rect {
     start: PixelLocation,
-    end: PixelLocation
+    end: PixelLocation,
 }

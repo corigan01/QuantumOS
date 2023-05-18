@@ -31,12 +31,12 @@ pub mod rtc;
 
 #[derive(Clone, Copy, Debug, Ord, PartialOrd, Eq, PartialEq)]
 pub struct Time {
-    second : u16,
-    minute : u16,
-    hour   : u16,
-    day    : u16,
-    month  : u16,
-    year   : u16
+    second: u16,
+    minute: u16,
+    hour: u16,
+    day: u16,
+    month: u16,
+    year: u16,
 }
 
 impl Time {
@@ -52,11 +52,16 @@ impl Time {
     }
 
     fn from_seconds(mut seconds: u64) -> Self {
-        let year  = seconds / 31_536_000;   seconds -= year     * 31_536_000;
-        let month = seconds / 2_628_288;    seconds -= month    * 2_628_288;
-        let day   = seconds / 86400;        seconds -= day      * 86400;
-        let hour  = seconds / 3600;         seconds -= hour     * 3600;
-        let minute= seconds / 60;           seconds -= minute   * 60;
+        let year = seconds / 31_536_000;
+        seconds -= year * 31_536_000;
+        let month = seconds / 2_628_288;
+        seconds -= month * 2_628_288;
+        let day = seconds / 86400;
+        seconds -= day * 86400;
+        let hour = seconds / 3600;
+        seconds -= hour * 3600;
+        let minute = seconds / 60;
+        seconds -= minute * 60;
 
         Self {
             second: seconds as u16,
@@ -71,11 +76,13 @@ impl Time {
 
 impl fmt::Display for Time {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "{:#02}:{:#02}:{:#02} {:#02}/{:#02}/{:#04}",
-               self.hour, self.minute, self.second, self.month, self.day, self.year)
+        write!(
+            f,
+            "{:#02}:{:#02}:{:#02} {:#02}/{:#02}/{:#04}",
+            self.hour, self.minute, self.second, self.month, self.day, self.year
+        )
     }
 }
-
 
 #[cfg(test)]
 pub mod test_case {
@@ -87,9 +94,9 @@ pub mod test_case {
 
         assert_eq!(time.second, 2);
         assert_eq!(time.minute, 0);
-        assert_eq!(time.hour,   1);
-        assert_eq!(time.month,  0);
-        assert_eq!(time.year,   0);
+        assert_eq!(time.hour, 1);
+        assert_eq!(time.month, 0);
+        assert_eq!(time.year, 0);
 
         let time = Time::from_seconds(32596368);
 
@@ -100,6 +107,4 @@ pub mod test_case {
         assert_eq!(time.month, 0);
         assert_eq!(time.year, 1);
     }
-
-
 }

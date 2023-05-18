@@ -35,7 +35,7 @@ pub struct IOPort(u16);
 
 impl IOPort {
     pub fn new(n: u16) -> IOPort {
-        IOPort ( n )
+        IOPort(n)
     }
 
     pub fn as_u16(&self) -> u16 {
@@ -45,11 +45,11 @@ impl IOPort {
     pub fn mutate_offset_by(&mut self, offset: i16) {
         self.0 = (offset as i32 + self.0 as i32) as u16;
     }
-    
+
     pub fn clone_from_offset_by(&self, offset: i16) -> Self {
         let mut cloned_value = self.clone();
         cloned_value.mutate_offset_by(offset);
-        
+
         cloned_value
     }
 

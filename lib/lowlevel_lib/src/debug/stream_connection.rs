@@ -23,8 +23,8 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use core::fmt::Debug;
 use crate::debug::{SimpleStreamFunction, StreamableConnection};
+use core::fmt::Debug;
 use core::marker::PhantomData;
 
 pub enum StreamType {
@@ -40,7 +40,7 @@ pub struct StreamConnection {
     pub(crate) info: StreamConnectionInformation,
     pub(crate) outlet: Option<&'static (dyn StreamableConnection + Send + Sync)>,
     pub(crate) ignore_welcome: bool,
-    pub(crate) simple_outlet: Option<SimpleStreamFunction>
+    pub(crate) simple_outlet: Option<SimpleStreamFunction>,
 }
 
 #[derive(Clone, Copy, Debug)]

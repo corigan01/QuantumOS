@@ -121,7 +121,6 @@ impl MulAssign for Bytes {
     }
 }
 
-
 /// Converts the specified value to a `Bytes` instance.
 ///
 /// # Examples
@@ -137,7 +136,7 @@ macro_rules! from_all_types {
         impl From<$t> for Bytes  {
             fn from(value: $t) -> Self {
                 Bytes {
-                    0: (value as u64) 
+                    0: (value as u64)
                 }
             }
         }
@@ -149,7 +148,5 @@ macro_rules! from_all_types {
         }
     )*)
 }
-
-
 
 from_all_types! {usize u8 u16 u32 u64 u128 i8 i16 i32 i64 i128 isize}

@@ -23,14 +23,7 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-pub struct EntryPoint64(u64);
+pub struct MemoryAllocator<'a> {
+    allocatable_region: &'a mut [u8],
 
-impl EntryPoint64 {
-    pub fn from_address(addr: u64) -> Self {
-        Self { 0: addr }
-    }
-
-    pub fn execute() -> ! {
-        todo!()
-    }
 }

@@ -27,9 +27,9 @@ pub mod bios_call;
 pub mod interrupts;
 pub mod io;
 pub mod paging;
+pub mod raw_cpu_io_port;
 pub mod registers;
 pub mod tables;
-pub mod raw_cpu_io_port;
 
 /// Enumeration of possible privilege levels (rings) in x86 and x86_64 architectures.
 pub enum PrivlLevel {

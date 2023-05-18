@@ -36,7 +36,6 @@ pub trait Addressable {
     }
 }
 
-
 macro_rules! impl_all_types {
     ($($t:ty)*) => ($(
         impl Addressable for $t {

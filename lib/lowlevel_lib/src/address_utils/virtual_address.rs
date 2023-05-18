@@ -23,11 +23,11 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use crate::address_utils::addressable::Addressable;
+use crate::address_utils::{InvdAddress, VIRTUAL_ALLOWED_ADDRESS_SIZE};
+use crate::bitset::BitSet;
 use core::marker::PhantomData;
 use core::ops::{RangeBounds, RangeFull};
-use crate::address_utils::{InvdAddress, VIRTUAL_ALLOWED_ADDRESS_SIZE};
-use crate::address_utils::addressable::Addressable;
-use crate::bitset::BitSet;
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
 pub struct Unaligned {}
@@ -35,9 +35,9 @@ pub struct Unaligned {}
 pub struct Aligned {}
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
-pub struct VirtAddress<Type = Unaligned, const ALIGNED_BITS: u64 = 12>{
+pub struct VirtAddress<Type = Unaligned, const ALIGNED_BITS: u64 = 12> {
     value: u64,
-    reserved: PhantomData<Type>
+    reserved: PhantomData<Type>,
 }
 
 impl VirtAddress {
@@ -66,29 +66,31 @@ impl VirtAddress {
 
     pub fn is_address_virtual_compatible(address: u64) -> bool {
         address.get_bits(VIRTUAL_ALLOWED_ADDRESS_SIZE..64)
-            == u64::MAX.get_bits(VIRTUAL_ALLOWED_ADDRESS_SIZE..64) ||
-            address.get_bits(VIRTUAL_ALLOWED_ADDRESS_SIZE..64) == 0
+            == u64::MAX.get_bits(VIRTUAL_ALLOWED_ADDRESS_SIZE..64)
+            || address.get_bits(VIRTUAL_ALLOWED_ADDRESS_SIZE..64) == 0
     }
 
     pub fn is_address_aligned(address: u64, alignment: usize) -> bool {
         address & (2_u64.pow(alignment as u32) - 1) == 0
     }
 
-    pub fn strip_unaligned_bits_to_align_address<const ALIGNED_BITS: u64>(mut self) -> VirtAddress<Aligned, ALIGNED_BITS> {
+    pub fn strip_unaligned_bits_to_align_address<const ALIGNED_BITS: u64>(
+        mut self,
+    ) -> VirtAddress<Aligned, ALIGNED_BITS> {
         VirtAddress {
             value: self.value.set_bits(0..((ALIGNED_BITS + 1) as u8), 0),
-            reserved: Default::default()
+            reserved: Default::default(),
         }
     }
 
-    pub fn try_aligned<const ALIGNED_BITS: u64>(self) -> Result<VirtAddress<Aligned, ALIGNED_BITS>, InvdAddress> {
+    pub fn try_aligned<const ALIGNED_BITS: u64>(
+        self,
+    ) -> Result<VirtAddress<Aligned, ALIGNED_BITS>, InvdAddress> {
         if Self::is_address_aligned(self.value, ALIGNED_BITS as usize) {
-            return Ok(
-                VirtAddress {
-                    value: self.value,
-                    reserved: Default::default()
-                }
-            );
+            return Ok(VirtAddress {
+                value: self.value,
+                reserved: Default::default(),
+            });
         }
 
         Err(InvdAddress(self.value))

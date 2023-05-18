@@ -29,5 +29,5 @@ pub struct E820Entry {
     pub address: u64,
     pub len: u64,
     pub entry_type: u32,
-    pub acpi: u32
+    pub acpi: u32,
 }
