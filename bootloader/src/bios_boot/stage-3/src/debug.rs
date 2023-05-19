@@ -79,8 +79,11 @@ pub fn setup_framebuffer(
 }
 
 pub fn clear_framebuffer() {
-    let console = CONSOLE.lock();
+    let mut console = CONSOLE.lock();
     let framebuffer_info = &console.framebuffer.unwrap();
+
+    console.x = 0;
+    console.y = 0;
 
     let framebuffer = framebuffer_info.framebuffer as *mut u8;
     let x_size = framebuffer_info.screen_x_res;

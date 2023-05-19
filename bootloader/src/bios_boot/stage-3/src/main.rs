@@ -38,6 +38,7 @@ use quantum_lib::com::serial::{SerialBaud, SerialDevice, SerialPort};
 use quantum_lib::elf::{ElfHeader, ElfArch, ElfBits, ElfSegmentType};
 use quantum_lib::x86_64::PrivlLevel;
 use quantum_lib::x86_64::registers::{Segment, SegmentRegs};
+use quantum_lib::bytes::Bytes;
 
 use stage_3::debug::{clear_framebuffer, display_string, setup_framebuffer};
 
@@ -168,6 +169,8 @@ fn main(boot_info: &BootInfo) {
 
     debug_println!("Calling Kernel!");
     clear_framebuffer();
+
+    debug_println!("Quantum Kernel [entry: 0x{:x}, stack: 0x{:x}, size: {}]", entry_point, 0, Bytes::from(kernel_slice.len()));
     unsafe {
         asm!(
             "jmp {kern:r}",

@@ -37,7 +37,7 @@ pub struct RealTimeClock {
 }
 
 lazy_static! {
-    static ref REAL_TIME_CLOCK: Mutex<RealTimeClock> = { Mutex::new(RealTimeClock::new()) };
+    static ref REAL_TIME_CLOCK: Mutex<RealTimeClock> = Mutex::new(RealTimeClock::new());
 }
 
 pub fn update_and_get_time() -> Time {

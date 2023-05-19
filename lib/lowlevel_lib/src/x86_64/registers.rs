@@ -489,6 +489,10 @@ impl CpuStack {
         )
     }
 
+    pub fn sp() -> usize {
+
+    }
+
     pub unsafe fn align_stack() {
         asm!("and esp, 0xffffff00",);
     }
