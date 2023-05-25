@@ -23,19 +23,24 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use crate::gfx::PixelLocation;
+pub mod boot_info;
 
-#[derive(Clone, Copy, Debug)]
-pub struct Rect {
-    start: PixelLocation,
-    end: PixelLocation,
-}
+#[macro_export]
+macro_rules! kernel_entry {
+    ($function:ident) => {
+        #[no_mangle]
+        #[doc(hidden)]
+        #[link_section = ".start"]
+        pub extern "C" fn _start(boot_struct_raw: u64) -> ! {
+            use quantum_lib::boot::boot_info::KernelBootInformation;
 
-impl Rect {
-    pub fn new(start: PixelLocation, end: PixelLocation) -> Self {
-        Self {
-            start,
-            end
+            let boot_info = unsafe {
+                KernelBootInformation::load_from_bootloader(boot_struct_raw as *const KernelBootInformation)
+            }.expect("Unable to determine boot information");
+
+            $function(boot_info);
+            panic!("Kernel should not finish!");
         }
-    }
+    };
 }
+

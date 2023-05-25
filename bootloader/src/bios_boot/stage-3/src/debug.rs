@@ -161,7 +161,7 @@ pub fn display_string(string: &str) {
                     }
                 }
 
-                return;
+                continue;
             },
 
             i if i >= first_font_char_offset && i < (font.len() + 32) as u8 => {

@@ -39,10 +39,6 @@ impl<Type> RegionMap<Type>
             regions: Default::default()
         }
     }
-    
-    pub fn condense_gaps(&mut self) {
-        
-    }
 
     pub fn add_new_region(&mut self, value: MemoryRegion<Type>) -> Result<(), HeaplessVecErr> {
         self.regions.push_within_capacity(value)

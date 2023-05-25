@@ -28,7 +28,9 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 pub mod draw_packet;
 pub mod frame_info;
 pub mod rectangle;
+pub mod linear_framebuffer;
 
+#[derive(Clone, Copy, Debug)]
 pub enum FramebufferPixelLayout {
     RGB,
     GRB,
@@ -38,12 +40,32 @@ pub enum FramebufferPixelLayout {
     Unknown,
 }
 
+#[derive(Clone, Copy, Debug)]
 pub struct PixelLocation {
     pub x: usize,
     pub y: usize,
 }
 
-#[repr(C, packed)]
+impl PixelLocation {
+    pub fn new(x: usize, y: usize) -> Self {
+        Self {
+            x,
+            y
+        }
+    }
+}
+
+impl Default for PixelLocation {
+    fn default() -> Self {
+        Self {
+            x: 0,
+            y: 0
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+#[repr(C)]
 pub struct Pixel {
     red: u8,
     green: u8,

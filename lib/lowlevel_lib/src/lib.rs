@@ -27,6 +27,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 #![feature(abi_x86_interrupt)]
 #![feature(test)]
+#![feature(mem_copy_fn)]
 
 pub mod x86_64;
 pub mod basic_font;
@@ -48,5 +49,6 @@ pub mod data_portal;
 pub mod enum_iterator;
 pub mod com;
 pub mod enum_flags;
+pub mod boot;
 
 pub type Nothing = ();

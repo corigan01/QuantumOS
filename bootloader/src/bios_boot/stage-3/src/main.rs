@@ -34,11 +34,19 @@ use bootloader::boot_info::BootInfo;
 use quantum_lib::debug::{add_connection_to_global_stream, StreamableConnection};
 use quantum_lib::debug::stream_connection::StreamConnectionBuilder;
 use quantum_lib::{debug_print, debug_println};
+use quantum_lib::address_utils::physical_address::PhyAddress;
+use quantum_lib::address_utils::region::{MemoryRegion, MemoryRegionType};
+use quantum_lib::address_utils::region_map::RegionMap;
+use quantum_lib::address_utils::virtual_address::VirtAddress;
+use quantum_lib::boot::boot_info::KernelBootInformation;
 use quantum_lib::com::serial::{SerialBaud, SerialDevice, SerialPort};
 use quantum_lib::elf::{ElfHeader, ElfArch, ElfBits, ElfSegmentType};
 use quantum_lib::x86_64::PrivlLevel;
 use quantum_lib::x86_64::registers::{Segment, SegmentRegs};
 use quantum_lib::bytes::Bytes;
+use quantum_lib::gfx::frame_info::FrameInfo;
+use quantum_lib::gfx::FramebufferPixelLayout;
+use quantum_lib::gfx::linear_framebuffer::LinearFramebuffer;
 
 use stage_3::debug::{clear_framebuffer, display_string, setup_framebuffer};
 
@@ -83,9 +91,11 @@ pub extern "C" fn _start(boot_info: u64) -> ! {
     panic!("Stage3 should not return!");
 }
 
-fn parse_kernel_elf(kernel_elf: ElfHeader) -> Option<u32> {
+fn parse_kernel_elf(kernel_elf: &ElfHeader) -> Option<(u32, MemoryRegion<PhyAddress>)> {
     let kernel_arch = kernel_elf.elf_arch()?;
     let kernel_bits = kernel_elf.elf_bits()?;
+    let mut lower_kernel_end = u64::MAX;
+    let mut higher_kernel_end = 0;
 
     debug_print!("Kernel arch={:?}, bits={:?} ...", kernel_arch, kernel_bits);
 
@@ -110,9 +120,15 @@ fn parse_kernel_elf(kernel_elf: ElfHeader) -> Option<u32> {
         entry_point
     );
 
+
+    // TODO: This is a super simple ELF loader and should be improved
     for i in 0..header_amount {
         let header_idx = i as usize;
         let header = kernel_elf.get_program_header(header_idx)?;
+
+        let expected_address = header.data_expected_address();
+        let real_memory_size = header.size_in_mem();
+        let end_of_expected_address = expected_address + real_memory_size;
 
         debug_print!(
             "Header {} = '{:x?}' -- {:?} => F: {} M: {} O: {} Vaddr: {:x}",
@@ -120,17 +136,24 @@ fn parse_kernel_elf(kernel_elf: ElfHeader) -> Option<u32> {
             header.type_of_segment(),
             header.flags(),
             header.size_in_elf(),
-            header.size_in_mem(),
+            real_memory_size,
             header.data_offset(),
-            header.data_expected_address()
+            expected_address
         );
 
-        // Test code
         let header_type = header.type_of_segment();
         let kernel_raw_data = kernel_elf.get_raw_data_slice();
 
         if matches!(header_type, ElfSegmentType::Load) {
-            let loader_ptr = header.data_expected_address() as *mut u8;
+            lower_kernel_end =
+                if lower_kernel_end > expected_address
+                { expected_address } else { lower_kernel_end };
+
+            higher_kernel_end =
+                if higher_kernel_end < end_of_expected_address
+                { end_of_expected_address } else { higher_kernel_end };
+
+            let loader_ptr = expected_address as *mut u8;
 
             let data_size = header.size_in_elf() as usize;
             let ac_data_offset = header.data_offset() as usize;
@@ -150,12 +173,16 @@ fn parse_kernel_elf(kernel_elf: ElfHeader) -> Option<u32> {
         }
     }
 
-    Some(entry_point)
+    let region = MemoryRegion::new(
+        PhyAddress::new(lower_kernel_end).unwrap(),
+        PhyAddress::new(higher_kernel_end).unwrap(),
+        MemoryRegionType::KernelCode
+    );
+
+    Some((entry_point, region))
 }
 
 fn main(boot_info: &BootInfo) {
-    let boot_info_ptr = boot_info as *const BootInfo as u64;
-
     debug_println!("Starting to parse kernel ELF...");
 
     let kernel_info = boot_info.get_kernel_entry();
@@ -163,19 +190,93 @@ fn main(boot_info: &BootInfo) {
 
     let kernel_elf = ElfHeader::from_bytes(kernel_slice).unwrap();
 
-    let entry_point = parse_kernel_elf(kernel_elf).unwrap();
+    let (entry_point, kernel_region) = parse_kernel_elf(&kernel_elf).unwrap();
+
+    debug_print!("Rebuilding Regions... ");
+    let mut region_map: RegionMap<PhyAddress> = RegionMap::new();
+    for e820_entry in unsafe { boot_info.get_memory_map() } {
+
+        let region_type = match e820_entry.entry_type {
+            1 => MemoryRegionType::Usable,
+            2 => MemoryRegionType::Reserved,
+            3 | 4 => MemoryRegionType::Uefi,
+            5 => MemoryRegionType::UnavailableMemory,
+            _ => MemoryRegionType::Unknown
+        };
+
+        let start_address = PhyAddress::new(e820_entry.address).unwrap();
+        let size_bytes = Bytes::from(e820_entry.len);
+
+        let region= MemoryRegion::from_distance(start_address, size_bytes, region_type);
+
+        region_map.add_new_region(region).unwrap();
+    }
+    region_map.add_new_region(kernel_region).unwrap();
+
+    // TODO: Get this region map from stage-2
+    let mut virtual_region_map = RegionMap::new();
+    let virtual_region = MemoryRegion::<VirtAddress>::new(
+        VirtAddress::new(0).unwrap(),
+        VirtAddress::new(10 * Bytes::GIB).unwrap(),
+        MemoryRegionType::Unknown
+    );
+
+    virtual_region_map.add_new_region(virtual_region).unwrap();
+
+    let old_framebuffer = boot_info.get_video_information();
+    let stride = old_framebuffer.x * old_framebuffer.depth;
+    let total_bytes = stride * old_framebuffer.y;
+
+    // TODO: Get the pixel layout from stage-1
+    let frame_info = FrameInfo::new(
+        old_framebuffer.x as usize,
+        old_framebuffer.y as usize,
+        old_framebuffer.depth as usize,
+        stride as usize,
+        total_bytes as usize,
+        FramebufferPixelLayout::RGB
+    );
+
+    let video = LinearFramebuffer::new(old_framebuffer.framebuffer as *mut u8, frame_info);
+
+    let kernel_info = KernelBootInformation::new(
+        region_map,
+        virtual_region_map,
+        video
+    );
+
+
+    debug_println!("Regions Built!");
 
     debug_println!("Kernel Entry Point 0x{:x}", entry_point);
 
     debug_println!("Calling Kernel!");
     clear_framebuffer();
 
-    debug_println!("Quantum Kernel [entry: 0x{:x}, stack: 0x{:x}, size: {}]", entry_point, 0, Bytes::from(kernel_slice.len()));
+    // TODO: Yeah lets maybe not have the stack just hard coded here :)
+    let stack_ptr = 2 * Bytes::MIB;
+
+    debug_println!();
+    debug_println!("The Kernel has not setup the framebuffer");
+    debug_println!("========================================");
+    debug_println!("Quantum-Bootloader has setup this framebuffer for you!");
+    debug_println!("Please use the included boot info structure to gather");
+    debug_println!("the needed information to draw to this framebuffer.");
+    debug_println!("Find more info here: https://github.com/corigan01/QuantumOS");
+
+    debug_println!("\nKernel [entry: 0x{:x}, stack: 0x{:x}, size: {}]", entry_point, stack_ptr, kernel_region.bytes());
+    debug_println!("Cpu: x86_64 64-bit | Kern: {:?} {:?}", kernel_elf.elf_arch().unwrap(), kernel_elf.elf_bits().unwrap());
+    debug_println!("\n{:#?}", boot_info.get_video_information());
+
+    debug_println!("\nCalling '_start' in elf at 0x{:x}", entry_point);
+
     unsafe {
         asm!(
+            "mov rsp, {stack}",
             "jmp {kern:r}",
-            in("rdi") boot_info_ptr,
+            in("rdi") kernel_info.send_as_u64(),
             kern = in(reg) entry_point,
+            stack = in(reg) stack_ptr
         );
     }
 }

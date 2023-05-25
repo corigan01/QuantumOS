@@ -23,12 +23,12 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use crate::gfx::FramebufferPixelLayout;
+use crate::gfx::{FramebufferPixelLayout, PixelLocation};
 
+#[derive(Clone, Copy, Debug)]
 pub struct FrameInfo {
     depth: usize,
-    size_y: usize,
-    size_x: usize,
+    size: PixelLocation,
     stride: usize,
     total_bytes: usize,
     pixel_layout: FramebufferPixelLayout,
@@ -45,11 +45,10 @@ impl FrameInfo {
     ) -> Self {
         FrameInfo {
             depth,
-            size_y,
-            size_x,
             stride,
             total_bytes,
             pixel_layout,
+            size: PixelLocation::new(size_x, size_y),
         }
     }
 }

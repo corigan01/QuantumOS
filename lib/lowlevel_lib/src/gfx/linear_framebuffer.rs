@@ -23,19 +23,20 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use crate::gfx::PixelLocation;
+use crate::gfx::frame_info::FrameInfo;
 
 #[derive(Clone, Copy, Debug)]
-pub struct Rect {
-    start: PixelLocation,
-    end: PixelLocation,
+pub struct LinearFramebuffer {
+    ptr: *mut u8,
+    info: FrameInfo,
 }
 
-impl Rect {
-    pub fn new(start: PixelLocation, end: PixelLocation) -> Self {
+impl LinearFramebuffer {
+    pub fn new(ptr: *mut u8, info: FrameInfo) -> Self {
         Self {
-            start,
-            end
+            ptr,
+            info
         }
     }
 }
+

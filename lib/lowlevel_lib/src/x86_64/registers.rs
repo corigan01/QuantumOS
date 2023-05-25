@@ -489,8 +489,30 @@ impl CpuStack {
         )
     }
 
+    #[cfg(target_pointer_width = "64")]
     pub fn sp() -> usize {
+        let value: u64;
+        unsafe {
+            asm!(
+                "mov {v}, rsp",
+                v = out(reg) value
+            );
 
+            value as usize
+        }
+    }
+
+    #[cfg(target_pointer_width = "32")]
+    pub fn sp() -> usize {
+        let value: u32;
+        unsafe {
+            asm!(
+            "mov {v}, esp",
+            v = out(reg) value
+            );
+
+            value as usize
+        }
     }
 
     pub unsafe fn align_stack() {

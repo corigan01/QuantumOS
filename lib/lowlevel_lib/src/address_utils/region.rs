@@ -40,6 +40,7 @@ pub enum MemoryRegionType {
     Unknown
 }
 
+#[derive(Clone, Copy)]
 pub struct MemoryRegion<Type = u64> {
     start: Type,
     end: Type,

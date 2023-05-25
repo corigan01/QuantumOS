@@ -37,14 +37,15 @@ use quantum_lib::bytes::Bytes;
 use quantum_lib::com::serial::{SerialBaud, SerialDevice, SerialPort};
 use quantum_lib::debug::{add_connection_to_global_stream};
 use quantum_lib::debug::stream_connection::StreamConnectionBuilder;
-use quantum_lib::debug_println;
+use quantum_lib::{debug_println, kernel_entry};
+use quantum_lib::boot::boot_info::KernelBootInformation;
 use quantum_os::clock::rtc::{update_and_get_time};
 
 static mut SERIAL_CONNECTION: Option<SerialDevice> = None;
 
-#[no_mangle]
-#[link_section = ".start"]
-pub extern "C" fn _start(boot_info_ptr: u64) {
+kernel_entry!(main);
+
+fn main(boot_info: &KernelBootInformation) {
     let connection = unsafe { &mut SERIAL_CONNECTION };
     *connection = Some(SerialDevice::new(SerialPort::Com1, SerialBaud::Baud115200).unwrap());
 
@@ -58,58 +59,10 @@ pub extern "C" fn _start(boot_info_ptr: u64) {
     add_connection_to_global_stream(connection).unwrap();
 
     debug_println!("Welcome to Quantum OS! {}\n", update_and_get_time());
-    debug_println!("Bootloader info ptr 0x{:x}", boot_info_ptr);
 
-    let bootloader_info = BootInfo::from_ptr(boot_info_ptr as usize);
-    #[cfg(test)]
-    {
-        debug_println!("Running tests!");
-
-        use quantum_os::test_main;
-        use quantum_os::qemu::{exit_qemu, QemuExitCode};
-
-        test_main();
-
-        debug_println!("Exiting Qemu...");
-
-        exit_qemu(QemuExitCode::Success);
-    }
-
-    main(bootloader_info);
-
-    panic!("Kernel Should not exit!!!");
-}
-
-fn main(boot_info: &BootInfo) {
-    let memory_regions = unsafe { boot_info.get_memory_map() };
-
-    let mut region_map = RegionMap::new();
-    for bios_memory_region in memory_regions {
-        let address = match PhyAddress::new(bios_memory_region.address) {
-            Ok(value) => value,
-            Err(invl) => {
-                debug_println!("Invalid address that was given in `memory_regions` {:?}, skipping... ", invl);
-                continue;
-            }
-        };
-
-        let region_type = match bios_memory_region.entry_type {
-            1 => MemoryRegionType::Usable,
-            2 => MemoryRegionType::Reserved,
-            _ => MemoryRegionType::Unknown,
-        };
-
-        let size = Bytes::from(bios_memory_region.len);
-        let region = MemoryRegion::from_distance(address, size, region_type);
-
-        debug_println!("{:#?}", region);
-
-        region_map.add_new_region(region).unwrap();
-    }
-
-    debug_println!("Total Usable Memory {} ", region_map.total_mem_for_type(MemoryRegionType::Usable));
-
-
+   debug_println!("Total usable memory {}",
+       boot_info.physical_regions.total_mem_for_type(MemoryRegionType::Usable)
+   );
 }
 
 #[panic_handler]
