@@ -27,11 +27,11 @@ use crate::gfx::{FramebufferPixelLayout, PixelLocation};
 
 #[derive(Clone, Copy, Debug)]
 pub struct FrameInfo {
-    depth: usize,
-    size: PixelLocation,
-    stride: usize,
-    total_bytes: usize,
-    pixel_layout: FramebufferPixelLayout,
+    pub depth: usize,
+    pub size: PixelLocation,
+    pub stride: usize,
+    pub total_bytes: usize,
+    pub pixel_layout: FramebufferPixelLayout,
 }
 
 impl FrameInfo {
@@ -50,5 +50,22 @@ impl FrameInfo {
             pixel_layout,
             size: PixelLocation::new(size_x, size_y),
         }
+    }
+
+    pub fn is_location_inside_view_port(&self, loc: PixelLocation) -> bool {
+        let size_x = self.size.x;
+        let size_y = self.size.y;
+
+        let end_x = loc.x;
+        let end_y = loc.y;
+
+        size_x >= end_x && size_y >= end_y
+    }
+
+    pub fn calculate_linear_ptr_offset(&self, loc: PixelLocation) -> usize {
+        let y_offset = loc.y * self.stride;
+        let x_offset = loc.x * self.depth;
+
+        y_offset + x_offset
     }
 }

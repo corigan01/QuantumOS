@@ -29,17 +29,15 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #![allow(dead_code)]
 
 use core::panic::PanicInfo;
-use bootloader::boot_info::BootInfo;
-use quantum_lib::address_utils::physical_address::PhyAddress;
-use quantum_lib::address_utils::region::{MemoryRegion, MemoryRegionType};
-use quantum_lib::address_utils::region_map::RegionMap;
-use quantum_lib::bytes::Bytes;
-use quantum_lib::com::serial::{SerialBaud, SerialDevice, SerialPort};
-use quantum_lib::debug::{add_connection_to_global_stream};
-use quantum_lib::debug::stream_connection::StreamConnectionBuilder;
+
 use quantum_lib::{debug_println, kernel_entry};
+use quantum_lib::address_utils::region::MemoryRegionType;
 use quantum_lib::boot::boot_info::KernelBootInformation;
-use quantum_os::clock::rtc::{update_and_get_time};
+use quantum_lib::com::serial::{SerialBaud, SerialDevice, SerialPort};
+use quantum_lib::debug::add_connection_to_global_stream;
+use quantum_lib::debug::stream_connection::StreamConnectionBuilder;
+
+use quantum_os::clock::rtc::update_and_get_time;
 
 static mut SERIAL_CONNECTION: Option<SerialDevice> = None;
 

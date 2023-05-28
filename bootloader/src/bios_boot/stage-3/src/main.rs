@@ -192,6 +192,9 @@ fn main(boot_info: &BootInfo) {
 
     let (entry_point, kernel_region) = parse_kernel_elf(&kernel_elf).unwrap();
 
+    // TODO: Yeah lets maybe not have the stack just hard coded here :)
+    let stack_ptr = 2 * Bytes::MIB;
+
     debug_print!("Rebuilding Regions... ");
     let mut region_map: RegionMap<PhyAddress> = RegionMap::new();
     for e820_entry in unsafe { boot_info.get_memory_map() } {
@@ -212,6 +215,14 @@ fn main(boot_info: &BootInfo) {
         region_map.add_new_region(region).unwrap();
     }
     region_map.add_new_region(kernel_region).unwrap();
+
+    let stack_region = MemoryRegion::new(
+        PhyAddress::new(stack_ptr - Bytes::MIB).unwrap(),
+        PhyAddress::new(stack_ptr).unwrap(),
+        MemoryRegionType::KernelCode
+    );
+
+    region_map.add_new_region(stack_region).unwrap();
 
     // TODO: Get this region map from stage-2
     let mut virtual_region_map = RegionMap::new();
@@ -252,9 +263,6 @@ fn main(boot_info: &BootInfo) {
 
     debug_println!("Calling Kernel!");
     clear_framebuffer();
-
-    // TODO: Yeah lets maybe not have the stack just hard coded here :)
-    let stack_ptr = 2 * Bytes::MIB;
 
     debug_println!();
     debug_println!("The Kernel has not setup the framebuffer");

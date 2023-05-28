@@ -27,6 +27,19 @@ use crate::gfx::rectangle::Rect;
 use crate::gfx::Pixel;
 
 pub struct DrawPacket<'a> {
-    rect: Rect,
-    raw_data: &'a [Pixel],
+    pub rect: Rect,
+    pub raw_data: &'a [Pixel],
+}
+
+impl<'a> DrawPacket<'a> {
+    pub fn new_packet(draw_size: Rect, data: &'a [Pixel]) -> Option<Self> {
+        if data.len() != draw_size.pixel_area() {
+            return None;
+        }
+
+        Some(Self {
+            rect: draw_size,
+            raw_data: data
+        })
+    }
 }

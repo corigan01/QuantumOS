@@ -27,8 +27,8 @@ use crate::gfx::PixelLocation;
 
 #[derive(Clone, Copy, Debug)]
 pub struct Rect {
-    start: PixelLocation,
-    end: PixelLocation,
+    pub start: PixelLocation,
+    pub end: PixelLocation,
 }
 
 impl Rect {
@@ -37,5 +37,11 @@ impl Rect {
             start,
             end
         }
+    }
+
+    pub fn pixel_area(&self) -> usize {
+        let area = self.start - self.end;
+
+        area.x * area.y
     }
 }

@@ -25,12 +25,15 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 #![allow(dead_code)]
 
+use core::ops::{Sub, SubAssign};
+use crate::bitset::BitSet;
+
 pub mod draw_packet;
 pub mod frame_info;
 pub mod rectangle;
 pub mod linear_framebuffer;
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum FramebufferPixelLayout {
     RGB,
     GRB,
@@ -55,6 +58,24 @@ impl PixelLocation {
     }
 }
 
+impl Sub for PixelLocation {
+    type Output = Self;
+
+    fn sub(self, rhs: Self) -> Self::Output {
+        let x = self.x - rhs.x;
+        let y = self.y - rhs.y;
+
+        Self::new(x, y)
+    }
+}
+
+impl SubAssign for PixelLocation {
+    fn sub_assign(&mut self, rhs: Self) {
+        self.x -= rhs.x;
+        self.y -= rhs.y;
+    }
+}
+
 impl Default for PixelLocation {
     fn default() -> Self {
         Self {
@@ -71,4 +92,22 @@ pub struct Pixel {
     green: u8,
     blue: u8,
     alpha: u8,
+}
+
+impl Pixel {
+    pub fn stream_into_u32(&self, layout: FramebufferPixelLayout) -> u32 {
+        // FIXME: We should be able to use not only RGB layouts
+        assert_eq!(layout, FramebufferPixelLayout::RGB,
+            "FIXME: Currently we only support RGB pixel layout");
+
+
+        let mut value: u32 = 0;
+        value.set_bits(24..32, self.red as u64);
+        value.set_bits(16..24, self.green as u64);
+        value.set_bits(8..16, self.blue as u64);
+        value.set_bits(0..8, self.alpha as u64);
+
+
+        value
+    }
 }

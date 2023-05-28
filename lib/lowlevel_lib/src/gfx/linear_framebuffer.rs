@@ -24,11 +24,18 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 use crate::gfx::frame_info::FrameInfo;
+use crate::gfx::{Pixel, PixelLocation};
+use crate::gfx::draw_packet::DrawPacket;
 
 #[derive(Clone, Copy, Debug)]
 pub struct LinearFramebuffer {
     ptr: *mut u8,
     info: FrameInfo,
+}
+
+pub enum DrawStatus {
+    Successful,
+    Failed
 }
 
 impl LinearFramebuffer {
@@ -37,6 +44,35 @@ impl LinearFramebuffer {
             ptr,
             info
         }
+    }
+
+    pub fn draw_pixel(&mut self, color: Pixel, location: PixelLocation) -> DrawStatus {
+        if !self.info.is_location_inside_view_port(location) {
+            return DrawStatus::Failed;
+        }
+
+        let ptr_base_offset = self.info.calculate_linear_ptr_offset(location);
+
+        // FIXME: We should re-calculate the color to fit the viewport color depth
+        assert_eq!(self.info.depth, 32,
+                   "FIXME: Currently we do not support color depths lower then 32-bits / pixel");
+
+        let pixel_value = color.stream_into_u32(self.info.pixel_layout);
+
+        unsafe {
+            let modified_ptr = (self.ptr as *mut u32).add(ptr_base_offset);
+            *modified_ptr = pixel_value;
+        }
+
+        DrawStatus::Successful
+    }
+
+    pub fn draw_packet(&mut self, packet: DrawPacket) -> DrawStatus {
+        if !self.info.is_location_inside_view_port(packet.rect.end) {
+            return DrawStatus::Failed;
+        }
+
+        todo!()
     }
 }
 
