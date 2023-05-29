@@ -25,13 +25,13 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 #![allow(dead_code)]
 
-use core::ops::{Sub, SubAssign};
-use crate::bitset::BitSet;
+use core::ops::{Add, AddAssign, Sub, SubAssign};
 
 pub mod draw_packet;
 pub mod frame_info;
 pub mod rectangle;
 pub mod linear_framebuffer;
+pub mod bitmap_font;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum FramebufferPixelLayout {
@@ -76,6 +76,24 @@ impl SubAssign for PixelLocation {
     }
 }
 
+impl Add for PixelLocation {
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        let x = self.x + rhs.x;
+        let y = self.y + rhs.y;
+
+        Self::new(x, y)
+    }
+}
+
+impl AddAssign for PixelLocation {
+    fn add_assign(&mut self, rhs: Self) {
+        self.x += rhs.x;
+        self.y += rhs.y;
+    }
+}
+
 impl Default for PixelLocation {
     fn default() -> Self {
         Self {
@@ -95,19 +113,120 @@ pub struct Pixel {
 }
 
 impl Pixel {
-    pub fn stream_into_u32(&self, layout: FramebufferPixelLayout) -> u32 {
-        // FIXME: We should be able to use not only RGB layouts
-        assert_eq!(layout, FramebufferPixelLayout::RGB,
-            "FIXME: Currently we only support RGB pixel layout");
+    pub const RED: Pixel =   Pixel::from_hex(0xFF0000);
+    pub const GREEN: Pixel = Pixel::from_hex(0x00FF00);
+    pub const BLUE: Pixel =  Pixel::from_hex(0x0000FF);
+    pub const WHITE: Pixel = Pixel::from_hex(0xFFFFFF);
+    pub const BLACK: Pixel = Pixel::from_hex(0x000000);
 
+    pub const fn from_hex(hex: u32) -> Self {
+        Pixel {
+            red: ((hex & 0xFF0000) >> 16) as u8,
+            green: ((hex & 0x00FF00) >> 8) as u8,
+            blue: (hex & 0x0000FF) as u8,
+            alpha: 255
+        }
+    }
 
-        let mut value: u32 = 0;
-        value.set_bits(24..32, self.red as u64);
-        value.set_bits(16..24, self.green as u64);
-        value.set_bits(8..16, self.blue as u64);
-        value.set_bits(0..8, self.alpha as u64);
+    pub const fn to_hex_with_layout(&self, layout: FramebufferPixelLayout) -> u32 {
+        match layout {
+            FramebufferPixelLayout::RGB => {
+                ((self.red as u32) << 2*8)          |
+                    ((self.green as u32) << 1*8)    |
+                    ((self.blue as u32) << 0*8)
+            }
+            FramebufferPixelLayout::GRB => {
+                ((self.red as u32) << 1*8)          |
+                    ((self.green as u32) << 2*8)    |
+                    ((self.blue as u32) << 0*8)
+            }
+            FramebufferPixelLayout::BGR => {
+                ((self.red as u32) << 0*8)          |
+                    ((self.green as u32) << 1*8)    |
+                    ((self.blue as u32) << 2*8)
+            }
+            FramebufferPixelLayout::WB => {
+                unimplemented!()
+            }
+            FramebufferPixelLayout::Unknown => {
+                unimplemented!()
+            }
+        }
+    }
+}
 
+#[cfg(test)]
+mod test {
+    use crate::gfx::{FramebufferPixelLayout, Pixel};
 
-        value
+    #[test]
+    pub fn test_red_pixel_value() {
+        let pixel = Pixel::RED;
+
+        assert_eq!(pixel.red, 0xFF);
+        assert_eq!(pixel.green, 0x00);
+        assert_eq!(pixel.blue, 0x00);
+        assert_eq!(pixel.alpha, 0xFF);
+
+        let pixel = pixel.to_hex_with_layout(FramebufferPixelLayout::RGB);
+
+        assert_eq!(pixel, 0xFF0000);
+
+    }
+
+    #[test]
+    pub fn test_green_pixel_value() {
+        let pixel = Pixel::GREEN;
+
+        assert_eq!(pixel.red, 0x00);
+        assert_eq!(pixel.green, 0xFF);
+        assert_eq!(pixel.blue, 0x00);
+        assert_eq!(pixel.alpha, 0xFF);
+
+        let pixel = pixel.to_hex_with_layout(FramebufferPixelLayout::RGB);
+
+        assert_eq!(pixel, 0x00FF00);
+    }
+
+    #[test]
+    pub fn test_blue_pixel_value() {
+        let pixel = Pixel::BLUE;
+
+        assert_eq!(pixel.red, 0x00);
+        assert_eq!(pixel.green, 0x00);
+        assert_eq!(pixel.blue, 0xFF);
+        assert_eq!(pixel.alpha, 0xFF);
+
+        let pixel = pixel.to_hex_with_layout(FramebufferPixelLayout::RGB);
+
+        assert_eq!(pixel, 0x0000FF);
+    }
+
+    #[test]
+    pub fn test_white_pixel_value() {
+        let pixel = Pixel::WHITE;
+
+        assert_eq!(pixel.red, 0xFF);
+        assert_eq!(pixel.green, 0xFF);
+        assert_eq!(pixel.blue, 0xFF);
+        assert_eq!(pixel.alpha, 0xFF);
+
+        let pixel = pixel.to_hex_with_layout(FramebufferPixelLayout::RGB);
+
+        assert_eq!(pixel, 0xFFFFFF);
+    }
+
+    #[test]
+    pub fn test_black_pixel_value() {
+        let pixel = Pixel::BLACK;
+
+        assert_eq!(pixel.red, 0x00);
+        assert_eq!(pixel.green, 0x00);
+        assert_eq!(pixel.blue, 0x00);
+        assert_eq!(pixel.alpha, 0xFF);
+
+        let pixel = pixel.to_hex_with_layout(FramebufferPixelLayout::RGB);
+
+        assert_eq!(pixel, 0x000000);
     }
 }

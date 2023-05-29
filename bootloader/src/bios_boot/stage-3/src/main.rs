@@ -245,7 +245,7 @@ fn main(boot_info: &BootInfo) {
         old_framebuffer.depth as usize,
         stride as usize,
         total_bytes as usize,
-        FramebufferPixelLayout::RGB
+        FramebufferPixelLayout::BGR
     );
 
     let video = LinearFramebuffer::new(old_framebuffer.framebuffer as *mut u8, frame_info);

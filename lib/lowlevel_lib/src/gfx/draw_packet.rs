@@ -23,6 +23,7 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use crate::debug_println;
 use crate::gfx::rectangle::Rect;
 use crate::gfx::Pixel;
 
@@ -33,7 +34,8 @@ pub struct DrawPacket<'a> {
 
 impl<'a> DrawPacket<'a> {
     pub fn new_packet(draw_size: Rect, data: &'a [Pixel]) -> Option<Self> {
-        if data.len() != draw_size.pixel_area() {
+        if data.len() < draw_size.pixel_area() {
+            debug_println!("Data len {}, Pixel len {}", data.len(), draw_size.pixel_area());
             return None;
         }
 

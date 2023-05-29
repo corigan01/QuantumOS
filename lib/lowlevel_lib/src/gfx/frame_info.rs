@@ -24,6 +24,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 use crate::gfx::{FramebufferPixelLayout, PixelLocation};
+use crate::gfx::rectangle::Rect;
 
 #[derive(Clone, Copy, Debug)]
 pub struct FrameInfo {
@@ -52,7 +53,12 @@ impl FrameInfo {
         }
     }
 
-    pub fn is_location_inside_view_port(&self, loc: PixelLocation) -> bool {
+    pub const fn is_rect_inside_view_port(&self, rect: Rect) -> bool {
+        self.is_location_inside_view_port(rect.start) &&
+            self.is_location_inside_view_port(rect.end)
+    }
+
+    pub const fn is_location_inside_view_port(&self, loc: PixelLocation) -> bool {
         let size_x = self.size.x;
         let size_y = self.size.y;
 
@@ -63,9 +69,10 @@ impl FrameInfo {
     }
 
     pub fn calculate_linear_ptr_offset(&self, loc: PixelLocation) -> usize {
-        let y_offset = loc.y * self.stride;
-        let x_offset = loc.x * self.depth;
+        let y_offset = loc.y * self.size.x;
+        let x_offset = loc.x;
 
         y_offset + x_offset
     }
 }
+

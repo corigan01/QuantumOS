@@ -23,32 +23,9 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-#![no_std]
+use crate::gfx::Pixel;
 
-#![feature(abi_x86_interrupt)]
-#![feature(test)]
-#![feature(try_trait_v2)]
-
-pub mod x86_64;
-pub mod basic_font;
-pub mod bitset;
-pub mod bytes;
-pub mod debug;
-pub mod gfx;
-pub mod heapless_string;
-pub mod heapless_vector;
-pub mod panic_utils;
-pub mod possibly_uninit;
-pub mod ptr;
-pub mod simple_allocator;
-pub mod time;
-pub mod address_utils;
-pub mod elf;
-pub mod magic;
-pub mod data_portal;
-pub mod enum_iterator;
-pub mod com;
-pub mod enum_flags;
-pub mod boot;
-
-pub type Nothing = ();
+pub struct Glyph<const PIXELS_X: usize, const PIXELS_Y: usize> {
+    c: char,
+    pixel_data: [[Pixel; PIXELS_X]; PIXELS_Y]
+}

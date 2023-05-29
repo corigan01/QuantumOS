@@ -30,12 +30,15 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 use core::panic::PanicInfo;
 
-use quantum_lib::{debug_println, kernel_entry};
+use quantum_lib::{debug_println, kernel_entry, rect};
 use quantum_lib::address_utils::region::MemoryRegionType;
 use quantum_lib::boot::boot_info::KernelBootInformation;
 use quantum_lib::com::serial::{SerialBaud, SerialDevice, SerialPort};
 use quantum_lib::debug::add_connection_to_global_stream;
 use quantum_lib::debug::stream_connection::StreamConnectionBuilder;
+use quantum_lib::gfx::{Pixel, PixelLocation};
+use quantum_lib::gfx::draw_packet::DrawPacket;
+use quantum_lib::gfx::rectangle::Rect;
 
 use quantum_os::clock::rtc::update_and_get_time;
 
@@ -58,9 +61,25 @@ fn main(boot_info: &KernelBootInformation) {
 
     debug_println!("Welcome to Quantum OS! {}\n", update_and_get_time());
 
-   debug_println!("Total usable memory {}",
-       boot_info.physical_regions.total_mem_for_type(MemoryRegionType::Usable)
-   );
+    debug_println!("Total usable memory {}",
+        boot_info.physical_regions.total_mem_for_type(MemoryRegionType::Usable)
+    );
+
+    let mut framebuffer = boot_info.framebuffer;
+
+    framebuffer.draw_rect(
+        rect!(199, 199 ; 32, 32),
+        Pixel::WHITE
+    );
+
+    let pixel_data = [Pixel::GREEN; 1000];
+
+    let draw_packet = DrawPacket::new_packet(
+        rect!(200, 200 ; 30, 30),
+        &pixel_data
+    ).unwrap();
+
+    framebuffer.draw_packet(draw_packet);
 }
 
 #[panic_handler]

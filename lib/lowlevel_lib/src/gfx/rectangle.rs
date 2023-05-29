@@ -39,9 +39,35 @@ impl Rect {
         }
     }
 
+    pub fn dist(start: PixelLocation, size: PixelLocation) -> Self {
+        Self {
+            start,
+            end: start + size
+        }
+    }
+
     pub fn pixel_area(&self) -> usize {
-        let area = self.start - self.end;
+        let area = self.end - self.start;
 
         area.x * area.y
+    }
+
+    pub fn size_x(&self) -> usize {
+        self.end.x.abs_diff(self.start.x)
+    }
+
+    pub fn size_y(&self) -> usize {
+        self.end.y.abs_diff(self.end.y)
+    }
+}
+
+#[macro_export]
+macro_rules! rect {
+    ($x:literal, $y:literal, $xx:literal, $yy:literal) => {
+        Rect::new(PixelLocation::new($x, $y), PixelLocation::new($xx, $yy))
+    };
+
+    ($x:literal, $y:literal ; $xx:literal, $yy:literal) => {
+        Rect::dist(PixelLocation::new($x, $y), PixelLocation::new($xx, $yy))
     }
 }
