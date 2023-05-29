@@ -144,10 +144,6 @@ impl LinearFramebuffer {
 
         DrawStatus::Successful
     }
-
-    //pub fn draw_built_in_glyph(&mut self, c: char, location: PixelLocation) -> DrawStatus {
-    //    todo!()
-    //}
 }
 
 

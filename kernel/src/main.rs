@@ -61,6 +61,8 @@ fn main(boot_info: &KernelBootInformation) {
 
     debug_println!("Welcome to Quantum OS! {}\n", update_and_get_time());
 
+    debug_println!("Physical Memory Map: \n{:?}\n", boot_info.get_physical_memory());
+
     debug_println!("Total usable memory {}",
         boot_info.physical_regions.total_mem_for_type(MemoryRegionType::Usable)
     );

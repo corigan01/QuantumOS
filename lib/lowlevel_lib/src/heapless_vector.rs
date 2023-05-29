@@ -165,7 +165,17 @@ impl<Type, const SIZE: usize> HeaplessVec<Type, SIZE> {
         Some(moved_out_data)
     }
 
-    pub fn retain<Function>(&mut self, runner: &mut Function)
+    pub fn push_vec(&mut self, rhs: Self) -> Result<(), HeaplessVecErr> {
+        for rhs_index in 0..rhs.used_data {
+            unsafe {
+                self.push_within_capacity(rhs.internal_data[rhs_index].assume_init_read())?;
+            }
+        }
+
+        Ok(())
+    }
+
+    pub fn retain<Function>(&mut self, mut runner: Function)
         where Function: FnMut(&Type) -> bool {
 
         let mut removed_indexes: HeaplessVec<bool, SIZE> = HeaplessVec::new();

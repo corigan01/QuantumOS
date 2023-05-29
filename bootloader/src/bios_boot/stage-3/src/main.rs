@@ -223,6 +223,7 @@ fn main(boot_info: &BootInfo) {
     );
 
     region_map.add_new_region(stack_region).unwrap();
+    region_map.consolidate().unwrap();
 
     // TODO: Get this region map from stage-2
     let mut virtual_region_map = RegionMap::new();

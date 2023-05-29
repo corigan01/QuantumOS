@@ -40,11 +40,29 @@ pub enum MemoryRegionType {
     Unknown
 }
 
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub enum HowOverlapping {
+    EndsIn,
+    StartsIn,
+    Within,
+    OverExpands,
+    None
+}
+
 #[derive(Clone, Copy)]
 pub struct MemoryRegion<Type = u64> {
     start: Type,
     end: Type,
     region_type: MemoryRegionType,
+}
+
+impl<Type> PartialEq for MemoryRegion<Type>
+    where Type: Addressable + Copy {
+    fn eq(&self, other: &Self) -> bool {
+        self.start.address_as_u64() == other.start.address_as_u64() &&
+            self.end.address_as_u64() == other.end.address_as_u64() &&
+            self.region_type == other.region_type
+    }
 }
 
 impl<Type> MemoryRegion<Type>
@@ -63,19 +81,41 @@ impl<Type> MemoryRegion<Type>
         Self::new(start, start.copy_by_offset(distance.into()), region_type)
     }
 
+
+    pub fn how_overlapping(&self, rhs: &MemoryRegion<Type>) -> HowOverlapping {
+        let self_start = self.start.address_as_u64();
+        let self_end = self.end.address_as_u64();
+
+        let other_start = rhs.start.address_as_u64();
+        let other_end = rhs.end.address_as_u64();
+
+
+        if other_start > self_start && other_end < self_end {
+            HowOverlapping::Within
+        } else if other_start > self_start && other_start < self_end && other_end >= self_end {
+            HowOverlapping::StartsIn
+        } else if other_start <= self_start && other_end < self_end && other_end >= self_start {
+            HowOverlapping::EndsIn
+        } else if other_start <= self_start && other_end >= self_end {
+            HowOverlapping::OverExpands
+        } else {
+            HowOverlapping::None
+        }
+    }
+
     pub fn size(&self) -> u64 {
         self.start.distance_from_address(&self.end)
     }
 
-    pub fn get_start_address(&self) -> &Type {
+    pub const fn get_start_address(&self) -> &Type {
         &self.start
     }
 
-    pub fn get_end_address(&self) -> &Type {
+    pub const fn get_end_address(&self) -> &Type {
         &self.end
     }
 
-    pub fn region_type(&self) -> MemoryRegionType {
+    pub const fn region_type(&self) -> MemoryRegionType {
         self.region_type
     }
 
@@ -94,4 +134,81 @@ impl<Type> Debug for MemoryRegion<Type>
             write!(f, "MemoryRegion<{}> {{ type: {:?}, start: 0x{:x}, end: 0x{:x}, size: {} }}", type_name,  self.region_type, self.start.address_as_u64(), self.end.address_as_u64(), Bytes::from(self.size()))
         }
     }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::address_utils::region::{HowOverlapping, MemoryRegion, MemoryRegionType};
+
+    #[test]
+    fn test_contained_overlapping() {
+        let region =
+            MemoryRegion::new(0, 100, MemoryRegionType::Usable);
+
+        let other =
+            MemoryRegion::new(50, 70, MemoryRegionType::Reserved);
+
+        assert_eq!(region.how_overlapping(&other), HowOverlapping::Within);
+    }
+
+    #[test]
+    fn test_starts_in_overlapping() {
+        let region =
+            MemoryRegion::new(0, 100, MemoryRegionType::Usable);
+
+        let other =
+            MemoryRegion::new(80, 120, MemoryRegionType::Reserved);
+
+        assert_eq!(region.how_overlapping(&other), HowOverlapping::StartsIn);
+
+        let other =
+            MemoryRegion::new(80, 100, MemoryRegionType::Reserved);
+
+        assert_eq!(region.how_overlapping(&other), HowOverlapping::StartsIn);
+    }
+
+    #[test]
+    fn test_ends_in_overlapping() {
+        let region =
+            MemoryRegion::new(70, 200, MemoryRegionType::Usable);
+
+        let other =
+            MemoryRegion::new(50, 100, MemoryRegionType::Reserved);
+
+        assert_eq!(region.how_overlapping(&other), HowOverlapping::EndsIn);
+
+        let other =
+            MemoryRegion::new(50, 70, MemoryRegionType::Reserved);
+
+        assert_eq!(region.how_overlapping(&other), HowOverlapping::EndsIn);
+    }
+
+    #[test]
+    fn test_over_expands_overlapping() {
+        let region =
+            MemoryRegion::new(50, 100, MemoryRegionType::Usable);
+
+        let other =
+            MemoryRegion::new(40, 200, MemoryRegionType::Reserved);
+
+        assert_eq!(region.how_overlapping(&other), HowOverlapping::OverExpands);
+
+        let other =
+            MemoryRegion::new(50, 100, MemoryRegionType::Reserved);
+
+        assert_eq!(region.how_overlapping(&other), HowOverlapping::OverExpands);
+    }
+
+    #[test]
+    fn test_none_overlapping() {
+        let region =
+            MemoryRegion::new(50, 100, MemoryRegionType::Usable);
+
+        let other =
+            MemoryRegion::new(120, 200, MemoryRegionType::Reserved);
+
+        assert_eq!(region.how_overlapping(&other), HowOverlapping::None);
+    }
+
+
 }

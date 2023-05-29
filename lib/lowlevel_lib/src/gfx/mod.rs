@@ -106,10 +106,10 @@ impl Default for PixelLocation {
 #[derive(Clone, Copy, Debug)]
 #[repr(C)]
 pub struct Pixel {
-    red: u8,
-    green: u8,
-    blue: u8,
-    alpha: u8,
+    pub red: u8,
+    pub green: u8,
+    pub blue: u8,
+    pub alpha: u8,
 }
 
 impl Pixel {
@@ -124,6 +124,24 @@ impl Pixel {
             red: ((hex & 0xFF0000) >> 16) as u8,
             green: ((hex & 0x00FF00) >> 8) as u8,
             blue: (hex & 0x0000FF) as u8,
+            alpha: 255
+        }
+    }
+
+    pub const fn from_rgba_hex(rgba_hex: u32) -> Self {
+        Self {
+            red: ((rgba_hex & 0xFF0000) >> 24) as u8,
+            green: ((rgba_hex & 0x00FF00) >> 16) as u8,
+            blue: ((rgba_hex & 0x0000FF) >> 8) as u8,
+            alpha: ((rgba_hex & 0x0000FF) >> 0) as u8
+        }
+    }
+
+    pub const fn from_component(red: u8, green: u8, blue: u8) -> Self {
+        Self {
+            red,
+            green,
+            blue,
             alpha: 255
         }
     }
