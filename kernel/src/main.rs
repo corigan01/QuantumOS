@@ -37,8 +37,7 @@ use quantum_lib::bytes::Bytes;
 use quantum_lib::com::serial::{SerialBaud, SerialDevice, SerialPort};
 use quantum_lib::debug::add_connection_to_global_stream;
 use quantum_lib::debug::stream_connection::StreamConnectionBuilder;
-use quantum_lib::gfx::{Pixel, PixelLocation};
-use quantum_lib::gfx::rectangle::Rect;
+use quantum_lib::gfx::{Pixel};
 
 use quantum_os::clock::rtc::update_and_get_time;
 
@@ -81,31 +80,6 @@ fn main(boot_info: &KernelBootInformation) {
     let mut framebuffer = boot_info.framebuffer;
 
     framebuffer.fill_entire(Pixel::from_hex(0x111111));
-
-    let mut draw_location_x = 0;
-    let mut draw_location_y = 0;
-
-    let modifier = 1;
-    loop {
-        let drawing_rect = Rect::dist(
-            PixelLocation::new(draw_location_x, draw_location_y),
-            PixelLocation::new(100, 100)
-        );
-
-        framebuffer.draw_rect(drawing_rect, Pixel::from_hex((draw_location_x + draw_location_y * 255) as u32));
-
-        draw_location_x += modifier;
-
-        if draw_location_x >= (framebuffer.info.size.x - 100) {
-            draw_location_x = 0;
-            draw_location_y += 100;
-        }
-        if draw_location_y >= (framebuffer.info.size.y - 100) {
-            framebuffer.fill_entire(Pixel::from_hex(0x111111));
-            draw_location_y = 0;
-        }
-    }
-
 }
 
 #[panic_handler]
