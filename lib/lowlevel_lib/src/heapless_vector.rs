@@ -77,6 +77,7 @@ pub enum HeaplessVecErr {
 ///     assert_eq!(my_vector.len(), 2_usize);
 ///
 /// }
+#[derive(Copy)]
 pub struct HeaplessVec<Type, const SIZE: usize> {
     /// # Internal Data
     /// This is the raw array that stores the data with type `Type` and size `SIZE`.
@@ -89,6 +90,21 @@ pub struct HeaplessVec<Type, const SIZE: usize> {
     /// `used_data` represents the amount of data inside `internal_data`. This helps
     /// us know how many positions are populated and which ones are free for use.
     used_data: usize,
+}
+
+impl<Type, const SIZE: usize> Clone for HeaplessVec<Type, SIZE>
+    where Type: Clone {
+    fn clone(&self) -> Self {
+        let mut new_vector = HeaplessVec::new();
+
+        for index in 0..self.used_data {
+            let copied_value = unsafe { self.internal_data[index].assume_init_read() };
+
+            new_vector.push_within_capacity(copied_value).unwrap();
+        }
+
+        new_vector
+    }
 }
 
 impl<Type, const SIZE: usize> HeaplessVec<Type, SIZE> {
@@ -165,7 +181,7 @@ impl<Type, const SIZE: usize> HeaplessVec<Type, SIZE> {
         Some(moved_out_data)
     }
 
-    pub fn push_vec(&mut self, rhs: Self) -> Result<(), HeaplessVecErr> {
+    pub fn push_vec<const RHS_SIZE: usize>(&mut self, rhs: HeaplessVec<Type, RHS_SIZE>) -> Result<(), HeaplessVecErr> {
         for rhs_index in 0..rhs.used_data {
             unsafe {
                 self.push_within_capacity(rhs.internal_data[rhs_index].assume_init_read())?;
@@ -282,7 +298,7 @@ impl<Type, const SIZE: usize> HeaplessVec<Type, SIZE> {
     /// unsafe as it doesn't directly cause any unsafe behavour. However, the caller can derefrence
     /// this ptr which will cause issues if the data is malformed.
     pub fn as_ptr(&self) -> *const Type {
-        return self.internal_data.as_ptr() as *const Type;
+        self.internal_data.as_ptr() as *const Type
     }
 
     /// # As Mut Ptr
@@ -372,5 +388,26 @@ mod tests {
         assert_eq!(vec.get(0), Ok(&69));
 
         assert_eq!(vec.insert(10, 320), Err(HeaplessVecErr::OutOfBounds));
+    }
+
+    #[test]
+    fn test_push_vec() {
+        let mut total: HeaplessVec<i32, 20> = HeaplessVec::new();
+
+        total.push_within_capacity(10).unwrap();
+
+        let mut new: HeaplessVec<i32, 10> = HeaplessVec::new();
+        for i in 0..10 {
+            new.push_within_capacity(i).unwrap();
+        }
+
+        total.push_vec(new).unwrap();
+
+        assert_eq!(total.len(), 11);
+
+        assert_eq!(*total.get(0).unwrap(), 10);
+        for i in 1..11 {
+            assert_eq!(*total.get(i as usize).unwrap(), i - 1);
+        }
     }
 }

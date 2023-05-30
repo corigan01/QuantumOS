@@ -42,7 +42,7 @@ checksum = "c1b04fb49957986fdce4d6ee7a65027d55d4b6d2265e5848bbb507b58ccfdb6f"
 
 [[package]]
 name = "quantum_lib"
-version = "0.1.4"
+version = "0.2.3"
 dependencies = [
  "lazy_static",
  "spin 0.9.8",

@@ -30,14 +30,14 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 use core::panic::PanicInfo;
 
-use quantum_lib::{debug_println, kernel_entry, rect};
+use quantum_lib::{debug_println, kernel_entry};
 use quantum_lib::address_utils::region::MemoryRegionType;
 use quantum_lib::boot::boot_info::KernelBootInformation;
+use quantum_lib::bytes::Bytes;
 use quantum_lib::com::serial::{SerialBaud, SerialDevice, SerialPort};
 use quantum_lib::debug::add_connection_to_global_stream;
 use quantum_lib::debug::stream_connection::StreamConnectionBuilder;
 use quantum_lib::gfx::{Pixel, PixelLocation};
-use quantum_lib::gfx::draw_packet::DrawPacket;
 use quantum_lib::gfx::rectangle::Rect;
 
 use quantum_os::clock::rtc::update_and_get_time;
@@ -61,27 +61,51 @@ fn main(boot_info: &KernelBootInformation) {
 
     debug_println!("Welcome to Quantum OS! {}\n", update_and_get_time());
 
-    debug_println!("Physical Memory Map: \n{:?}\n", boot_info.get_physical_memory());
+    let mut physical_memory_map = boot_info.get_physical_memory().clone();
+    let mut virtual_memory_map = boot_info.get_virtual_memory().clone();
 
-    debug_println!("Total usable memory {}",
-        boot_info.physical_regions.total_mem_for_type(MemoryRegionType::Usable)
+    physical_memory_map.consolidate().unwrap();
+    virtual_memory_map.consolidate().unwrap();
+
+    debug_println!("Virtual Memory Map:\n{virtual_memory_map:?}");
+    debug_println!("Physical Memory Map:\n{physical_memory_map:?}");
+
+    let total_phy: u64 = boot_info.physical_regions.total_mem_for_type(MemoryRegionType::Usable).into();
+    let total_pages: u64 = total_phy / (4 * Bytes::KIB);
+
+    debug_println!("Total Usable Physical Memory {} ({} -- 4k Pages)",
+        Bytes::from(total_phy),
+        total_pages
     );
 
     let mut framebuffer = boot_info.framebuffer;
 
-    framebuffer.draw_rect(
-        rect!(199, 199 ; 32, 32),
-        Pixel::WHITE
-    );
+    framebuffer.fill_entire(Pixel::from_hex(0x111111));
 
-    let pixel_data = [Pixel::GREEN; 1000];
+    let mut draw_location_x = 0;
+    let mut draw_location_y = 0;
 
-    let draw_packet = DrawPacket::new_packet(
-        rect!(200, 200 ; 30, 30),
-        &pixel_data
-    ).unwrap();
+    let modifier = 1;
+    loop {
+        let drawing_rect = Rect::dist(
+            PixelLocation::new(draw_location_x, draw_location_y),
+            PixelLocation::new(100, 100)
+        );
 
-    framebuffer.draw_packet(draw_packet);
+        framebuffer.draw_rect(drawing_rect, Pixel::from_hex((draw_location_x + draw_location_y * 255) as u32));
+
+        draw_location_x += modifier;
+
+        if draw_location_x >= (framebuffer.info.size.x - 100) {
+            draw_location_x = 0;
+            draw_location_y += 100;
+        }
+        if draw_location_y >= (framebuffer.info.size.y - 100) {
+            framebuffer.fill_entire(Pixel::from_hex(0x111111));
+            draw_location_y = 0;
+        }
+    }
+
 }
 
 #[panic_handler]

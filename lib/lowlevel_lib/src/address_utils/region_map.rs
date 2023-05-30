@@ -32,6 +32,7 @@ use crate::heapless_vector::{HeaplessVec, HeaplessVecErr};
 
 const MAX_ALLOCATABLE_REGIONS: usize = 40;
 
+#[derive(Clone, Copy)]
 pub struct RegionMap<Type> {
     regions: HeaplessVec<MemoryRegion<Type>, MAX_ALLOCATABLE_REGIONS>,
 }
@@ -65,6 +66,10 @@ impl<Type> RegionMap<Type>
                 let free_start = free_regions.get_start_address().address_as_u64();
 
                 for all_other_regions in non_usable_iterator {
+                    if free_regions == all_other_regions {
+                        continue;
+                    }
+
                     let overlapping_status = free_regions.how_overlapping(all_other_regions);
 
                     let other_start = all_other_regions.get_start_address().address_as_u64();
@@ -80,7 +85,7 @@ impl<Type> RegionMap<Type>
                             new_free_regions.push_within_capacity(shrunk_region)?;
 
                             was_work_done = true;
-                            break 'outer;
+                            continue 'outer;
                         }
                         HowOverlapping::StartsIn => {
                             let shrunk_region = MemoryRegion::new(
@@ -92,7 +97,7 @@ impl<Type> RegionMap<Type>
                             new_free_regions.push_within_capacity(shrunk_region)?;
 
                             was_work_done = true;
-                            break 'outer;
+                            continue 'outer;
                         }
                         HowOverlapping::Within => {
                             let before_region = MemoryRegion::new(
@@ -111,17 +116,16 @@ impl<Type> RegionMap<Type>
                             new_free_regions.push_within_capacity(after_region)?;
 
                             was_work_done = true;
-                            break 'outer;
+                            continue 'outer;
                         }
                         HowOverlapping::OverExpands => {
                             was_work_done = true;
-                            break 'outer;
+                            continue 'outer;
                         }
                         HowOverlapping::None => {}
                     }
-
-                    new_free_regions.push_within_capacity(*free_regions)?;
                 }
+                new_free_regions.push_within_capacity(*free_regions)?;
             }
 
             if !was_work_done {
@@ -188,9 +192,13 @@ impl<Type> Debug for RegionMap<Type>
 
 #[cfg(test)]
 mod test {
+    extern crate alloc;
+
+    use alloc::vec;
     use crate::address_utils::physical_address::PhyAddress;
     use crate::address_utils::region::{MemoryRegion, MemoryRegionType};
     use crate::address_utils::region_map::RegionMap;
+    use crate::bytes::Bytes;
 
     #[test]
     fn test_within_consolidation() {
@@ -376,5 +384,40 @@ mod test {
 
         assert_eq!(not_free_region, reserved_region);
         assert_eq!(free_1_region, free_region);
+    }
+
+    #[test]
+    fn test_lots_of_consolidation() {
+        use MemoryRegionType::*;
+
+        let region_vector = vec![
+            (Usable, 0x0, 0x9fc00),
+            (Reserved, 0x9fc00, 0xa0000),
+            (Reserved, 0xf0000, 0x100000),
+            (Usable, 0x100000, 0xffe0000),
+            (Reserved, 0xffe0000, 0x10000000),
+            (Reserved, 0xfffc0000, 0x100000000),
+            (Reserved, 0xfd00000000, 0x10000000000),
+            (KernelCode, 0x1000000, 0x1009250),
+            (KernelCode, 0x100000, 0x200000)
+        ];
+
+        let mut region_map = RegionMap::new();
+
+        for fake_region in region_vector {
+            region_map.add_new_region(MemoryRegion::new(
+               PhyAddress::new(fake_region.1).unwrap(),
+                PhyAddress::new(fake_region.2).unwrap(),
+                fake_region.0
+            )).unwrap();
+        }
+
+        let before_gross_free_bytes = region_map.total_mem_for_type(Usable);
+        let before_loss_bytes = region_map.total_mem_for_type(KernelCode);
+        let before_net_bytes = before_gross_free_bytes - before_loss_bytes;
+
+        region_map.consolidate().unwrap();
+
+        assert_eq!(region_map.total_mem_for_type(Usable), before_net_bytes - Bytes::from(3));
     }
 }

@@ -32,7 +32,7 @@ use crate::gfx::rectangle::Rect;
 #[derive(Clone, Copy, Debug)]
 pub struct LinearFramebuffer {
     ptr: *mut u8,
-    info: FrameInfo,
+    pub info: FrameInfo,
 }
 
 
@@ -143,6 +143,13 @@ impl LinearFramebuffer {
         }
 
         DrawStatus::Successful
+    }
+
+    pub fn fill_entire(&mut self, fill: Pixel) -> DrawStatus {
+        self.draw_rect(
+            Rect::dist(PixelLocation::new(0,0), self.info.size),
+            fill
+        )
     }
 }
 
