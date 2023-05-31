@@ -23,43 +23,27 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use crate::debug::stream_connection::StreamConnection;
 use stacked::heapless_vector::HeaplessVec;
 
-pub struct HeaplessStreamCollections {
-    pub(crate) stream_connections: HeaplessVec<StreamConnection, 4>,
+// Just like the SerenityOS Project,
+// This is a quick and dirty allocator to get things going! :^)
+
+#[repr(C, packed)]
+pub struct Allocation {
+    ptr: *mut u8,
+    len: u32
 }
 
-impl HeaplessStreamCollections {
-    pub fn new() -> Self {
-        Self {
-            stream_connections: HeaplessVec::new(),
-        }
-    }
-}
+#[allow(dead_code)]
+pub struct ComplexAllocator {
+    ptr: *mut u8,
+    size: usize,
 
-impl Default for HeaplessStreamCollections {
-    fn default() -> Self {
-        Self::new()
-    }
-}
+    // The idea is that this can store a first few memory allocations,
+    // then when it fills up it will dump them into the allocation array
+    pool_allocation: HeaplessVec<Allocation, 10>,
 
-impl ::core::fmt::Write for HeaplessStreamCollections {
-    fn write_str(&mut self, s: &str) -> ::core::fmt::Result {
-        for stream in self.stream_connections.mut_iter() {
-            if let Some(outlet) = stream.outlet {
-                outlet.display_string(s);
-                continue;
-            }
 
-            if let Some(outlet) = stream.simple_outlet {
-                let func = outlet as fn(&str);
-                func(s);
-
-                continue;
-            }
-        }
-
-        Ok(())
-    }
+    allocation_array: *mut Allocation,
+    allocation_array_len: usize
 }

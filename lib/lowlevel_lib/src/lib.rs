@@ -36,12 +36,9 @@ pub mod bitset;
 pub mod bytes;
 pub mod debug;
 pub mod gfx;
-pub mod heapless_string;
-pub mod heapless_vector;
 pub mod panic_utils;
 pub mod possibly_uninit;
 pub mod ptr;
-pub mod simple_allocator;
 pub mod time;
 pub mod address_utils;
 pub mod elf;
@@ -51,5 +48,7 @@ pub mod enum_iterator;
 pub mod com;
 pub mod enum_flags;
 pub mod boot;
+pub mod alloc;
 
 pub type Nothing = ();
+

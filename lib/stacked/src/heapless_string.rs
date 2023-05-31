@@ -57,11 +57,11 @@ impl<const SIZE: usize> HeaplessString<SIZE> {
         Self::from_bytes(string.as_bytes())
     }
 
-    pub fn get_str<'a>(&'a self) -> &'a str {
+    pub fn get_str(&self) -> &str {
         return unsafe { core::str::from_utf8_unchecked(&self.internal_buffer) }.trim_end();
     }
 
-    pub fn get_mut_str<'a>(&'a mut self) -> &'a str {
+    pub fn get_mut_str(&mut self) -> &str {
         return unsafe { core::str::from_utf8_unchecked_mut(&mut self.internal_buffer) }.trim_end();
     }
 

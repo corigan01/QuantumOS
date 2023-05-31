@@ -24,29 +24,50 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 */
 
-#[derive(Clone, Copy, Ord, PartialOrd, Eq, PartialEq)]
+use core::mem::MaybeUninit;
+
 pub struct PossiblyUninit<Type> {
-    data: Option<Type>,
+    data: MaybeUninit<Type>,
+    has_been_init: bool
 }
 
 impl<Type> PossiblyUninit<Type> {
-    pub fn new() -> Self {
-        Self { data: None }
+    pub const fn new() -> Self {
+        Self {
+            data: MaybeUninit::uninit(),
+            has_been_init: false
+        }
     }
 
-    pub fn from_value(value: Type) -> Self {
-        Self { data: Some(value) }
+    pub const fn from(t: Type) -> Self {
+        Self {
+            data: MaybeUninit::new(t),
+            has_been_init: true
+        }
     }
 
-    pub fn to_ref_value<'a>(&'a self) -> Option<&'a Type> {
-        self.data.as_ref()
+    fn check_conditions(&self) -> Option<()> {
+        if !self.has_been_init {
+            None
+        } else {
+            Some(())
+        }
     }
 
-    pub fn to_mut_ref_value<'a>(&'a mut self) -> Option<&'a mut Type> {
-        self.data.as_mut()
+    pub fn get_ref(&self) -> Option<&Type> {
+        self.check_conditions()?;
+
+        Some(unsafe { self.data.assume_init_ref() })
     }
 
-    pub fn consume_type(self) -> Option<Type> {
-        self.data
+    pub fn get_mut_ref(&mut self) -> Option<&mut Type> {
+        self.check_conditions()?;
+
+        Some(unsafe { self.data.assume_init_mut() })
+    }
+
+    pub fn set(&mut self, t: Type) {
+        self.data.write(t);
+        self.has_been_init = true;
     }
 }

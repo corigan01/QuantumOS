@@ -6,7 +6,8 @@ build = "build.rs"
 
 [dependencies]
 quantum_lib = { path = "../../../../lib/lowlevel_lib" }
-bootloader = { path = "../../../bootloader" }
+stacked     = { path = "../../../../lib/stacked"}
+bootloader  = { path = "../../../bootloader" }
 
 [profile.release]
 opt-level="z"

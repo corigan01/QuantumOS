@@ -54,7 +54,7 @@ impl<'a> SimpleBumpAllocator<'a> {
     ///
     /// # Examples
     /// ```
-    /// use quantum_lib::simple_allocator::SimpleBumpAllocator;
+    /// use quantum_lib::alloc::simple_allocator::SimpleBumpAllocator;
     ///
     /// let mut memory = [0u8; 1024];
     /// let allocator = SimpleBumpAllocator::new(&mut memory);
@@ -82,7 +82,7 @@ impl<'a> SimpleBumpAllocator<'a> {
     /// # Examples
     /// ```
     /// use core::mem::size_of;
-    /// use quantum_lib::simple_allocator::SimpleBumpAllocator;
+    /// use quantum_lib::alloc::simple_allocator::SimpleBumpAllocator;
     ///
     /// let mut memory = [0u8; 1024];
     ///
@@ -119,7 +119,7 @@ impl<'a> SimpleBumpAllocator<'a> {
     /// # Examples
     ///
     /// ```rust
-    /// use quantum_lib::simple_allocator::SimpleBumpAllocator;
+    /// use quantum_lib::alloc::simple_allocator::SimpleBumpAllocator;
     ///
     /// let mut memory = [0u8; 1024];
     /// let mut allocator = SimpleBumpAllocator::new(&mut memory);
@@ -151,7 +151,7 @@ impl<'a> SimpleBumpAllocator<'a> {
 
 #[cfg(test)]
 mod tests {
-    use crate::simple_allocator::SimpleBumpAllocator;
+    use crate::alloc::simple_allocator::SimpleBumpAllocator;
 
     #[test]
     fn test_allocate_region() {
