@@ -33,6 +33,8 @@ fn main() {
     println!("     {} Welcome to the Quantum World", "Quantum".green().bold());
 
     let cargo = std::env::var("CARGO").unwrap_or("cargo".into());
+    let current_dir = std::env::current_dir().unwrap();
+    let target = format!("{}/target", current_dir.display());
 
     let command_args: Vec<String> = std::env::args().collect();
     let noqemu = command_args.contains(&String::from("noqemu"));
@@ -46,15 +48,17 @@ fn main() {
 
         let _lowlevel_lib = Command::new(cargo.clone())
             .current_dir("lib/lowlevel_lib")
-            .stdout(std::process::Stdio::inherit())
             .arg("test")
+            .arg(format!("--target-dir={}/lowlevel_lib", target))
+            .stdout(std::process::Stdio::inherit())
             .status()
             .unwrap();
 
         let _stacked_lib = Command::new(cargo.clone())
             .current_dir("lib/stacked")
-            .stdout(std::process::Stdio::inherit())
             .arg("test")
+            .arg(format!("--target-dir={}/stacked", target))
+            .stdout(std::process::Stdio::inherit())
             .status()
             .unwrap();
 
