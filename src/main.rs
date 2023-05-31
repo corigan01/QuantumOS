@@ -32,67 +32,88 @@ use owo_colors::OwoColorize;
 fn main() {
     println!("     {} Welcome to the Quantum World", "Quantum".green().bold());
 
+    let cargo = std::env::var("CARGO").unwrap_or("cargo".into());
+
     let command_args: Vec<String> = std::env::args().collect();
     let noqemu = command_args.contains(&String::from("noqemu"));
     let kvm = command_args.contains(&String::from("kvm"));
     let debug_int = command_args.contains(&String::from("debug-int"));
     let debug = command_args.contains(&String::from("debug"));
-    let kernel_test = command_args.contains(&String::from("kernel-test"));
+    let test_libs = command_args.contains(&String::from("test-libs"));
 
-    if noqemu {
-        println!("     {} Build only mode!", "Quantum".green().bold());
-    }
+    if test_libs {
+        println!("     {} Testing all Libs!", "Quantum".green().bold());
 
-    let mut build_status = bios_boot(kernel_test);
-
-    if build_status.is_err() {
-        println!("Failed to build --> {:?}", build_status.err());
-        clean_dont_care();
-
-        println!("Attempting to re-run build...");
-        build_status = bios_boot(kernel_test);
-    }
-
-    if !noqemu {
-        let mut user_extra_args: Vec<String> = Default::default();
-
-        if kvm {
-            user_extra_args.push(String::from("-enable-kvm"));
-        }
-
-        if debug_int {
-            user_extra_args.push(String::from("-d"));
-            user_extra_args.push(String::from("int"));
-        }
-
-        if debug {
-            user_extra_args.push(String::from("-s"));
-            user_extra_args.push(String::from("-S"));
-        }
-
-        println!("     {} Starting QEMU", "Quantum".green().bold());
-
-        let _qemu = Command::new("qemu-system-x86_64")
-            .args(user_extra_args)
-            .arg("-d")
-            .arg("cpu_reset")
-            .arg("--no-shutdown")
-            .arg("-m")
-            .arg("256M")
-            .arg("-display")
-            .arg("gtk")
-            .arg("-k")
-            .arg("en-us")
-            .arg("-serial")
-            .arg("stdio")
-            .arg("-nic")
-            .arg("none")
-            .arg("-drive")
-            .arg(format!("format=raw,file={}", build_status.unwrap()))
+        let _lowlevel_lib = Command::new(cargo.clone())
+            .current_dir("lib/lowlevel_lib")
             .stdout(std::process::Stdio::inherit())
-            .status();
+            .arg("test")
+            .status()
+            .unwrap();
+
+        let _stacked_lib = Command::new(cargo.clone())
+            .current_dir("lib/stacked")
+            .stdout(std::process::Stdio::inherit())
+            .arg("test")
+            .status()
+            .unwrap();
+
     } else {
-        println!("     {} NOT RUNNING QEMU!", "Quantum".yellow().bold());
+        if noqemu {
+            println!("     {} Build only mode!", "Quantum".green().bold());
+        }
+
+        let mut build_status = bios_boot(false);
+
+        if build_status.is_err() {
+            println!("Failed to build --> {:?}", build_status.err());
+            clean_dont_care();
+
+            println!("Attempting to re-run build...");
+            build_status = bios_boot(false);
+        }
+
+        if !noqemu {
+            let mut user_extra_args: Vec<String> = Default::default();
+
+            if kvm {
+                user_extra_args.push(String::from("-enable-kvm"));
+            }
+
+            if debug_int {
+                user_extra_args.push(String::from("-d"));
+                user_extra_args.push(String::from("int"));
+            }
+
+            if debug {
+                user_extra_args.push(String::from("-s"));
+                user_extra_args.push(String::from("-S"));
+            }
+
+            println!("     {} Starting QEMU", "Quantum".green().bold());
+
+            let _qemu = Command::new("qemu-system-x86_64")
+                .args(user_extra_args)
+                .arg("-d")
+                .arg("cpu_reset")
+                .arg("--no-shutdown")
+                .arg("-m")
+                .arg("256M")
+                .arg("-display")
+                .arg("gtk")
+                .arg("-k")
+                .arg("en-us")
+                .arg("-serial")
+                .arg("stdio")
+                .arg("-nic")
+                .arg("none")
+                .arg("-drive")
+                .arg(format!("format=raw,file={}", build_status.unwrap()))
+                .stdout(std::process::Stdio::inherit())
+                .status();
+        } else {
+            println!("     {} NOT RUNNING QEMU!", "Quantum".yellow().bold());
+        }
     }
 
     println!("\n{} All Jobs Complete!", "Quantum".green().bold());
