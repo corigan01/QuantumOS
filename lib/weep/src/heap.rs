@@ -23,43 +23,16 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use crate::debug::stream_connection::StreamConnection;
-use over_stacked::heapless_vector::HeaplessVec;
 
-pub struct HeaplessStreamCollections {
-    pub(crate) stream_connections: HeaplessVec<StreamConnection, 4>,
+
+// This is going to require an initial allocator to function! **Maybe**
+// Or we could chunk off some of our own memory to begin with,
+// then allocate more for the vector in large chunks once we are up and running.
+
+// I think I am going to have to make a custom Allocator Lib! The rust one is bad :(
+pub struct DynamicVectoredAllocator {
+
 }
 
-impl HeaplessStreamCollections {
-    pub fn new() -> Self {
-        Self {
-            stream_connections: HeaplessVec::new(),
-        }
-    }
-}
 
-impl Default for HeaplessStreamCollections {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl ::core::fmt::Write for HeaplessStreamCollections {
-    fn write_str(&mut self, s: &str) -> ::core::fmt::Result {
-        for stream in self.stream_connections.mut_iter() {
-            if let Some(outlet) = stream.outlet {
-                outlet.display_string(s);
-                continue;
-            }
-
-            if let Some(outlet) = stream.simple_outlet {
-                let func = outlet as fn(&str);
-                func(s);
-
-                continue;
-            }
-        }
-
-        Ok(())
-    }
-}
+pub struct SlabAllocator<const CHUNK_SIZE: usize> {}

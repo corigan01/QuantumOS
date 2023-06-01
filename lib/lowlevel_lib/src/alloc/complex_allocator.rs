@@ -23,7 +23,7 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use stacked::heapless_vector::HeaplessVec;
+use over_stacked::heapless_vector::HeaplessVec;
 
 // Just like the SerenityOS Project,
 // This is a quick and dirty allocator to get things going! :^)

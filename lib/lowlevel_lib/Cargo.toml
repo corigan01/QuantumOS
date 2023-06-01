@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies]
 spin = "0.9.8"
-stacked = { path = "../stacked" }
+over-stacked = { path = "../over-stacked" }
 
 [dependencies.lazy_static]
 version = "1.4.0"

@@ -30,7 +30,7 @@ use crate::filesystem::fat::FatValid;
 use bootloader::error::BootloaderError;
 
 use core::mem::size_of;
-use stacked::heapless_string::HeaplessString;
+use over_stacked::heapless_string::HeaplessString;
 
 #[repr(C, packed)]
 #[derive(Clone, Copy)]

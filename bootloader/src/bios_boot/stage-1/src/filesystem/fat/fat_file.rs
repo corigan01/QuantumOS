@@ -24,7 +24,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 use bootloader::error::BootloaderError;
-use stacked::heapless_string::HeaplessString;
+use over_stacked::heapless_string::HeaplessString;
 
 pub struct FatFile {
     pub filename: HeaplessString<32>,

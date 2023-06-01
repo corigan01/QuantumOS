@@ -28,7 +28,7 @@ use core::fmt::{Debug, Formatter};
 use crate::address_utils::addressable::Addressable;
 use crate::address_utils::region::{HowOverlapping, MemoryRegion, MemoryRegionType};
 use crate::bytes::Bytes;
-use stacked::heapless_vector::{HeaplessVec, HeaplessVecErr};
+use over_stacked::heapless_vector::{HeaplessVec, HeaplessVecErr};
 
 const MAX_ALLOCATABLE_REGIONS: usize = 40;
 

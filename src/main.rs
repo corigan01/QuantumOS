@@ -54,10 +54,10 @@ fn main() {
             .status()
             .unwrap();
 
-        let _stacked_lib = Command::new(cargo.clone())
-            .current_dir("lib/stacked")
+        let _over_stacked_lib = Command::new(cargo.clone())
+            .current_dir("lib/over-stacked")
             .arg("test")
-            .arg(format!("--target-dir={}/stacked", target))
+            .arg(format!("--target-dir={}/over-stacked", target))
             .stdout(std::process::Stdio::inherit())
             .status()
             .unwrap();

@@ -64,7 +64,7 @@ pub enum HeaplessVecErr {
 ///
 /// # Common Usage
 /// ```rust
-/// use stacked::heapless_vector::HeaplessVec;
+/// use over_stacked::heapless_vector::HeaplessVec;
 ///
 /// fn main() {
 ///     let mut my_vector: HeaplessVec<usize, 10> = HeaplessVec::new();

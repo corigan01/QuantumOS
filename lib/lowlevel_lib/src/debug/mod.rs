@@ -25,7 +25,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 use crate::debug::heapless_stream_collections::HeaplessStreamCollections;
 use crate::debug::stream_connection::StreamConnection;
-use stacked::heapless_vector::HeaplessVecErr;
+use over_stacked::heapless_vector::HeaplessVecErr;
 use core::fmt::Write;
 use lazy_static::lazy_static;
 use spin::Mutex;

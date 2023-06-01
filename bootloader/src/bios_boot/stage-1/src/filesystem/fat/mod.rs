@@ -28,7 +28,7 @@ use crate::{bios_print, bios_println};
 
 use core::str;
 
-use stacked::heapless_string::HeaplessString;
+use over_stacked::heapless_string::HeaplessString;
 
 use crate::filesystem::fat::bios_parameter_block::{BiosBlock, FatTableEntryType};
 use crate::filesystem::fat::fat_file::{FatDirectoryEntry, FatFile, FatFileType, FatLongFileName};
