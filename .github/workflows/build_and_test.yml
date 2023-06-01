@@ -24,3 +24,5 @@ jobs:
       run: rustup component add llvm-tools-preview
     - name: Build
       run: cargo run noqemu
+    - name: Lib Test
+      run: cargo run test-libs
