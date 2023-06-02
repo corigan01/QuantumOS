@@ -23,10 +23,37 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-#![no_std]
-#![feature(test)]
+use crate::heapless_vector::{HeaplessVec, HeaplessVecErr};
 
-pub mod heapless_string;
-pub mod heapless_vector;
-pub mod heapless_bits;
-pub mod heapless_map;
+pub struct HeaplessMap<KeyType: PartialEq, ValueType, const QTY: usize> {
+    keys: HeaplessVec<KeyType, QTY>,
+    values: HeaplessVec<ValueType, QTY>
+}
+
+impl<KeyType: PartialEq, ValueType, const QTY: usize> HeaplessMap<KeyType, ValueType, QTY> {
+    pub fn new() -> Self {
+        Self {
+            keys: HeaplessVec::new(),
+            values: HeaplessVec::new()
+        }
+    }
+
+    pub fn insert(&mut self, key: KeyType, value: ValueType) -> Result<(), HeaplessVecErr> {
+        self.keys.push_within_capacity(key)?;
+        self.values.push_within_capacity(value)?;
+
+        Ok(())
+    }
+
+    pub fn contains_key(&self, key: &KeyType) -> bool {
+        self.keys.iter().any(|value| key == value)
+    }
+
+    pub fn remove(&self, key: &KeyType) {
+        todo!()
+    }
+
+    
+
+
+}

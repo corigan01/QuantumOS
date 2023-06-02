@@ -23,10 +23,61 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+/*!
+ * # Heapless Bits
+ */
 
 use crate::heapless_vector::{HeaplessVec, HeaplessVecErr};
 
+/// # Heapless Bits
+/// Bits aids in the control of bit level modification, this is often used to create
+/// allocators or other applications that require chunks of memory or chunks of a resource
+/// to be allocated. 
+/// 
+/// # Example Useage
+/// ```rust
+/// use over_stacked::heapless_bits::HeaplessBits;
+/// 
+/// fn main() {
+///     let mut bit_map: HeaplessBits<10> = HeaplessBits::new();
+/// 
+///     bit_map.set_bit(10, true).unwrap();
+/// 
+///     assert_eq!(bit_map.get_bit(10).unwrap(), true);
+/// } 
+/// ```
+/// 
+/// # Stack Based Allocation
+/// Stack based allocation has limitations as does all allocation methods. However,
+/// stack based is often the least flexable. This is because the stack needs to be 
+/// a known size at compile time. This limits us to having to set the amount of 
+/// 'BYTES' we want to use for our allocations. 
+/// 
+/// This is often very useful in cases where a heap allocator isn't practical, 
+/// and the need to something on the stack is a perfect choice. 
+/// 
+/// # Limitations
+/// * Since we are limited to a stack allocation enviroment, this type is very slow 
+/// to pass by value. This type *contains* its entire buffer, so its not able to be
+/// easily transfered. 
+/// 
+/// * This can not allocate more memory! Even if an allocator is available, this type
+/// will not allocate more memory. It is limited to the size at compile time. 
+/// 
+/// * This can cause problems on small stack devices, or large allocation volumes do to
+/// stack crashing. This is where you over-allocate your stack causing the stack to 
+/// overflow. This means that its up to the user to correctly setup the size, and
+/// understand how that size is going to affect thier stack.  
 pub struct HeaplessBits<const BYTES: usize> {
+    /// ## `data`
+    /// The byte array used to store the bits as flags.
+    /// 
+    /// ## Improvements
+    /// We could allocate a buffer of `u64`, or even `usize` 
+    /// to increase speed, however, due to rust's const
+    /// eval system we can not do math at compile time. This
+    /// causes problems with the user when they want to allocate
+    /// only 4 bytes, and we want to have a 8 byte value.  
     data: HeaplessVec<u8, BYTES>
 }
 
@@ -90,6 +141,12 @@ impl<const BYTES: usize> HeaplessBits<BYTES> {
         Ok(Self::get_flag_from_byte(self.get_byte(data_offset)?, bit_offset))
     }
 
+}
+
+impl<const BYTES: usize> Default for HeaplessBits<BYTES> {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 #[cfg(test)]

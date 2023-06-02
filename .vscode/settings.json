@@ -1,0 +1,5 @@
+{
+    "rust-analyzer.linkedProjects": [
+        "./lib/over-stacked/Cargo.toml"
+    ]
+}
