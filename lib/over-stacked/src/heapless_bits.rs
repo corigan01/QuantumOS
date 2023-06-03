@@ -32,59 +32,59 @@ use crate::heapless_vector::{HeaplessVec, HeaplessVecErr};
 /// # Heapless Bits
 /// Bits aids in the control of bit level modification, this is often used to create
 /// allocators or other applications that require chunks of memory or chunks of a resource
-/// to be allocated. 
-/// 
+/// to be allocated.
+///
 /// # Example Useage
 /// ```rust
 /// use over_stacked::heapless_bits::HeaplessBits;
-/// 
+///
 /// fn main() {
 ///     let mut bit_map: HeaplessBits<10> = HeaplessBits::new();
-/// 
+///
 ///     bit_map.set_bit(10, true).unwrap();
-/// 
+///
 ///     assert_eq!(bit_map.get_bit(10).unwrap(), true);
-/// } 
+/// }
 /// ```
-/// 
+///
 /// # Stack Based Allocation
 /// Stack based allocation has limitations as does all allocation methods. However,
-/// stack based is often the least flexable. This is because the stack needs to be 
-/// a known size at compile time. This limits us to having to set the amount of 
-/// 'BYTES' we want to use for our allocations. 
-/// 
-/// This is often very useful in cases where a heap allocator isn't practical, 
-/// and the need to something on the stack is a perfect choice. 
-/// 
+/// stack based is often the least flexable. This is because the stack needs to be
+/// a known size at compile time. This limits us to having to set the amount of
+/// 'BYTES' we want to use for our allocations.
+///
+/// This is often very useful in cases where a heap allocator isn't practical,
+/// and the need to something on the stack is a perfect choice.
+///
 /// # Limitations
-/// * Since we are limited to a stack allocation enviroment, this type is very slow 
+/// * Since we are limited to a stack allocation enviroment, this type is very slow
 /// to pass by value. This type *contains* its entire buffer, so its not able to be
-/// easily transfered. 
-/// 
+/// easily transfered.
+///
 /// * This can not allocate more memory! Even if an allocator is available, this type
-/// will not allocate more memory. It is limited to the size at compile time. 
-/// 
+/// will not allocate more memory. It is limited to the size at compile time.
+///
 /// * This can cause problems on small stack devices, or large allocation volumes do to
-/// stack crashing. This is where you over-allocate your stack causing the stack to 
+/// stack crashing. This is where you over-allocate your stack causing the stack to
 /// overflow. This means that its up to the user to correctly setup the size, and
 /// understand how that size is going to affect thier stack.  
 pub struct HeaplessBits<const BYTES: usize> {
     /// ## `data`
     /// The byte array used to store the bits as flags.
-    /// 
+    ///
     /// ## Improvements
-    /// We could allocate a buffer of `u64`, or even `usize` 
+    /// We could allocate a buffer of `u64`, or even `usize`
     /// to increase speed, however, due to rust's const
     /// eval system we can not do math at compile time. This
     /// causes problems with the user when they want to allocate
     /// only 4 bytes, and we want to have a 8 byte value.  
-    data: HeaplessVec<u8, BYTES>
+    data: HeaplessVec<u8, BYTES>,
 }
 
 impl<const BYTES: usize> HeaplessBits<BYTES> {
     pub fn new() -> Self {
         Self {
-            data: HeaplessVec::new()
+            data: HeaplessVec::new(),
         }
     }
 
@@ -138,9 +138,11 @@ impl<const BYTES: usize> HeaplessBits<BYTES> {
     #[inline]
     pub fn get_bit(&self, index: usize) -> Result<bool, HeaplessVecErr> {
         let (data_offset, bit_offset) = Self::get_offsets(index);
-        Ok(Self::get_flag_from_byte(self.get_byte(data_offset)?, bit_offset))
+        Ok(Self::get_flag_from_byte(
+            self.get_byte(data_offset)?,
+            bit_offset,
+        ))
     }
-
 }
 
 impl<const BYTES: usize> Default for HeaplessBits<BYTES> {
@@ -189,27 +191,84 @@ mod test {
 
     #[test]
     fn test_set_flag_in_byte() {
-        assert_eq!(HeaplessBits::<0>::set_flag_in_byte(0b00000000, 0, true), 0b00000001);
-        assert_eq!(HeaplessBits::<0>::set_flag_in_byte(0b00000000, 1, true), 0b00000010);
-        assert_eq!(HeaplessBits::<0>::set_flag_in_byte(0b00000000, 2, true), 0b00000100);
-        assert_eq!(HeaplessBits::<0>::set_flag_in_byte(0b00000000, 3, true), 0b00001000);
-        assert_eq!(HeaplessBits::<0>::set_flag_in_byte(0b00000000, 4, true), 0b00010000);
-        assert_eq!(HeaplessBits::<0>::set_flag_in_byte(0b00000000, 5, true), 0b00100000);
-        assert_eq!(HeaplessBits::<0>::set_flag_in_byte(0b00000000, 6, true), 0b01000000);
-        assert_eq!(HeaplessBits::<0>::set_flag_in_byte(0b00000000, 7, true), 0b10000000);
+        assert_eq!(
+            HeaplessBits::<0>::set_flag_in_byte(0b00000000, 0, true),
+            0b00000001
+        );
+        assert_eq!(
+            HeaplessBits::<0>::set_flag_in_byte(0b00000000, 1, true),
+            0b00000010
+        );
+        assert_eq!(
+            HeaplessBits::<0>::set_flag_in_byte(0b00000000, 2, true),
+            0b00000100
+        );
+        assert_eq!(
+            HeaplessBits::<0>::set_flag_in_byte(0b00000000, 3, true),
+            0b00001000
+        );
+        assert_eq!(
+            HeaplessBits::<0>::set_flag_in_byte(0b00000000, 4, true),
+            0b00010000
+        );
+        assert_eq!(
+            HeaplessBits::<0>::set_flag_in_byte(0b00000000, 5, true),
+            0b00100000
+        );
+        assert_eq!(
+            HeaplessBits::<0>::set_flag_in_byte(0b00000000, 6, true),
+            0b01000000
+        );
+        assert_eq!(
+            HeaplessBits::<0>::set_flag_in_byte(0b00000000, 7, true),
+            0b10000000
+        );
 
-        assert_eq!(HeaplessBits::<0>::set_flag_in_byte(0b11111111, 0, false), 0b11111110);
-        assert_eq!(HeaplessBits::<0>::set_flag_in_byte(0b11111111, 1, false), 0b11111101);
-        assert_eq!(HeaplessBits::<0>::set_flag_in_byte(0b11111111, 2, false), 0b11111011);
-        assert_eq!(HeaplessBits::<0>::set_flag_in_byte(0b11111111, 3, false), 0b11110111);
-        assert_eq!(HeaplessBits::<0>::set_flag_in_byte(0b11111111, 4, false), 0b11101111);
-        assert_eq!(HeaplessBits::<0>::set_flag_in_byte(0b11111111, 5, false), 0b11011111);
-        assert_eq!(HeaplessBits::<0>::set_flag_in_byte(0b11111111, 6, false), 0b10111111);
-        assert_eq!(HeaplessBits::<0>::set_flag_in_byte(0b11111111, 7, false), 0b01111111);
+        assert_eq!(
+            HeaplessBits::<0>::set_flag_in_byte(0b11111111, 0, false),
+            0b11111110
+        );
+        assert_eq!(
+            HeaplessBits::<0>::set_flag_in_byte(0b11111111, 1, false),
+            0b11111101
+        );
+        assert_eq!(
+            HeaplessBits::<0>::set_flag_in_byte(0b11111111, 2, false),
+            0b11111011
+        );
+        assert_eq!(
+            HeaplessBits::<0>::set_flag_in_byte(0b11111111, 3, false),
+            0b11110111
+        );
+        assert_eq!(
+            HeaplessBits::<0>::set_flag_in_byte(0b11111111, 4, false),
+            0b11101111
+        );
+        assert_eq!(
+            HeaplessBits::<0>::set_flag_in_byte(0b11111111, 5, false),
+            0b11011111
+        );
+        assert_eq!(
+            HeaplessBits::<0>::set_flag_in_byte(0b11111111, 6, false),
+            0b10111111
+        );
+        assert_eq!(
+            HeaplessBits::<0>::set_flag_in_byte(0b11111111, 7, false),
+            0b01111111
+        );
 
-        assert_eq!(HeaplessBits::<0>::set_flag_in_byte(0b11100101, 0, false), 0b11100100);
-        assert_eq!(HeaplessBits::<0>::set_flag_in_byte(0b10101101, 6, false), 0b10101101);
-        assert_eq!(HeaplessBits::<0>::set_flag_in_byte(0b11111111, 0, true), 0b11111111);
+        assert_eq!(
+            HeaplessBits::<0>::set_flag_in_byte(0b11100101, 0, false),
+            0b11100100
+        );
+        assert_eq!(
+            HeaplessBits::<0>::set_flag_in_byte(0b10101101, 6, false),
+            0b10101101
+        );
+        assert_eq!(
+            HeaplessBits::<0>::set_flag_in_byte(0b11111111, 0, true),
+            0b11111111
+        );
     }
 
     #[test]
