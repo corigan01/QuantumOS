@@ -26,7 +26,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #![no_std]
 #![feature(test)]
 
-pub mod heapless_string;
-pub mod heapless_vector;
 pub mod heapless_bits;
 pub mod heapless_map;
+pub mod heapless_string;
+pub mod heapless_vector;

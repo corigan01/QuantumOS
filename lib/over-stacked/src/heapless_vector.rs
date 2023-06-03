@@ -26,7 +26,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 use core::fmt::{Debug, Formatter};
 use core::mem;
-use core::mem::{MaybeUninit};
+use core::mem::MaybeUninit;
 use core::slice::{Iter, IterMut};
 
 /// # Heapless Vector Error
@@ -93,7 +93,9 @@ pub struct HeaplessVec<Type, const SIZE: usize> {
 }
 
 impl<Type, const SIZE: usize> Clone for HeaplessVec<Type, SIZE>
-    where Type: Clone {
+where
+    Type: Clone,
+{
     fn clone(&self) -> Self {
         let mut new_vector = HeaplessVec::new();
 
@@ -180,7 +182,10 @@ impl<Type, const SIZE: usize> HeaplessVec<Type, SIZE> {
         Some(moved_out_data)
     }
 
-    pub fn push_vec<const RHS_SIZE: usize>(&mut self, rhs: HeaplessVec<Type, RHS_SIZE>) -> Result<(), HeaplessVecErr> {
+    pub fn push_vec<const RHS_SIZE: usize>(
+        &mut self,
+        rhs: HeaplessVec<Type, RHS_SIZE>,
+    ) -> Result<(), HeaplessVecErr> {
         for rhs_index in 0..rhs.used_data {
             unsafe {
                 self.push_within_capacity(rhs.internal_data[rhs_index].assume_init_read())?;
@@ -191,8 +196,9 @@ impl<Type, const SIZE: usize> HeaplessVec<Type, SIZE> {
     }
 
     pub fn retain<Function>(&mut self, mut runner: Function)
-        where Function: FnMut(&Type) -> bool {
-
+    where
+        Function: FnMut(&Type) -> bool,
+    {
         let mut removed_indexes: HeaplessVec<bool, SIZE> = HeaplessVec::new();
 
         for value in self.iter() {
@@ -209,7 +215,7 @@ impl<Type, const SIZE: usize> HeaplessVec<Type, SIZE> {
             }
         }
     }
-    
+
     pub fn insert(&mut self, index: usize, element: Type) -> Result<(), HeaplessVecErr> {
         if self.used_data >= SIZE {
             return Err(HeaplessVecErr::VectorFull);
@@ -220,16 +226,32 @@ impl<Type, const SIZE: usize> HeaplessVec<Type, SIZE> {
         if index == self.used_data {
             return self.push_within_capacity(element);
         }
-        
+
         for i in index..(self.used_data - 1) {
             self.internal_data.swap(i, i + 1);
         }
-        
+
         self.used_data += 1;
-        
+
         self.internal_data[index].write(element);
-        
+
         Ok(())
+    }
+
+    pub fn find_index_of(&self, value: &Type) -> Option<usize>
+    where
+        Type: PartialEq,
+    {
+        let mut index = None;
+
+        for (idx, v) in self.iter().enumerate() {
+            if v == value {
+                index = Some(idx);
+                break;
+            }
+        }
+
+        index
     }
 
     /// # Get
@@ -260,10 +282,7 @@ impl<Type, const SIZE: usize> HeaplessVec<Type, SIZE> {
     /// Returns the raw internal data for minupulation.
     pub const fn as_slice(&self) -> &[Type] {
         unsafe {
-            core::slice::from_raw_parts(
-                self.internal_data.as_ptr() as *const Type,
-                self.used_data
-            )
+            core::slice::from_raw_parts(self.internal_data.as_ptr() as *const Type, self.used_data)
         }
     }
 
@@ -283,7 +302,7 @@ impl<Type, const SIZE: usize> HeaplessVec<Type, SIZE> {
         unsafe {
             core::slice::from_raw_parts_mut(
                 self.internal_data.as_mut_ptr() as *mut Type,
-                self.used_data
+                self.used_data,
             )
         }
     }
@@ -336,7 +355,6 @@ impl<Type, const SIZE: usize> Default for HeaplessVec<Type, SIZE> {
         Self::new()
     }
 }
-
 
 #[cfg(test)]
 mod tests {
