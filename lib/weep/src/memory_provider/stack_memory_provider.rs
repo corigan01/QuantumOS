@@ -23,20 +23,30 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-#![no_std]
-#![feature(test)]
-
+use core::mem;
+use core::mem::MaybeUninit;
+use crate::AllocErr;
+use crate::container::{Container, MutContainer};
 use crate::memory_provider::MemoryProvider;
 
-pub mod heap;
-pub mod memory_provider;
-pub mod container;
-
-pub enum AllocErr {
-    OutOfMemory,
-    ImproperConfig,
+pub struct LinearStackMemoryProvider<Type, const SIZE: usize> {
+    data: [MaybeUninit<Type>; SIZE],
 }
 
-struct Vec<Type, Provider: MemoryProvider<Type>> {
-    provider: Provider
+impl<Type, const SIZE: usize> LinearStackMemoryProvider<Type, SIZE> {
+    pub const fn new() -> Self {
+        Self {
+            data: unsafe { mem::zeroed() }
+        }
+    }
+}
+
+impl<Type, const SIZE: usize> MemoryProvider<Type> for LinearStackMemoryProvider<Type, SIZE> {
+    fn get_slice(&self) -> Result<&[Type], AllocErr> {
+        Ok(self.data.as_slice())
+    }
+
+    fn get_mut_slice(&mut self) -> Result<&mut [Type], AllocErr> {
+        Ok(self.data.as_mut_slice())
+    }
 }

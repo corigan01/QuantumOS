@@ -23,20 +23,14 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-#![no_std]
-#![feature(test)]
 
-use crate::memory_provider::MemoryProvider;
 
-pub mod heap;
-pub mod memory_provider;
-pub mod container;
-
-pub enum AllocErr {
-    OutOfMemory,
-    ImproperConfig,
+pub struct Container<T> {
+    ptr: *const T,
+    qty: usize
 }
 
-struct Vec<Type, Provider: MemoryProvider<Type>> {
-    provider: Provider
+pub struct MutContainer<T> {
+    ptr: *mut T,
+    qty: usize
 }

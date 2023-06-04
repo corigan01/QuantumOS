@@ -23,20 +23,12 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-#![no_std]
-#![feature(test)]
+use crate::AllocErr;
+use crate::container::{Container, MutContainer};
 
-use crate::memory_provider::MemoryProvider;
+pub mod stack_memory_provider;
 
-pub mod heap;
-pub mod memory_provider;
-pub mod container;
-
-pub enum AllocErr {
-    OutOfMemory,
-    ImproperConfig,
-}
-
-struct Vec<Type, Provider: MemoryProvider<Type>> {
-    provider: Provider
+pub trait MemoryProvider<Type: ?Sized> {
+    fn get_slice(&self) -> Result<&[Type], AllocErr>;
+    fn get_mut_slice(&mut self) -> Result<&mut [Type], AllocErr>;
 }
