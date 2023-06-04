@@ -24,7 +24,6 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 use crate::heapless_vector::{HeaplessVec, HeaplessVecErr};
-use core::slice::Iter;
 
 pub struct HeaplessMap<KeyType: PartialEq, ValueType, const QTY: usize> {
     keys: HeaplessVec<KeyType, QTY>,

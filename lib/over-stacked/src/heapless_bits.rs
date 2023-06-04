@@ -27,6 +27,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
  * # Heapless Bits
  */
 
+use core::fmt::{Debug, Formatter};
 use crate::heapless_vector::{HeaplessVec, HeaplessVecErr};
 
 /// # Heapless Bits
@@ -143,6 +144,71 @@ impl<const BYTES: usize> HeaplessBits<BYTES> {
             bit_offset,
         ))
     }
+
+    pub fn set_bit_qty(&mut self, index: usize, qty: usize, flag: bool) -> Result<(), HeaplessVecErr> {
+        for i in index..(index + qty) {
+            self.set_bit(i, flag)?;
+        }
+
+        Ok(())
+    }
+
+    pub fn first_of(&self, flag: bool) -> Option<usize> {
+        for index in 0..BYTES {
+            for i in 0..8 {
+                let translated_index = index * 8 + i;
+                if self.get_bit(translated_index).unwrap() == flag {
+                    return Some(translated_index);
+                }
+            }
+        }
+
+        None
+    }
+
+    pub fn first_of_qty(&self, qty: usize, flag: bool) -> Option<usize> {
+        let mut first_index_with_flag: Option<usize> = None;
+        for index in 0..(BYTES * 8) {
+            let bit = self.get_bit(index).unwrap();
+
+            if bit == flag {
+                if first_index_with_flag.is_none() {
+                    first_index_with_flag = Some(index);
+                    continue;
+                }
+
+                if index - first_index_with_flag? >= qty - 1 {
+                    return first_index_with_flag;
+                }
+            } else {
+                first_index_with_flag = None;
+            }
+        }
+
+        None
+    }
+}
+
+impl<const BYTES: usize> Debug for HeaplessBits<BYTES> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        if f.alternate() {
+            write!(f, "HeaplessBits<{}> {{\n    bits: ", BYTES)?;
+        } else {
+            write!(f, "HeaplessBits<{}> {{ bits: ", BYTES)?;
+        }
+
+        for i in self.data.iter() {
+            write!(f, "{:08b}", i.reverse_bits())?;
+        }
+
+        if f.alternate() {
+            write!(f, "\n}}")?;
+        } else {
+            write!(f, " }}")?;
+        }
+
+        Ok(())
+    }
 }
 
 impl<const BYTES: usize> Default for HeaplessBits<BYTES> {
@@ -155,6 +221,61 @@ impl<const BYTES: usize> Default for HeaplessBits<BYTES> {
 mod test {
     use crate::heapless_bits::HeaplessBits;
     use crate::heapless_vector::HeaplessVecErr;
+
+    #[test]
+    fn test_set_qty() {
+        let mut map: HeaplessBits<8> = HeaplessBits::new();
+
+        map.set_bit_qty(0, 10, true).unwrap();
+
+        assert_eq!(map.get_bit(0).unwrap(), true);
+        assert_eq!(map.get_bit(1).unwrap(), true);
+        assert_eq!(map.get_bit(2).unwrap(), true);
+        assert_eq!(map.get_bit(3).unwrap(), true);
+        assert_eq!(map.get_bit(4).unwrap(), true);
+        assert_eq!(map.get_bit(5).unwrap(), true);
+        assert_eq!(map.get_bit(6).unwrap(), true);
+        assert_eq!(map.get_bit(7).unwrap(), true);
+        assert_eq!(map.get_bit(8).unwrap(), true);
+        assert_eq!(map.get_bit(9).unwrap(), true);
+
+        map.set_bit_qty(4, 4, false).unwrap();
+
+        assert_eq!(map.get_bit(0).unwrap(), true);
+        assert_eq!(map.get_bit(1).unwrap(), true);
+        assert_eq!(map.get_bit(2).unwrap(), true);
+        assert_eq!(map.get_bit(3).unwrap(), true);
+        assert_eq!(map.get_bit(4).unwrap(), false);
+        assert_eq!(map.get_bit(5).unwrap(), false);
+        assert_eq!(map.get_bit(6).unwrap(), false);
+        assert_eq!(map.get_bit(7).unwrap(), false);
+        assert_eq!(map.get_bit(8).unwrap(), true);
+        assert_eq!(map.get_bit(9).unwrap(), true);
+    }
+
+    #[test]
+    fn test_find_first_of_qty() {
+        let mut map: HeaplessBits<8> = HeaplessBits::new();
+
+        map.set_bit_qty(1, 4, true).unwrap();
+
+        assert_eq!(map.first_of_qty(2, false).unwrap(), 5);
+        assert_eq!(map.first_of_qty(4, true).unwrap(), 1);
+
+        assert_eq!(map.first_of_qty(5, true), None);
+    }
+
+    #[test]
+    fn test_get_first_of() {
+        let mut map: HeaplessBits<8> = HeaplessBits::new();
+
+        assert_eq!(map.first_of(false).unwrap(), 0);
+
+        map.set_bit(0, true).unwrap();
+
+        assert_eq!(map.first_of(false).unwrap(), 1);
+        assert_eq!(map.first_of(true).unwrap(), 0);
+    }
 
     #[test]
     fn test_index_offsets() {

@@ -26,7 +26,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 use quantum::bios_boot::BiosBootConfig;
 use std::fs;
-use std::process::Command;
+use std::process::{Command, exit};
 use owo_colors::OwoColorize;
 
 fn main() {
@@ -46,7 +46,7 @@ fn main() {
     if test_libs {
         println!("     {} Testing all Libs!", "Quantum".green().bold());
 
-        let _lowlevel_lib = Command::new(cargo.clone())
+        let lowlevel_lib = Command::new(cargo.clone())
             .current_dir("lib/lowlevel_lib")
             .arg("test")
             .arg(format!("--target-dir={}/lowlevel_lib", target))
@@ -54,13 +54,27 @@ fn main() {
             .status()
             .unwrap();
 
-        let _over_stacked_lib = Command::new(cargo.clone())
+        let over_stacked_lib = Command::new(cargo.clone())
             .current_dir("lib/over-stacked")
             .arg("test")
             .arg(format!("--target-dir={}/over-stacked", target))
             .stdout(std::process::Stdio::inherit())
             .status()
             .unwrap();
+
+        let weep_lib = Command::new(cargo.clone())
+            .current_dir("lib/weep")
+            .arg("test")
+            .arg(format!("--target-dir={}/weep", target))
+            .stdout(std::process::Stdio::inherit())
+            .status()
+            .unwrap();
+
+        if lowlevel_lib.success() && over_stacked_lib.success() && weep_lib.success() {
+            return;
+        } else {
+            exit(-1);
+        }
 
     } else {
         if noqemu {

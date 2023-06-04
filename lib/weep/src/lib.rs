@@ -26,17 +26,9 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #![no_std]
 #![feature(test)]
 
-use crate::memory_provider::MemoryProvider;
-
-pub mod heap;
-pub mod memory_provider;
-pub mod container;
+pub mod simple_heap;
 
 pub enum AllocErr {
     OutOfMemory,
     ImproperConfig,
-}
-
-struct Vec<Type, Provider: MemoryProvider<Type>> {
-    provider: Provider
 }

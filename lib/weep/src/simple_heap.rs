@@ -23,12 +23,58 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use core::mem::size_of;
+use core::ptr::NonNull;
+use over_stacked::heapless_bits::HeaplessBits;
 use crate::AllocErr;
-use crate::container::{Container, MutContainer};
 
-pub mod stack_memory_provider;
+pub enum SimpleAllocationType {
+    Free,
+    Used
+}
 
-pub trait MemoryProvider<Type: ?Sized> {
-    fn get_slice(&self) -> Result<&[Type], AllocErr>;
-    fn get_mut_slice(&mut self) -> Result<&mut [Type], AllocErr>;
+pub struct SimpleHeap<const BLOCK_SIZE: usize> {
+    map: HeaplessBits<64>,
+    ptr: u64,
+    size: usize
+}
+
+impl<const BLOCK_SIZE: usize> SimpleHeap<BLOCK_SIZE> {
+    pub fn new(ptr: *mut u8, size: usize) -> Self {
+        Self {
+            map: HeaplessBits::new(),
+            ptr: ptr as u64,
+            size
+        }
+    }
+
+    pub fn alloc_type<T>(&mut self) -> Result<NonNull<T>, AllocErr> {
+        let amount_of_chunks = (size_of::<T>() + (BLOCK_SIZE - 1)) / BLOCK_SIZE;
+
+        let first_free_bits =
+            if let Some(value) = self.map.first_of_qty(amount_of_chunks, false) { value }
+            else { return Err(AllocErr::OutOfMemory); };
+
+        self.map.set_bit_qty(first_free_bits, amount_of_chunks, true).unwrap();
+
+        let ptr_offset = first_free_bits * BLOCK_SIZE;
+
+        // FIXME: We should know this before we even look for regions
+        if ptr_offset > self.size {
+            return Err(AllocErr::OutOfMemory);
+        }
+
+        let new_ptr = (self.ptr + ptr_offset as u64) as *mut T;
+
+        Ok(unsafe { NonNull::new_unchecked(new_ptr) })
+    }
+}
+
+#[cfg(test)]
+mod test {
+    #[test]
+    fn test_allocate_new_type() {
+
+    }
+
 }
