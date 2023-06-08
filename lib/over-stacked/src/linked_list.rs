@@ -23,11 +23,32 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-#![no_std]
-#![feature(test)]
+use core::mem::MaybeUninit;
+use core::ptr::NonNull;
+use quantum_utils::own_ptr::OwnPtr;
 
-pub mod heapless_bits;
-pub mod heapless_map;
-pub mod heapless_string;
-pub mod heapless_vector;
-pub mod linked_list;
+pub struct CustomLinkedList<Type: ?Sized> {
+    own_ptr: Option<OwnPtr<Type>>,
+    next_element_ptr: Option<NonNull<Self>>
+}
+
+impl<Type: ?Sized> CustomLinkedList<Type> {
+    pub fn new() -> Self {
+        Self {
+            own_ptr: None,
+            next_element_ptr: None
+        }
+    }
+
+    pub fn store(&mut self, value: OwnPtr<Type>) {
+        self.own_ptr = Some(value);
+    }
+
+    pub fn release(&mut self) -> Option<OwnPtr<Type>> {
+        let copy = self.own_ptr;
+        self.own_ptr = None;
+
+        copy
+    }
+
+}

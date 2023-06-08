@@ -4,3 +4,6 @@ version = "0.1.2"
 edition = "2021"
 license = "MIT"
 description = "Stack the Stack with no-std compatable helpers"
+
+[dependencies]
+quantum_utils = { path = "../quantum_utils" }
