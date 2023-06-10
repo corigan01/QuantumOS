@@ -23,32 +23,81 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use core::mem::MaybeUninit;
 use core::ptr::NonNull;
 use quantum_utils::own_ptr::OwnPtr;
 
-pub struct CustomLinkedList<Type: ?Sized> {
-    own_ptr: Option<OwnPtr<Type>>,
+pub struct LinkedListComponent<Type: ?Sized> {
+    own_ptr: OwnPtr<Type>,
     next_element_ptr: Option<NonNull<Self>>
 }
 
-impl<Type: ?Sized> CustomLinkedList<Type> {
-    pub fn new() -> Self {
+impl<Type: ?Sized> LinkedListComponent<Type> {
+    pub fn new(value: OwnPtr<Type>) -> Self {
         Self {
-            own_ptr: None,
+            own_ptr: value,
             next_element_ptr: None
         }
     }
 
     pub fn store(&mut self, value: OwnPtr<Type>) {
-        self.own_ptr = Some(value);
+        self.own_ptr = value;
     }
 
-    pub fn release(&mut self) -> Option<OwnPtr<Type>> {
-        let copy = self.own_ptr;
-        self.own_ptr = None;
+    pub fn release(self) -> OwnPtr<Type> {
+        self.own_ptr
+    }
 
-        copy
+    pub fn as_ref(&self) -> &Type {
+        unsafe { self.own_ptr.as_ref() }
+    }
+
+    pub fn as_mut(&mut self) -> &mut Type {
+        unsafe { self.own_ptr.as_mut() }
+    }
+
+    pub fn account_next_ptr(&mut self, next_element: NonNull<Self>) {
+        self.next_element_ptr = Some(next_element);
+    }
+
+    pub fn get_next_list_ref(&self) -> Option<&Self> {
+        Some(unsafe { self.next_element_ptr?.as_ref() })
+    }
+
+    pub fn get_next_list_mut(&mut self) -> Option<&mut Self> {
+        Some(unsafe { self.next_element_ptr?.as_mut() })
+    }
+
+}
+
+
+#[cfg(test)]
+mod test {
+    use core::ptr::NonNull;
+    use quantum_utils::own_ptr::OwnPtr;
+    use crate::linked_list::LinkedListComponent;
+
+    #[test]
+    pub fn test_storing_one_value() {
+        let mut data_is_here = 102;
+        let own_ptr_to_data = OwnPtr::from_mut(&mut data_is_here);
+
+        let linked_list = LinkedListComponent::new(own_ptr_to_data);
+
+        assert_eq!(linked_list.as_ref(), &102);
+    }
+
+    #[test]
+    pub fn test_storing_two_value() {
+        let mut data_one_is_here = 1;
+        let mut data_two_is_here = 2;
+
+        let own_ptr_one = OwnPtr::from_mut(&mut data_one_is_here);
+        let own_ptr_two = OwnPtr::from_mut(&mut data_two_is_here);
+
+        let linked_list_main = LinkedListComponent::new(own_ptr_one);
+        let linked_list_two = LinkedListComponent::new(own_ptr_two);
+
+
     }
 
 }

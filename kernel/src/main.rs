@@ -43,13 +43,14 @@ use quantum_lib::possibly_uninit::PossiblyUninit;
 
 use quantum_os::clock::rtc::update_and_get_time;
 
-static mut SERIAL_CONNECTION: PossiblyUninit<SerialDevice> = PossiblyUninit::new();
+static mut SERIAL_CONNECTION: PossiblyUninit<SerialDevice> = PossiblyUninit::new_lazy(|| {
+    SerialDevice::new(SerialPort::Com1, SerialBaud::Baud115200).unwrap()
+});
 
 kernel_entry!(main);
 
 fn main(boot_info: &KernelBootInformation) {
     let connection = unsafe { &mut SERIAL_CONNECTION };
-    connection.set(SerialDevice::new(SerialPort::Com1, SerialBaud::Baud115200).unwrap());
 
     let connection = StreamConnectionBuilder::new()
         .console_connection()

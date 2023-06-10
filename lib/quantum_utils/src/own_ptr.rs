@@ -46,6 +46,10 @@ impl<Type: ?Sized> OwnPtr<Type> {
         })
     }
 
+    pub fn from_mut(value: &mut Type) -> Self {
+        Self::new(value as *mut Type).unwrap()
+    }
+
     pub unsafe fn new_unchecked(ptr: *mut Type) -> Self {
         Self {
             ptr: NonNull::new_unchecked(ptr),

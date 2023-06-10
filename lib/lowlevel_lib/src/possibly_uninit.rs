@@ -28,6 +28,8 @@ use core::mem::MaybeUninit;
 
 pub struct PossiblyUninit<Type> {
     data: MaybeUninit<Type>,
+    func: MaybeUninit<fn() -> Type>,
+    has_func: bool,
     has_been_init: bool
 }
 
@@ -35,18 +37,43 @@ impl<Type> PossiblyUninit<Type> {
     pub const fn new() -> Self {
         Self {
             data: MaybeUninit::uninit(),
+            func: MaybeUninit::uninit(),
+            has_func: false,
             has_been_init: false
         }
+    }
+
+    pub const fn new_lazy(fnc: fn() -> Type) -> Self {
+        Self {
+            data: MaybeUninit::uninit(),
+            func: MaybeUninit::new(fnc),
+            has_func: true,
+            has_been_init: false
+        }
+    }
+
+    fn auto_init_if_avl(&mut self) {
+        if !self.has_func || self.has_been_init {
+            return;
+        }
+
+        let func = unsafe { self.func.assume_init_ref() };
+        self.data = MaybeUninit::new(func());
+        self.has_been_init = true;
     }
 
     pub const fn from(t: Type) -> Self {
         Self {
             data: MaybeUninit::new(t),
+            func: MaybeUninit::uninit(),
+            has_func: false,
             has_been_init: true
         }
     }
 
-    fn check_conditions(&self) -> Option<()> {
+    fn check_conditions(&mut self) -> Option<()> {
+        self.auto_init_if_avl();
+
         if !self.has_been_init {
             None
         } else {
@@ -54,7 +81,7 @@ impl<Type> PossiblyUninit<Type> {
         }
     }
 
-    pub fn get_ref(&self) -> Option<&Type> {
+    pub fn get_ref(&mut self) -> Option<&Type> {
         self.check_conditions()?;
 
         Some(unsafe { self.data.assume_init_ref() })
