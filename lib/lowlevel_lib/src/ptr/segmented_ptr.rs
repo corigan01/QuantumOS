@@ -84,6 +84,6 @@ mod test {
 
         let unsegmented_ptr = seg_ptr.unsegmentize();
 
-        assert_eq!(seg_ptr.segment, 0x100);
+        assert_eq!(unsegmented_ptr, 0x100);
     }
 }
