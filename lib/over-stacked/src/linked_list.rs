@@ -55,7 +55,7 @@ impl<Type: ?Sized> LinkedListComponent<Type> {
         unsafe { self.own_ptr.as_mut() }
     }
 
-    pub fn account_next_ptr(&mut self, next_element: NonNull<Self>) {
+    pub fn recurse_next_element(&mut self, next_element: NonNull<Self>) {
         self.next_element_ptr = Some(next_element);
     }
 
@@ -72,7 +72,6 @@ impl<Type: ?Sized> LinkedListComponent<Type> {
 
 #[cfg(test)]
 mod test {
-    use core::ptr::NonNull;
     use quantum_utils::own_ptr::OwnPtr;
     use crate::linked_list::LinkedListComponent;
 
@@ -97,6 +96,7 @@ mod test {
         let linked_list_main = LinkedListComponent::new(own_ptr_one);
         let linked_list_two = LinkedListComponent::new(own_ptr_two);
 
+        linked_list_main.recurse_next_element();
 
     }
 
