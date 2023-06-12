@@ -72,7 +72,7 @@ fn main(boot_info: &KernelBootInformation) {
     debug_println!("Virtual Memory Map:\n{virtual_memory_map:?}");
     debug_println!("Physical Memory Map:\n{physical_memory_map:?}");
 
-    let total_phy: u64 = boot_info.physical_regions.total_mem_for_type(MemoryRegionType::Usable).into();
+    let total_phy: u64 = physical_memory_map.total_mem_for_type(MemoryRegionType::Usable).into();
     let total_pages: u64 = total_phy / (PAGE_SIZE as u64);
 
     debug_println!("Total Usable Physical Memory {} ({} -- 4k Pages)",
