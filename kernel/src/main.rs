@@ -38,7 +38,7 @@ use quantum_lib::bytes::Bytes;
 use quantum_lib::com::serial::{SerialBaud, SerialDevice, SerialPort};
 use quantum_lib::debug::add_connection_to_global_stream;
 use quantum_lib::debug::stream_connection::StreamConnectionBuilder;
-use quantum_lib::gfx::{Pixel};
+use quantum_lib::gfx::{Pixel, PixelLocation};
 use quantum_lib::possibly_uninit::PossiblyUninit;
 
 use quantum_os::clock::rtc::update_and_get_time;
@@ -83,6 +83,8 @@ fn main(boot_info: &KernelBootInformation) {
     let mut framebuffer = boot_info.framebuffer;
 
     framebuffer.fill_entire(Pixel::from_hex(0x111111));
+    framebuffer.draw_built_in_text(PixelLocation::new(0, 0), Pixel::WHITE, "Quantum Kernel");
+
 }
 
 #[panic_handler]
