@@ -63,7 +63,11 @@ impl<Type: ?Sized> LinkedListComponent<Type> {
         Some(unsafe { self.next_element_ptr?.as_ref() })
     }
 
-    pub fn get_next_list_mut(&mut self) -> Option<&mut Self> {
+    pub fn next_ref(&self) -> Option<&Self> {
+        Some(unsafe { self.next_element_ptr?.as_ref() })
+    }
+
+    pub fn next_mut(&mut self) -> Option<&mut Self> {
         Some(unsafe { self.next_element_ptr?.as_mut() })
     }
 
@@ -74,7 +78,6 @@ impl<Type: ?Sized> LinkedListComponent<Type> {
     }
 
 }
-
 
 #[cfg(test)]
 mod test {
@@ -103,6 +106,11 @@ mod test {
         let mut linked_list_two = LinkedListComponent::new(own_ptr_two);
 
         linked_list_main.recurse_next_element(linked_list_two.self_ptr());
+
+        assert!(linked_list_main.next_element_ptr.is_some());
+
+        assert_eq!(linked_list_main.as_ref(), &1);
+        assert_eq!(linked_list_main.next_ref().unwrap().as_ref(), &2);
     }
 
 }
