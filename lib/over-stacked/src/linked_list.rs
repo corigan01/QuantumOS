@@ -104,6 +104,8 @@ mod test {
         let mut linked_list_main = LinkedListComponent::new(own_ptr_one);
         let mut linked_list_two = LinkedListComponent::new(own_ptr_two);
 
+        assert!(linked_list_main.next_element_ptr.is_none());
+
         linked_list_main.recurse_next_element(linked_list_two.self_ptr());
 
         assert!(linked_list_main.next_element_ptr.is_some());
