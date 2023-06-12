@@ -47,3 +47,43 @@ impl SegPtr {
         ((self.segment as u32) * 0x10) + (self.address as u32)
     }
 }
+
+#[cfg(test)]
+mod test {
+    use crate::ptr::segmented_ptr::SegPtr;
+
+    #[test]
+    fn test_new() {
+        let segment = SegPtr::new(1, 0);
+
+        assert_eq!(segment.address, 0);
+        assert_eq!(segment.segment, 1);
+
+        let segment = SegPtr::new(2, 10);
+
+        assert_eq!(segment.address, 10);
+        assert_eq!(segment.segment, 2);
+    }
+
+    #[test]
+    fn test_segmentize() {
+        let unsegmented_ptr = 0x100;
+
+        let seg_ptr = SegPtr::segmentize(unsegmented_ptr);
+
+        assert_eq!(seg_ptr.address, 0);
+        assert_eq!(seg_ptr.segment, 16);
+    }
+
+    #[test]
+    fn test_unsegmentize() {
+        let seg_ptr = SegPtr::new(0x10, 0);
+
+        assert_eq!(seg_ptr.address, 0);
+        assert_eq!(seg_ptr.segment, 0x10);
+
+        let unsegmented_ptr = seg_ptr.unsegmentize();
+
+        assert_eq!(seg_ptr.segment, 0x100);
+    }
+}
