@@ -67,6 +67,12 @@ impl<Type: ?Sized> LinkedListComponent<Type> {
         Some(unsafe { self.next_element_ptr?.as_mut() })
     }
 
+    pub fn self_ptr(&mut self) -> NonNull<Self> {
+        let self_ptr = self as *mut Self;
+
+        unsafe { NonNull::new_unchecked(self_ptr) }
+    }
+
 }
 
 
@@ -93,11 +99,10 @@ mod test {
         let own_ptr_one = OwnPtr::from_mut(&mut data_one_is_here);
         let own_ptr_two = OwnPtr::from_mut(&mut data_two_is_here);
 
-        let linked_list_main = LinkedListComponent::new(own_ptr_one);
-        let linked_list_two = LinkedListComponent::new(own_ptr_two);
+        let mut linked_list_main = LinkedListComponent::new(own_ptr_one);
+        let mut linked_list_two = LinkedListComponent::new(own_ptr_two);
 
-        linked_list_main.recurse_next_element();
-
+        linked_list_main.recurse_next_element(linked_list_two.self_ptr());
     }
 
 }
