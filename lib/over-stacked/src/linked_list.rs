@@ -76,7 +76,6 @@ impl<Type: ?Sized> LinkedListComponent<Type> {
 
         unsafe { NonNull::new_unchecked(self_ptr) }
     }
-
 }
 
 #[cfg(test)]
@@ -85,7 +84,7 @@ mod test {
     use crate::linked_list::LinkedListComponent;
 
     #[test]
-    pub fn test_storing_one_value() {
+    fn test_storing_one_value() {
         let mut data_is_here = 102;
         let own_ptr_to_data = OwnPtr::from_mut(&mut data_is_here);
 
@@ -95,7 +94,7 @@ mod test {
     }
 
     #[test]
-    pub fn test_storing_two_value() {
+    fn test_storing_two_values() {
         let mut data_one_is_here = 1;
         let mut data_two_is_here = 2;
 
