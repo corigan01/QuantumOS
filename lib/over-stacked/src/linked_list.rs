@@ -110,6 +110,7 @@ impl<Type: ?Sized> LinkedListComponent<Type> {
         }
     }
 
+    #[allow(cast_ref_to_mut)]
     pub fn last_list_mut(&mut self) -> &mut Self {
         let mut next =
             if let Some(value) = self.next_list_ref() {
