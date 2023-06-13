@@ -48,7 +48,44 @@ let output = 255_u8.set_bits(0..8, 0);
 ```
 */
 
+use core::mem::size_of;
 use core::ops::Range;
+
+pub struct BitsIter<Type: Sized> {
+    value: Type,
+    forward_index: usize,
+    back_index: usize
+}
+
+impl<Type> Iterator for BitsIter<Type>
+    where Type: BitSet {
+    type Item = bool;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.forward_index >= Type::max_bits()
+            || ((Type::max_bits() - self.back_index) + self.forward_index) >= Type::max_bits() {
+            return None;
+        }
+
+        self.forward_index += 1;
+        Some(self.value.get_bit((self.forward_index - 1) as u8 ))
+    }
+}
+
+impl<Type> DoubleEndedIterator for BitsIter<Type>
+    where Type: BitSet {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        if self.back_index == 0
+            || ((Type::max_bits() - self.back_index) + self.forward_index) >= Type::max_bits() {
+            return None;
+        }
+
+        let return_value = Some(self.value.get_bit((self.back_index - 1) as u8));
+        self.back_index -= 1;
+
+        return_value
+    }
+}
 
 /// # Bitset trait
 /// The main traits for settings bits!
@@ -58,6 +95,10 @@ pub trait BitSet {
 
     fn get_bit(&self, bit: u8) -> bool;
     fn get_bits(&self, r: Range<u8>) -> Self;
+
+    fn bits(&self) -> BitsIter<Self> where Self: Sized;
+
+    fn max_bits() -> usize;
 }
 
 macro_rules! bitset_impl {
@@ -164,7 +205,7 @@ macro_rules! bitset_impl {
                 use core::mem::size_of;
 
                 let self_size_bits = size_of::<Self>() * 8;
-                if bit > self_size_bits as u8 { panic!("Tried to get a bit outside the range of the current type!"); }
+                if bit >= self_size_bits as u8 { panic!("Tried to get a bit outside the range of the current type!"); }
 
                 (self >> bit) & 0b1 == 0b1
             }
@@ -198,6 +239,18 @@ macro_rules! bitset_impl {
                 >> (((size_of::<Self>() * 8) as Self) - (r.end as Self));
 
                 bits >> r.start
+            }
+
+            fn bits(&self) -> BitsIter<Self> {
+                BitsIter {
+                    value: *self,
+                    forward_index: 0,
+                    back_index: Self::max_bits()
+                }
+            }
+
+            fn max_bits() -> usize {
+                size_of::<Self>() * 8
             }
         }
     )*)
@@ -235,5 +288,67 @@ mod tests {
         assert_eq!(321_u32.get_bits(0..9), 321_u32);
         assert_eq!(42_u32.get_bits(6..8), 0_u32);
         assert_eq!(4921949_u64.get_bits(16..20), 0b1011_u64);
+    }
+
+    #[test]
+    fn bits_iterator_test() {
+        let value: u8 = 0b10011010;
+        let mut bits = value.bits();
+
+        assert_eq!(
+            (
+                bits.next(),
+                bits.next(),
+                bits.next(),
+                bits.next(),
+                bits.next(),
+                bits.next(),
+                bits.next(),
+                bits.next(),
+                bits.next()
+            ),
+            (
+                Some(false),
+                Some(true),
+                Some(false),
+                Some(true),
+                Some(true),
+                Some(false),
+                Some(false),
+                Some(true),
+                None
+            )
+        );
+    }
+
+    #[test]
+    fn bits_iterator_test_rev() {
+        let value: u8 = 0b10011010;
+        let mut bits = value.bits().rev();
+
+        assert_eq!(
+            (
+                bits.next(),
+                bits.next(),
+                bits.next(),
+                bits.next(),
+                bits.next(),
+                bits.next(),
+                bits.next(),
+                bits.next(),
+                bits.next()
+            ),
+            (
+                Some(true),
+                Some(false),
+                Some(false),
+                Some(true),
+                Some(true),
+                Some(false),
+                Some(true),
+                Some(false),
+                None
+            )
+        );
     }
 }

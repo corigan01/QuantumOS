@@ -228,7 +228,7 @@ fn main(boot_info: &BootInfo) {
     let mut virtual_region_map = RegionMap::new();
     let virtual_region = MemoryRegion::<VirtAddress>::new(
         VirtAddress::new(0).unwrap(),
-        VirtAddress::new(10 * Bytes::GIB).unwrap(),
+        VirtAddress::new(5 * Bytes::GIB).unwrap(),
         MemoryRegionType::Unknown
     );
 

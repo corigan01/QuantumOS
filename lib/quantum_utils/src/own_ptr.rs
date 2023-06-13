@@ -23,3 +23,49 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use core::marker::PhantomData;
+use core::mem;
+use core::ptr::NonNull;
+
+pub struct OwnPtr<Type: ?Sized> {
+    ptr: NonNull<Type>,
+    ph: PhantomData<Type>
+}
+
+impl<Type: Sized> OwnPtr<Type> {
+    pub fn empty() -> Self {
+        unsafe { Self::new_unchecked(mem::align_of::<Type>() as *mut Type) }
+    }
+}
+
+impl<Type: ?Sized> OwnPtr<Type> {
+    pub fn new(ptr: *mut Type) -> Option<Self> {
+        Some(Self {
+            ptr: NonNull::new(ptr)?,
+            ph: Default::default(),
+        })
+    }
+
+    pub fn from_mut(value: &mut Type) -> Self {
+        Self::new(value as *mut Type).unwrap()
+    }
+
+    pub unsafe fn new_unchecked(ptr: *mut Type) -> Self {
+        Self {
+            ptr: NonNull::new_unchecked(ptr),
+            ph: PhantomData::default()
+        }
+    }
+
+    pub fn as_ptr(&self) -> NonNull<Type> {
+        self.ptr
+    }
+
+    pub unsafe fn as_ref(&self) -> &Type {
+        self.ptr.as_ref()
+    }
+
+    pub unsafe fn as_mut(&mut self) -> &mut Type {
+        self.ptr.as_mut()
+    }
+}

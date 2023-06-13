@@ -53,7 +53,7 @@ pub fn create_fat_img_from_directory(
     fat_img.set_len(40 * 1024 * 1024)?;
 
     // Format the disk with fat
-    let volume_id = *b"BOOTLOADER1";
+    let volume_id = *b"QBOOT      ";
     let fatfs_options = FormatVolumeOptions::new()
         .volume_label(volume_id)
         .drive_num(0x80)

@@ -70,7 +70,19 @@ fn main() {
             .status()
             .unwrap();
 
-        if lowlevel_lib.success() && over_stacked_lib.success() && weep_lib.success() {
+        let quantum_utils = Command::new(cargo.clone())
+            .current_dir("lib/quantum_utils")
+            .arg("test")
+            .arg(format!("--target-dir={}/quantum_utils", target))
+            .stdout(std::process::Stdio::inherit())
+            .status()
+            .unwrap();
+
+        if lowlevel_lib.success() &&
+            over_stacked_lib.success() &&
+            weep_lib.success() &&
+            quantum_utils.success() {
+
             return;
         } else {
             exit(-1);

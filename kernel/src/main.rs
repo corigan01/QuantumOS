@@ -30,7 +30,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 use core::panic::PanicInfo;
 
-use quantum_lib::{debug_println, kernel_entry};
+use quantum_lib::{debug_println, kernel_entry, rect};
 use quantum_lib::address_utils::PAGE_SIZE;
 use quantum_lib::address_utils::region::MemoryRegionType;
 use quantum_lib::boot::boot_info::KernelBootInformation;
@@ -38,24 +38,25 @@ use quantum_lib::bytes::Bytes;
 use quantum_lib::com::serial::{SerialBaud, SerialDevice, SerialPort};
 use quantum_lib::debug::add_connection_to_global_stream;
 use quantum_lib::debug::stream_connection::StreamConnectionBuilder;
-use quantum_lib::gfx::{Pixel};
+use quantum_lib::gfx::{Pixel, PixelLocation, rectangle::Rect};
 use quantum_lib::possibly_uninit::PossiblyUninit;
 
 use quantum_os::clock::rtc::update_and_get_time;
 
-static mut SERIAL_CONNECTION: PossiblyUninit<SerialDevice> = PossiblyUninit::new();
+static mut SERIAL_CONNECTION: PossiblyUninit<SerialDevice> = PossiblyUninit::new_lazy(|| {
+    SerialDevice::new(SerialPort::Com1, SerialBaud::Baud115200).unwrap()
+});
 
 kernel_entry!(main);
 
 fn main(boot_info: &KernelBootInformation) {
-    let connection = unsafe { &mut SERIAL_CONNECTION };
-    connection.set(SerialDevice::new(SerialPort::Com1, SerialBaud::Baud115200).unwrap());
+    let serial = unsafe { &mut SERIAL_CONNECTION };
 
     let connection = StreamConnectionBuilder::new()
         .console_connection()
         .add_connection_name("SERIAL")
         .does_support_scrolling(true)
-        .add_outlet(connection.get_ref().unwrap())
+        .add_outlet(serial.get_ref().unwrap())
         .build();
 
     add_connection_to_global_stream(connection).unwrap();
@@ -71,7 +72,7 @@ fn main(boot_info: &KernelBootInformation) {
     debug_println!("Virtual Memory Map:\n{virtual_memory_map:?}");
     debug_println!("Physical Memory Map:\n{physical_memory_map:?}");
 
-    let total_phy: u64 = boot_info.physical_regions.total_mem_for_type(MemoryRegionType::Usable).into();
+    let total_phy: u64 = physical_memory_map.total_mem_for_type(MemoryRegionType::Usable).into();
     let total_pages: u64 = total_phy / (PAGE_SIZE as u64);
 
     debug_println!("Total Usable Physical Memory {} ({} -- 4k Pages)",
@@ -82,6 +83,8 @@ fn main(boot_info: &KernelBootInformation) {
     let mut framebuffer = boot_info.framebuffer;
 
     framebuffer.fill_entire(Pixel::from_hex(0x111111));
+    framebuffer.draw_built_in_text(PixelLocation::new(0, 0), Pixel::WHITE, "Quantum Kernel");
+    framebuffer.draw_rect(rect!(0, 15 ; 150, 2), Pixel::WHITE);
 }
 
 #[panic_handler]

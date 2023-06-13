@@ -336,3 +336,15 @@ pub const BUILT_IN_FONT: [[u8; 13]; 96] = [
         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
     ],
 ];
+
+
+pub struct BuiltInFont {}
+
+impl BuiltInFont {
+    pub const HEIGHT: usize = 13;
+    pub const WIDTH: usize = 8;
+
+    pub fn get_glyph(c: char) -> [u8; Self::HEIGHT] {
+        BUILT_IN_FONT[(c as usize) - 32]
+    }
+}

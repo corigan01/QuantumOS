@@ -63,9 +63,8 @@ fn enter_rust(disk_id: u16) {
     
     // TODO: Detect Memory First so we know if we have enough space, and where to put it.
     //       We should also look into reimplementing a lot of the 'BootInfo' Struct due
-    //       to how it only gives a limited amount of info to the next stage. There
-    //       is already a fixme in the bootloader noting that we "don't" know the state
-    //       of the vga buffer.
+    //       to how it only gives a limited amount of info to the next stage. There is already
+    //       fixme in the bootloader noting that we "don't" know the state of the vga buffer.
     unsafe {
         TEMP_ALLOC.write(SimpleBumpAllocator::new_from_ptr((0x00100000) as *mut u8, 0x03200000));
     }

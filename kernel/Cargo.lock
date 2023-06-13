@@ -37,6 +37,9 @@ dependencies = [
 [[package]]
 name = "over-stacked"
 version = "0.1.2"
+dependencies = [
+ "quantum_utils",
+]
 
 [[package]]
 name = "owo-colors"
@@ -63,6 +66,10 @@ dependencies = [
  "quantum_lib",
  "spin 0.9.8",
 ]
+
+[[package]]
+name = "quantum_utils"
+version = "0.1.0"
 
 [[package]]
 name = "scopeguard"
