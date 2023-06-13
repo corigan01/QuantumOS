@@ -26,6 +26,24 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 use core::ptr::NonNull;
 use quantum_utils::own_ptr::OwnPtr;
 
+pub struct LinkedListComponentIter<'a, Type>
+    where Type: ?Sized {
+    linked_list: &'a LinkedListComponent<Type>,
+    index: usize
+}
+
+impl<'a, Type> Iterator for LinkedListComponentIter<'a, Type>
+    where Type: Copy + ?Sized {
+
+    type Item = &'a Type;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.index += 1;
+        self.linked_list.get_nth_ref(self.index - 1)
+    }
+
+}
+
 pub struct LinkedListComponent<Type: ?Sized> {
     own_ptr: OwnPtr<Type>,
     next_element_ptr: Option<NonNull<Self>>
@@ -63,12 +81,63 @@ impl<Type: ?Sized> LinkedListComponent<Type> {
         Some(unsafe { self.next_element_ptr?.as_ref() })
     }
 
-    pub fn next_ref(&self) -> Option<&Self> {
+    pub fn next_list_ref(&self) -> Option<&Self> {
         Some(unsafe { self.next_element_ptr?.as_ref() })
     }
 
-    pub fn next_mut(&mut self) -> Option<&mut Self> {
+    pub fn next_list_mut(&mut self) -> Option<&mut Self> {
         Some(unsafe { self.next_element_ptr?.as_mut() })
+    }
+
+    pub fn last_list_ref(&self) -> &Self {
+        let mut next =
+            if let Some(value) = self.next_list_ref() {
+                value
+            } else {
+                return self;
+            };
+
+        loop {
+            if let Some(value) = next.next_list_ref() {
+                next = value;
+
+                continue;
+            }
+
+            break next;
+        }
+    }
+
+    pub fn last_list_mut(&mut self) -> &mut Self {
+        let mut next =
+            if let Some(value) = self.next_list_ref() {
+                value
+            } else {
+                return self;
+            };
+
+        loop {
+            if let Some(value) = next.next_list_ref() {
+                next = value;
+
+                continue;
+            }
+
+            // TODO: This is a hack to get around the stupid `cant borrow mut more then once` problem!
+            break unsafe { &mut *(next as *const Self as *mut Self) };
+        }
+    }
+
+    pub fn next_ref(&self) -> Option<&Type> {
+        let next = self.next_list_ref()?;
+
+        Some(next.as_ref())
+    }
+
+    pub fn next_mut(&mut self) -> Option<&mut Type> {
+        let next = self.next_list_mut()?;
+
+        Some(next.as_mut())
     }
 
     pub fn self_ptr(&mut self) -> NonNull<Self> {
@@ -76,6 +145,40 @@ impl<Type: ?Sized> LinkedListComponent<Type> {
 
         unsafe { NonNull::new_unchecked(self_ptr) }
     }
+
+    pub fn get_nth_ref(&self, n: usize) -> Option<&Type> {
+        if n == 0 {
+            return Some(self.as_ref());
+        }
+
+        let mut next = self.next_list_ref()?;
+        for _i in 0..(n - 1) {
+            next = next.next_list_ref()?;
+        }
+
+        Some(next.as_ref())
+    }
+
+    pub fn get_nth_mut(&mut self, n: usize) -> Option<&mut Type> {
+        if n == 0 {
+            return Some(self.as_mut());
+        }
+
+        let mut next = self.next_list_mut()?;
+        for _i in 0..(n - 1) {
+            next = next.next_list_mut()?;
+        }
+
+        Some(next.as_mut())
+    }
+
+    pub fn iter(&self) -> LinkedListComponentIter<Type> {
+        LinkedListComponentIter {
+            linked_list: self,
+            index: 0,
+        }
+    }
+
 }
 
 #[cfg(test)]
@@ -111,7 +214,67 @@ mod test {
         assert!(linked_list_main.next_element_ptr.is_some());
 
         assert_eq!(linked_list_main.as_ref(), &1);
-        assert_eq!(linked_list_main.next_ref().unwrap().as_ref(), &2);
+        assert_eq!(linked_list_main.next_list_ref().unwrap().as_ref(), &2);
+    }
+
+    #[test]
+    fn test_getting_next_element() {
+        let mut data_one = 1;
+        let mut data_two = 2;
+        let mut data_three = 3;
+
+        let own_ptr_one = OwnPtr::from_mut(&mut data_one);
+        let own_ptr_two = OwnPtr::from_mut(&mut data_two);
+        let own_ptr_three = OwnPtr::from_mut(&mut data_three);
+
+        let mut main_linked_list = LinkedListComponent::new(own_ptr_one);
+
+        let mut linked_two = LinkedListComponent::new(own_ptr_two);
+        let mut linked_three = LinkedListComponent::new(own_ptr_three);
+
+        main_linked_list.recurse_next_element(linked_two.self_ptr());
+
+        assert!(matches!(main_linked_list.next_list_mut(), Some(_)));
+
+        // Test getting the second, and then try to add to it
+        main_linked_list.next_list_mut().unwrap().recurse_next_element(linked_three.self_ptr());
+
+        assert_eq!(main_linked_list.as_ref(), &1);
+        assert_eq!(main_linked_list.next_ref().unwrap(), &2);
+        assert_eq!(main_linked_list.next_list_ref().unwrap().next_ref().unwrap(), &3);
+    }
+
+    #[test]
+    fn iterator_over_linked_list() {
+        let mut data_one = 1;
+        let mut data_two = 2;
+        let mut data_three = 3;
+
+        let own_ptr_one = OwnPtr::from_mut(&mut data_one);
+        let own_ptr_two = OwnPtr::from_mut(&mut data_two);
+        let own_ptr_three = OwnPtr::from_mut(&mut data_three);
+
+        let mut main_linked_list = LinkedListComponent::new(own_ptr_one);
+
+        let mut linked_two = LinkedListComponent::new(own_ptr_two);
+        let mut linked_three = LinkedListComponent::new(own_ptr_three);
+
+        main_linked_list.recurse_next_element(linked_two.self_ptr());
+
+        assert!(matches!(main_linked_list.next_list_mut(), Some(_)));
+
+        main_linked_list.last_list_mut().recurse_next_element(linked_three.self_ptr());
+
+        assert!(matches!(linked_two.next_list_mut(), Some(_)));
+
+        let mut linked_list_iter = main_linked_list.iter();
+
+        assert_eq!(linked_list_iter.next(), Some(&1));
+        assert_eq!(linked_list_iter.next(), Some(&2));
+        assert_eq!(linked_list_iter.next(), Some(&3));
+        assert_eq!(linked_list_iter.next(), None);
+
     }
 
 }
+
