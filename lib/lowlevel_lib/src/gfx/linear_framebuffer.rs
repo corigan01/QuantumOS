@@ -154,22 +154,33 @@ impl LinearFramebuffer {
         )
     }
 
-    pub fn draw_built_in_text(&mut self, loc: PixelLocation, color: Pixel, text: &str) -> DrawStatus {
-        for (x_char_offset, c) in text.chars().enumerate() {
-            let glyph = BuiltInFont::get_glyph(c);
+    pub fn draw_built_in_char(&mut self, loc: PixelLocation, color: Pixel, c: char) -> DrawStatus {
+        let glyph = BuiltInFont::get_glyph(c);
 
-            for (y_offset, pixel_groups) in glyph.iter().rev().enumerate() {
-                for (x_offset, pixel) in pixel_groups.bits().rev().enumerate() {
-                    if pixel {
-                        let pixel_x_location = loc.x + (x_char_offset * (BuiltInFont::WIDTH + 2)) + x_offset;
-                        let pixel_y_location = loc.y + y_offset;
+        for (y_offset, pixel_groups) in glyph.iter().rev().enumerate() {
+            for (x_offset, pixel) in pixel_groups.bits().rev().enumerate() {
+                if pixel {
+                    let pixel_x_location = loc.x + x_offset;
+                    let pixel_y_location = loc.y + y_offset;
 
-                        let location = PixelLocation::new(pixel_x_location, pixel_y_location);
+                    let location = PixelLocation::new(pixel_x_location, pixel_y_location);
 
-                        self.draw_pixel(color, location);
-                    }
+                    self.draw_pixel(color, location);
                 }
             }
+        }
+
+        DrawStatus::Successful
+    }
+
+    pub fn draw_built_in_text(&mut self, loc: PixelLocation, color: Pixel, text: &str) -> DrawStatus {
+        for (x_char_offset, c) in text.chars().enumerate() {
+            let loc_x = x_char_offset * (BuiltInFont::WIDTH + 2) + loc.x;
+            let loc_y = loc.y;
+
+            let location = PixelLocation::new(loc_x, loc_y);
+
+            self.draw_built_in_char(location, color, c)?;
         }
 
         DrawStatus::Successful
