@@ -23,3 +23,26 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use core::ptr::NonNull;
+
+pub struct UsableRegion {
+    ptr: NonNull<u8>,
+    size: usize,
+}
+
+impl UsableRegion {
+    pub fn new(ptr: &mut [u8]) -> Self {
+        Self {
+            ptr: NonNull::new(ptr.as_mut_ptr()).unwrap(),
+            size: ptr.len()
+        }
+    }
+
+    pub fn ptr(&self) -> NonNull<u8> {
+        self.ptr
+    }
+
+    pub fn size(&self) -> usize {
+        self.size
+    }
+}

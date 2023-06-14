@@ -23,14 +23,33 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-#![no_std]
-#![feature(test)]
+use core::mem::{align_of, size_of};
 
-pub mod heap;
-pub mod usable_region;
-pub mod memory_layout;
+pub struct MemoryLayout {
+    alignment: usize, 
+    bytes: usize
+}
 
-pub enum AllocErr {
-    OutOfMemory,
-    ImproperConfig,
+impl MemoryLayout {
+    pub fn new(alignment: usize, bytes: usize) -> Self {
+        Self {
+            alignment,
+            bytes
+        }
+    }
+    
+    pub fn from_type<T: Sized>() -> Self {
+        let alignment = align_of::<T>();
+        let size = size_of::<T>();
+        
+        Self::new(alignment, size)
+    }
+    
+    pub fn alignment(&self) -> usize {
+        self.alignment
+    }
+    
+    pub fn bytes(&self) -> usize {
+        self.bytes
+    }
 }
