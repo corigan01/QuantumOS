@@ -23,12 +23,26 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-#![no_std]
-#![feature(test)]
+use core::ptr::NonNull;
 
-pub mod heapless_bits;
-pub mod heapless_map;
-pub mod heapless_string;
-pub mod heapless_vector;
-pub mod linked_list;
-pub mod raw_vec;
+pub struct NonNullRegion<Type> {
+    ptr: NonNull<Type>,
+    qty: usize
+}
+
+impl<Type> NonNullRegion<Type> {
+    pub fn new(ptr: NonNull<Type>, qty: usize) -> Self {
+        Self {
+            ptr,
+            qty
+        }
+    }
+
+}
+
+impl<Type> PartialEq for NonNullRegion<Type> {
+    fn eq(&self, other: &Self) -> bool {
+        (self.ptr.as_ptr() as u64) == (other.ptr.as_ptr() as u64) &&
+            self.qty == other.qty
+    }
+}

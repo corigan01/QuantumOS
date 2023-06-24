@@ -21,16 +21,37 @@ NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPO
 NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
 DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
 */
 
-#![no_std]
-#![feature(test)]
+use core::fmt::{Debug, Formatter};
+use core::mem;
+use core::mem::MaybeUninit;
+use core::slice::{Iter, IterMut};
+use quantum_utils::nonnull_region::NonNullRegion;
 
-pub mod heap;
-pub mod usable_region;
-pub mod memory_layout;
+pub enum RawVecErr {
+    NotEnoughMem
+}
 
-pub enum AllocErr {
-    OutOfMemory,
-    ImproperConfig,
+pub struct RawVec<Type> {
+    region: NonNullRegion<Type>,
+    used: usize
+}
+
+impl<Type> RawVec<Type> {
+    pub fn new(region: NonNullRegion<Type>) -> Self {
+        Self {
+            region,
+            used: 0
+        }
+    }
+
+    pub fn expand(&mut self, new_region: NonNullRegion<Type>) -> Result<(), RawVecErr> {
+        if self.region == new_region {
+            return Ok(());
+        }
+
+        todo!()
+    }
 }

@@ -37,16 +37,26 @@ use crate::usable_region::UsableRegion;
 pub struct MemoryDisc {
     pub ptr: u64,
     pub size: u64,
-    pub used: bool
+    pub used: bool,
+    pub next: u64
 }
 
 impl MemoryDisc {
-    pub fn new(ptr: u64, size: u64) -> Self {
+    pub fn new(ptr: *mut u8, size: usize) -> Self {
         Self {
-            ptr,
-            size,
-            used: false
+            ptr: ptr as u64,
+            size: size as u64,
+            used: false,
+            next: 0
         }
+    }
+
+    pub fn add_next(&mut self, next: NonNull<Self>) {
+        self.next = next.as_ptr() as u64;
+    }
+
+    pub fn next_ptr(&self) -> Option<NonNull<Self>> {
+        NonNull::new(self.next as *mut Self)
     }
 
     pub fn ptr_alignment(&self) -> usize {
@@ -74,71 +84,78 @@ impl MemoryDisc {
     }
 }
 
-pub struct MemoryBackedAllocator {
-    memory_region: UsableRegion,
-    allocations: LinkedListComponent<MemoryDisc>
+pub struct LinkedListMemoryAllocator {
+    memory_regions: NonNull<MemoryDisc>
 }
 
-impl MemoryBackedAllocator {
+impl LinkedListMemoryAllocator {
     pub fn new(region: UsableRegion) -> Self {
-        assert!(region.size() > size_of::<LinkedListComponent<MemoryDisc>>());
-
-        let mut casted_ptr: NonNull<MemoryDisc> = region.ptr().cast();
-        let casted_mut = unsafe { casted_ptr.as_mut() };
-
-        *casted_mut = MemoryDisc::new(region.ptr().as_ptr() as u64, region.size() as u64);
-
-        let linked_list_main = LinkedListComponent::new(OwnPtr::from_mut(casted_mut));
+        let alloc_ptr: NonNull<MemoryDisc> = region.ptr().cast();
+        unsafe { *alloc_ptr.as_mut() = MemoryDisc::new(region.ptr().as_ptr(), region.size()) };
 
         Self {
-            memory_region: region,
-            allocations: linked_list_main
+            memory_regions: alloc_ptr
         }
     }
 
+    fn run_on_all_disc<Function>(&self, function: Function) -> Option<MemoryDisc>
+        where Function: FnMut(MemoryDisc) -> bool {
 
-    pub fn allocate(&mut self, layout: MemoryLayout) -> Result<UsableRegion, AllocErr> {
+        let mut looping_disc = unsafe { *self.memory_regions.as_ptr() };
+
+        loop {
+            let is_returnable = function(looping_disc);
+
+            if is_returnable {
+                return Some(looping_disc);
+            }
+
+            let Some(maybe_next) = looping_disc.next_ptr() else {
+                return None;
+            };
+
+            looping_disc = unsafe { *maybe_next.unwrap().as_ptr() };
+        }
+    }
+
+    pub fn alloc(&mut self, layout: MemoryLayout) -> Result<UsableRegion, AllocErr> {
         let align = layout.alignment();
-        let bytes = layout.bytes();
+        let bytes = layout.bytes() as u64;
+        let bytes_for_disc = size_of::<MemoryDisc>();
 
-        if bytes == 0 {
-            return Err(AllocErr::ImproperConfig);
-        }
-
-        for region in self.allocations.iter() {
-            if region.used || region.size < bytes as u64 {
-                continue;
+        let Some(working_disc) = self.run_on_all_disc(|disc| {
+            if disc.used || bytes > disc.size {
+                return false;
             }
 
-            let over_head_bytes_needed = region.bytes_to_alignment(align)
-                + (size_of::<(MemoryDisc, LinkedListComponent<MemoryDisc>)>() * 2);
+            let overhead_bytes = bytes_for_disc
+                + disc.bytes_to_alignment(align);
 
-            let total_bytes = over_head_bytes_needed + bytes;
+            let total_bytes = overhead_bytes as u64 + bytes;
 
-            if total_bytes > region.size as usize {
-                continue;
+            if disc.size >= total_bytes {
+                true;
             }
 
-            // should have a region that can hold our allocation
+            false
+        }) else { return Err(AllocErr::OutOfMemory); };
 
-            // First lets collect all the PTRs we are going to need to store this allocation.
-            // Since this allocation requires splitting one allocation into two, we need to
-            // also grab the second ptrs as well
-            let typeless_ptr = region.ptr as *mut u8;
-            let first_memory_disc_ptr = typeless_ptr as *mut MemoryDisc;
-            let first_linked_list_ptr = unsafe { typeless_ptr.add(size_of::<MemoryDisc>()) } as *mut LinkedListComponent<MemoryDisc>;
-            let second_memory_disc_ptr = unsafe { typeless_ptr.add(size_of::<(MemoryDisc, LinkedListComponent<MemoryDisc>)>() + bytes)} as *mut MemoryDisc;
-            let second_linked_list_ptr = unsafe { typeless_ptr.add(size_of::<(MemoryDisc, LinkedListComponent<MemoryDisc>)>() + size_of::<MemoryDisc>() + bytes) };
+        let bytes_to_align = working_disc.bytes_to_alignment(align);
 
+        let pushed_ptr = working_disc.ptr + bytes_to_align;
+        let new_size = working_disc.size - (bytes_to_align + bytes_for_disc);
 
-
+        if new_size > (bytes_for_disc + bytes) as u64 {
+            // We need to split into two since we have bytes left over
         }
 
+        // We need to change the allocation to used
 
-        Err(AllocErr::OutOfMemory)
+        todo!()
     }
 
     pub fn free(&mut self, region: UsableRegion) -> Result<(), AllocErr> {
         todo!()
     }
+
 }
