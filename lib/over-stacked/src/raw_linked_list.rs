@@ -182,7 +182,7 @@ impl<Type: ?Sized> LinkedListComponent<Type> {
 #[cfg(test)]
 mod test {
     use quantum_utils::own_ptr::OwnPtr;
-    use crate::linked_list::LinkedListComponent;
+    use crate::raw_linked_list::LinkedListComponent;
 
     #[test]
     fn test_storing_one_value() {

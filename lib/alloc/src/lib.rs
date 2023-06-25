@@ -26,7 +26,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #![no_std]
 #![feature(test)]
 
-pub mod heap;
+// pub mod heap;
 pub mod usable_region;
 pub mod memory_layout;
 

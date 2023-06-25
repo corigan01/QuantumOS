@@ -28,71 +28,17 @@ use core::fmt::{Debug, Formatter};
 use core::mem;
 use core::mem::MaybeUninit;
 use core::slice::{Iter, IterMut};
+use crate::raw_vec::RawVec;
 
-/// # Heapless Vector Error
-/// This is the errors that heapless vector can encounter while using it.
-///
-/// Some Errors include:
-///     * VectorFull
-///     * OutOfBounds
-///
-/// ### What these errors mean?
-///
-/// `VectorFull` is probably the most common error that you might encounter as it is called
-/// when you try to push an element into a full vector. Since this vector is not heap allocated
-/// and instead lives on the stack, it must have a known size know at compile time. This is
-/// unfortunate as it limits the user to the size defined at compile time.
-///
-/// `OutOfBounds` is going to be another big one that users might encounter while using
-/// this structure as it is returned when you try to access something in the vector that is
-/// out of bounds of the valid data.
-///
-#[derive(Debug, Copy, Clone, PartialOrd, PartialEq)]
-pub enum HeaplessVecErr {
-    VectorFull,
-    OutOfBounds,
-}
 
-/// # Heapless Vector
-/// Heapless vector is my method on abstracting the use of raw type arrays that can be hard to
-/// deal with and add elements to. So this is a heapless abstraction of that. Unfortunately since
-/// there is no heap allocator, we must live on the stack which has its limitations. These
-/// limitations include having a size known at compile time which can be inconvenient due to the
-/// limitation of max size. However, its also bad for the other reason as if this vector is oversize
-/// for the data, it still takes up all that data in 'preparation' for the addition of new data.
-///
-///
-/// # Common Usage
-/// ```rust
-/// use over_stacked::heapless_vector::HeaplessVec;
-///
-/// fn main() {
-///     let mut my_vector: HeaplessVec<usize, 10> = HeaplessVec::new();
-///
-///     my_vector.push_within_capacity(2).unwrap();
-///     my_vector.push_within_capacity(6).unwrap();
-///
-///     assert_eq!(my_vector.get(0).unwrap(), &2_usize);
-///     assert_eq!(my_vector.get(1).unwrap(), &6_usize);
-///     assert_eq!(my_vector.len(), 2_usize);
-///
-/// }
 #[derive(Copy)]
-pub struct HeaplessVec<Type, const SIZE: usize> {
-    /// # Internal Data
-    /// This is the raw array that stores the data with type `Type` and size `SIZE`.
-    ///
-    /// Rust is very convenient as it already has many helper functions in its most
-    /// primitive types, which aids in the development in in this type.
+pub struct HeaplessVec<'a, Type, const SIZE: usize> {
     internal_data: [MaybeUninit<Type>; SIZE],
+    raw_vec: RawVec<'a, Type>
 
-    /// # Used Data
-    /// `used_data` represents the amount of data inside `internal_data`. This helps
-    /// us know how many positions are populated and which ones are free for use.
-    used_data: usize,
 }
 
-impl<Type, const SIZE: usize> Clone for HeaplessVec<Type, SIZE>
+impl<'a, Type, const SIZE: usize> Clone for HeaplessVec<'a, Type, SIZE>
 where
     Type: Clone,
 {
@@ -109,36 +55,24 @@ where
     }
 }
 
-impl<Type, const SIZE: usize> HeaplessVec<Type, SIZE> {
-    /// # New
-    /// Construct a new empty heapless vector.
-    ///
+impl<'a, Type, const SIZE: usize> HeaplessVec<'a, Type, SIZE> {
+
     pub fn new() -> Self {
         Self {
             internal_data: unsafe { mem::zeroed() },
-            used_data: 0,
+            raw_vec,
         }
     }
 
-    /// # Len
-    /// Gets the current length of the vector, or more precisely it will return the amount of
-    /// elements that are currently used inside the vector. This is useful when you want to
-    /// know how many elements have been populated inside the array.
+
     pub const fn len(&self) -> usize {
         self.used_data
     }
 
-    /// # Capacity
-    /// Gets the current max length of this vector. The maximum amount of elements that can
-    /// be allocated in this type at one time. If anymore elements are allocated with
-    /// `push_within_capacity` then it will return `VectorFull`.
     pub const fn capacity(&self) -> usize {
         SIZE
     }
 
-    /// # Push within Capacity
-    /// Gets a value from the user and will append it to the end of the vector. This will also
-    /// increase the len() of the vector to represent the newly added data.
     pub fn push_within_capacity(&mut self, value: Type) -> Result<(), HeaplessVecErr> {
         if self.used_data >= SIZE {
             return Err(HeaplessVecErr::VectorFull);
@@ -152,10 +86,6 @@ impl<Type, const SIZE: usize> HeaplessVec<Type, SIZE> {
         Ok(())
     }
 
-    /// # Pop
-    /// Pops (removes) the last element in the array. If there are no elements in the array,
-    /// then it will simply return `None`; however if there are elements in the array then it
-    /// return `Some(Type)` with the data that it removed from the vector
     pub fn pop(&mut self) -> Option<Type> {
         if self.used_data == 0 {
             return None;
@@ -254,10 +184,6 @@ impl<Type, const SIZE: usize> HeaplessVec<Type, SIZE> {
         index
     }
 
-    /// # Get
-    /// Gets the data at the index provided. If the index is invalid or out of bounds, then it will
-    /// return `Err(OutOfBounds)`. Otherwise it will return a reference to the data with the same
-    /// lifetime as self.
     pub fn get(&self, index: usize) -> Result<&Type, HeaplessVecErr> {
         if index > self.used_data {
             return Err(HeaplessVecErr::OutOfBounds);
@@ -266,10 +192,6 @@ impl<Type, const SIZE: usize> HeaplessVec<Type, SIZE> {
         return Ok(unsafe { self.internal_data[index].assume_init_ref() });
     }
 
-    /// # Get Mut
-    /// Gets the data at the index provided, but mutable. If the index is invalid or out of bounds,
-    /// then it will return `Err(OutOfBounds)` just like get. Otherwise it will return a mutable
-    /// reference to the data with the same lifetime as self.
     pub fn get_mut(&mut self, index: usize) -> Result<&mut Type, HeaplessVecErr> {
         if index > self.used_data {
             return Err(HeaplessVecErr::OutOfBounds);
@@ -278,26 +200,12 @@ impl<Type, const SIZE: usize> HeaplessVec<Type, SIZE> {
         return Ok(unsafe { self.internal_data[index].assume_init_mut() });
     }
 
-    /// # As Slice
-    /// Returns the raw internal data for minupulation.
     pub const fn as_slice(&self) -> &[Type] {
         unsafe {
             core::slice::from_raw_parts(self.internal_data.as_ptr() as *const Type, self.used_data)
         }
     }
 
-    /// # As Mut Slice
-    /// Returns the raw internal data for manipulation but mutable with the data inside this
-    /// vector.
-    ///
-    /// # Safety
-    /// Because its returning a mutable reference to the data that's included in the vector,
-    /// we have no way of updating the size if you go out of bounds from the original size.
-    ///
-    /// So its up to the caller to not add elements to the array if possible. If however,
-    /// elements are added to internal_data, we will not represent the new data and override it
-    /// as soon as the caller calls `push`. Furthermore, a call to get will return `OutOfBounds`
-    /// if data was manipulated out of bounds from len.
     pub fn as_mut_slice(&mut self) -> &mut [Type] {
         unsafe {
             core::slice::from_raw_parts_mut(
@@ -307,26 +215,10 @@ impl<Type, const SIZE: usize> HeaplessVec<Type, SIZE> {
         }
     }
 
-    /// # As Ptr
-    /// return a ptr to the internal data.
-    ///
-    /// # Safety
-    /// It is up to the caller to ensure that safety is used when handing raw ptrs. Since simply
-    /// returning a ptr is not considered 'unsafe' it is not required that this method is marked
-    /// unsafe as it doesn't directly cause any unsafe behaviour. However, the caller can dereference
-    /// this ptr which will cause issues if the data is malformed.
     pub const fn as_ptr(&self) -> *const Type {
         self.internal_data.as_ptr() as *const Type
     }
 
-    /// # As Mut Ptr
-    /// return a mut ptr to the internal data.
-    ///
-    /// # Safety
-    /// It is up to the caller to ensure that safety is used when handing raw ptrs. Since simply
-    /// returning a ptr is not considered 'unsafe' it is not required that this method is marked
-    /// unsafe as it doesn't directly cause any unsafe behaviour. However, the caller can dereference
-    /// this ptr which will cause issues if the data is malformed.
     pub fn as_mut_ptr(&mut self) -> *mut Type {
         return self.internal_data.as_mut_ptr() as *mut Type;
     }
