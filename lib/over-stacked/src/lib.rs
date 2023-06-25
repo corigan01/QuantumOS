@@ -32,4 +32,3 @@ pub mod heapless_string;
 pub mod heapless_vector;
 pub mod raw_linked_list;
 pub mod raw_vec;
-
