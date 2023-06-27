@@ -49,8 +49,8 @@ impl Into<HeaplessVecErr> for RawVecErr {
 
 #[allow(dead_code)]
 pub struct HeaplessVec<Type, const SIZE: usize> {
+    raw_vec: RawVec<Type>,
     internal_data: [Type; SIZE],
-    raw_vec: RawVec<Type>
 }
 
 unsafe impl<Type, const SIZE: usize> Send for HeaplessVec<Type, SIZE> {}

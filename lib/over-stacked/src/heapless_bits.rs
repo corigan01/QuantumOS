@@ -110,7 +110,7 @@ impl<const BYTES: usize> HeaplessBits<BYTES> {
             return Err(HeaplessVecErr::OutOfBounds);
         }
 
-        if index > self.data.len() {
+        if index >= self.data.len() {
             return Ok(0);
         }
 
@@ -396,7 +396,7 @@ mod test {
     fn test_setting_bits_1_byte() {
         let mut bits = HeaplessBits::<1>::new();
 
-        assert_eq!(bits.get_bit(10), Err(HeaplessVecErr::VectorFull));
+        assert_eq!(bits.get_bit(10), Err(HeaplessVecErr::OutOfBounds));
 
         assert_eq!(bits.get_bit(0), Ok(false));
         assert_eq!(bits.get_bit(1), Ok(false));
