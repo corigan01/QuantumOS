@@ -82,6 +82,14 @@ impl<Type> RawVec<Type> {
         Ok(return_ptr)
     }
 
+    pub fn capacity(&self) -> usize {
+        self.total
+    }
+
+    pub fn len(&self) -> usize {
+        self.used
+    }
+
     pub fn get_ref(&self, index: usize) -> Option<&Type> {
         if index >= self.used {
             return None;
@@ -96,14 +104,6 @@ impl<Type> RawVec<Type> {
         }
 
         Some(unsafe {&mut *self.data.as_ptr().add(index)})
-    }
-
-    pub fn capacity(&self) -> usize {
-        self.total
-    }
-
-    pub fn len(&self) -> usize {
-        self.used
     }
 
     pub(crate) fn read(&self, index: usize) -> Option<Type> {
