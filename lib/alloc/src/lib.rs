@@ -30,8 +30,11 @@ pub mod heap;
 pub mod usable_region;
 pub mod memory_layout;
 
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum AllocErr {
     OutOfMemory,
     ImproperConfig,
-    NotFound
+    NotFound,
+    InternalErr,
+    DoubleFree
 }

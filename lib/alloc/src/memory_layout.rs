@@ -25,6 +25,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 use core::mem::{align_of, size_of};
 
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct MemoryLayout {
     alignment: usize, 
     bytes: usize
@@ -38,7 +39,7 @@ impl MemoryLayout {
         }
     }
     
-    pub fn from_type<T: Sized>() -> Self {
+    pub fn from_type<T>() -> Self {
         let alignment = align_of::<T>();
         let size = size_of::<T>();
         

@@ -32,8 +32,3 @@ pub mod heapless_string;
 pub mod heapless_vector;
 pub mod raw_linked_list;
 pub mod raw_vec;
-
-pub trait MemoryProvider {
-    unsafe fn expand(&mut self, new_qty: usize);
-    unsafe fn shrink(&mut self, new_qty: usize);
-}

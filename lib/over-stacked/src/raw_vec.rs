@@ -133,6 +133,20 @@ impl<Type> RawVec<Type> {
         self.store(b, a_copy).unwrap();
     }
 
+    pub fn replace(&mut self, index: usize, value: Type) -> Result<Type, RawVecErr> {
+        if index > self.used {
+            return Err(RawVecErr::OutOfBounds);
+        }
+
+        let Some(old_value) = self.read(index) else {
+            return Err(RawVecErr::Invalid);
+        };
+
+        self.store(index, value).unwrap();
+
+        Ok(old_value)
+    }
+
     pub fn push_within_capacity(&mut self, value: Type) -> Result<(), RawVecErr> {
         if self.used >= self.total {
             return Err(RawVecErr::NotEnoughMem);
@@ -203,7 +217,7 @@ impl<Type> RawVec<Type> {
         }
 
         for i in (index..self.used).rev() {
-            self.store(i + 1, self.read(i).unwrap()).unwrap();
+            self.store(i + 1, self.read(i).unwrap())?;
         }
 
         self.used += 1;
