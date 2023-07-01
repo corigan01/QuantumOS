@@ -112,7 +112,7 @@ impl<Type> RawVec<Type> {
     }
 
     pub(crate) fn read(&self, index: usize) -> Option<Type> {
-        if index >= self.used || index >= self.total {
+        if index >= self.used {
             return None;
         }
 
@@ -475,6 +475,42 @@ mod tests {
         assert_eq!(raw_vec.len(), 4);
 
         assert_eq!(raw_vec.as_slice(), &[1, 2, 3, 4]);
+    }
+
+    #[test]
+    fn test_regrowing_vector() {
+        let mut data_storage = [0_i32; 10];
+        let mut raw_vec = RawVec::new();
+
+        assert!(raw_vec.grow(
+            NonNull::new(data_storage.as_mut_ptr()).unwrap(),
+            data_storage.len()
+        ).is_ok(), "RawVec grow failed!");
+
+        assert!(raw_vec.push_within_capacity(1).is_ok());
+        assert!(raw_vec.push_within_capacity(2).is_ok());
+        assert!(raw_vec.push_within_capacity(3).is_ok());
+        assert!(raw_vec.push_within_capacity(9).is_ok());
+        assert!(raw_vec.push_within_capacity(4).is_ok());
+        assert_eq!(raw_vec.len(), 5);
+
+        assert_eq!(raw_vec.remove(3), Some(9));
+        assert_eq!(raw_vec.len(), 4);
+
+        assert_eq!(raw_vec.as_slice(), &[1, 2, 3, 4]);
+
+        let mut data_storage2 = [0_i32; 20];
+        assert!(raw_vec.grow(
+            NonNull::new(data_storage2.as_mut_ptr()).unwrap(),
+            data_storage2.len()
+        ).is_ok(), "RawVec grow failed!");
+
+        assert_eq!(raw_vec.as_slice(), &[1, 2, 3, 4]);
+        assert_eq!(raw_vec.len(), 4);
+
+        assert!(raw_vec.insert(0, 0).is_ok());
+        assert_eq!(raw_vec.as_slice(), &[0, 1, 2, 3, 4]);
+
     }
 }
 
