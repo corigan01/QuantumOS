@@ -29,6 +29,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 use core::arch::asm;
 use core::panic::PanicInfo;
+use core::ptr;
 use bootloader::boot_info::BootInfo;
 
 use quantum_lib::debug::{add_connection_to_global_stream, StreamableConnection};
@@ -47,6 +48,7 @@ use quantum_lib::bytes::Bytes;
 use quantum_lib::gfx::frame_info::FrameInfo;
 use quantum_lib::gfx::FramebufferPixelLayout;
 use quantum_lib::gfx::linear_framebuffer::LinearFramebuffer;
+use quantum_lib::possibly_uninit::PossiblyUninit;
 
 use stage_3::debug::{clear_framebuffer, display_string, setup_framebuffer};
 
@@ -182,6 +184,10 @@ fn parse_kernel_elf(kernel_elf: &ElfHeader) -> Option<(u32, MemoryRegion<PhyAddr
     Some((entry_point, region))
 }
 
+static mut PHS_REGION_MAP: PossiblyUninit<RegionMap<PhyAddress>> = PossiblyUninit::new_lazy(|| RegionMap::new());
+static mut VRT_REGION_MAP: PossiblyUninit<RegionMap<VirtAddress>> = PossiblyUninit::new_lazy(|| RegionMap::new());
+static mut KRNL_BOOT_INFO: PossiblyUninit<KernelBootInformation> = PossiblyUninit::new();
+
 fn main(boot_info: &BootInfo) {
     debug_println!("Starting to parse kernel ELF...");
 
@@ -193,10 +199,14 @@ fn main(boot_info: &BootInfo) {
     let (entry_point, kernel_region) = parse_kernel_elf(&kernel_elf).unwrap();
 
     // TODO: Yeah lets maybe not have the stack just hard coded here :)
-    let stack_ptr = 2 * Bytes::MIB;
+    debug_println!("Zero-ing Kernel Stack region");
+    let stack_ptr = 15 * Bytes::MIB;
+    for ptr in (stack_ptr - (2 * Bytes::MIB))..stack_ptr {
+        unsafe { ptr::write(ptr as *mut u8, 0_u8); }
+    }
 
     debug_print!("Rebuilding Regions... ");
-    let mut region_map: RegionMap<PhyAddress> = RegionMap::new();
+    let region_map = unsafe { PHS_REGION_MAP.get_mut_ref().unwrap() };
     for e820_entry in unsafe { boot_info.get_memory_map() } {
 
         let region_type = match e820_entry.entry_type {
@@ -219,13 +229,13 @@ fn main(boot_info: &BootInfo) {
     let stack_region = MemoryRegion::new(
         PhyAddress::new(stack_ptr - Bytes::MIB).unwrap(),
         PhyAddress::new(stack_ptr).unwrap(),
-        MemoryRegionType::KernelCode
+        MemoryRegionType::KernelStack
     );
 
     region_map.add_new_region(stack_region).unwrap();
 
     // TODO: Get this region map from stage-2
-    let mut virtual_region_map = RegionMap::new();
+    let virtual_region_map = unsafe { VRT_REGION_MAP.get_mut_ref().unwrap() };
     let virtual_region = MemoryRegion::<VirtAddress>::new(
         VirtAddress::new(0).unwrap(),
         VirtAddress::new(5 * Bytes::GIB).unwrap(),
@@ -233,6 +243,8 @@ fn main(boot_info: &BootInfo) {
     );
 
     virtual_region_map.add_new_region(virtual_region).unwrap();
+
+    debug_println!("Regions Built!");
 
     let old_framebuffer = boot_info.get_video_information();
     let stride = old_framebuffer.x * old_framebuffer.depth;
@@ -250,14 +262,16 @@ fn main(boot_info: &BootInfo) {
 
     let video = LinearFramebuffer::new(old_framebuffer.framebuffer as *mut u8, frame_info);
 
-    let kernel_info = KernelBootInformation::new(
-        region_map,
-        virtual_region_map,
-        video
-    );
+    unsafe {
+        KRNL_BOOT_INFO.set(KernelBootInformation::new(
+            region_map.clone(),
+            virtual_region_map.clone(),
+            video
+        ));
+    }
 
+    let kernel_info = unsafe { KRNL_BOOT_INFO.get_ref().unwrap().send_as_u64() };
 
-    debug_println!("Regions Built!");
 
     debug_println!("Kernel Entry Point 0x{:x}", entry_point);
 
@@ -282,7 +296,7 @@ fn main(boot_info: &BootInfo) {
         asm!(
             "mov rsp, {stack}",
             "jmp {kern:r}",
-            in("rdi") kernel_info.send_as_u64(),
+            in("rdi") kernel_info,
             kern = in(reg) entry_point,
             stack = in(reg) stack_ptr
         );

@@ -38,7 +38,7 @@ pub enum KernelBootInfoErr {
 // TODO: implement a bootloader callback which will tell the bootloader
 //       that we successfully booted into the kernel!
 
-#[repr(C)]
+
 pub struct KernelBootInformation {
     pub physical_regions: RegionMap<PhyAddress>,
     pub virtual_regions: RegionMap<VirtAddress>,
@@ -77,14 +77,17 @@ impl KernelBootInformation {
     }
 
     pub fn get_physical_memory(&self) -> &RegionMap<PhyAddress> {
+        assert!(self.magic.is_magic_valid(), "Magic failed!");
         &self.physical_regions
     }
 
     pub fn get_virtual_memory(&self) -> &RegionMap<VirtAddress> {
+        assert!(self.magic.is_magic_valid(), "Magic failed!");
         &self.virtual_regions
     }
 
     pub fn get_framebuffer(&self) -> &LinearFramebuffer {
+        assert!(self.magic.is_magic_valid(), "Magic failed!");
         &self.framebuffer
     }
 }

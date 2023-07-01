@@ -15,7 +15,7 @@ build = "build.rs"
 # ]
 
 [dependencies]
-mbrman = "0.5.1"
+mbrman = "0.5.2"
 fatfs = "0.3.6"
 owo-colors = "3.5.0"
 

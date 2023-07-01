@@ -113,6 +113,7 @@ fn main() {
             if debug_int {
                 user_extra_args.push(String::from("-d"));
                 user_extra_args.push(String::from("int"));
+                user_extra_args.push(String::from("--no-reboot"));
             }
 
             if debug {

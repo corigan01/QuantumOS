@@ -26,45 +26,83 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 use core::fmt::{Debug, Formatter};
 use core::mem;
-use core::ptr::NonNull;
+use core::mem::MaybeUninit;
 use core::slice::{Iter, IterMut};
-use crate::raw_vec::{RawVec, RawVecErr};
 
-#[derive(Copy, Clone, Debug, PartialEq)]
+/// # Heapless Vector Error
+/// This is the errors that heapless vector can encounter while using it.
+///
+/// Some Errors include:
+///     * VectorFull
+///     * OutOfBounds
+///
+/// ### What these errors mean?
+///
+/// `VectorFull` is probably the most common error that you might encounter as it is called
+/// when you try to push an element into a full vector. Since this vector is not heap allocated
+/// and instead lives on the stack, it must have a known size know at compile time. This is
+/// unfortunate as it limits the user to the size defined at compile time.
+///
+/// `OutOfBounds` is going to be another big one that users might encounter while using
+/// this structure as it is returned when you try to access something in the vector that is
+/// out of bounds of the valid data.
+///
+#[derive(Debug, Copy, Clone, PartialOrd, PartialEq)]
 pub enum HeaplessVecErr {
     VectorFull,
     OutOfBounds,
-    Invalid
 }
 
-impl Into<HeaplessVecErr> for RawVecErr {
-    fn into(self) -> HeaplessVecErr {
-        match self {
-            RawVecErr::Invalid => HeaplessVecErr::Invalid,
-            RawVecErr::OutOfBounds => HeaplessVecErr::OutOfBounds,
-            RawVecErr::NotEnoughMem => HeaplessVecErr::VectorFull
-        }
-    }
-}
-
-#[allow(dead_code)]
+/// # Heapless Vector
+/// Heapless vector is my method on abstracting the use of raw type arrays that can be hard to
+/// deal with and add elements to. So this is a heapless abstraction of that. Unfortunately since
+/// there is no heap allocator, we must live on the stack which has its limitations. These
+/// limitations include having a size known at compile time which can be inconvenient due to the
+/// limitation of max size. However, its also bad for the other reason as if this vector is oversize
+/// for the data, it still takes up all that data in 'preparation' for the addition of new data.
+///
+///
+/// # Common Usage
+/// ```rust
+/// use over_stacked::heapless_vector::HeaplessVec;
+///
+/// fn main() {
+///     let mut my_vector: HeaplessVec<usize, 10> = HeaplessVec::new();
+///
+///     my_vector.push_within_capacity(2).unwrap();
+///     my_vector.push_within_capacity(6).unwrap();
+///
+///     assert_eq!(my_vector.get(0).unwrap(), &2_usize);
+///     assert_eq!(my_vector.get(1).unwrap(), &6_usize);
+///     assert_eq!(my_vector.len(), 2_usize);
+///
+/// }
+#[derive(Copy)]
 pub struct HeaplessVec<Type, const SIZE: usize> {
-    raw_vec: RawVec<Type>,
-    internal_data: [Type; SIZE],
-}
+    /// # Internal Data
+    /// This is the raw array that stores the data with type `Type` and size `SIZE`.
+    ///
+    /// Rust is very convenient as it already has many helper functions in its most
+    /// primitive types, which aids in the development in in this type.
+    internal_data: [MaybeUninit<Type>; SIZE],
 
-unsafe impl<Type, const SIZE: usize> Send for HeaplessVec<Type, SIZE> {}
-unsafe impl<Type, const SIZE: usize> Sync for HeaplessVec<Type, SIZE> {}
+    /// # Used Data
+    /// `used_data` represents the amount of data inside `internal_data`. This helps
+    /// us know how many positions are populated and which ones are free for use.
+    used_data: usize,
+}
 
 impl<Type, const SIZE: usize> Clone for HeaplessVec<Type, SIZE>
-where
-    Type: Clone,
+    where
+        Type: Clone,
 {
     fn clone(&self) -> Self {
         let mut new_vector = HeaplessVec::new();
 
-        for value in self.raw_vec.iter() {
-            new_vector.push_within_capacity(value.clone()).unwrap();
+        for index in 0..self.used_data {
+            let copied_value = unsafe { self.internal_data[index].assume_init_read() };
+
+            new_vector.push_within_capacity(copied_value).unwrap();
         }
 
         new_vector
@@ -72,101 +110,225 @@ where
 }
 
 impl<Type, const SIZE: usize> HeaplessVec<Type, SIZE> {
+    /// # New
+    /// Construct a new empty heapless vector.
+    ///
     pub fn new() -> Self {
-        // FIXME: For some reason the `cell`'s ptr that its assigned here, is not
-        // its ptr forever! This is a huge problem because we want the ptr to be the same
-        // the entire structs lifetime. This is causing our RawVec ptr to be
-        // dangling and then cause undefined behavior.
-
-        let cell: [Type; SIZE] = unsafe { mem::zeroed() };
-
-        let mut self_data = Self {
-            internal_data: cell,
-            raw_vec: RawVec::new()
-        };
-
-        self_data.raw_vec.grow(NonNull::new(self_data.internal_data.as_mut_ptr()).unwrap(),
-                              SIZE).unwrap();
-        self_data
+        Self {
+            internal_data: unsafe { mem::zeroed() },
+            used_data: 0,
+        }
     }
 
-
-    pub fn len(&self) -> usize {
-        self.raw_vec.len()
+    /// # Len
+    /// Gets the current length of the vector, or more precisely it will return the amount of
+    /// elements that are currently used inside the vector. This is useful when you want to
+    /// know how many elements have been populated inside the array.
+    pub const fn len(&self) -> usize {
+        self.used_data
     }
 
-    pub fn capacity(&self) -> usize {
+    /// # Capacity
+    /// Gets the current max length of this vector. The maximum amount of elements that can
+    /// be allocated in this type at one time. If anymore elements are allocated with
+    /// `push_within_capacity` then it will return `VectorFull`.
+    pub const fn capacity(&self) -> usize {
         SIZE
     }
 
+    /// # Push within Capacity
+    /// Gets a value from the user and will append it to the end of the vector. This will also
+    /// increase the len() of the vector to represent the newly added data.
     pub fn push_within_capacity(&mut self, value: Type) -> Result<(), HeaplessVecErr> {
-        unsafe { self.raw_vec.without_checking_set_new_ptr(self.internal_data.as_mut_ptr()) };
-        self.raw_vec.push_within_capacity(value).map_err(|e| e.into())
+        if self.used_data >= SIZE {
+            return Err(HeaplessVecErr::VectorFull);
+        }
+
+        let index = self.used_data;
+        self.internal_data[index].write(value);
+
+        self.used_data += 1;
+
+        Ok(())
     }
 
+    /// # Pop
+    /// Pops (removes) the last element in the array. If there are no elements in the array,
+    /// then it will simply return `None`; however if there are elements in the array then it
+    /// return `Some(Type)` with the data that it removed from the vector
     pub fn pop(&mut self) -> Option<Type> {
-        unsafe { self.raw_vec.without_checking_set_new_ptr(self.internal_data.as_mut_ptr()) };
-        self.raw_vec.pop()
+        if self.used_data == 0 {
+            return None;
+        }
+
+        self.used_data -= 1;
+
+        Some(unsafe { self.internal_data[self.used_data + 1].assume_init_read() })
     }
 
     pub fn remove(&mut self, index: usize) -> Option<Type> {
-        unsafe { self.raw_vec.without_checking_set_new_ptr(self.internal_data.as_mut_ptr()) };
-        self.raw_vec.remove(index)
+        if self.used_data == 0 && index > self.used_data {
+            return None;
+        }
+
+        let moved_out_data = unsafe { self.internal_data[index].assume_init_read() };
+
+        for i in index..(self.used_data - 1) {
+            self.internal_data.swap(i, i + 1);
+        }
+
+        self.used_data -= 1;
+
+        Some(moved_out_data)
     }
 
     pub fn push_vec<const RHS_SIZE: usize>(
         &mut self,
         rhs: HeaplessVec<Type, RHS_SIZE>,
     ) -> Result<(), HeaplessVecErr> {
-        unsafe { self.raw_vec.without_checking_set_new_ptr(self.internal_data.as_mut_ptr()) };
-        self.raw_vec.push_vec(rhs.raw_vec).map_err(|e| e.into())
+        for rhs_index in 0..rhs.used_data {
+            unsafe {
+                self.push_within_capacity(rhs.internal_data[rhs_index].assume_init_read())?;
+            }
+        }
+
+        Ok(())
     }
 
-    pub fn retain<Function>(&mut self, runner: Function)
-    where
-        Function: FnMut(&Type) -> bool,
+    pub fn retain<Function>(&mut self, mut runner: Function)
+        where
+            Function: FnMut(&Type) -> bool,
     {
-        unsafe { self.raw_vec.without_checking_set_new_ptr(self.internal_data.as_mut_ptr()) };
-        self.raw_vec.retain(runner);
+        let mut removed_indexes: HeaplessVec<bool, SIZE> = HeaplessVec::new();
+
+        for value in self.iter() {
+            let run_result = runner(value);
+
+            removed_indexes.push_within_capacity(run_result).unwrap();
+        }
+
+        let mut deletion_offset = 0;
+        for (index, should_keep) in removed_indexes.iter().enumerate() {
+            if !should_keep {
+                self.remove(index - deletion_offset);
+                deletion_offset += 1;
+            }
+        }
     }
 
     pub fn insert(&mut self, index: usize, element: Type) -> Result<(), HeaplessVecErr> {
-        unsafe { self.raw_vec.without_checking_set_new_ptr(self.internal_data.as_mut_ptr()) };
-        self.raw_vec.insert(index, element).map_err(|e| e.into())
+        if self.used_data >= SIZE {
+            return Err(HeaplessVecErr::VectorFull);
+        }
+        if index > self.used_data {
+            return Err(HeaplessVecErr::OutOfBounds);
+        }
+        if index == self.used_data {
+            return self.push_within_capacity(element);
+        }
+
+        for i in index..(self.used_data - 1) {
+            self.internal_data.swap(i, i + 1);
+        }
+
+        self.used_data += 1;
+
+        self.internal_data[index].write(element);
+
+        Ok(())
     }
 
     pub fn find_index_of(&self, value: &Type) -> Option<usize>
-    where
-        Type: PartialEq,
+        where
+            Type: PartialEq,
     {
-        self.raw_vec.find_index_of(value)
+        let mut index = None;
+
+        for (idx, v) in self.iter().enumerate() {
+            if v == value {
+                index = Some(idx);
+                break;
+            }
+        }
+
+        index
     }
 
-    pub fn get(&self, index: usize) -> Option<&Type> {
-        self.raw_vec.get_ref(index)
+    /// # Get
+    /// Gets the data at the index provided. If the index is invalid or out of bounds, then it will
+    /// return `Err(OutOfBounds)`. Otherwise it will return a reference to the data with the same
+    /// lifetime as self.
+    pub fn get(&self, index: usize) -> Result<&Type, HeaplessVecErr> {
+        if index > self.used_data {
+            return Err(HeaplessVecErr::OutOfBounds);
+        }
+
+        return Ok(unsafe { self.internal_data[index].assume_init_ref() });
     }
 
-    pub fn get_mut(&mut self, index: usize) -> Option<&mut Type> {
-        unsafe { self.raw_vec.without_checking_set_new_ptr(self.internal_data.as_mut_ptr()) };
-        self.raw_vec.get_mut(index)
+    /// # Get Mut
+    /// Gets the data at the index provided, but mutable. If the index is invalid or out of bounds,
+    /// then it will return `Err(OutOfBounds)` just like get. Otherwise it will return a mutable
+    /// reference to the data with the same lifetime as self.
+    pub fn get_mut(&mut self, index: usize) -> Result<&mut Type, HeaplessVecErr> {
+        if index > self.used_data {
+            return Err(HeaplessVecErr::OutOfBounds);
+        }
+
+        return Ok(unsafe { self.internal_data[index].assume_init_mut() });
     }
 
-    pub fn as_slice(&self) -> &[Type] {
-        self.raw_vec.as_slice()
+    /// # As Slice
+    /// Returns the raw internal data for minupulation.
+    pub const fn as_slice(&self) -> &[Type] {
+        unsafe {
+            core::slice::from_raw_parts(self.internal_data.as_ptr() as *const Type, self.used_data)
+        }
     }
 
+    /// # As Mut Slice
+    /// Returns the raw internal data for manipulation but mutable with the data inside this
+    /// vector.
+    ///
+    /// # Safety
+    /// Because its returning a mutable reference to the data that's included in the vector,
+    /// we have no way of updating the size if you go out of bounds from the original size.
+    ///
+    /// So its up to the caller to not add elements to the array if possible. If however,
+    /// elements are added to internal_data, we will not represent the new data and override it
+    /// as soon as the caller calls `push`. Furthermore, a call to get will return `OutOfBounds`
+    /// if data was manipulated out of bounds from len.
     pub fn as_mut_slice(&mut self) -> &mut [Type] {
-        unsafe { self.raw_vec.without_checking_set_new_ptr(self.internal_data.as_mut_ptr()) };
-        self.raw_vec.as_mut_slice()
+        unsafe {
+            core::slice::from_raw_parts_mut(
+                self.internal_data.as_mut_ptr() as *mut Type,
+                self.used_data,
+            )
+        }
     }
 
-    pub fn as_ptr(&self) -> *const Type {
-        self.raw_vec.as_ptr()
+    /// # As Ptr
+    /// return a ptr to the internal data.
+    ///
+    /// # Safety
+    /// It is up to the caller to ensure that safety is used when handing raw ptrs. Since simply
+    /// returning a ptr is not considered 'unsafe' it is not required that this method is marked
+    /// unsafe as it doesn't directly cause any unsafe behaviour. However, the caller can dereference
+    /// this ptr which will cause issues if the data is malformed.
+    pub const fn as_ptr(&self) -> *const Type {
+        self.internal_data.as_ptr() as *const Type
     }
 
-    pub unsafe fn as_mut_ptr(&mut self) -> *mut Type {
-        unsafe { self.raw_vec.without_checking_set_new_ptr(self.internal_data.as_mut_ptr()) };
-        self.raw_vec.as_mut()
+    /// # As Mut Ptr
+    /// return a mut ptr to the internal data.
+    ///
+    /// # Safety
+    /// It is up to the caller to ensure that safety is used when handing raw ptrs. Since simply
+    /// returning a ptr is not considered 'unsafe' it is not required that this method is marked
+    /// unsafe as it doesn't directly cause any unsafe behaviour. However, the caller can dereference
+    /// this ptr which will cause issues if the data is malformed.
+    pub fn as_mut_ptr(&mut self) -> *mut Type {
+        return self.internal_data.as_mut_ptr() as *mut Type;
     }
 
     pub fn iter(&self) -> Iter<Type> {
@@ -174,22 +336,17 @@ impl<Type, const SIZE: usize> HeaplessVec<Type, SIZE> {
     }
 
     pub fn mut_iter(&mut self) -> IterMut<Type> {
-        unsafe { self.raw_vec.without_checking_set_new_ptr(self.internal_data.as_mut_ptr()) };
         self.as_mut_slice().iter_mut()
     }
 }
 
 impl<Type, const SIZE: usize> Debug for HeaplessVec<Type, SIZE>
-where
-    Type: Sized,
-    Type: Debug,
+    where
+        Type: Sized,
+        Type: Debug,
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
-        if f.alternate() {
-            write!(f, "{:#?}", self.raw_vec)
-        } else {
-            write!(f, "{:?}", self.raw_vec)
-        }
+        write!(f, "{:?}", &self.internal_data[0..self.used_data])
     }
 }
 
@@ -253,7 +410,7 @@ mod tests {
         vec.insert(0, 69).unwrap();
 
         assert_eq!(vec.len(), 1);
-        assert_eq!(vec.get(0), Some(&69));
+        assert_eq!(vec.get(0), Ok(&69));
 
         assert_eq!(vec.insert(10, 320), Err(HeaplessVecErr::OutOfBounds));
     }
@@ -273,10 +430,9 @@ mod tests {
 
         assert_eq!(total.len(), 11);
 
-        assert_eq!(total.get(0), Some(&10));
+        assert_eq!(*total.get(0).unwrap(), 10);
         for i in 1..11 {
             assert_eq!(*total.get(i as usize).unwrap(), i - 1);
         }
     }
-
 }

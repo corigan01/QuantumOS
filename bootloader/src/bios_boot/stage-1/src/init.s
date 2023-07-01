@@ -51,7 +51,7 @@ begin:
 
     call init_a20
 
-    # Make sure we are going forward in memory for things like the stack
+    # Make sure we are going forward in memory
     cld
 
     # Point the stack here at 0x7c00, this is right before the bootloader is loaded into memory
