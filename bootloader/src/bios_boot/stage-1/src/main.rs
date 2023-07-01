@@ -66,7 +66,7 @@ fn enter_rust(disk_id: u16) {
     //       to how it only gives a limited amount of info to the next stage. There is already
     //       fixme in the bootloader noting that we "don't" know the state of the vga buffer.
     unsafe {
-        TEMP_ALLOC.write(SimpleBumpAllocator::new_from_ptr((0x00100000) as *mut u8, 0x03200000));
+        TEMP_ALLOC.write(SimpleBumpAllocator::new_from_ptr((0x00100000) as *mut u8, 0x01400000));
     }
 
     let temp_alloc = unsafe { TEMP_ALLOC.assume_init_mut() };
@@ -103,7 +103,6 @@ fn enter_rust(disk_id: u16) {
 
     let bootloader_config = BootloaderConfig::from_str(bootloader_config_string.trim())
         .expect("Unable to parse bootloader config!");
-
     let next_2_stage_bytes = fs
         .get_filesize_bytes(bootloader_config.get_stage2_file_path())
         .expect("Could not get stage2 filesize");
@@ -205,7 +204,6 @@ fn enter_rust(disk_id: u16) {
     let mut vesa = BiosVesa::new().quarry().unwrap();
     let closest_mode = vesa.find_closest_mode(expected_res).unwrap();
     BiosTextMode::print_int_bytes(b"OK\n");
-
     BiosTextMode::print_int_bytes(b"Setting Video Mode and jumping to stage2! ");
     vesa.set_mode(&closest_mode).unwrap();
 

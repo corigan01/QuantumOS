@@ -16,12 +16,18 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
+    - name: Update Rust
+      run: rustup update
     - name: Set Nightly
       run: rustup override set nightly
     - name: Add Rust SRC
       run: rustup component add rust-src
     - name: Add LLVM Tools Preview 
       run: rustup component add llvm-tools-preview
+    - name: Update Cargo
+      run: cargo update
+    - name: Clean
+      run: cargo clean
     - name: Build
       run: cargo run noqemu
     - name: Lib Test

@@ -110,24 +110,19 @@ impl<Type: ?Sized> LinkedListComponent<Type> {
         }
     }
 
-    #[allow(cast_ref_to_mut)]
     pub fn last_list_mut(&mut self) -> &mut Self {
-        let mut next =
-            if let Some(value) = self.next_list_ref() {
-                value
-            } else {
-                return self;
-            };
+        if self.next_element_ptr.is_none() {
+            return self;
+        }
+
+        let mut next = self.next_list_mut().unwrap();
 
         loop {
-            if let Some(value) = next.next_list_ref() {
-                next = value;
-
-                continue;
+            if next.next_element_ptr.is_none() {
+                break next;
             }
 
-            // TODO: This is a hack to get around the stupid `cant borrow mut more then once` problem!
-            break unsafe { &mut *(next as *const Self as *mut Self) };
+            next = next.next_list_mut().unwrap();
         }
     }
 
@@ -187,7 +182,7 @@ impl<Type: ?Sized> LinkedListComponent<Type> {
 #[cfg(test)]
 mod test {
     use quantum_utils::own_ptr::OwnPtr;
-    use crate::linked_list::LinkedListComponent;
+    use crate::raw_linked_list::LinkedListComponent;
 
     #[test]
     fn test_storing_one_value() {

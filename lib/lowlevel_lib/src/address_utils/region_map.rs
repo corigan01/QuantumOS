@@ -32,7 +32,7 @@ use over_stacked::heapless_vector::{HeaplessVec, HeaplessVecErr};
 
 const MAX_ALLOCATABLE_REGIONS: usize = 40;
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub struct RegionMap<Type> {
     regions: HeaplessVec<MemoryRegion<Type>, MAX_ALLOCATABLE_REGIONS>,
 }

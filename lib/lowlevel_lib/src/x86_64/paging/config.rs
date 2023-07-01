@@ -35,11 +35,11 @@ use core::mem::transmute;
 
 pub struct NonTypedPageConfig;
 
-pub trait PageConfigable {}
-impl PageConfigable for PageMapLevel1Entry {}
-impl PageConfigable for PageMapLevel2Entry {}
-impl PageConfigable for PageMapLevel3Entry {}
-impl PageConfigable for PageMapLevel4Entry {}
+pub trait PageConfigurable {}
+impl PageConfigurable for PageMapLevel1Entry {}
+impl PageConfigurable for PageMapLevel2Entry {}
+impl PageConfigurable for PageMapLevel3Entry {}
+impl PageConfigurable for PageMapLevel4Entry {}
 
 #[allow(dead_code)]
 pub struct PageConfigBuilder<Type = NonTypedPageConfig> {
@@ -63,7 +63,7 @@ pub struct PageConfigBuilder<Type = NonTypedPageConfig> {
 }
 
 impl PageConfigBuilder {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             present: false,
             rw: false,
@@ -81,7 +81,7 @@ impl PageConfigBuilder {
             page_attribute_table: false,
             global: false,
             address: 0,
-            reserved: Default::default(),
+            reserved: PhantomData,
         }
     }
 }
@@ -103,39 +103,39 @@ impl PageConfigBuilder<NonTypedPageConfig> {
 
 impl<Type> PageConfigBuilder<Type>
 where
-    Type: PageConfigable,
+    Type: PageConfigurable,
 {
-    pub fn present(mut self, flag: bool) -> Self {
+    pub const fn present(mut self, flag: bool) -> Self {
         self.present = flag;
 
         self
     }
 
-    pub fn executable(mut self, flag: bool) -> Self {
+    pub const fn executable(mut self, flag: bool) -> Self {
         self.execute_disable = !flag;
 
         self
     }
 
-    pub fn read_write(mut self, flag: bool) -> Self {
+    pub const fn read_write(mut self, flag: bool) -> Self {
         self.rw = flag;
 
         self
     }
 
-    pub fn cache_disable(mut self, flag: bool) -> Self {
+    pub const fn cache_disable(mut self, flag: bool) -> Self {
         self.cache_disable = flag;
 
         self
     }
 
-    pub fn write_through(mut self, flag: bool) -> Self {
+    pub const fn write_through(mut self, flag: bool) -> Self {
         self.write_through = flag;
 
         self
     }
 
-    pub fn user_page(mut self, flag: bool) -> Self {
+    pub const fn user_page(mut self, flag: bool) -> Self {
         self.user_supervisor = flag;
 
         self

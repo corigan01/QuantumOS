@@ -54,7 +54,7 @@ fn main(boot_info: &KernelBootInformation) {
 
     let connection = StreamConnectionBuilder::new()
         .console_connection()
-        .add_connection_name("SERIAL")
+        .add_connection_name("Serial COM1")
         .does_support_scrolling(true)
         .add_outlet(serial.get_ref().unwrap())
         .build();

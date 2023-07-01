@@ -23,8 +23,34 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-#![no_std]
-#![feature(test)]
+use core::mem::{align_of, size_of};
 
-pub mod own_ptr;
-pub mod nonnull_region;
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct MemoryLayout {
+    alignment: usize, 
+    bytes: usize
+}
+
+impl MemoryLayout {
+    pub fn new(alignment: usize, bytes: usize) -> Self {
+        Self {
+            alignment,
+            bytes
+        }
+    }
+    
+    pub fn from_type<T>() -> Self {
+        let alignment = align_of::<T>();
+        let size = size_of::<T>();
+        
+        Self::new(alignment, size)
+    }
+    
+    pub fn alignment(&self) -> usize {
+        self.alignment
+    }
+    
+    pub fn bytes(&self) -> usize {
+        self.bytes
+    }
+}

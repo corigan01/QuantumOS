@@ -26,5 +26,17 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #![no_std]
 #![feature(test)]
 
-pub mod own_ptr;
-pub mod nonnull_region;
+extern crate alloc;
+
+pub mod heap;
+pub mod usable_region;
+pub mod memory_layout;
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum AllocErr {
+    OutOfMemory,
+    ImproperConfig,
+    NotFound,
+    InternalErr,
+    DoubleFree
+}

@@ -62,10 +62,10 @@ fn main() {
             .status()
             .unwrap();
 
-        let weep_lib = Command::new(cargo.clone())
-            .current_dir("lib/weep")
+        let alloc_lib = Command::new(cargo.clone())
+            .current_dir("lib/alloc")
             .arg("test")
-            .arg(format!("--target-dir={}/weep", target))
+            .arg(format!("--target-dir={}/alloc", target))
             .stdout(std::process::Stdio::inherit())
             .status()
             .unwrap();
@@ -80,7 +80,7 @@ fn main() {
 
         if lowlevel_lib.success() &&
             over_stacked_lib.success() &&
-            weep_lib.success() &&
+            alloc_lib.success() &&
             quantum_utils.success() {
 
             return;
@@ -113,6 +113,7 @@ fn main() {
             if debug_int {
                 user_extra_args.push(String::from("-d"));
                 user_extra_args.push(String::from("int"));
+                user_extra_args.push(String::from("--no-reboot"));
             }
 
             if debug {

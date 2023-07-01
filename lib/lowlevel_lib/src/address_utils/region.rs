@@ -30,14 +30,17 @@ use crate::address_utils::addressable::Addressable;
 use crate::bytes::Bytes;
 
 #[derive(Debug, Copy, Clone, PartialEq)]
+#[repr(u8)]
 pub enum MemoryRegionType {
+    Unknown = 0,
     Usable,
     KernelCode,
+    KernelStack,
+    BootInfo,
     Reserved,
     Bios,
     Uefi,
     UnavailableMemory,
-    Unknown
 }
 
 #[derive(Clone, Copy, PartialEq, Debug)]

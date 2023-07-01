@@ -23,12 +23,38 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-#![no_std]
-#![feature(test)]
+use core::mem::size_of;
+use core::ptr::NonNull;
 
-pub mod simple_heap;
+pub struct UsableRegion {
+    ptr: NonNull<u8>,
+    size: usize,
+}
 
-pub enum AllocErr {
-    OutOfMemory,
-    ImproperConfig,
+impl UsableRegion {
+    pub fn new<Type: Sized>(ptr: &mut [Type]) -> Self {
+        let size = ptr.len() * size_of::<Type>();
+
+        Self {
+            ptr: NonNull::from(ptr).cast(),
+            size
+        }
+    }
+
+    pub unsafe fn from_raw_parts(ptr: *mut u8, size: usize) -> Option<Self> {
+        Some(
+            Self {
+                ptr: NonNull::new(ptr)?,
+                size
+            }
+        )
+    }
+
+    pub fn ptr(&self) -> NonNull<u8> {
+        self.ptr
+    }
+
+    pub fn size(&self) -> usize {
+        self.size
+    }
 }

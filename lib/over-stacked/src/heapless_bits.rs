@@ -60,7 +60,7 @@ use crate::heapless_vector::{HeaplessVec, HeaplessVecErr};
 /// # Limitations
 /// * Since we are limited to a stack allocation enviroment, this type is very slow
 /// to pass by value. This type *contains* its entire buffer, so its not able to be
-/// easily transfered.
+/// easily transferred.
 ///
 /// * This can not allocate more memory! Even if an allocator is available, this type
 /// will not allocate more memory. It is limited to the size at compile time.
@@ -107,14 +107,14 @@ impl<const BYTES: usize> HeaplessBits<BYTES> {
     #[inline]
     fn get_byte(&self, index: usize) -> Result<u8, HeaplessVecErr> {
         if index >= BYTES {
-            return Err(HeaplessVecErr::VectorFull);
+            return Err(HeaplessVecErr::OutOfBounds);
         }
 
-        if index > self.data.len() {
+        if index >= self.data.len() {
             return Ok(0);
         }
 
-        Ok(*self.data.get(index)?)
+        Ok(*self.data.get(index).unwrap())
     }
 
     #[inline]
@@ -123,7 +123,7 @@ impl<const BYTES: usize> HeaplessBits<BYTES> {
             self.data.push_within_capacity(0)?;
         }
 
-        *self.data.get_mut(index)? = byte;
+        *self.data.get_mut(index).unwrap() = byte;
 
         Ok(())
     }
@@ -396,7 +396,7 @@ mod test {
     fn test_setting_bits_1_byte() {
         let mut bits = HeaplessBits::<1>::new();
 
-        assert_eq!(bits.get_bit(10), Err(HeaplessVecErr::VectorFull));
+        assert_eq!(bits.get_bit(10), Err(HeaplessVecErr::OutOfBounds));
 
         assert_eq!(bits.get_bit(0), Ok(false));
         assert_eq!(bits.get_bit(1), Ok(false));
