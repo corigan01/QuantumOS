@@ -26,6 +26,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 use core::fmt::{Debug, Formatter};
 use core::ops::{Index, IndexMut};
+use core::ptr;
 use core::ptr::NonNull;
 use core::slice::{Iter, IterMut};
 
@@ -71,7 +72,7 @@ impl<Type> RawVec<Type> {
 
         for i in 0..self.used {
             let data_copy = self.read(i).unwrap();
-            *(unsafe {&mut *new_ptr.as_ptr().add(i) }) = data_copy;
+            unsafe { ptr::write(new_ptr.as_ptr().add(i), data_copy) };
         }
 
         let return_ptr = self.data;
@@ -88,6 +89,10 @@ impl<Type> RawVec<Type> {
 
     pub fn len(&self) -> usize {
         self.used
+    }
+
+    pub fn remaining(&self) -> usize {
+        self.total - self.used
     }
 
     pub fn get_ref(&self, index: usize) -> Option<&Type> {
@@ -111,7 +116,7 @@ impl<Type> RawVec<Type> {
             return None;
         }
 
-        Some(unsafe { self.data.as_ptr().add(index).read_unaligned() })
+        Some(unsafe { ptr::read(self.data.as_ptr().add(index)) })
     }
 
     pub(crate) fn store(&mut self, index: usize, data: Type) -> Result<(), RawVecErr> {
@@ -119,7 +124,7 @@ impl<Type> RawVec<Type> {
             return Err(RawVecErr::OutOfBounds);
         }
 
-        *(unsafe { &mut *self.data.as_ptr().add(index) }) = data;
+        unsafe { ptr::write(self.data.as_ptr().add(index),data) };
 
         Ok(())
     }

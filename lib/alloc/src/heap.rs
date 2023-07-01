@@ -24,12 +24,21 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 
+use core::iter::{Filter, FilterMap};
 use core::mem::{align_of, size_of};
 use core::ptr::NonNull;
+use core::slice::{Iter, IterMut};
 use over_stacked::raw_vec::RawVec;
 use crate::AllocErr;
 use crate::memory_layout::MemoryLayout;
 use crate::usable_region::UsableRegion;
+
+#[derive(Debug, Clone, Copy)]
+pub enum DebugAllocationEvent {
+    Free,
+    Allocate,
+    MakeNewVector
+}
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct UnsafeAllocationObject {
@@ -54,25 +63,33 @@ pub struct HeapEntry {
 }
 
 pub struct KernelHeap {
-    allocations: RawVec<HeapEntry>
+    allocations: RawVec<HeapEntry>,
+    total_allocated_bytes: usize
 }
 
 impl KernelHeap {
+    const VEC_ALLOC_MIN_SIZE_INCREASE: usize = 10;
+
     pub fn new(region: UsableRegion) -> Option<Self> {
-        let init_vec_size = (size_of::<HeapEntry>() * 10) + 1;
+        let init_vec_size = (size_of::<HeapEntry>() * Self::VEC_ALLOC_MIN_SIZE_INCREASE) + 1;
         if region.size() <= init_vec_size {
             return None;
         }
 
-        let region_start_ptr = region.ptr().cast();
-        let mut raw_vec: RawVec<HeapEntry> = RawVec::begin(region_start_ptr, 10);
+        let region_start_ptr = region.ptr();
+        let (aligned_ptr, bytes_to_align) =
+            Self::align_ptr(region_start_ptr.as_ptr() as u64, align_of::<HeapEntry>());
 
-        let adjusted_ptr = region_start_ptr.as_ptr() as u64 + init_vec_size as u64;
-        let adjusted_size = (region.size() - init_vec_size) as u64;
+        let aligned_nonnull = NonNull::new(aligned_ptr as *mut HeapEntry).unwrap();
+
+        let mut raw_vec: RawVec<HeapEntry> = RawVec::begin(aligned_nonnull, 10);
+
+        let adjusted_ptr = region_start_ptr.as_ptr() as u64 + init_vec_size as u64 + bytes_to_align as u64;
+        let adjusted_size = (region.size() - (init_vec_size + bytes_to_align)) as u64;
 
         let used_section = HeapEntry {
             ptr: region.ptr().as_ptr() as u64,
-            pad: 0,
+            pad: bytes_to_align as u32,
             size: init_vec_size as u64,
             kind: HeapEntryType::UsedByHeap
         };
@@ -88,7 +105,8 @@ impl KernelHeap {
         raw_vec.push_within_capacity(init_alloc).unwrap();
 
         Some(Self {
-            allocations: raw_vec
+            allocations: raw_vec,
+            total_allocated_bytes: region.size(),
         })
     }
 
@@ -102,7 +120,61 @@ impl KernelHeap {
         (ptr + (alignment_offset as u64), alignment_offset)
     }
 
-    pub unsafe fn allocate(&mut self, allocation_description: MemoryLayout) -> Result<UnsafeAllocationObject, AllocErr> {
+    fn ensure_buffer_health(&self, caller: DebugAllocationEvent) {
+        let all_bytes: usize = self.allocations.iter().map(|entry| {
+            entry.size as usize + entry.pad as usize
+        }).sum();
+
+        assert_eq!(all_bytes, self.total_allocated_bytes,
+                   "{:?}:: Buffer Health out-of-sync! Bytes in the buffer should equal bytes given!\nAllocations Dump: {:#?}", caller, self.allocations);
+    }
+
+    pub fn total_bytes_of(&self, kind: HeapEntryType) -> usize {
+        self.allocations.iter().filter_map(|entry| {
+            if entry.kind != kind {
+                None
+            } else {
+                Some(entry.size as usize)
+            }
+        }).sum()
+    }
+
+    pub fn max_continuous_of(&self, kind: HeapEntryType) -> usize {
+        self.allocations.iter().filter_map(|entry| {
+            if entry.kind != kind {
+                None
+            } else {
+                Some(entry.size as usize)
+            }
+        }).max().unwrap_or(0)
+    }
+
+    pub fn allocations_iter(&self) -> Iter<HeapEntry> {
+        self.allocations.iter()
+    }
+
+    pub fn reallocate_internal_vector(&mut self) -> Result<(), AllocErr> {
+        let new_entry_qty =
+            ((self.allocations.capacity() / Self::VEC_ALLOC_MIN_SIZE_INCREASE) + 1) * Self::VEC_ALLOC_MIN_SIZE_INCREASE;
+
+        let memory_layout_for_internal_vector =
+            MemoryLayout::new(align_of::<HeapEntry>(), size_of::<HeapEntry>() * new_entry_qty);
+        let allocation =
+            unsafe { self.allocate_impl(memory_layout_for_internal_vector, true, HeapEntryType::UsedByHeap) }?;
+
+        let old_ptr: NonNull<HeapEntry> =
+            self.allocations.grow(NonNull::new(allocation.ptr as *mut HeapEntry).unwrap(), new_entry_qty)
+                .map_err(|_e| { AllocErr::InternalErr } )?;
+
+        unsafe { self.free(old_ptr).expect("Free Should not fail for old Vector!") };
+
+        self.ensure_buffer_health(DebugAllocationEvent::MakeNewVector);
+
+        Ok(())
+    }
+
+    pub unsafe fn allocate_impl(&mut self, allocation_description: MemoryLayout, avoid_vec_safety_check: bool, mark_allocated_as: HeapEntryType)
+                                -> Result<UnsafeAllocationObject, AllocErr> {
         let requested_bytes = allocation_description.bytes();
         let requested_align = allocation_description.alignment();
 
@@ -125,6 +197,7 @@ impl KernelHeap {
         });
 
         let mut best_entry: Option<(usize, HeapEntry)> = None;
+
         for (entry_id, entry_ref) in proper_size_with_alignment_iter {
             assert_eq!(entry_ref.kind, HeapEntryType::Free,
                        "It should be impossible for a non-free entry to be iterated in this for loop!");
@@ -146,13 +219,14 @@ impl KernelHeap {
             let (_, their_bytes_to_alignment) =
                 Self::align_ptr(some_best_entry.ptr, requested_align);
 
-            let our_alignment_score = bytes_to_alignment;
-            let their_alignment_score = their_bytes_to_alignment;
+            let our_bytes = entry_ref.size as usize;
+            let their_bytes = some_best_entry.size as usize;
 
-            // FIXME: We should also try to find the smallest allocation that we can, instead
-            //        of just finding the most aligned entry!
+            let our_score = bytes_to_alignment + our_bytes;
+            let their_score = their_bytes_to_alignment + their_bytes;
 
-            if our_alignment_score < their_alignment_score {
+            // We want the lowest score
+            if our_score > their_score {
                 best_entry = Some((entry_id, entry_ref.clone()));
             }
         }
@@ -162,8 +236,11 @@ impl KernelHeap {
         };
 
         // We need to ensure that our RawVec here has enough space to allocate,
-        // our possibly 3 new regions. So we need to assert that our RawVec has space
-        // for 4 allocations, if it does not, then we need to reallocate RawVec.
+        // our possibly 2 new regions. So we need to assert that our RawVec has space
+        // for 5 allocations, if it does not, then we need to reallocate RawVec.
+        if self.allocations.remaining() <= 3 && !avoid_vec_safety_check {
+            self.reallocate_internal_vector()?;
+        }
 
         // We might have to split our entry into 3 if we have a perfect situation.
         // Say we have an allocation that is terribly aligned, and we need a *very*
@@ -190,7 +267,7 @@ impl KernelHeap {
                 ptr: best_entry_new_ptr,
                 pad: 0,
                 size: best_entry.size - (best_entry_align_bump as u64),
-                kind: HeapEntryType::Used
+                kind: mark_allocated_as
             };
 
             if self.allocations.replace(best_entry_id, modified_old_entry).is_err() {
@@ -212,13 +289,13 @@ impl KernelHeap {
             };
 
             let ptr = if pre_allocation_split { best_entry_new_ptr }
-                           else { best_entry.ptr };
+            else { best_entry.ptr };
 
             let modified_old_entry = HeapEntry {
                 ptr,
                 pad: best_entry_align_bump as u32,
                 size: requested_bytes as u64,
-                kind: HeapEntryType::Used
+                kind: mark_allocated_as
             };
 
 
@@ -232,16 +309,28 @@ impl KernelHeap {
 
         // Change the main entry to be reserved
         if !(post_allocation_split || pre_allocation_split) {
-            self.allocations[best_entry_id].kind = HeapEntryType::Used;
+            self.allocations[best_entry_id].kind = mark_allocated_as;
         }
 
         // Construct the output
         let returning_value = self.allocations[best_entry_id];
 
+        assert_ne!(best_entry_new_ptr, 0, "Somehow we allocated a null ptr!");
+        assert_ne!(returning_value.size, 0, "Somehow we allocated a null size!");
+
+        self.ensure_buffer_health(
+            if avoid_vec_safety_check { DebugAllocationEvent::MakeNewVector }
+            else { DebugAllocationEvent::Allocate}
+        );
+
         Ok(UnsafeAllocationObject {
             ptr: best_entry_new_ptr,
-            size: returning_value.size as usize
+            size: requested_bytes
         })
+    }
+
+    pub unsafe fn allocate(&mut self, allocation_description: MemoryLayout) -> Result<UnsafeAllocationObject, AllocErr> {
+        self.allocate_impl(allocation_description, false, HeapEntryType::Used)
     }
 
     pub fn consolidate_entries(&mut self) {
@@ -276,17 +365,21 @@ impl KernelHeap {
     pub unsafe fn free<Type>(&mut self, ptr: NonNull<Type>) -> Result<(), AllocErr> {
         let searching_ptr = ptr.as_ptr() as u64;
 
+        let allocations_with_ptr =
+            self.allocations.mut_iter().filter(|entry| {
+                entry.ptr != searching_ptr && (entry.ptr + (entry.pad as u64)) != searching_ptr
+            });
+
         let mut did_find = false;
-        for entries in self.allocations.mut_iter() {
-            if entries.ptr != searching_ptr && (entries.ptr + (entries.pad as u64)) != searching_ptr {
-                continue;
-            }
-            if entries.kind == HeapEntryType::Free {
+        for entry in allocations_with_ptr {
+            if entry.kind == HeapEntryType::Free {
+                assert!(false, "This: {:#?}\nall: {:#?}", entry.clone(), self.allocations);
                 return Err(AllocErr::DoubleFree);
             }
 
-            entries.kind = HeapEntryType::Free;
+            entry.kind = HeapEntryType::Free;
             did_find = true;
+            break;
         }
 
         if !did_find {
@@ -294,6 +387,7 @@ impl KernelHeap {
         }
 
         self.consolidate_entries();
+        self.ensure_buffer_health(DebugAllocationEvent::Free);
 
         Ok(())
     }
@@ -340,10 +434,10 @@ mod test {
         assert_eq!(offset, 0);
     }
 
-    static mut ALLOCATION_SPACE: [u8; 1024] = [0; 1024];
+    static mut ALLOCATION_SPACE: [u8; 4096] = [0; 4096];
 
     fn get_example_allocator() -> KernelHeap {
-        unsafe { ALLOCATION_SPACE = [0; 1024]; }
+        unsafe { ALLOCATION_SPACE = [0; 4096]; }
         let usable_region = UsableRegion::new(unsafe { &mut ALLOCATION_SPACE });
         KernelHeap::new(usable_region).unwrap()
     }
@@ -421,12 +515,60 @@ mod test {
 
         assert_eq!(unsafe {*nonnull_ptr.as_ptr()}, 0xBABBEEF);
 
-
         let free_result = unsafe { allocator.free(nonnull_ptr) };
 
         assert_eq!(free_result, Ok(()));
     }
 
+    extern crate test;
+    use test::{Bencher, black_box};
 
+    #[bench]
+    fn test_lots_of_allocation(b: &mut Bencher) {
+        b.iter(|| {
+            let mut allocation_data: [u8; 1024] = [0; 1024];
+            let usable_region = UsableRegion::new(&mut allocation_data);
+            let mut allocator = KernelHeap::new(usable_region).unwrap();
+
+            type TestAllocType = u64;
+
+            let test_allocation_type_alignment = align_of::<TestAllocType>();
+            let example_layout = MemoryLayout::from_type::<TestAllocType>();
+
+            let allocation = unsafe { allocator.allocate(example_layout) };
+            assert!(allocation.is_ok());
+            assert_ne!(allocator.total_bytes_of(HeapEntryType::Free), 0, "We are allocating, and freeing, there should not be memory loss!");
+
+            let Ok(allocation) = allocation else {
+                unreachable!();
+            };
+
+            let nonnull_ptr = NonNull::new(allocation.ptr as *mut u64).unwrap();
+
+            unsafe {
+                *nonnull_ptr.as_ptr() = 0xBABBEEF;
+            };
+
+            assert_eq!(unsafe {*nonnull_ptr.as_ptr()}, 0xBABBEEF);
+
+            let free_result = unsafe { allocator.free(nonnull_ptr) };
+
+            assert_eq!(free_result, Ok(()), "{:#?}", allocator.allocations);
+        })
+    }
+
+    #[test]
+    fn make_over_10_allocations() {
+        let mut allocator = get_example_allocator();
+        let example_layout = MemoryLayout::from_type::<u8>();
+
+        for _ in 0..20 {
+            let allocation_result = unsafe { allocator.allocate(example_layout) };
+            assert!(allocation_result.is_ok(), "Allocator was not able to allocate 20 regions of 1 byte, result was {:#?}", allocation_result);
+        }
+
+        assert!(allocator.total_bytes_of(HeapEntryType::Free) >= 4096,
+                "{:#?}", allocator.allocations);
+    }
 
 }
