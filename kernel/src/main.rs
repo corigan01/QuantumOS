@@ -83,8 +83,9 @@ fn main(boot_info: &KernelBootInformation) {
     let mut framebuffer = boot_info.framebuffer;
 
     framebuffer.fill_entire(Pixel::from_hex(0x111111));
-    framebuffer.draw_built_in_text(PixelLocation::new(0, 0), Pixel::WHITE, "Quantum Kernel");
+    framebuffer.draw_built_in_text(PixelLocation::new(0, 0), Pixel::WHITE, "QuantumOS");
     framebuffer.draw_rect(rect!(0, 15 ; 150, 2), Pixel::WHITE);
+
 }
 
 #[panic_handler]

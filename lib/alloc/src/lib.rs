@@ -31,6 +31,7 @@ extern crate alloc;
 pub mod heap;
 pub mod usable_region;
 pub mod memory_layout;
+pub mod vec;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum AllocErr {
@@ -40,3 +41,4 @@ pub enum AllocErr {
     InternalErr,
     DoubleFree
 }
+

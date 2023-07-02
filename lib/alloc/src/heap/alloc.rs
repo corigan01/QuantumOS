@@ -25,6 +25,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 
 use core::mem::{align_of, size_of};
+use core::ptr;
 use core::ptr::NonNull;
 use core::slice::Iter;
 use over_stacked::raw_vec::RawVec;
@@ -41,8 +42,8 @@ pub enum DebugAllocationEvent {
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct UnsafeAllocationObject {
-    ptr: u64,
-    size: usize
+    pub ptr: u64,
+    pub size: usize
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -340,6 +341,34 @@ impl KernelHeap {
         self.allocate_impl(allocation_description, false, HeapEntryType::Used)
     }
 
+    pub unsafe fn realloc<Type>(&mut self, old_ptr: NonNull<Type>, new_alloc_desc: MemoryLayout) -> Result<UnsafeAllocationObject, AllocErr> {
+        let searching_ptr = old_ptr.as_ptr() as u64;
+
+        let Some(old_alloc) =
+            self.allocations.iter().find(|entry| {
+                (entry.ptr + (entry.pad as u64)) == searching_ptr
+            }) else {
+            return Err(AllocErr::NotFound);
+        };
+        let old_alloc = *old_alloc;
+        if old_alloc.size > new_alloc_desc.bytes() as u64{
+            return Err(AllocErr::ImproperConfig);
+        }
+
+
+        let new_alloc = self.allocate(new_alloc_desc)?;
+        let new_alloc_ptr = new_alloc.ptr as *mut u8;
+
+        // FIXME: Use ptr::copy instead of manual byte-copy
+        for i in 0..(old_alloc.size as usize) {
+            ptr::write(new_alloc_ptr.add(i), ptr::read((old_ptr.as_ptr() as *const u8).add(i)));
+        }
+
+        self.free(old_ptr)?;
+
+        Ok(new_alloc)
+    }
+
     pub fn consolidate_entries(&mut self) {
         let mut index = 0;
         while index <= self.allocations.len() {
@@ -588,6 +617,42 @@ mod test {
             let allocation_result = unsafe { allocator.allocate(example_layout) };
             assert!(allocation_result.is_ok(), "Allocator was not able to allocate 20 regions of 1 byte, result was {:#?}", allocation_result);
         }
+
+    }
+
+    #[test]
+    fn test_realloc() {
+        let mut allocator = get_example_allocator();
+
+        type TestAllocType = u64;
+        let example_layout = MemoryLayout::from_type::<TestAllocType>();
+
+        let allocation = unsafe { allocator.allocate(example_layout) };
+        assert!(allocation.is_ok());
+
+        let Ok(allocation) = allocation else {
+            unreachable!();
+        };
+
+        let nonnull_ptr = NonNull::new(allocation.ptr as *mut u64).unwrap();
+
+        unsafe {
+            *nonnull_ptr.as_ptr() = 0xBABBEEF;
+        };
+
+        assert_eq!(unsafe {*nonnull_ptr.as_ptr()}, 0xBABBEEF);
+
+        let new_layout = MemoryLayout::new(example_layout.alignment(), example_layout.bytes() * 2);
+
+        let new_alloc = unsafe { allocator.realloc(nonnull_ptr, new_layout) };
+        assert!(new_alloc.is_ok());
+        let new_alloc = new_alloc.unwrap();
+
+        let nonnull_ptr = NonNull::new(new_alloc.ptr as *mut u64).unwrap();
+        assert_eq!(unsafe {*nonnull_ptr.as_ptr()}, 0xBABBEEF);
+
+        let free_result = unsafe { allocator.free(nonnull_ptr) };
+        assert_eq!(free_result, Ok(()));
 
     }
 
