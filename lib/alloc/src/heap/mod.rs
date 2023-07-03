@@ -57,23 +57,55 @@ pub struct GlobalAlloc;
 
 impl AllocatorAPI for GlobalAlloc {
     unsafe fn allocate(allocation_description: MemoryLayout) -> Result<UnsafeAllocationObject, AllocErr> {
-        get_global_alloc().allocate(allocation_description)
+        reserve_lock();
+        let u = get_global_alloc().allocate(allocation_description);
+        free_lock();
+
+        u
     }
 
     unsafe fn realloc<Type>(old_ptr: NonNull<Type>, new_alloc_desc: MemoryLayout) -> Result<UnsafeAllocationObject, AllocErr> {
-        get_global_alloc().realloc(old_ptr, new_alloc_desc)
+        reserve_lock();
+        let u = get_global_alloc().realloc(old_ptr, new_alloc_desc);
+        free_lock();
+
+        u
     }
 
     unsafe fn realloc_fill<Type>(old_ptr: NonNull<Type>, new_alloc_desc: MemoryLayout, fill: u8) -> Result<UnsafeAllocationObject, AllocErr> {
-        get_global_alloc().realloc_fill(old_ptr, new_alloc_desc, fill)
+        reserve_lock();
+        let u = get_global_alloc().realloc_fill(old_ptr, new_alloc_desc, fill);
+        free_lock();
+
+        u
     }
 
     unsafe fn free<Type>(ptr: NonNull<Type>) -> Result<(), AllocErr> {
-        get_global_alloc().free(ptr)
+        reserve_lock();
+        let u = get_global_alloc().free(ptr);
+        free_lock();
+
+        u
     }
 }
 
 pub static mut THE_GLOBAL_ALLOC: Option<KernelHeap> = None;
+pub static mut THE_GLOBAL_LOCK: bool = false;
+
+pub fn reserve_lock() {
+    unsafe {
+        while THE_GLOBAL_LOCK {};
+
+        THE_GLOBAL_LOCK = true;
+    }
+}
+
+pub fn free_lock() {
+    unsafe {
+        THE_GLOBAL_LOCK = false;
+    }
+}
+
 pub fn set_global_alloc(alloc: KernelHeap) {
     unsafe {
         assert!(THE_GLOBAL_ALLOC.is_none(), "Can not move allocations! Unable to set the global allocator multiple times.");
@@ -91,7 +123,6 @@ pub fn get_global_alloc() -> &'static mut KernelHeap {
 pub fn set_example_allocator(size_in_bytes: usize) {
     unsafe {
         if THE_GLOBAL_ALLOC.is_some() {
-            THE_GLOBAL_ALLOC.as_mut().unwrap().clear_entries();
             return;
         }
     }

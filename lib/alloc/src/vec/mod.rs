@@ -156,7 +156,7 @@ impl<Type, Alloc: AllocatorAPI> Drop for Vec<Type, Alloc> {
 
 #[cfg(test)]
 mod test {
-    use crate::heap::{get_global_alloc, set_example_allocator};
+    use crate::heap::set_example_allocator;
     use super::*;
 
     #[test]

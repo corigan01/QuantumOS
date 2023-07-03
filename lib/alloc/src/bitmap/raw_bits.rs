@@ -29,6 +29,7 @@ use core::ptr::NonNull;
 use crate::heap::{AllocatorAPI, GlobalAlloc};
 use crate::memory_layout::MemoryLayout;
 
+
 pub struct RawBitmap<Alloc: AllocatorAPI = GlobalAlloc> {
     pub(crate) ptr: NonNull<usize>,
     pub(crate) cap: usize,
@@ -36,7 +37,8 @@ pub struct RawBitmap<Alloc: AllocatorAPI = GlobalAlloc> {
 }
 
 impl<Alloc: AllocatorAPI> RawBitmap<Alloc> {
-    pub const UNIT_SIZE: usize = size_of::<usize>();
+    pub const UNIT_SIZE_BYTES: usize = size_of::<usize>();
+    pub const BITS_PER_UNIT: usize = Self::UNIT_SIZE_BYTES * 8;
 
     pub const fn new() -> Self {
         Self {
@@ -46,11 +48,32 @@ impl<Alloc: AllocatorAPI> RawBitmap<Alloc> {
         }
     }
 
+    pub fn read(&self, index: usize) -> usize {
+        if index >= self.cap {
+            return 0;
+        }
+
+        unsafe { *self.ptr.as_ptr().add(index) }
+    }
+
+    pub fn write(&mut self, index: usize, value: usize) {
+        // We lazy allocate, so if the value is zero, we don't have to allocate because the
+        // default is zero!
+        if value == 0 {
+            return;
+        }
+
+        if index >= self.cap {
+            self.reserve((index - self.cap) + 1);
+        }
+
+        unsafe { *self.ptr.as_ptr().add(index) = value };
+    }
+
     pub fn reserve(&mut self, additional: usize) {
         if additional == 0 {
             return;
         }
-
         let allocation_disc = MemoryLayout::new(align_of::<usize>(), size_of::<usize>() * (additional + self.cap));
 
         let allocation = if self.cap == 0 {

@@ -41,6 +41,7 @@ pub enum DebugAllocationEvent {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[must_use = "Not referencing ptr, will leak its allocation"]
 pub struct UnsafeAllocationObject {
     pub ptr: u64,
     pub size: usize
@@ -217,7 +218,7 @@ impl KernelHeap {
                 let (_, bytes_to_align) = Self::align_ptr(entry.ptr, requested_align);
                 entry.size as usize >= (requested_bytes + bytes_to_align) && entry.kind == HeapEntryType::Free
             })
-            .min_by_key(|(id, entry)| entry.size as usize)
+            .min_by_key(|(_, entry)| entry.size as usize)
             .map(|(id, _)| (id, self.allocations[id]));
 
         let Some((best_entry_id, best_entry)) = best_entry_info else {
@@ -429,7 +430,7 @@ impl KernelHeap {
 mod test {
     extern crate alloc;
 
-    use alloc::alloc::alloc;
+    use alloc::alloc::{alloc, dealloc};
     use core::alloc::Layout;
     use core::mem::align_of;
     use super::*;
@@ -471,21 +472,29 @@ mod test {
     }
 
     const ALLOCATION_BUFFER_SIZE: usize = 4096;
-    static mut ALLOCATION_SPACE: NonNull<u8> = NonNull::dangling();
 
     fn get_example_allocator() -> KernelHeap {
         let memory_layout = Layout::from_size_align(ALLOCATION_BUFFER_SIZE, 1).unwrap();
-        unsafe {
+
+        let nonnull = unsafe {
             let alloc = alloc(memory_layout);
 
-            let nonnull = NonNull::new(alloc).unwrap();
-            ALLOCATION_SPACE = nonnull;
-        }
+             NonNull::new(alloc).unwrap()
+        };
 
         let usable_region =
-            unsafe { UsableRegion::from_raw_parts(ALLOCATION_SPACE.as_ptr(), ALLOCATION_BUFFER_SIZE) }
+            unsafe { UsableRegion::from_raw_parts(nonnull.as_ptr(), ALLOCATION_BUFFER_SIZE) }
                 .unwrap();
+
         KernelHeap::new(usable_region).unwrap()
+    }
+
+    fn free_my_example_allocator(heap: KernelHeap) {
+        let memory_layout = Layout::from_size_align(ALLOCATION_BUFFER_SIZE, 1).unwrap();
+
+        unsafe {
+            dealloc(heap.init_ptr as *mut u8, memory_layout);
+        }
     }
 
     #[test]
@@ -494,6 +503,7 @@ mod test {
 
         assert_ne!(allocator.allocations.len(), 0);
 
+        free_my_example_allocator(allocator);
     }
 
     #[test]
@@ -504,6 +514,7 @@ mod test {
 
         assert!(allocation_result.is_ok());
 
+        free_my_example_allocator(allocator);
     }
 
     #[test]
@@ -516,6 +527,7 @@ mod test {
             assert!(allocation_result.is_ok(), "Allocator was not able to allocate 5 regions of 1 byte, result was {:#?}", allocation_result);
         }
 
+        free_my_example_allocator(allocator);
     }
 
     #[test]
@@ -536,6 +548,7 @@ mod test {
 
         assert_eq!(allocation.size, size_of::<TestAllocType>());
         assert_eq!((allocation.ptr as *const ()).align_offset(test_allocation_type_alignment), 0);
+        free_my_example_allocator(allocator);
     }
 
     #[test]
@@ -566,6 +579,7 @@ mod test {
 
         assert_eq!(free_result, Ok(()));
 
+        free_my_example_allocator(allocator);
     }
 
     extern crate test;
@@ -614,6 +628,7 @@ mod test {
             assert!(allocation_result.is_ok(), "Allocator was not able to allocate 20 regions of 1 byte, result was {:#?}", allocation_result);
         }
 
+        free_my_example_allocator(allocator);
     }
 
     #[test]
@@ -650,6 +665,7 @@ mod test {
         let free_result = unsafe { allocator.free(nonnull_ptr) };
         assert_eq!(free_result, Ok(()));
 
+        free_my_example_allocator(allocator);
     }
 
 }

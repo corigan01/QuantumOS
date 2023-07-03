@@ -23,78 +23,61 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use core::marker::PhantomData;
 use quantum_utils::bitset::BitSet;
 use crate::bitmap::raw_bits::RawBitmap;
-use crate::heap::GlobalAlloc;
+use crate::heap::{AllocatorAPI, GlobalAlloc};
 
 mod raw_bits;
 
 
 // FIXME: Rust is giving weird issues when using `Alloc = GlobalAlloc` in this type
-pub struct Bitmap {
-    raw: RawBitmap<GlobalAlloc>
+pub struct Bitmap<Alloc: AllocatorAPI = GlobalAlloc> {
+    raw: RawBitmap<Alloc>,
+    phn: PhantomData<Alloc>
 }
 
 impl Bitmap {
-    const UNIT_SIZE_BYTES: usize = RawBitmap::<GlobalAlloc>::UNIT_SIZE;
-    const UNIT_SIZE_BITS: usize = Self::UNIT_SIZE_BYTES * 8;
+    const UNIT_SIZE_BYTES: usize = RawBitmap::<GlobalAlloc>::UNIT_SIZE_BYTES;
+    const BITS_PER_UNIT: usize = RawBitmap::<GlobalAlloc>::BITS_PER_UNIT;
 
     pub const fn new() -> Self {
         Self {
-            raw: RawBitmap::new()
+            raw: RawBitmap::new(),
+            phn: PhantomData
         }
     }
 
     pub fn with_capacity(n_bits: usize) -> Self {
         let mut tmp = Self::new();
-        tmp.raw.reserve(n_bits / Self::UNIT_SIZE_BITS);
+        tmp.raw.reserve(n_bits / Self::BITS_PER_UNIT);
 
         tmp
     }
 
     pub fn capacity(&self) -> usize {
-        self.raw.cap * Self::UNIT_SIZE_BITS
-    }
-
-    fn capacity_deficit_in_allocations(&self, n_bit: usize) -> usize {
-        if self.capacity() > n_bit {
-            0
-        } else {
-            ((n_bit - self.capacity()) / Self::UNIT_SIZE_BITS) + 1
-        }
+        self.raw.cap * Self::BITS_PER_UNIT
     }
 
     pub fn set_bit(&mut self, n_bit: usize, flag: bool) {
-        let capacity_diff = self.capacity_deficit_in_allocations(n_bit);
-        if capacity_diff != 0 {
-            self.raw.reserve(capacity_diff);
-        }
+        let unit_index = n_bit / Self::BITS_PER_UNIT;
+        let bit_index = n_bit % Self::BITS_PER_UNIT;
 
-        unsafe {
-            let ptr = self.raw.ptr.as_ptr().add(n_bit / Self::UNIT_SIZE_BITS);
-            *ptr = (*ptr).set_bit((n_bit % 8) as u8, flag);
-        }
+        let bit = self.raw.read(unit_index).set_bit(bit_index as u8, flag);
+        self.raw.write(unit_index, bit);
     }
 
     pub fn get_bit(&self, n_bit: usize) -> bool {
-        let capacity_diff = self.capacity_deficit_in_allocations(n_bit);
-        if capacity_diff != 0 {
-            return false;
-        }
+        let unit_index = n_bit / Self::BITS_PER_UNIT;
+        let bit_index = n_bit % Self::BITS_PER_UNIT;
 
-        let return_flag;
-        unsafe {
-            let ptr = self.raw.ptr.as_ptr().add(n_bit / Self::UNIT_SIZE_BITS);
-            return_flag = (*ptr).get_bit((n_bit % 8) as u8);
-        }
-
-        return_flag
+        self.raw.read(unit_index).get_bit(bit_index as u8)
     }
 }
 
 #[cfg(test)]
 mod test {
-    use crate::heap::{get_global_alloc, set_example_allocator};
+    use crate::heap::set_example_allocator;
     use super::*;
 
     #[test]
@@ -124,6 +107,7 @@ mod test {
         assert_eq!(bitmap.get_bit(3), false);
         assert_eq!(bitmap.get_bit(4), true);
         assert_eq!(bitmap.get_bit(5), false);
+
     }
 
     #[test]
@@ -159,7 +143,6 @@ mod test {
             assert_eq!(bitmap.get_bit(i), true);
         }
 
-        assert!(false, "{:#?}", get_global_alloc().allocations);
         assert_eq!(bitmap.get_bit(1000), false);
     }
 
