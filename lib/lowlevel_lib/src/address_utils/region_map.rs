@@ -24,6 +24,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 use core::fmt::{Debug, Formatter};
+use core::slice::Iter;
 
 use crate::address_utils::addressable::Addressable;
 use crate::address_utils::region::{HowOverlapping, MemoryRegion, MemoryRegionType};
@@ -158,6 +159,10 @@ impl<Type> RegionMap<Type>
         }
     }
 
+    pub fn iter(&self) -> Iter<MemoryRegion<Type>> {
+        self.regions.iter()
+    }
+
     pub fn total_mem(&self) -> Bytes {
         let mut total_bytes = Bytes::from(0);
         for region in self.regions.iter() {
@@ -176,6 +181,16 @@ impl<Type> RegionMap<Type>
         }
 
         total_bytes
+    }
+
+    pub fn is_within(&self, rhs: MemoryRegion<Type>) -> bool {
+        let Some(region) = self.iter().find(|region| {
+            region.how_overlapping(&rhs) == HowOverlapping::Within
+        }) else {
+            return false
+        };
+
+        region.region_type() == rhs.region_type()
     }
 }
 

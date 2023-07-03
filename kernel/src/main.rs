@@ -29,10 +29,15 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #![allow(dead_code)]
 
 use core::panic::PanicInfo;
+use qk_alloc::heap::alloc::KernelHeap;
+use qk_alloc::heap::set_global_alloc;
+use qk_alloc::usable_region::UsableRegion;
 
-use quantum_lib::{debug_println, kernel_entry, rect};
+use quantum_lib::{debug_print, debug_println, kernel_entry, rect};
 use quantum_lib::address_utils::PAGE_SIZE;
-use quantum_lib::address_utils::region::MemoryRegionType;
+use quantum_lib::address_utils::physical_address::PhyAddress;
+use quantum_lib::address_utils::region::{MemoryRegion, MemoryRegionType};
+use quantum_lib::address_utils::virtual_address::VirtAddress;
 use quantum_lib::boot::boot_info::KernelBootInformation;
 use quantum_lib::bytes::Bytes;
 use quantum_lib::com::serial::{SerialBaud, SerialDevice, SerialPort};
@@ -43,9 +48,12 @@ use quantum_lib::possibly_uninit::PossiblyUninit;
 
 use quantum_os::clock::rtc::update_and_get_time;
 
+use owo_colors::OwoColorize;
+
 static mut SERIAL_CONNECTION: PossiblyUninit<SerialDevice> = PossiblyUninit::new_lazy(|| {
     SerialDevice::new(SerialPort::Com1, SerialBaud::Baud115200).unwrap()
 });
+
 
 kernel_entry!(main);
 
@@ -80,12 +88,51 @@ fn main(boot_info: &KernelBootInformation) {
         total_pages
     );
 
-    let mut framebuffer = boot_info.framebuffer;
+    // FIXME: The tmp alloc should be dynamic
+    let init_alloc_begin = 2 * Bytes::MIB;
+    let init_alloc_size = Bytes::from(1 * Bytes::MIB);
 
-    framebuffer.fill_entire(Pixel::from_hex(0x111111));
+    debug_print!("\nCreating Init Heap Allocator at (ptr: 0x{:x} size: {}) ... ",
+        init_alloc_begin, init_alloc_size
+    );
+
+    let is_within = physical_memory_map.is_within(MemoryRegion::from_distance(
+        PhyAddress::try_from(init_alloc_begin).unwrap(),
+        init_alloc_size,
+        MemoryRegionType::Usable
+    ));
+
+    assert!(is_within, "Failed, the region is not within the memory map! TODO: Make the Init region dynamic!");
+
+    let usable_region = unsafe {
+        UsableRegion::from_raw_parts(
+            init_alloc_begin as *mut u8,
+            init_alloc_size.into()
+        )
+    }.unwrap();
+
+    let new_kernel_heap = KernelHeap::new(usable_region)
+        .expect("Unable to create init kernel allocator");
+
+    set_global_alloc(new_kernel_heap);
+
+    debug_println!("{}", "OK".bright_green().bold());
+
+    debug_println!("\nUsing Bootloader framebuffer");
+    let mut framebuffer = boot_info.framebuffer.clone();
+
+    let clear_display_color = Pixel::from_hex(0x111111);
+
+    debug_print!("Clearing Display with {:?} ... ", clear_display_color);
+    framebuffer.fill_entire(clear_display_color);
+    debug_println!("{}", "OK".bright_green().bold());
+
+    debug_print!("Drawing Boot Graphics ... ");
     framebuffer.draw_built_in_text(PixelLocation::new(0, 0), Pixel::WHITE, "QuantumOS");
     framebuffer.draw_rect(rect!(0, 15 ; 150, 2), Pixel::WHITE);
+    debug_println!("{}", "OK".bright_green().bold());
 
+    debug_println!("\n\nDone!");
 }
 
 #[panic_handler]

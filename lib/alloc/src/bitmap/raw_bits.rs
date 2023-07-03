@@ -26,52 +26,52 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 use core::marker::PhantomData;
 use core::mem::{align_of, size_of};
 use core::ptr::NonNull;
-use crate::heap::AllocatorAPI;
+use crate::heap::{AllocatorAPI, GlobalAlloc};
 use crate::memory_layout::MemoryLayout;
 
-unsafe impl<T: Send, Alloc: AllocatorAPI> Send for RawVec<T, Alloc> {}
-unsafe impl<T: Sync, Alloc: AllocatorAPI> Sync for RawVec<T, Alloc> {}
-
-pub struct RawVec<Type, Alloc: AllocatorAPI> {
-    pub(crate) ptr: NonNull<Type>,
+pub struct RawBitmap<Alloc: AllocatorAPI = GlobalAlloc> {
+    pub(crate) ptr: NonNull<usize>,
     pub(crate) cap: usize,
     phn: PhantomData<Alloc>
 }
 
-impl<Type, Alloc: AllocatorAPI> RawVec<Type, Alloc> {
-    pub const fn new() -> Self {
-        let sizeof_type = size_of::<Type>();
-        let cap = if sizeof_type == 0 { usize::MAX } else { 0 };
+impl<Alloc: AllocatorAPI> RawBitmap<Alloc> {
+    pub const UNIT_SIZE: usize = size_of::<usize>();
 
+    pub const fn new() -> Self {
         Self {
             ptr: NonNull::dangling(),
-            cap,
+            cap: 0,
             phn: PhantomData,
         }
     }
 
     pub fn reserve(&mut self, additional: usize) {
-        let memory_disc = MemoryLayout::new(align_of::<Type>(), size_of::<Type>() * (self.cap + additional));
+        if additional == 0 {
+            return;
+        }
 
-        let new_allocation = if self.cap == 0 {
-            unsafe { Alloc::allocate(memory_disc) }.expect("Unable to reserve vector!")
+        let allocation_disc = MemoryLayout::new(align_of::<usize>(), size_of::<usize>() * (additional + self.cap));
+
+        let allocation = if self.cap == 0 {
+            unsafe { Alloc::allocate_zero(allocation_disc) }
+                .expect("Unable to reserve Bitmap")
         } else {
-            unsafe { Alloc::realloc(self.ptr, memory_disc) }.expect("Unable to reserve vector!")
+            unsafe { Alloc::realloc_zero(self.ptr, allocation_disc) }
+                .expect("Unable to reserve Bitmap")
         };
 
-        self.ptr = NonNull::new(new_allocation.ptr as *mut Type).unwrap();
+        let new_ptr = NonNull::new(allocation.ptr as *mut usize).unwrap();
+
+        self.ptr = new_ptr;
         self.cap += additional;
     }
 }
 
-impl<Type, Alloc: AllocatorAPI> Drop for RawVec<Type, Alloc> {
+impl<Alloc: AllocatorAPI> Drop for RawBitmap<Alloc> {
     fn drop(&mut self) {
-        if self.cap == 0 || size_of::<Type>() == 0 {
-            return;
-        }
-
         unsafe {
-            Alloc::free(self.ptr).expect("Unable to free vector!");
+            Alloc::free(self.ptr).expect("Unable to drop Bitmap")
         }
     }
 }

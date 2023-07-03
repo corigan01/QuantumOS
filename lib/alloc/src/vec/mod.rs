@@ -156,27 +156,12 @@ impl<Type, Alloc: AllocatorAPI> Drop for Vec<Type, Alloc> {
 
 #[cfg(test)]
 mod test {
-    use alloc::alloc::alloc_zeroed;
-    use core::alloc::Layout;
-    use crate::heap::alloc::KernelHeap;
-    use crate::heap::set_global_alloc;
-    use crate::usable_region::UsableRegion;
-    use crate::vec::Vec;
-
-    fn setup_allocator() {
-        let allocator_layout = Layout::from_size_align(4096, 8).unwrap();
-        let allocation = unsafe { alloc_zeroed(allocator_layout) };
-        let usable_region = unsafe { UsableRegion::from_raw_parts(allocation, 4096) }
-            .unwrap();
-
-        let new_kernel_heap = KernelHeap::new(usable_region).unwrap();
-
-        set_global_alloc(new_kernel_heap);
-    }
+    use crate::heap::{get_global_alloc, set_example_allocator};
+    use super::*;
 
     #[test]
     fn test_push_of_elements() {
-        setup_allocator();
+        set_example_allocator(4096);
 
         let mut new_vector: Vec<i32> = Vec::new();
 
@@ -186,6 +171,18 @@ mod test {
         new_vector.push(3);
 
         assert_eq!(new_vector.as_slice(), &[0, 1, 2, 3]);
+    }
+
+    #[test]
+    fn test_push_a_bunch_of_elements() {
+        set_example_allocator(4096);
+        let mut vector: Vec<i32> = Vec::new();
+
+        for i in 0..10 {
+            vector.push(i);
+        }
+
+
     }
 
 
