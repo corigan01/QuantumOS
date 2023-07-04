@@ -45,6 +45,13 @@ impl MemoryLayout {
         
         Self::new(alignment, size)
     }
+
+    pub fn from_type_array<T>(elements: usize) -> Self {
+        let alignment = align_of::<T>();
+        let size = size_of::<T>() * elements;
+
+        Self::new(alignment, size)
+    }
     
     pub fn alignment(&self) -> usize {
         self.alignment

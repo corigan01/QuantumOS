@@ -24,7 +24,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 use core::marker::PhantomData;
-use core::mem::{align_of, size_of};
+use core::mem::size_of;
 use core::ptr::NonNull;
 use crate::heap::AllocatorAPI;
 use crate::memory_layout::MemoryLayout;
@@ -51,7 +51,7 @@ impl<Type, Alloc: AllocatorAPI> RawVec<Type, Alloc> {
     }
 
     pub fn reserve(&mut self, additional: usize) {
-        let memory_disc = MemoryLayout::new(align_of::<Type>(), size_of::<Type>() * (self.cap + additional));
+        let memory_disc = MemoryLayout::from_type_array::<Type>(self.cap + additional);
 
         let new_allocation = if self.cap == 0 {
             unsafe { Alloc::allocate(memory_disc) }.expect("Unable to reserve vector!")
