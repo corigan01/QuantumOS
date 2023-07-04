@@ -31,8 +31,12 @@ extern crate alloc;
 pub mod heap;
 pub mod usable_region;
 pub mod memory_layout;
+
+// std(like) libs for heap allocation
 pub mod vec;
 pub mod bitmap;
+pub mod string;
 
 pub mod error;
+
 pub use error::*;
