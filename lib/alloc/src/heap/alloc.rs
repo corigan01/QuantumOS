@@ -299,6 +299,12 @@ impl KernelHeap {
         // Change the main entry to be reserved
         if !(post_allocation_split || pre_allocation_split) {
             let best_entry_mut = self.allocations.get_mut(best_entry_id).unwrap();
+            if best_entry_mut.size < requested_bytes as u64 ||
+                best_entry_mut.kind != HeapEntryType::Free {
+                return Err(AllocErr::InternalErr);
+            }
+
+            best_entry_mut.pad = best_entry_align_bump as u32;
             best_entry_mut.kind = mark_allocated_as;
             best_entry_mut.over = best_entry_mut.size - requested_bytes as u64;
         }
@@ -383,6 +389,7 @@ impl KernelHeap {
             if entry_end == next_entry.ptr {
                 self.allocations[index].size = entry.size + next_entry.size;
                 self.allocations[index].pad = 0;
+                self.allocations[index].over = 0;
                 self.allocations.remove(index + 1);
                 continue;
             }
@@ -416,6 +423,7 @@ impl KernelHeap {
         }
 
         if !did_find {
+            assert!(false, "ptr: {}\n{:#?}", ptr.as_ptr() as u64, self.allocations);
             return Err(AllocErr::NotFound);
         }
 
