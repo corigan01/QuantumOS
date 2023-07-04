@@ -69,8 +69,10 @@ impl Display for Bytes {
             (self.0 / Self::MIB, "Mib")
         } else if self.0 >= Self::KIB {
             (self.0 / Self::KIB, "Kib")
-        } else {
+        } else if self.0 != 1 {
             (self.0, "bytes")
+        } else {
+            (self.0, "byte")
         };
 
         write!(f, "{} {}", bytes, symb)?;
