@@ -30,20 +30,19 @@ use crate::heap::{AllocatorAPI, GlobalAlloc};
 
 mod raw_bits;
 
-
-// FIXME: Rust is giving weird issues when using `Alloc = GlobalAlloc` in this type
 pub struct Bitmap<Alloc: AllocatorAPI = GlobalAlloc> {
     raw: RawBitmap<Alloc>,
+    highest_set: usize,
     phn: PhantomData<Alloc>
 }
 
 impl Bitmap {
-    const UNIT_SIZE_BYTES: usize = RawBitmap::<GlobalAlloc>::UNIT_SIZE_BYTES;
     const BITS_PER_UNIT: usize = RawBitmap::<GlobalAlloc>::BITS_PER_UNIT;
 
     pub const fn new() -> Self {
         Self {
             raw: RawBitmap::new(),
+            highest_set: 0,
             phn: PhantomData
         }
     }
@@ -59,9 +58,23 @@ impl Bitmap {
         self.raw.cap * Self::BITS_PER_UNIT
     }
 
+    pub fn highest_set(&self) -> usize {
+        self.highest_set
+    }
+
     pub fn set_bit(&mut self, n_bit: usize, flag: bool) {
+        if n_bit > self.highest_set {
+            self.highest_set = n_bit;
+        }
+
         let unit_index = n_bit / Self::BITS_PER_UNIT;
         let bit_index = n_bit % Self::BITS_PER_UNIT;
+
+        // We don't need to allocate if its not setting a bit,
+        // only allocate if we *must*!
+        if !flag && unit_index > self.capacity() {
+            return;
+        }
 
         let bit = self.raw.read(unit_index).set_bit(bit_index as u8, flag);
         self.raw.write(unit_index, bit);
@@ -72,6 +85,62 @@ impl Bitmap {
         let bit_index = n_bit % Self::BITS_PER_UNIT;
 
         self.raw.read(unit_index).get_bit(bit_index as u8)
+    }
+
+    pub fn first_of(&self, flag: bool) -> Option<usize> {
+        let skip_if_equal = if flag { 0 } else { usize::MAX };
+
+        for unit_index in 0..self.raw.cap {
+            let unit_value = self.raw.read(unit_index);
+            if unit_value == skip_if_equal {
+                continue;
+            }
+
+            for bit_index in 0..Self::BITS_PER_UNIT {
+                let bit_flag = unit_value.get_bit(bit_index as u8);
+
+                if bit_flag != flag {
+                    continue;
+                }
+
+                return Some(unit_index * Self::BITS_PER_UNIT + bit_index);
+            }
+        }
+
+        None
+    }
+
+    pub fn iter(&self) -> BitmapIter {
+        BitmapIter::from_bitmap_ref(&self)
+    }
+}
+
+pub struct BitmapIter<'a> {
+    bitmap: &'a Bitmap,
+    bit_index: usize
+}
+
+impl<'a> BitmapIter<'a> {
+    fn from_bitmap_ref(bitmap: &'a Bitmap) -> Self {
+        Self {
+            bitmap,
+            bit_index: 0
+        }
+    }
+}
+
+impl<'a> Iterator for BitmapIter<'a> {
+    type Item = bool;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.bit_index > self.bitmap.highest_set {
+            None
+        } else {
+            let flag = self.bitmap.get_bit(self.bit_index);
+            self.bit_index += 1;
+
+            Some(flag)
+        }
     }
 }
 
@@ -144,6 +213,21 @@ mod test {
         }
 
         assert_eq!(bitmap.get_bit(1000), false);
+    }
+
+    #[test]
+    fn test_bitmap_iterator() {
+        set_example_allocator(4096);
+        let mut bitmap = Bitmap::new();
+
+        for i in 0..100 {
+            bitmap.set_bit(i, true);
+        }
+
+        for (index, bit) in bitmap.iter().enumerate() {
+            assert_eq!(bit, true, "Was not true on {}", index);
+        }
+
     }
 
 

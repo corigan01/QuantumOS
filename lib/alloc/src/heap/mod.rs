@@ -25,6 +25,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 use core::ptr;
 use core::ptr::NonNull;
+use core::sync::atomic::{AtomicBool, Ordering};
 use crate::AllocErr;
 use crate::heap::alloc::{KernelHeap, UnsafeAllocationObject};
 use crate::memory_layout::MemoryLayout;
@@ -39,7 +40,7 @@ pub trait AllocatorAPI {
 
     unsafe fn allocate_fill(allocation_description: MemoryLayout, fill: u8) -> Result<UnsafeAllocationObject, AllocErr> {
         let allocation = Self::allocate(allocation_description)?;
-        ptr::write_bytes(allocation.ptr as *mut u8, fill, allocation.size as usize);
+        ptr::write_bytes(allocation.ptr as *mut u8, fill, allocation.size);
 
         Ok(allocation)
     }
@@ -90,19 +91,19 @@ impl AllocatorAPI for GlobalAlloc {
 }
 
 pub static mut THE_GLOBAL_ALLOC: Option<KernelHeap> = None;
-pub static mut THE_GLOBAL_LOCK: bool = false;
+pub static mut THE_GLOBAL_LOCK: AtomicBool = AtomicBool::new(false);
 
+#[inline(never)]
 pub fn reserve_lock() {
     unsafe {
-        while THE_GLOBAL_LOCK {};
-
-        THE_GLOBAL_LOCK = true;
+        while !THE_GLOBAL_LOCK.compare_exchange(false, true, Ordering::Acquire, Ordering::Acquire).is_ok() { }
     }
 }
 
+#[inline(never)]
 pub fn free_lock() {
     unsafe {
-        THE_GLOBAL_LOCK = false;
+        THE_GLOBAL_LOCK.store(false, Ordering::Release);
     }
 }
 
@@ -121,11 +122,14 @@ pub fn get_global_alloc() -> &'static mut KernelHeap {
 
 #[cfg(test)]
 pub fn set_example_allocator(size_in_bytes: usize) {
+
     unsafe {
         if THE_GLOBAL_ALLOC.is_some() {
             return;
         }
     }
+
+    reserve_lock();
 
     extern crate alloc;
 
@@ -138,4 +142,6 @@ pub fn set_example_allocator(size_in_bytes: usize) {
 
         set_global_alloc(new_kern_heap);
     }
+
+    free_lock();
 }
