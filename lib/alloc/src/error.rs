@@ -67,7 +67,7 @@ impl Debug for AllocErr {
                     }
                     ImproperConfigReason::Smaller(old, new) => {
                         write!(f,
-                               "(Does Not Fit) Your old allocation is {} but your new allocation is only {}!",
+                               "(Does Not Fit) Your old allocation is {}, however we are trying to fit it in only {}!",
                             Bytes::from(*old),
                             Bytes::from(*new)
                         )?;
@@ -76,7 +76,7 @@ impl Debug for AllocErr {
             }
             AllocErr::NotFound => {
                 write!(f,
-                       "(Not Found) Could not find that allocation. "
+                       "(Not Found) Could not find that allocation to free!"
                 )?;
             }
             AllocErr::InternalErr => {

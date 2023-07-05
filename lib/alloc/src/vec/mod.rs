@@ -24,6 +24,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 use core::ptr;
+use core::slice::{Iter, IterMut};
 use crate::heap::{AllocatorAPI, GlobalAlloc};
 use crate::vec::raw_vec::RawVec;
 
@@ -60,6 +61,15 @@ impl<Type, Alloc: AllocatorAPI> Vec<Type, Alloc> {
     pub fn as_slice<'a>(&self) -> &'a [Type] {
         unsafe {
             core::slice::from_raw_parts(
+                self.raw.ptr.as_ptr(),
+                self.len
+            )
+        }
+    }
+
+    pub fn as_mut_slice<'a>(&self) -> &'a mut [Type] {
+        unsafe {
+            core::slice::from_raw_parts_mut(
                 self.raw.ptr.as_ptr(),
                 self.len
             )
@@ -145,6 +155,14 @@ impl<Type, Alloc: AllocatorAPI> Vec<Type, Alloc> {
 
         self.len -= 1;
         return_value
+    }
+
+    pub fn iter(&self) -> Iter<Type> {
+        self.as_slice().iter()
+    }
+
+    pub fn mut_iter(&mut self) -> IterMut<Type> {
+        self.as_mut_slice().iter_mut()
     }
 }
 

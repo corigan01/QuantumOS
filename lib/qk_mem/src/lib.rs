@@ -23,27 +23,7 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use over_stacked::heapless_vector::HeaplessVec;
+#![no_std]
+#![feature(test)]
 
-// Just like the SerenityOS Project,
-// This is a quick and dirty allocator to get things going! :^)
-
-#[repr(C, packed)]
-pub struct Allocation {
-    ptr: *mut u8,
-    len: u32
-}
-
-#[allow(dead_code)]
-pub struct ComplexAllocator {
-    ptr: *mut u8,
-    size: usize,
-
-    // The idea is that this can store a first few memory allocations,
-    // then when it fills up it will dump them into the allocation array
-    pool_allocation: HeaplessVec<Allocation, 10>,
-
-
-    allocation_array: *mut Allocation,
-    allocation_array_len: usize
-}
+pub mod pmm;

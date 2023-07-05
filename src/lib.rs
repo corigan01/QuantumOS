@@ -51,7 +51,7 @@ pub fn build_kernel(is_in_test_mode: bool) -> Result<String, Box<dyn std::error:
     let cargo_status = Command::new(cargo)
         .current_dir("kernel/")
         .arg(build_string)
-        .arg("--release")
+        //.arg("--release")
         .arg("--target")
         .arg("x86_64-quantum_os.json")
         .arg(format!("--target-dir={}", target))

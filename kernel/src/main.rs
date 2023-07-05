@@ -37,7 +37,6 @@ use quantum_lib::{debug_print, debug_println, kernel_entry, rect};
 use quantum_lib::address_utils::PAGE_SIZE;
 use quantum_lib::address_utils::physical_address::PhyAddress;
 use quantum_lib::address_utils::region::{MemoryRegion, MemoryRegionType};
-use quantum_lib::address_utils::virtual_address::VirtAddress;
 use quantum_lib::boot::boot_info::KernelBootInformation;
 use quantum_lib::bytes::Bytes;
 use quantum_lib::com::serial::{SerialBaud, SerialDevice, SerialPort};
@@ -49,6 +48,7 @@ use quantum_lib::possibly_uninit::PossiblyUninit;
 use quantum_os::clock::rtc::update_and_get_time;
 
 use owo_colors::OwoColorize;
+use qk_alloc::string::String;
 
 static mut SERIAL_CONNECTION: PossiblyUninit<SerialDevice> = PossiblyUninit::new_lazy(|| {
     SerialDevice::new(SerialPort::Com1, SerialBaud::Baud115200).unwrap()
@@ -57,7 +57,7 @@ static mut SERIAL_CONNECTION: PossiblyUninit<SerialDevice> = PossiblyUninit::new
 
 kernel_entry!(main);
 
-fn main(boot_info: &KernelBootInformation) {
+fn setup_serial_debug() {
     let serial = unsafe { &mut SERIAL_CONNECTION };
 
     let connection = StreamConnectionBuilder::new()
@@ -70,6 +70,10 @@ fn main(boot_info: &KernelBootInformation) {
     add_connection_to_global_stream(connection).unwrap();
 
     debug_println!("Welcome to Quantum OS! {}\n", update_and_get_time());
+}
+
+fn main(boot_info: &KernelBootInformation) {
+    setup_serial_debug();
 
     let mut physical_memory_map = boot_info.get_physical_memory().clone();
     let mut virtual_memory_map = boot_info.get_virtual_memory().clone();
@@ -117,6 +121,9 @@ fn main(boot_info: &KernelBootInformation) {
     set_global_alloc(new_kernel_heap);
 
     debug_println!("{}", "OK".bright_green().bold());
+
+    let string_test = String::from("OK".bright_green().bold());
+    debug_println!("Test String {}", string_test.as_str());
 
     debug_println!("\nUsing Bootloader framebuffer");
     let mut framebuffer = boot_info.framebuffer.clone();
