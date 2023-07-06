@@ -23,55 +23,60 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use qk_alloc::bitmap::Bitmap;
 use qk_alloc::vec::Vec;
-use quantum_lib::address_utils::physical_address::{Aligned, PhyAddress};
-use quantum_lib::address_utils::region::{MemoryRegion, MemoryRegionType};
+use quantum_lib::address_utils::PAGE_SIZE;
+use quantum_lib::address_utils::physical_address::PhyAddress;
+use quantum_lib::address_utils::region::MemoryRegion;
+use quantum_lib::address_utils::region_map::RegionMap;
+use crate::pmm::phy_part::PhyPart;
+
+pub mod phy_part;
 
 pub enum PhyAllocErr {
     NotAligned,
-    NotFree
+    NotFree,
 }
 
-pub struct PhyPage {
-    address: PhyAddress<Aligned, 12>
+#[allow(dead_code)]
+pub struct PhysicalMemoryManager {
+    usable: Vec<PhyPart>,
+    kernel: Vec<MemoryRegion<PhyAddress>>,
+    io: Vec<MemoryRegion<PhyAddress>>,
+    other: Vec<MemoryRegion<PhyAddress>>
 }
 
-pub struct PhysicalAllocator {
-    memory_bitmap: Vec<(MemoryRegion<PhyAddress<Aligned, 12>>, Bitmap)>
-}
+impl PhysicalMemoryManager {
+    pub fn new(map: &RegionMap<PhyAddress>) -> Self {
+        let free_allocations: Vec<PhyPart> = map.iter()
+            .filter(|region| region.is_usable())
+            .filter_map(|region| {
+                Some(PhyPart::new(
+                    region.get_start_address().align_up(),
 
-impl PhysicalAllocator {
-    pub const fn new() -> Self {
+                    // We have to subtract one because aligning up will mean that we lose the bottom one page
+                    (region.size() as usize / PAGE_SIZE) - 1
+                ))
+            })
+            .collect();
+
+        let kernel_allocations: Vec<MemoryRegion<PhyAddress>> = map.iter()
+            .filter(|region| region.is_kernel())
+            .collect();
+
+        let other: Vec<MemoryRegion<PhyAddress>> = map.iter()
+            .filter(|region| region.is_reserved())
+            .collect();
+
         Self {
-            memory_bitmap: Vec::new()
+            usable: free_allocations,
+            kernel: kernel_allocations,
+            io: Vec::new(),
+            other
         }
     }
 
-    pub fn add_region(&mut self, region: MemoryRegion<PhyAddress>) -> Result<(), PhyAllocErr> {
-        if region.region_type() != MemoryRegionType::Usable {
-            return Err(PhyAllocErr::NotFree);
-        }
+    pub fn allocate_free_page(&mut self) {
 
-        let Ok(new_aligned_start_address) = region.get_end_address().try_aligned() else {
-            return Err(PhyAllocErr::NotAligned);
-        };
-
-        let new_memory_region = MemoryRegion::new(
-            new_aligned_start_address,
-            region.get_end_address().strip_unaligned_bits_to_align_address(),
-            MemoryRegionType::Usable
-        );
-
-        self.memory_bitmap.push((new_memory_region, Bitmap::new()));
-
-        Ok(())
-    }
-
-    pub fn reserve_page(&mut self) -> Result<PhyPage, PhyAllocErr> {
-        self.memory_bitmap.iter().map(|region| &region.1).map(|bitmap| r.iter())
-
-        todo!()
     }
 
 

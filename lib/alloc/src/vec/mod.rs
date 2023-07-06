@@ -23,6 +23,8 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use core::cmp::Ordering;
+use core::ops::{Index, IndexMut};
 use core::ptr;
 use core::slice::{Iter, IterMut};
 use crate::heap::{AllocatorAPI, GlobalAlloc};
@@ -157,12 +159,68 @@ impl<Type, Alloc: AllocatorAPI> Vec<Type, Alloc> {
         return_value
     }
 
+    pub fn get(&self, index: usize) -> Option<&Type> {
+        self.as_slice().get(index)
+    }
+
+    pub fn get_mut(&mut self, index: usize) -> Option<&mut Type> {
+        self.as_mut_slice().get_mut(index)
+    }
+
+    pub fn sort(&mut self)
+        where Type: Ord {
+        self.as_mut_slice().sort_unstable()
+    }
+
+    pub fn sort_by<F>(&mut self, function: F)
+        where F: FnMut(&Type, &Type) -> Ordering {
+        self.as_mut_slice().sort_unstable_by(function)
+    }
+
     pub fn iter(&self) -> Iter<Type> {
         self.as_slice().iter()
     }
 
     pub fn mut_iter(&mut self) -> IterMut<Type> {
         self.as_mut_slice().iter_mut()
+    }
+}
+
+impl<Type, Alloc: AllocatorAPI> Index<usize> for Vec<Type, Alloc> {
+    type Output = Type;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        self.get(index).expect("Index out of bounds!")
+    }
+}
+
+impl<Type, Alloc: AllocatorAPI> IndexMut<usize> for Vec<Type, Alloc> {
+    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
+        self.get_mut(index).expect("Index out of bounds!")
+    }
+}
+
+impl<Type, Alloc: AllocatorAPI> FromIterator<Type> for Vec<Type, Alloc> {
+    fn from_iter<T: IntoIterator<Item=Type>>(iter: T) -> Self {
+        let mut tmp = Vec::new();
+        for i in iter {
+            tmp.push(i);
+        }
+
+        tmp
+    }
+}
+
+impl<'a, Type, Alloc: AllocatorAPI> FromIterator<&'a Type> for Vec<Type, Alloc>
+    where Type: Clone + 'a
+{
+    fn from_iter<T: IntoIterator<Item=&'a Type>>(iter: T) -> Self {
+        let mut tmp = Vec::new();
+        for i in iter {
+            tmp.push(i.clone());
+        }
+
+        tmp
     }
 }
 
@@ -200,6 +258,25 @@ mod test {
             vector.push(i);
         }
 
+
+    }
+
+    #[test]
+    fn test_sorting_elements() {
+        set_example_allocator(4096);
+        let mut vector: Vec<i32> = Vec::new();
+
+        vector.push(3);
+        vector.push(1);
+        vector.push(0);
+        vector.push(2);
+
+        vector.sort();
+
+        assert_eq!(vector[0], 0);
+        assert_eq!(vector[1], 1);
+        assert_eq!(vector[2], 2);
+        assert_eq!(vector[3], 3);
 
     }
 

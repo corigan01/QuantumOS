@@ -66,6 +66,18 @@ fn main() {
             .current_dir("lib/alloc")
             .arg("test")
             .arg(format!("--target-dir={}/alloc", target))
+            .arg("--")
+            .arg("--test-threads=1")
+            .stdout(std::process::Stdio::inherit())
+            .status()
+            .unwrap();
+
+        let qk_mem = Command::new(cargo.clone())
+            .current_dir("lib/qk_mem")
+            .arg("test")
+            .arg(format!("--target-dir={}/qk_mem", target))
+            .arg("--")
+            .arg("--test-threads=1")
             .stdout(std::process::Stdio::inherit())
             .status()
             .unwrap();
@@ -81,8 +93,9 @@ fn main() {
         if lowlevel_lib.success() &&
             over_stacked_lib.success() &&
             alloc_lib.success() &&
-            quantum_utils.success() {
-
+            quantum_utils.success() &&
+            qk_mem.success()
+            {
             return;
         } else {
             exit(-1);

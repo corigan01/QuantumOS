@@ -29,7 +29,7 @@ use core::fmt::{Debug, Formatter};
 use crate::address_utils::addressable::Addressable;
 use crate::bytes::Bytes;
 
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 #[repr(u8)]
 pub enum MemoryRegionType {
     Unknown = 0,
@@ -104,6 +104,19 @@ impl<Type> MemoryRegion<Type>
         } else {
             HowOverlapping::None
         }
+    }
+
+    pub fn is_usable(&self) -> bool {
+        self.region_type == MemoryRegionType::Usable
+    }
+
+    pub fn is_reserved(&self) -> bool {
+        self.region_type == MemoryRegionType::Reserved
+    }
+
+    pub fn is_kernel(&self) -> bool {
+        self.region_type == MemoryRegionType::KernelStack ||
+            self.region_type == MemoryRegionType::KernelCode
     }
 
     pub fn size(&self) -> u64 {

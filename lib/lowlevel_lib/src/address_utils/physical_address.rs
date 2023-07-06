@@ -64,6 +64,21 @@ impl PhyAddress {
         None
     }
 
+    pub fn align_up<const ALIGNED_BITS: u64>(mut self) -> PhyAddress<Aligned, ALIGNED_BITS> {
+        if self.try_aligned::<ALIGNED_BITS>().is_ok() {
+            return PhyAddress {
+                value: self.value,
+                reserved: PhantomData
+            };
+        }
+
+        let shifted_up = 1 << ALIGNED_BITS;
+        PhyAddress {
+            value: self.value.set_bits(0..(ALIGNED_BITS as u8), 0) + shifted_up,
+            reserved: PhantomData
+        }
+    }
+
     pub fn is_address_physical_compatible(address: u64) -> bool {
         address.get_bits(PHYSICAL_ALLOWED_ADDRESS_SIZE..64)
             == u64::MAX.get_bits(PHYSICAL_ALLOWED_ADDRESS_SIZE..64)
@@ -97,6 +112,13 @@ impl PhyAddress {
     }
 }
 impl<Any, const ALIGNED_BITS: u64> PhyAddress<Any, ALIGNED_BITS> {
+    pub const fn dangling() -> Self {
+        Self {
+            value: 0,
+            reserved: PhantomData,
+        }
+    }
+
     pub fn is_null(&self) -> bool {
         self.value == 0
     }

@@ -136,8 +136,9 @@ impl KernelHeap {
 
     fn ensure_buffer_health(&self, caller: DebugAllocationEvent) {
         self.allocations.iter().for_each(|entry| {
-            assert_ne!(entry.ptr, 0);
-            assert_ne!(entry.size, 0);
+            assert_ne!(entry.ptr, 0,
+                       "{:?}:: Buffer Health out-of-sync! We should not contain entries with ptrs of 0 in the allocator. ", caller);
+            assert_ne!(entry.size, 0, "{:#?} Buffer Health out-of-sync! We should not have entries with size of 0 in the allocator", caller);
         });
 
         assert_ne!(self.allocations.iter().filter(|entry| {
@@ -423,7 +424,6 @@ impl KernelHeap {
         }
 
         if !did_find {
-            assert!(false, "ptr: {}\n{:#?}", ptr.as_ptr() as u64, self.allocations);
             return Err(AllocErr::NotFound);
         }
 
