@@ -44,7 +44,7 @@ use quantum_lib::com::serial::{SerialBaud, SerialDevice, SerialPort};
 use quantum_lib::elf::{ElfHeader, ElfArch, ElfBits, ElfSegmentType};
 use quantum_lib::x86_64::PrivlLevel;
 use quantum_lib::x86_64::registers::{Segment, SegmentRegs};
-use quantum_lib::bytes::Bytes;
+use quantum_utils::bytes::Bytes;
 use quantum_lib::gfx::frame_info::FrameInfo;
 use quantum_lib::gfx::FramebufferPixelLayout;
 use quantum_lib::gfx::linear_framebuffer::LinearFramebuffer;

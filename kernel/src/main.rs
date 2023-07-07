@@ -30,7 +30,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 use core::panic::PanicInfo;
 use qk_alloc::heap::alloc::KernelHeap;
-use qk_alloc::heap::{get_global_alloc_debug, set_global_alloc};
+use qk_alloc::heap::{get_global_alloc, get_global_alloc_debug, set_global_alloc};
 use qk_alloc::usable_region::UsableRegion;
 
 use quantum_lib::{debug_print, debug_println, kernel_entry, rect};
@@ -38,7 +38,7 @@ use quantum_lib::address_utils::PAGE_SIZE;
 use quantum_lib::address_utils::physical_address::PhyAddress;
 use quantum_lib::address_utils::region::{MemoryRegion, MemoryRegionType};
 use quantum_lib::boot::boot_info::KernelBootInformation;
-use quantum_lib::bytes::Bytes;
+use quantum_utils::bytes::Bytes;
 use quantum_lib::com::serial::{SerialBaud, SerialDevice, SerialPort};
 use quantum_lib::debug::{add_connection_to_global_stream, set_panic};
 use quantum_lib::debug::stream_connection::StreamConnectionBuilder;
@@ -137,8 +137,6 @@ fn main(boot_info: &KernelBootInformation) {
     let string_test = String::from("OK".bright_green().bold());
     debug_println!("Test String ... {}", string_test.as_str());
 
-
-
     let clear_display_color = Pixel::from_hex(0x111111);
 
     debug_print!("Clearing Display with {:?} ... ", clear_display_color);
@@ -150,7 +148,9 @@ fn main(boot_info: &KernelBootInformation) {
     framebuffer.draw_rect(rect!(0, 15 ; 150, 2), Pixel::WHITE);
     debug_println!("{}", "OK".bright_green().bold());
 
-    debug_println!("\n\nDone!");
+    debug_println!("\n\n{}", get_global_alloc());
+
+    debug_println!("\nDone!");
 }
 
 #[panic_handler]
@@ -170,6 +170,6 @@ fn panic(info: &PanicInfo) -> ! {
     debug_println!("");
     debug_println!("{} {}", "Panic Reason:".bold(), info.red());
     debug_println!("\n{}", "Extra Info:".bold());
-    debug_println!("    - Kernel Heap: {:#?}", get_global_alloc_debug());
+    debug_println!("    - Kernel Heap: \n{:#?}", get_global_alloc_debug());
     loop {}
 }

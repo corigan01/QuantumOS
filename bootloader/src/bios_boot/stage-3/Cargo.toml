@@ -8,6 +8,7 @@ build = "build.rs"
 quantum_lib = { path = "../../../../lib/lowlevel_lib" }
 bootloader = { path = "../../../bootloader" }
 spin = "0.9.8"
+quantum_utils = { path = "../../../../lib/quantum_utils" }
 
 [dependencies.lazy_static]
 version = "1.4.0"

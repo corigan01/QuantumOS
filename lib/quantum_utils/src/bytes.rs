@@ -69,13 +69,35 @@ impl Display for Bytes {
             (self.0 / Self::MIB, "Mib")
         } else if self.0 >= Self::KIB {
             (self.0 / Self::KIB, "Kib")
-        } else if self.0 != 1 {
-            (self.0, "bytes")
         } else {
-            (self.0, "byte")
+            (self.0, "bytes")
         };
 
         write!(f, "{} {}", bytes, symb)?;
+
+        let Some(width) = f.width() else {
+            return Ok(());
+        };
+
+        let digit_chars = match bytes {
+            i if i < 10 => 1,
+            i if i < 100 => 2,
+            i if i < 1000 => 3,
+            i if i < 10000 => 4,
+            _ => 0
+        };
+        let symb_chars = symb.chars().count();
+
+        let total_chars = digit_chars + symb_chars + 1;
+        if total_chars > width {
+            return Ok(());
+        }
+
+        let padding = width - total_chars;
+
+        for _ in 0..padding {
+            write!(f, " ")?;
+        }
 
         Ok(())
     }

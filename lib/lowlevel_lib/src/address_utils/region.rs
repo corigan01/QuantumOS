@@ -27,7 +27,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 use core::any::{type_name};
 use core::fmt::{Debug, Formatter};
 use crate::address_utils::addressable::Addressable;
-use crate::bytes::Bytes;
+use quantum_utils::bytes::Bytes;
 use owo_colors::OwoColorize;
 
 #[derive(Copy, Clone, PartialEq, Eq)]

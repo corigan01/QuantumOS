@@ -30,7 +30,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 use core::arch::asm;
 use core::panic::PanicInfo;
 
-use quantum_lib::bytes::Bytes;
+use quantum_utils::bytes::Bytes;
 use quantum_lib::debug::{add_connection_to_global_stream, set_panic};
 use quantum_lib::debug::stream_connection::StreamConnectionBuilder;
 use quantum_lib::debug_println;

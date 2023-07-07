@@ -33,7 +33,6 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 pub mod x86_64;
 pub mod basic_font;
 pub mod bitset;
-pub mod bytes;
 pub mod debug;
 pub mod gfx;
 pub mod panic_utils;

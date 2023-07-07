@@ -51,14 +51,14 @@ pub struct PhysicalMemoryManager {
 impl PhysicalMemoryManager {
     pub fn new(map: &RegionMap<PhyAddress>) -> Self {
         let mut free_allocations: Vec<PhyPart> = map.iter()
-            .filter(|region| region.is_usable())
-            .filter_map(|region| {
-                Some(PhyPart::new(
+            .filter(|region| region.is_usable() && region.size() > PAGE_SIZE as u64)
+            .map(|region| {
+                PhyPart::new(
                     region.get_start_address().align_up(),
 
                     // We have to subtract one because aligning up will mean that we lose the bottom one page
                     (region.size() as usize / PAGE_SIZE) - 1
-                ))
+                )
             })
             .collect();
 

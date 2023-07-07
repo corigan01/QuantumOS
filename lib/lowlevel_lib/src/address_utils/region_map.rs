@@ -28,7 +28,7 @@ use core::slice::Iter;
 
 use crate::address_utils::addressable::Addressable;
 use crate::address_utils::region::{HowOverlapping, MemoryRegion, MemoryRegionType};
-use crate::bytes::Bytes;
+use quantum_utils::bytes::Bytes;
 use over_stacked::heapless_vector::{HeaplessVec, HeaplessVecErr};
 
 const MAX_ALLOCATABLE_REGIONS: usize = 40;
@@ -218,7 +218,7 @@ impl<Type> Display for RegionMap<Type>
         writeln!(f, "|     Start      |       End      |    Size   |       Type       |")?;
         writeln!(f, "+----------------+----------------+-----------+------------------+")?;
         for region in self.regions.iter() {
-            writeln!(f, "| 0x{:012x} | 0x{:012x} | {:8} | {:#16?} |",
+            writeln!(f, "| 0x{:012x} | 0x{:012x} | {:9} | {:#16?} |",
                 region.get_start_address().address_as_u64(),
                 region.get_end_address().address_as_u64(),
                 region.bytes(),
@@ -240,7 +240,7 @@ mod test {
     use crate::address_utils::physical_address::PhyAddress;
     use crate::address_utils::region::{MemoryRegion, MemoryRegionType};
     use crate::address_utils::region_map::RegionMap;
-    use crate::bytes::Bytes;
+    use quantum_utils::bytes::Bytes;
 
     #[test]
     fn test_within_consolidation() {

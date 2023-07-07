@@ -38,7 +38,7 @@ use core::marker::PhantomData;
 use types::FileSystemTypes;
 
 #[cfg(debug)]
-use quantum_lib::bytes::Bytes;
+use quantum_utils::bytes::Bytes;
 
 pub struct UnQuarried;
 pub struct Quarried;

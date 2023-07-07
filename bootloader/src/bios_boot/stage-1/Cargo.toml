@@ -8,6 +8,7 @@ build = "build.rs"
 quantum_lib = { path = "../../../../lib/lowlevel_lib" }
 over-stacked     = { path = "../../../../lib/over-stacked"}
 bootloader  = { path = "../../../bootloader" }
+quantum_utils = { path = "../../../../lib/quantum_utils" }
 
 [profile.release]
 opt-level="z"

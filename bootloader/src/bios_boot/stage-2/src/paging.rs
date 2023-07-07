@@ -27,7 +27,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 use quantum_lib::{debug_print, debug_println};
 use quantum_lib::address_utils::virtual_address::VirtAddress;
-use quantum_lib::bytes::Bytes;
+use quantum_utils::bytes::Bytes;
 use quantum_lib::x86_64::paging::config::PageConfigBuilder;
 use quantum_lib::x86_64::paging::structures::{PageMapLevel2, PageMapLevel3, PageMapLevel4};
 use quantum_lib::x86_64::PrivlLevel;

@@ -24,11 +24,14 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 
+use core::fmt::{Display, Formatter};
 use core::mem::{align_of, size_of};
 use core::ptr;
 use core::ptr::NonNull;
 use core::slice::Iter;
 use over_stacked::raw_vec::RawVec;
+use owo_colors::OwoColorize;
+use quantum_utils::bytes::Bytes;
 use crate::{AllocErr, ImproperConfigReason};
 use crate::memory_layout::MemoryLayout;
 use crate::usable_region::UsableRegion;
@@ -53,6 +56,55 @@ pub enum HeapEntryType {
     Used,
     UsedByHeap,
     Forever
+}
+
+impl Display for HeapEntryType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+
+        let heap_entry_type_string = match self {
+            HeapEntryType::Free => "Free",
+            HeapEntryType::Used => "Used",
+            HeapEntryType::UsedByHeap => "UsedByHeap",
+            _ => "Unknown",
+        };
+
+        if !f.alternate() {
+            write!(f, "{}", heap_entry_type_string)?;
+        } else {
+            match self {
+                HeapEntryType::Free => {
+                    write!(f, "{}", heap_entry_type_string.green().bold())?;
+                },
+                HeapEntryType::Used => {
+                    write!(f, "{}", heap_entry_type_string.red())?;
+                },
+                HeapEntryType::UsedByHeap => {
+                    write!(f, "{}", heap_entry_type_string.yellow())?;
+                },
+                _ => {
+                    write!(f, "{}", heap_entry_type_string.red().bold())?;
+                }
+            }
+        }
+
+        let Some(width) = f.width() else {
+            return Ok(());
+        };
+
+        let drawn_chars = heap_entry_type_string.chars().count();
+
+        if drawn_chars > width {
+            return Ok(());
+        }
+
+        let padding_to_draw = width - drawn_chars;
+
+        for _ in 0..padding_to_draw {
+            write!(f, " ")?;
+        }
+
+        Ok(())
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -430,6 +482,40 @@ impl KernelHeap {
 
         self.consolidate_entries();
         self.ensure_buffer_health(DebugAllocationEvent::Free);
+
+        Ok(())
+    }
+}
+
+impl Display for KernelHeap {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        let bytes_free = self.total_bytes_of(HeapEntryType::Free);
+        let percent_free = (bytes_free as f64) / (self.total_allocated_bytes as f64);
+
+        writeln!(f, "Heap: {} {} ({:.2}%)",
+            Bytes::from(bytes_free).green().bold(),
+            "Free".green().bold(),
+                 (percent_free * 100.0),
+        )?;
+
+        writeln!(f, "|       Ptr      |    Size    |    Loss    |    Type    |  Alloc % |")?;
+        writeln!(f, "+----------------+------------+------------+------------+----------+")?;
+        for region in self.allocations.iter() {
+            let start = region.ptr + region.pad as u64;
+            let size = region.size;
+            let loss = region.pad as u64 + region.over;
+            let kind = region.kind;
+            let percent = ((size + loss) as f64) / (self.total_allocated_bytes as f64);
+
+            writeln!(f, "| 0x{:012x} | {:10} | {:10} | {:#10} | {:7.4}% |",
+                start,
+                Bytes::from(size),
+                Bytes::from(loss),
+                kind,
+                percent * 100.0
+            )?;
+        }
+        writeln!(f, "+----------------+------------+------------+------------+----------+")?;
 
         Ok(())
     }
