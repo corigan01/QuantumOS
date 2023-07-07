@@ -32,7 +32,7 @@ use core::panic::PanicInfo;
 use core::ptr;
 use bootloader::boot_info::BootInfo;
 
-use quantum_lib::debug::{add_connection_to_global_stream, StreamableConnection};
+use quantum_lib::debug::{add_connection_to_global_stream, set_panic};
 use quantum_lib::debug::stream_connection::StreamConnectionBuilder;
 use quantum_lib::{debug_print, debug_println};
 use quantum_lib::address_utils::physical_address::PhyAddress;
@@ -51,6 +51,10 @@ use quantum_lib::gfx::linear_framebuffer::LinearFramebuffer;
 use quantum_lib::possibly_uninit::PossiblyUninit;
 
 use stage_3::debug::{clear_framebuffer, display_string, setup_framebuffer};
+
+static mut SERIAL_CONNECTION: PossiblyUninit<SerialDevice> = PossiblyUninit::new_lazy(|| {
+    SerialDevice::new(SerialPort::Com1, SerialBaud::Baud115200).unwrap()
+});
 
 #[no_mangle]
 #[link_section = ".start"]
@@ -83,11 +87,20 @@ pub extern "C" fn _start(boot_info: u64) -> ! {
         .does_support_scrolling(true)
         .build();
 
+    let serial = unsafe { &mut SERIAL_CONNECTION };
+
+    let connection = StreamConnectionBuilder::new()
+        .console_connection()
+        .add_connection_name("Serial")
+        .add_who_using("Stage3")
+        .does_support_scrolling(true)
+        .add_outlet(serial.get_mut_ref().unwrap())
+        .build();
+
     add_connection_to_global_stream(stream_connection).unwrap();
+    add_connection_to_global_stream(connection).unwrap();
 
     debug_println!("Quantum Bootloader! (Stage3) [64 bit]");
-
-    debug_println!("{:#?}", boot_info_ref.get_video_information());
 
     main(boot_info_ref);
     panic!("Stage3 should not return!");
@@ -288,7 +301,6 @@ fn main(boot_info: &BootInfo) {
 
     debug_println!("\nKernel [entry: 0x{:x}, stack: 0x{:x}, size: {}]", entry_point, stack_ptr, kernel_region.bytes());
     debug_println!("Cpu: x86_64 64-bit | Kern: {:?} {:?}", kernel_elf.elf_arch().unwrap(), kernel_elf.elf_bits().unwrap());
-    debug_println!("\n{:#?}", boot_info.get_video_information());
 
     debug_println!("\nCalling '_start' in elf at 0x{:x}", entry_point);
 
@@ -307,18 +319,8 @@ fn main(boot_info: &BootInfo) {
 #[cold]
 #[allow(dead_code)]
 fn panic(info: &PanicInfo) -> ! {
-    fn outlet(msg: &str) {
-        SerialDevice::new(SerialPort::Com1, SerialBaud::Baud115200).unwrap().display_string(msg);
-    }
-
-    let stream_connection = StreamConnectionBuilder::new()
-        .console_connection()
-        .add_simple_outlet(outlet)
-        .add_connection_name("SERIAL ERROR")
-        .does_support_scrolling(true)
-        .build();
-
-    add_connection_to_global_stream(stream_connection).unwrap();
+    set_panic();
+    debug_println!("");
 
     debug_println!("\nStage-3 PANIC ============\n{}\n\n", info);
     loop {}

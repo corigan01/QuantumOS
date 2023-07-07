@@ -75,6 +75,24 @@ impl Display for Bytes {
 
         write!(f, "{} {}", bytes, symb)?;
 
+        let Some(width) = f.width() else {
+            return Ok(());
+        };
+
+        let digit_chars = bytes.ilog10() as usize;
+        let symb_chars = symb.chars().count();
+
+        let total_chars = digit_chars + symb_chars + 1;
+        if total_chars > width {
+            return Ok(());
+        }
+
+        let padding = width - total_chars;
+
+        for _ in 0..padding {
+            write!(f, " ")?;
+        }
+
         Ok(())
     }
 }

@@ -28,19 +28,76 @@ use core::any::{type_name};
 use core::fmt::{Debug, Formatter};
 use crate::address_utils::addressable::Addressable;
 use crate::bytes::Bytes;
+use owo_colors::OwoColorize;
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq)]
 #[repr(u8)]
 pub enum MemoryRegionType {
     Unknown = 0,
     Usable,
     KernelCode,
     KernelStack,
+    KernelInitHeap,
     BootInfo,
     Reserved,
     Bios,
     Uefi,
     UnavailableMemory,
+}
+
+impl Debug for MemoryRegionType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        let memory_region_to_string = match self {
+            MemoryRegionType::Unknown => "Unknown",
+            MemoryRegionType::Usable => "Usable",
+            MemoryRegionType::KernelCode => "KernelCode",
+            MemoryRegionType::KernelStack => "KernelStack",
+            MemoryRegionType::KernelInitHeap => "KernelInitHeap",
+            MemoryRegionType::BootInfo => "BootInfo",
+            MemoryRegionType::Reserved => "Reserved",
+            MemoryRegionType::Bios => "Bios",
+            MemoryRegionType::Uefi => "Uefi",
+            MemoryRegionType::UnavailableMemory => "UnavailableMemory",
+        };
+
+        if !f.alternate() {
+            write!(f, "{}", memory_region_to_string)?;
+        } else {
+            match self {
+                MemoryRegionType::Usable => {
+                    write!(f, "{}", memory_region_to_string.green().bold())?;
+                },
+                MemoryRegionType::Unknown => {
+                    write!(f, "{}", memory_region_to_string.red().bold())?;
+                },
+                MemoryRegionType::KernelInitHeap => {
+                    write!(f, "{}", memory_region_to_string.yellow())?;
+                },
+
+                _ => {
+                    write!(f, "{}", memory_region_to_string.red())?;
+                }
+            }
+        }
+
+        let Some(width) = f.width() else {
+            return Ok(());
+        };
+
+        let drawn_chars = memory_region_to_string.chars().count();
+
+        if drawn_chars > width {
+            return Ok(());
+        }
+
+        let padding_to_draw = width - drawn_chars;
+
+        for _ in 0..padding_to_draw {
+            write!(f, " ")?;
+        }
+
+        Ok(())
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -84,6 +141,9 @@ impl<Type> MemoryRegion<Type>
         Self::new(start, start.copy_by_offset(distance.into()), region_type)
     }
 
+    pub unsafe fn reassign_region_type(&mut self, new: MemoryRegionType) {
+        self.region_type = new;
+    }
 
     pub fn how_overlapping(&self, rhs: &MemoryRegion<Type>) -> HowOverlapping {
         let self_start = self.start.address_as_u64();

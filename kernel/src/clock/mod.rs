@@ -31,12 +31,12 @@ pub mod rtc;
 
 #[derive(Clone, Copy, Debug, Ord, PartialOrd, Eq, PartialEq)]
 pub struct Time {
-    second: u16,
-    minute: u16,
-    hour: u16,
-    day: u16,
-    month: u16,
-    year: u16,
+    pub second: u16,
+    pub minute: u16,
+    pub hour: u16,
+    pub day: u16,
+    pub month: u16,
+    pub year: u16,
 }
 
 impl Time {

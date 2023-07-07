@@ -25,16 +25,19 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 use qk_alloc::vec::Vec;
 use quantum_lib::address_utils::PAGE_SIZE;
-use quantum_lib::address_utils::physical_address::PhyAddress;
+use quantum_lib::address_utils::physical_address::{Aligned, PhyAddress};
 use quantum_lib::address_utils::region::MemoryRegion;
 use quantum_lib::address_utils::region_map::RegionMap;
 use crate::pmm::phy_part::PhyPart;
 
 pub mod phy_part;
 
+pub type PageAligned = PhyAddress<Aligned, 12>;
+
 pub enum PhyAllocErr {
     NotAligned,
     NotFree,
+    NotEnoughMemory
 }
 
 #[allow(dead_code)]
@@ -47,7 +50,7 @@ pub struct PhysicalMemoryManager {
 
 impl PhysicalMemoryManager {
     pub fn new(map: &RegionMap<PhyAddress>) -> Self {
-        let free_allocations: Vec<PhyPart> = map.iter()
+        let mut free_allocations: Vec<PhyPart> = map.iter()
             .filter(|region| region.is_usable())
             .filter_map(|region| {
                 Some(PhyPart::new(
@@ -58,6 +61,13 @@ impl PhysicalMemoryManager {
                 ))
             })
             .collect();
+
+        free_allocations.sort_by(|this, other| {
+            let this = this.get_start_address().as_u64();
+            let other = other.get_start_address().as_u64();
+
+            this.cmp(&other)
+        });
 
         let kernel_allocations: Vec<MemoryRegion<PhyAddress>> = map.iter()
             .filter(|region| region.is_kernel())
@@ -75,8 +85,24 @@ impl PhysicalMemoryManager {
         }
     }
 
-    pub fn allocate_free_page(&mut self) {
+    pub fn allocate_free_page(&mut self) -> Result<PageAligned, PhyAllocErr> {
+        let Some(address) = self.usable.mut_iter().find_map(|entry| {
+            entry.reserve_first_free()
+        }) else {
+            return Err(PhyAllocErr::NotEnoughMemory);
+        };
 
+        Ok(address)
+    }
+
+    pub fn allocate_free_pages(&mut self, qty: usize) -> Result<PageAligned, PhyAllocErr> {
+        let Some(start_address) = self.usable.mut_iter().find_map(|entry| {
+            entry.reserve_first_free_of_many(qty)
+        }) else {
+            return Err(PhyAllocErr::NotEnoughMemory);
+        };
+
+        Ok(start_address)
     }
 
 

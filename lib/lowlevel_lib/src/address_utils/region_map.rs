@@ -23,7 +23,7 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use core::fmt::{Debug, Formatter};
+use core::fmt::{Debug, Display, Formatter};
 use core::slice::Iter;
 
 use crate::address_utils::addressable::Addressable;
@@ -140,6 +140,13 @@ impl<Type> RegionMap<Type>
             self.regions.push_vec(new_free_regions)?;
         }
 
+        self.regions.sort_by(|this, other| {
+            let this = this.get_start_address().address_as_u64();
+            let other = other.get_start_address().address_as_u64();
+
+            this.cmp(&other)
+        });
+
 
         Ok(())
     }
@@ -183,7 +190,7 @@ impl<Type> RegionMap<Type>
         total_bytes
     }
 
-    pub fn is_within(&self, rhs: MemoryRegion<Type>) -> bool {
+    pub fn is_within(&self, rhs: &MemoryRegion<Type>) -> bool {
         let Some(region) = self.iter().find(|region| {
             region.how_overlapping(&rhs) == HowOverlapping::Within
         }) else {
@@ -200,6 +207,26 @@ impl<Type> Debug for RegionMap<Type>
         for (index, region) in self.regions.iter().enumerate() {
             writeln!(f, "[{index}]: {region:?}")?;
         }
+
+        Ok(())
+    }
+}
+
+impl<Type> Display for RegionMap<Type>
+    where Type: Addressable + Copy {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        writeln!(f, "|     Start      |       End      |    Size   |       Type       |")?;
+        writeln!(f, "+----------------+----------------+-----------+------------------+")?;
+        for region in self.regions.iter() {
+            writeln!(f, "| 0x{:012x} | 0x{:012x} | {:8} | {:#16?} |",
+                region.get_start_address().address_as_u64(),
+                region.get_end_address().address_as_u64(),
+                region.bytes(),
+                region.region_type()
+            )?;
+        }
+        writeln!(f, "+----------------+----------------+-----------+------------------+")?;
+
 
         Ok(())
     }

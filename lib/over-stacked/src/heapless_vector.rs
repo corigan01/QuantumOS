@@ -24,6 +24,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 */
 
+use core::cmp::Ordering;
 use core::fmt::{Debug, Formatter};
 use core::mem;
 use core::mem::MaybeUninit;
@@ -329,6 +330,16 @@ impl<Type, const SIZE: usize> HeaplessVec<Type, SIZE> {
     /// this ptr which will cause issues if the data is malformed.
     pub fn as_mut_ptr(&mut self) -> *mut Type {
         return self.internal_data.as_mut_ptr() as *mut Type;
+    }
+
+    pub fn sort(&mut self)
+        where Type: Ord {
+        self.as_mut_slice().sort_unstable()
+    }
+
+    pub fn sort_by<F>(&mut self, function: F)
+        where F: FnMut(&Type, &Type) -> Ordering {
+        self.as_mut_slice().sort_unstable_by(function)
     }
 
     pub fn iter(&self) -> Iter<Type> {

@@ -109,7 +109,7 @@ pub fn build_stage_3() -> Result<String, Box<dyn std::error::Error>> {
     let cargo_status = Command::new(cargo)
         .current_dir("bootloader/src/bios_boot/stage-3")
         .arg("build")
-        //.arg("--release")
+        .arg("--release")
         .arg("--target")
         .arg("x86_64-quantum_loader.json")
         .arg(format!("--target-dir={}", target))

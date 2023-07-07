@@ -31,7 +31,7 @@ use core::arch::asm;
 use core::panic::PanicInfo;
 
 use quantum_lib::bytes::Bytes;
-use quantum_lib::debug::{add_connection_to_global_stream, StreamableConnection};
+use quantum_lib::debug::{add_connection_to_global_stream, set_panic};
 use quantum_lib::debug::stream_connection::StreamConnectionBuilder;
 use quantum_lib::debug_println;
 use quantum_lib::x86_64::{PrivlLevel};
@@ -43,6 +43,12 @@ use stage_2::paging::enable_paging;
 
 use bootloader::boot_info::BootInfo;
 use quantum_lib::com::serial::{SerialBaud, SerialDevice, SerialPort};
+use quantum_lib::possibly_uninit::PossiblyUninit;
+
+static mut SERIAL_CONNECTION: PossiblyUninit<SerialDevice> = PossiblyUninit::new_lazy(|| {
+    SerialDevice::new(SerialPort::Com1, SerialBaud::Baud115200).unwrap()
+});
+
 
 #[no_mangle]
 #[link_section = ".start"]
@@ -64,13 +70,25 @@ pub extern "C" fn _start(boot_info: u32) -> ! {
         true,
     );
 
+    let serial = unsafe { &mut SERIAL_CONNECTION };
+
     let stream_connection = StreamConnectionBuilder::new()
         .console_connection()
         .add_simple_outlet(display_string)
         .add_connection_name("VGA DEBUG")
         .does_support_scrolling(true)
         .build();
+
+    let connection = StreamConnectionBuilder::new()
+        .console_connection()
+        .add_connection_name("Serial")
+        .add_who_using("Stage2")
+        .does_support_scrolling(true)
+        .add_outlet(serial.get_mut_ref().unwrap())
+        .build();
+
     add_connection_to_global_stream(stream_connection).unwrap();
+    add_connection_to_global_stream(connection).unwrap();
 
     debug_println!("Quantum Bootloader! (Stage2) [32 bit]");
 
@@ -139,18 +157,8 @@ pub unsafe fn enter_stage3(boot_info: &BootInfo) {
 #[cold]
 #[allow(dead_code)]
 fn panic(info: &PanicInfo) -> ! {
-    fn outlet(msg: &str) {
-        SerialDevice::new(SerialPort::Com1, SerialBaud::Baud115200).unwrap().display_string(msg);
-    }
-
-    let stream_connection = StreamConnectionBuilder::new()
-        .console_connection()
-        .add_simple_outlet(outlet)
-        .add_connection_name("SERIAL ERROR")
-        .does_support_scrolling(true)
-        .build();
-
-    add_connection_to_global_stream(stream_connection).unwrap();
+    set_panic();
+    debug_println!("");
 
     debug_println!("\nStage-2 PANIC ============\n{}\n\n", info);
     loop {}

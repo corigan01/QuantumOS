@@ -30,7 +30,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 use core::panic::PanicInfo;
 use qk_alloc::heap::alloc::KernelHeap;
-use qk_alloc::heap::set_global_alloc;
+use qk_alloc::heap::{get_global_alloc_debug, set_global_alloc};
 use qk_alloc::usable_region::UsableRegion;
 
 use quantum_lib::{debug_print, debug_println, kernel_entry, rect};
@@ -40,7 +40,7 @@ use quantum_lib::address_utils::region::{MemoryRegion, MemoryRegionType};
 use quantum_lib::boot::boot_info::KernelBootInformation;
 use quantum_lib::bytes::Bytes;
 use quantum_lib::com::serial::{SerialBaud, SerialDevice, SerialPort};
-use quantum_lib::debug::add_connection_to_global_stream;
+use quantum_lib::debug::{add_connection_to_global_stream, set_panic};
 use quantum_lib::debug::stream_connection::StreamConnectionBuilder;
 use quantum_lib::gfx::{Pixel, PixelLocation, rectangle::Rect};
 use quantum_lib::possibly_uninit::PossiblyUninit;
@@ -49,6 +49,7 @@ use quantum_os::clock::rtc::update_and_get_time;
 
 use owo_colors::OwoColorize;
 use qk_alloc::string::String;
+use quantum_lib::panic_utils::CRASH_MESSAGES;
 
 static mut SERIAL_CONNECTION: PossiblyUninit<SerialDevice> = PossiblyUninit::new_lazy(|| {
     SerialDevice::new(SerialPort::Com1, SerialBaud::Baud115200).unwrap()
@@ -62,9 +63,10 @@ fn setup_serial_debug() {
 
     let connection = StreamConnectionBuilder::new()
         .console_connection()
-        .add_connection_name("Serial COM1")
+        .add_connection_name("Serial")
+        .add_who_using("Kernel")
         .does_support_scrolling(true)
-        .add_outlet(serial.get_ref().unwrap())
+        .add_outlet(serial.get_mut_ref().unwrap())
         .build();
 
     add_connection_to_global_stream(connection).unwrap();
@@ -75,14 +77,11 @@ fn setup_serial_debug() {
 fn main(boot_info: &KernelBootInformation) {
     setup_serial_debug();
 
+    debug_println!("\nUsing Bootloader framebuffer");
+    let mut framebuffer = boot_info.framebuffer.clone();
+
     let mut physical_memory_map = boot_info.get_physical_memory().clone();
     let mut virtual_memory_map = boot_info.get_virtual_memory().clone();
-
-    physical_memory_map.consolidate().unwrap();
-    virtual_memory_map.consolidate().unwrap();
-
-    debug_println!("Virtual Memory Map:\n{virtual_memory_map:?}");
-    debug_println!("Physical Memory Map:\n{physical_memory_map:?}");
 
     let total_phy: u64 = physical_memory_map.total_mem_for_type(MemoryRegionType::Usable).into();
     let total_pages: u64 = total_phy / (PAGE_SIZE as u64);
@@ -100,13 +99,27 @@ fn main(boot_info: &KernelBootInformation) {
         init_alloc_begin, init_alloc_size
     );
 
-    let is_within = physical_memory_map.is_within(MemoryRegion::from_distance(
+    let mut heap_region = MemoryRegion::from_distance(
         PhyAddress::try_from(init_alloc_begin).unwrap(),
         init_alloc_size,
         MemoryRegionType::Usable
-    ));
+    );
 
+    let is_within = physical_memory_map.is_within(&heap_region);
     assert!(is_within, "Failed, the region is not within the memory map! TODO: Make the Init region dynamic!");
+
+    unsafe {
+        heap_region.reassign_region_type(MemoryRegionType::KernelInitHeap);
+    }
+
+    physical_memory_map.add_new_region(heap_region).unwrap();
+    physical_memory_map.consolidate().unwrap();
+    virtual_memory_map.consolidate().unwrap();
+
+    debug_println!("{}", "OK".bright_green().bold());
+
+    debug_println!("\nVirtual Memory Map:\n{virtual_memory_map}");
+    debug_println!("Physical Memory Map:\n{physical_memory_map}");
 
     let usable_region = unsafe {
         UsableRegion::from_raw_parts(
@@ -120,13 +133,11 @@ fn main(boot_info: &KernelBootInformation) {
 
     set_global_alloc(new_kernel_heap);
 
-    debug_println!("{}", "OK".bright_green().bold());
 
     let string_test = String::from("OK".bright_green().bold());
-    debug_println!("Test String {}", string_test.as_str());
+    debug_println!("Test String ... {}", string_test.as_str());
 
-    debug_println!("\nUsing Bootloader framebuffer");
-    let mut framebuffer = boot_info.framebuffer.clone();
+
 
     let clear_display_color = Pixel::from_hex(0x111111);
 
@@ -144,6 +155,21 @@ fn main(boot_info: &KernelBootInformation) {
 
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
-    debug_println!("{}", info);
+    set_panic();
+    debug_println!("");
+
+    let time = update_and_get_time();
+    let panic_message_randomness = time.second as usize % CRASH_MESSAGES.len();
+
+    debug_println!("{}{}\n{}",
+        "KERNEL PANIC ---------- ".red().bold(),
+        time,
+        CRASH_MESSAGES[panic_message_randomness].dimmed()
+    );
+
+    debug_println!("");
+    debug_println!("{} {}", "Panic Reason:".bold(), info.red());
+    debug_println!("\n{}", "Extra Info:".bold());
+    debug_println!("    - Kernel Heap: {:#?}", get_global_alloc_debug());
     loop {}
 }

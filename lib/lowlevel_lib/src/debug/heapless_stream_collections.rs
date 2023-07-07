@@ -25,15 +25,18 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 use crate::debug::stream_connection::StreamConnection;
 use over_stacked::heapless_vector::HeaplessVec;
+use owo_colors::OwoColorize;
 
 pub struct HeaplessStreamCollections {
     pub(crate) stream_connections: HeaplessVec<StreamConnection, 4>,
+    pub(crate) is_panic: bool
 }
 
 impl HeaplessStreamCollections {
     pub fn new() -> Self {
         Self {
             stream_connections: HeaplessVec::new(),
+            is_panic: false
         }
     }
 }
@@ -47,8 +50,29 @@ impl Default for HeaplessStreamCollections {
 impl ::core::fmt::Write for HeaplessStreamCollections {
     fn write_str(&mut self, s: &str) -> ::core::fmt::Result {
         for stream in self.stream_connections.mut_iter() {
-            if let Some(outlet) = stream.outlet {
-                outlet.display_string(s);
+            if let Some(outlet) = &mut stream.outlet {
+                for char in s.chars() {
+                    if char == '\n' {
+                        if self.is_panic {
+                            write!(outlet, "\n[{}: {}]: ",
+                                   stream.info.who_using.dimmed().bold(),
+                                   "PANIC".red().bold().blink()
+                            )?;
+                            continue;
+                        }
+
+
+                        write!(outlet, "\n[{} -> {}]: ",
+                               stream.info.who_using.dimmed().bold(),
+                               stream.info.connection_name.dimmed().bold()
+                        )?;
+
+                        continue;
+                    }
+
+                    write!(outlet, "{}", char)?;
+                }
+
                 continue;
             }
 

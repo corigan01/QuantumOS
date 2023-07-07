@@ -99,31 +99,31 @@ pub unsafe fn enable_paging() {
     let level4_address = level4.get_address().as_u64();
     debug_println!(" OK ({}Gib Mapped!)", level2_tables.len());
 
-    debug_print!("Loading CR3 ...");
+    debug_print!("Loading CR3 ... ");
     CR3::set_page_directory_base_register(level4_address as *mut u8);
     debug_println!("OK 0x{:x}", level4_address);
 
-    debug_print!("Disabling paging ...");
+    debug_print!("Disabling paging ... ");
     CR0::set_paging(false);
 
     debug_println!("OK");
-    debug_print!("Setting PAE ...");
+    debug_print!("Setting PAE ... ");
     CR4::set_physical_address_extension(true);
     debug_println!("OK");
 
-    debug_print!("Setting Long mode ...");
+    debug_print!("Setting Long mode ... ");
     IA32_EFER::set_long_mode_enable(true);
     debug_println!("OK");
 
-    debug_print!("Enabling protected mode ...");
+    debug_print!("Enabling protected mode ... ");
     CR0::set_protected_mode(true);
     debug_println!("OK");
 
-    debug_print!("Enabling paging ...");
+    debug_print!("Enabling paging ... ");
     CR0::set_paging(true);
     debug_println!("OK");
 
-    debug_print!("Reloading segment registers ...");
+    debug_print!("Reloading segment registers ... ");
     SegmentRegs::set_data_segments(Segment::new(2, PrivlLevel::Ring0));
     debug_println!("OK");
 }

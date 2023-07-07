@@ -35,15 +35,6 @@ pub mod stream_connection;
 
 pub type SimpleStreamFunction = fn(&str);
 
-pub trait StreamableConnection {
-    fn display_char(&self, c: char);
-    fn display_string(&self, string: &str) {
-        for c in string.chars() {
-            self.display_char(c);
-        }
-    }
-}
-
 pub fn add_connection_to_global_stream(stream: StreamConnection) -> Result<(), HeaplessVecErr> {
     let does_stream_want_welcome = !stream.ignore_welcome;
     let stream_info_copy = stream.info;
@@ -55,7 +46,7 @@ pub fn add_connection_to_global_stream(stream: StreamConnection) -> Result<(), H
 
     if does_stream_want_welcome {
         crate::debug_println!(
-            "{}\n'{}' was just added! All project log/debug messages will be shown here.",
+            "\n{}\n'{}' was just added! All project log/debug messages will be shown here.",
             "---------------------------------------------------------------------------",
             stream_info_copy.connection_name);
     }
@@ -66,6 +57,10 @@ pub fn add_connection_to_global_stream(stream: StreamConnection) -> Result<(), H
 lazy_static! {
     static ref DEBUG_OUTPUT_STREAM: Mutex<HeaplessStreamCollections> =
         Mutex::new(HeaplessStreamCollections::new());
+}
+
+pub fn set_panic() {
+    DEBUG_OUTPUT_STREAM.lock().is_panic = true;
 }
 
 #[doc(hidden)]

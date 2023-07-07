@@ -120,6 +120,12 @@ pub fn get_global_alloc() -> &'static mut KernelHeap {
     }
 }
 
+pub fn get_global_alloc_debug() -> Option<&'static KernelHeap> {
+    unsafe {
+        THE_GLOBAL_ALLOC.as_ref()
+    }
+}
+
 #[cfg(test)]
 pub fn set_example_allocator(size_in_bytes: usize) {
 

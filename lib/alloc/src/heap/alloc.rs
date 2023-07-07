@@ -64,6 +64,7 @@ pub struct HeapEntry {
     kind: HeapEntryType
 }
 
+#[derive(Debug)]
 pub struct KernelHeap {
     pub(crate) allocations: RawVec<HeapEntry>,
     total_allocated_bytes: usize,

@@ -26,9 +26,9 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 use qk_alloc::bitmap::Bitmap;
 use qk_alloc::vec::Vec;
 use quantum_lib::address_utils::PAGE_SIZE;
-use quantum_lib::address_utils::physical_address::{Aligned, PhyAddress};
+use quantum_lib::address_utils::physical_address::PhyAddress;
+use crate::pmm::PageAligned;
 
-type PageAligned = PhyAddress<Aligned, 12>;
 
 pub struct PhyPart {
     address: PageAligned,
@@ -45,6 +45,25 @@ impl PhyPart {
             bitmap: Bitmap::new(),
             many: Vec::new(),
         }
+    }
+
+    pub fn get_start_address(&self) -> PageAligned {
+        self.address
+    }
+
+    pub fn get_qty_pages(&self) -> usize {
+        self.pages
+    }
+
+    pub fn get_free_pages(&self) -> usize {
+        let mut qty = 0;
+        for i in 0..self.pages {
+            if !self.bitmap.get_bit(i) {
+                qty += 1;
+            }
+        }
+
+        qty
     }
 
     #[inline]
