@@ -23,7 +23,7 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use qk_alloc::bitmap::Bitmap;
+use qk_alloc::bitfield::Bitmap;
 use qk_alloc::vec::Vec;
 use quantum_lib::address_utils::PAGE_SIZE;
 use quantum_lib::address_utils::physical_address::PhyAddress;

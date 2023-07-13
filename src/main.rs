@@ -138,6 +138,8 @@ fn main() {
 
             let _qemu = Command::new("qemu-system-x86_64")
                 .args(user_extra_args)
+                .arg("-device")
+                .arg("isa-debug-exit,iobase=0xf4,iosize=0x04")
                 .arg("-d")
                 .arg("cpu_reset")
                 .arg("--no-shutdown")

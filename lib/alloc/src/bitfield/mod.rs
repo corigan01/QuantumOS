@@ -23,7 +23,7 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use crate::bitmap::raw_bits::RawBitmap;
+use crate::bitfield::raw_bits::RawBitmap;
 use crate::heap::{AllocatorAPI, GlobalAlloc};
 use core::marker::PhantomData;
 use quantum_utils::bitset::BitSet;

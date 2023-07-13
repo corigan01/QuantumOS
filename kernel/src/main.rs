@@ -50,6 +50,7 @@ use quantum_os::clock::rtc::update_and_get_time;
 use owo_colors::OwoColorize;
 use qk_alloc::string::String;
 use quantum_lib::panic_utils::CRASH_MESSAGES;
+use quantum_os::qemu::{exit_qemu, QemuExitCode};
 
 static mut SERIAL_CONNECTION: PossiblyUninit<SerialDevice> = PossiblyUninit::new_lazy(|| {
     SerialDevice::new(SerialPort::Com1, SerialBaud::Baud115200).unwrap()
@@ -133,7 +134,6 @@ fn main(boot_info: &KernelBootInformation) {
 
     set_global_alloc(new_kernel_heap);
 
-
     let string_test = String::from("OK".bright_green().bold());
     debug_println!("Test String ... {}", string_test.as_str());
 
@@ -171,5 +171,6 @@ fn panic(info: &PanicInfo) -> ! {
     debug_println!("{} {}", "Panic Reason:".bold(), info.red());
     debug_println!("\n{}", "Extra Info:".bold());
     debug_println!("    - Kernel Heap: \n{:#?}", get_global_alloc_debug());
-    loop {}
+
+    exit_qemu(QemuExitCode::Success)
 }

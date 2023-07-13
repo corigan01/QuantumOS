@@ -32,9 +32,10 @@ pub mod memory_layout;
 
 // std(like) libs for heap allocation
 pub mod vec;
-pub mod bitmap;
+pub mod bitfield;
 pub mod string;
 
 pub mod error;
+pub mod circular_buffer;
 
 pub use error::*;

@@ -24,6 +24,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 use core::cmp::Ordering;
+use core::fmt::{Debug, Formatter};
 use core::ops::{Index, IndexMut};
 use core::ptr;
 use core::slice::{Iter, IterMut};
@@ -141,9 +142,34 @@ impl<Type, Alloc: AllocatorAPI> Vec<Type, Alloc> {
         self.len += 1;
     }
 
-    pub fn remove(&mut self, index: usize) -> Type {
+    pub fn replace(&mut self, index: usize, value: Type) -> Option<Type> {
         assert!(index <= self.len,
                 "Index out of bounds! Got index {}, but len is only {}", index, self.len);
+
+        if self.should_reserve() {
+            self.reserve(1);
+        }
+
+        let return_value;
+        unsafe {
+            let ptr = self.as_mut_ptr().add(index);
+
+            if index >= self.len {
+                ptr::write(ptr, value);
+                return None;
+            }
+
+            return_value = ptr::read(ptr);
+            ptr::write(ptr, value);
+        }
+
+        Some(return_value)
+    }
+
+    pub fn remove(&mut self, index: usize) -> Type {
+        assert!(index <= self.len || self.len == 0,
+                "Index out of bounds! Got index {}, but len is only {}", index, self.len);
+
 
 
         let return_value;
@@ -152,7 +178,7 @@ impl<Type, Alloc: AllocatorAPI> Vec<Type, Alloc> {
 
             return_value = ptr::read(ptr);
 
-            ptr::copy(ptr.add(1), ptr, self.len - index - 1);
+            ptr::copy(ptr.add(1), ptr, (self.len - index) - 1);
         }
 
         self.len -= 1;
@@ -183,6 +209,34 @@ impl<Type, Alloc: AllocatorAPI> Vec<Type, Alloc> {
 
     pub fn mut_iter(&mut self) -> IterMut<Type> {
         self.as_mut_slice().iter_mut()
+    }
+}
+
+impl<Type, Alloc: AllocatorAPI> Clone for Vec<Type, Alloc>
+    where Type: Clone
+{
+    fn clone(&self) -> Self {
+        let mut new = Vec::new();
+        for i in self.iter() {
+            new.push(i.clone());
+        }
+
+        new
+    }
+}
+
+impl<Type, Alloc: AllocatorAPI> Debug for Vec<Type, Alloc>
+    where Type: Debug
+{
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        if f.alternate() {
+            write!(f, "{:#?}", self.as_slice())?;
+
+        } else {
+            write!(f, "{:?}", self.as_slice())?;
+        }
+
+        Ok(())
     }
 }
 
@@ -277,7 +331,32 @@ mod test {
         assert_eq!(vector[1], 1);
         assert_eq!(vector[2], 2);
         assert_eq!(vector[3], 3);
+    }
 
+    #[test]
+    fn test_replacing_vector_element() {
+        set_example_allocator(4096);
+        let mut vec: Vec<i32> = Vec::new();
+
+        vec.push(0);
+        vec.push(1);
+        vec.push(2);
+        vec.push(3);
+
+        assert_eq!(vec[0], 0);
+        assert_eq!(vec[1], 1);
+        assert_eq!(vec[2], 2);
+        assert_eq!(vec[3], 3);
+
+        vec.replace(0, 3);
+        vec.replace(1, 2);
+        vec.replace(2, 1);
+        vec.replace(3, 0);
+
+        assert_eq!(vec[0], 3);
+        assert_eq!(vec[1], 2);
+        assert_eq!(vec[2], 1);
+        assert_eq!(vec[3], 0);
     }
 
 

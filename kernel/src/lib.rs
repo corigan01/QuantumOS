@@ -34,10 +34,12 @@ Quantum OS Lib file, documentation coming soon!
 #![reexport_test_harness_main = "run_test"]
 
 pub mod qemu;
+pub mod ata;
 pub mod clock;
 
 #[cfg(test)]
 pub mod test_handler;
+pub mod kernel_console;
 
 #[cfg(test)]
 pub fn test_main() {
