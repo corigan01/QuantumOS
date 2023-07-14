@@ -358,6 +358,7 @@ impl KernelHeap {
                 return Err(AllocErr::InternalErr);
             }
 
+                        best_entry_mut.size -= best_entry_align_bump as u64;
             best_entry_mut.pad = best_entry_align_bump as u32;
             best_entry_mut.kind = mark_allocated_as;
             best_entry_mut.over = best_entry_mut.size - requested_bytes as u64;
