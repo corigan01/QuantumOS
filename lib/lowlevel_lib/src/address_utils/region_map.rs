@@ -264,16 +264,11 @@ mod test {
         region_map.consolidate().unwrap();
 
         // TODO: We are not sure which region will be first, so maybe don't hard code this later
-        let not_free_region = *region_map.regions.get(0).unwrap();
-        let free_1_region = *region_map.regions.get(1).unwrap();
-        let free_2_region = *region_map.regions.get(2).unwrap();
+        let free_1_region = *region_map.regions.get(0).unwrap();
+        let used_2_region = *region_map.regions.get(1).unwrap();
+        let free_3_region = *region_map.regions.get(2).unwrap();
 
         assert_eq!(region_map.regions.len(), 3);
-
-        assert_eq!(
-            not_free_region,
-            kernel_code_region
-        );
 
         assert_eq!(free_1_region,
                    MemoryRegion::new(
@@ -283,7 +278,15 @@ mod test {
                    )
         );
 
-        assert_eq!(free_2_region,
+        assert_eq!(used_2_region,
+                   MemoryRegion::new(
+                       PhyAddress::new(0x050).unwrap(),
+                       PhyAddress::new(0x0090).unwrap(),
+                       MemoryRegionType::KernelCode,
+                   )
+        );
+
+        assert_eq!(free_3_region,
                    MemoryRegion::new(
                        PhyAddress::new(0x91).unwrap(),
                        PhyAddress::new(0x1000).unwrap(),

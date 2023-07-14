@@ -287,6 +287,7 @@ impl<Type, Alloc: AllocatorAPI> Drop for Vec<Type, Alloc> {
 #[cfg(test)]
 mod test {
     use crate::heap::set_example_allocator;
+    use crate::string::String;
     use super::*;
 
     #[test]
@@ -357,6 +358,19 @@ mod test {
         assert_eq!(vec[1], 2);
         assert_eq!(vec[2], 1);
         assert_eq!(vec[3], 0);
+    }
+
+    #[test]
+    fn test_unaligned_u16_push_on_dirty_buffer() {
+        set_example_allocator(4096);
+        let _ = String::from(" ");
+        let mut vec: Vec<u16> = Vec::new();
+
+        for i in 0..256 {
+            vec.push(i);
+        }
+
+        assert_eq!(vec.len(), 256);
     }
 
 

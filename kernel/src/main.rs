@@ -50,6 +50,7 @@ use quantum_os::clock::rtc::update_and_get_time;
 use owo_colors::OwoColorize;
 use qk_alloc::string::String;
 use quantum_lib::panic_utils::CRASH_MESSAGES;
+use quantum_os::ata::scan_for_disks;
 use quantum_os::qemu::{exit_qemu, QemuExitCode};
 
 static mut SERIAL_CONNECTION: PossiblyUninit<SerialDevice> = PossiblyUninit::new_lazy(|| {
@@ -148,8 +149,11 @@ fn main(boot_info: &KernelBootInformation) {
     framebuffer.draw_rect(rect!(0, 15 ; 150, 2), Pixel::WHITE);
     debug_println!("{}", "OK".bright_green().bold());
 
-    debug_println!("\n\n{}", get_global_alloc());
+    debug_println!("\nScanning for disks");
+    let _ = scan_for_disks();
 
+
+    debug_println!("\n\n{}", get_global_alloc());
     debug_println!("\nDone!");
 }
 

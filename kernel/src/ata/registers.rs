@@ -23,6 +23,8 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use core::slice::Iter;
+use qk_alloc::vec::Vec;
 use quantum_lib::x86_64::io::port::IOPort;
 use quantum_utils::bitset::BitSet;
 
@@ -84,39 +86,45 @@ const DEVICE_CONTROL_REGISTER_OFFSET_FROM_CONTROL_BASE: usize = 0;
 /// Provides drive select and head select information.
 const DRIVE_ADDRESS_REGISTER_OFFSET_FROM_CONTROL_BASE: usize = 1;
 
-#[derive(Clone, Copy)]
-pub enum Device {
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum DiskID {
     PrimaryFirst,
     PrimarySecond,
     SecondaryFirst,
     SecondarySecond
 }
 
-impl Device {
+impl DiskID {
+    const ALL_DISKS: [DiskID; 4] = [DiskID::PrimaryFirst, DiskID::PrimarySecond, DiskID::SecondaryFirst, DiskID::SecondarySecond];
+
+    pub fn iter() -> Iter<'static, DiskID> {
+        Self::ALL_DISKS.iter()
+    }
+
     pub const fn bus_base(&self) -> usize {
         match self {
-            Device::PrimaryFirst => PRIMARY_BUS_IO_BASE,
-            Device::PrimarySecond => PRIMARY_BUS_IO_BASE,
-            Device::SecondaryFirst => SECONDARY_BUS_IO_BASE,
-            Device::SecondarySecond => SECONDARY_BUS_IO_BASE,
+            DiskID::PrimaryFirst => PRIMARY_BUS_IO_BASE,
+            DiskID::PrimarySecond => PRIMARY_BUS_IO_BASE,
+            DiskID::SecondaryFirst => SECONDARY_BUS_IO_BASE,
+            DiskID::SecondarySecond => SECONDARY_BUS_IO_BASE,
         }
     }
 
     pub const fn control_base(&self) -> usize {
         match self {
-            Device::PrimaryFirst => PRIMARY_BUS_CONTROL_BASE,
-            Device::PrimarySecond => PRIMARY_BUS_CONTROL_BASE,
-            Device::SecondaryFirst => SECONDARY_BUS_CONTROL_BASE,
-            Device::SecondarySecond => SECONDARY_BUS_CONTROL_BASE,
+            DiskID::PrimaryFirst => PRIMARY_BUS_CONTROL_BASE,
+            DiskID::PrimarySecond => PRIMARY_BUS_CONTROL_BASE,
+            DiskID::SecondaryFirst => SECONDARY_BUS_CONTROL_BASE,
+            DiskID::SecondarySecond => SECONDARY_BUS_CONTROL_BASE,
         }
     }
 
     pub fn is_first(&self) -> bool {
         match self {
-            Device::PrimaryFirst => true,
-            Device::PrimarySecond => false,
-            Device::SecondaryFirst => true,
-            Device::SecondarySecond => false
+            DiskID::PrimaryFirst => true,
+            DiskID::PrimarySecond => false,
+            DiskID::SecondaryFirst => true,
+            DiskID::SecondarySecond => false
         }
     }
 
@@ -156,19 +164,19 @@ impl StatusRegister {
     const ATA_SR_IDX_BIT: u8 = 1;
     const ATA_SR_ERR_BIT: u8 = 0;
 
-    fn my_port(device: Device) -> IOPort {
+    fn my_port(device: DiskID) -> IOPort {
         let device_io = device.bus_base() + STATUS_REGISTER_OFFSET_FROM_IO_BASE;
 
         IOPort::new(device_io as u16)
     }
 
-    pub fn read(device: Device) -> u8 {
+    pub fn read(device: DiskID) -> u8 {
         let my_port = Self::my_port(device);
 
         unsafe { my_port.read_u8() }
     }
 
-    pub fn perform_400ns_delay(device: Device) {
+    pub fn perform_400ns_delay(device: DiskID) {
         let my_port = Self::my_port(device);
 
         for _ in 0..15 {
@@ -176,7 +184,12 @@ impl StatusRegister {
         }
     }
 
-    pub fn is_status(device: Device, status: StatusFlags) -> bool {
+    pub fn is_floating(device: DiskID) -> bool {
+        let read = Self::read(device);
+        read == 0
+    }
+
+    pub fn is_status(device: DiskID, status: StatusFlags) -> bool {
         let read_value = Self::read(device);
 
         let bit = match status {
@@ -193,8 +206,18 @@ impl StatusRegister {
         read_value.get_bit(bit)
     }
 
+    pub fn is_err_or_fault(device: DiskID) -> bool {
+        Self::is_status(device, StatusFlags::Err) ||
+            Self::is_status(device, StatusFlags::DriveFault)
+    }
+
+    pub fn is_busy(device: DiskID) -> bool {
+        Self::is_status(device, StatusFlags::Busy)
+    }
+
 }
 
+#[derive(Debug, Clone, Copy)]
 pub enum ErrorFlags {
     /// 0:	(AMNF)    Address mark not found.
     AddressMarkNotFound,
@@ -214,6 +237,23 @@ pub enum ErrorFlags {
     BadBlockDetected,
 }
 
+impl ErrorFlags {
+    const ERR_CONST: [ErrorFlags; 8] = [
+        ErrorFlags::AddressMarkNotFound,
+        ErrorFlags::TrackZeroNotFound,
+        ErrorFlags::AbortedCommand,
+        ErrorFlags::MediaChangeRequest,
+        ErrorFlags::IDNotFound,
+        ErrorFlags::MediaChanged,
+        ErrorFlags::UncorrectableDataError,
+        ErrorFlags::BadBlockDetected
+    ];
+
+    pub fn iter() -> Iter<'static, ErrorFlags> {
+        Self::ERR_CONST.iter()
+    }
+}
+
 pub struct ErrorRegister {}
 impl ErrorRegister {
     const ATA_ER_BBK_BIT: u8 = 7;
@@ -225,23 +265,23 @@ impl ErrorRegister {
     const ATA_ER_TKONF_BIT: u8 = 1;
     const ATA_ER_AMNF_BIT: u8 = 0;
 
-    fn my_port(device: Device) -> IOPort {
+    fn my_port(device: DiskID) -> IOPort {
         let io_port = device.bus_base() + ERROR_REGISTER_OFFSET_FROM_IO_BASE;
 
         IOPort::new(io_port as u16)
     }
 
-    pub fn read(device: Device) -> u8 {
+    pub fn read(device: DiskID) -> u8 {
         let port = Self::my_port(device);
 
         unsafe { port.read_u8() }
     }
 
-    pub fn any_error(device: Device) -> bool {
+    pub fn any_error(device: DiskID) -> bool {
         Self::read(device) > 0
     }
 
-    pub fn is_error(device: Device, error: ErrorFlags) -> bool {
+    pub fn is_error(device: DiskID, error: ErrorFlags) -> bool {
         let value = Self::read(device);
 
         if value == 0 {
@@ -275,8 +315,21 @@ impl ErrorRegister {
             }
         }
     }
+
+    pub fn all_flags(device: DiskID) -> Vec<ErrorFlags> {
+        let mut errors = Vec::new();
+
+        for flags in ErrorFlags::iter() {
+            if Self::is_error(device, *flags) {
+                errors.push(*flags);
+            }
+        }
+
+        errors
+    }
 }
 
+static mut LAST_DISK: Option<DiskID> = None;
 pub struct DriveHeadRegister {}
 impl DriveHeadRegister {
     const ATA_DH_DRV: u8 = 4;
@@ -284,41 +337,99 @@ impl DriveHeadRegister {
     const ATA_DH_LBA: u8 = 6;
     const ATA_DH_RESERVED_2: u8 = 7;
 
-    fn my_port(device: Device) -> IOPort {
+    fn my_port(device: DiskID) -> IOPort {
         let io_port = device.bus_base() + DRIVE_HEAD_OFFSET_FROM_IO_BASE;
 
         IOPort::new(io_port as u16)
     }
 
-    pub fn read(device: Device) -> u8 {
+    pub fn read(device: DiskID) -> u8 {
         let port = Self::my_port(device);
 
         unsafe { port.read_u8() }
     }
 
-    pub fn write(device: Device, value: u8) {
+    pub fn write(device: DiskID, value: u8) {
         let port = Self::my_port(device);
 
         unsafe { port.write_u8(value) };
     }
 
-    pub fn is_using_chs(device: Device) -> bool {
+    pub fn is_using_chs(device: DiskID) -> bool {
         let value = Self::read(device);
 
         value & (1 << Self::ATA_DH_LBA) == 0
     }
 
-    pub fn is_using_lba(device: Device) -> bool {
+    pub fn is_using_lba(device: DiskID) -> bool {
         !Self::is_using_chs(device)
     }
 
-    pub fn select_drive(device: Device) {
+    pub fn clear_select_disk_cache() {
+        unsafe { LAST_DISK = None };
+    }
+
+    pub fn note_disk(device: DiskID) {
+        unsafe { LAST_DISK = Some(device) };
+    }
+
+    fn should_skip(device: DiskID) -> bool {
+        unsafe {
+            if LAST_DISK.is_none() {
+                return false;
+            }
+
+            LAST_DISK.unwrap() == device
+        }
+    }
+
+    pub fn select_drive(device: DiskID) {
+        if Self::should_skip(device) {
+            return;
+        }
+
         let mut read = Self::read(device);
         let write_value = read.set_bit(Self::ATA_DH_DRV, device.is_second());
         Self::write(device, write_value);
     }
+}
+
+pub struct SectorRegisters {}
+impl SectorRegisters {
+    const IO_PORT_OFFSETS: [usize; 4] = [
+        SECTOR_COUNT_OFFSET_FROM_IO_BASE,
+        SECTOR_NUM_LOW_OFFSET_FROM_IO_BASE,
+        SECTOR_NUM_MID_OFFSET_FROM_IO_BASE,
+        SECTOR_NUM_HIGH_OFFSET_FROM_IO_BASE
+    ];
+
+    pub fn zero_registers(device: DiskID)  {
+        for offset in Self::IO_PORT_OFFSETS {
+            let port = offset + device.bus_base();
+            let io_port = IOPort::new(port as u16);
+
+            unsafe { io_port.write_u8(0) };
+        }
+    }
+
+    pub fn are_all_zero(device: DiskID) -> bool {
+        for offset in Self::IO_PORT_OFFSETS {
+            let port = offset + device.bus_base();
+            let io_port = IOPort::new(port as u16);
+
+            if unsafe { io_port.read_u8() } != 0 {
+                return false;
+            }
+        }
+
+        true
+    }
 
 
+}
+
+pub enum Commands {
+    Identify
 }
 
 pub struct CommandRegister {}
@@ -337,7 +448,36 @@ impl CommandRegister {
     const ATA_IDENTIFY_PACKET: u8 = 0xA1;
     const ATA_IDENTIFY: u8 = 0xEC;
 
-    pub fn preform_identify(device: Device) {
+    pub fn send_command(device: DiskID, command: Commands) {
+        let port = device.bus_base() + COMMAND_OFFSET_FROM_IO_BASE;
+        let io_port = IOPort::new(port as u16);
 
+        let command_id = match command {
+            Commands::Identify => Self::ATA_IDENTIFY,
+        };
+
+        unsafe { io_port.write_u8(command_id) };
     }
+}
+
+pub struct DataRegister {}
+impl DataRegister {
+
+    fn my_port(device: DiskID) -> IOPort {
+        let port = device.bus_base() + DATA_REGISTER_OFFSET_FROM_IO_BASE;
+        IOPort::new(port as u16)
+    }
+
+    pub fn read_u16(device: DiskID) -> u16 {
+        let io_port = Self::my_port(device);
+
+        unsafe { io_port.read_u16() }
+    }
+
+    pub fn read_u8(device: DiskID) -> u16 {
+        let io_port = Self::my_port(device);
+
+        unsafe { io_port.read_u16() }
+    }
+
 }
