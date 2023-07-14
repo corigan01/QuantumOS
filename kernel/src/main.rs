@@ -150,8 +150,8 @@ fn main(boot_info: &KernelBootInformation) {
     debug_println!("{}", "OK".bright_green().bold());
 
     debug_println!("\nScanning for disks");
-    let _ = scan_for_disks();
-
+    let disks = scan_for_disks();
+    debug_println!("Found {} disk(s)!", disks.len());
 
     debug_println!("\n\n{}", get_global_alloc());
     debug_println!("\nDone!");

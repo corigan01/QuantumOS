@@ -32,7 +32,7 @@ mod registers;
 
 pub struct ATADisk {
     device: DiskID,
-    identify: Vec<u16>
+    pub identify: Vec<u16>
 }
 
 impl ATADisk {
