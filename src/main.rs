@@ -136,7 +136,7 @@ fn main() {
 
             println!("     {} Starting QEMU", "Quantum".green().bold());
 
-            let _qemu = Command::new("qemu-system-x86_64")
+            let qemu = Command::new("qemu-system-x86_64")
                 .args(user_extra_args)
                 .arg("-device")
                 .arg("isa-debug-exit,iobase=0xf4,iosize=0x04")
@@ -156,13 +156,19 @@ fn main() {
                 .arg("-drive")
                 .arg(format!("format=raw,file={}", build_status.unwrap()))
                 .stdout(std::process::Stdio::inherit())
-                .status();
+                .status()
+                .expect("Could not start QEMU!");
+
+                let exit_code = qemu.code().unwrap_or(0);
+                if exit_code != 33 {
+                    exit(exit_code);
+                }
         } else {
             println!("     {} NOT RUNNING QEMU!", "Quantum".yellow().bold());
         }
     }
 
-    println!("\n{} All Jobs Complete!", "Quantum".green().bold());
+    println!("\n\n{} All Jobs Complete!", "Quantum".green().bold());
 }
 
 fn clean_dont_care() {

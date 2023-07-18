@@ -153,8 +153,31 @@ fn main(boot_info: &KernelBootInformation) {
     let disks = scan_for_disks();
     debug_println!("Found {} disk(s)!", disks.len());
 
+    for disk in disks.iter() {
+        debug_println!("{}", disk);
+    }
+
+    let main_disk = &disks[0];
+    let sector_data = main_disk.read_raw(0, 1).unwrap();
+    for (idx, word) in sector_data.iter().enumerate() {
+        debug_print!("{:04X} ", word);
+
+        if (idx + 1) % 16 == 0 {
+            debug_print!("\n");
+        }
+    }
+
+
+
+
+
+
+
     debug_println!("\n\n{}", get_global_alloc());
-    debug_println!("\nDone!");
+
+    debug_println!("\n\nDone!");
+    debug_print!("{}", "Shutting Down QuantumOS ...".red().bold());
+    exit_qemu(QemuExitCode::Success);
 }
 
 #[panic_handler]
@@ -176,5 +199,5 @@ fn panic(info: &PanicInfo) -> ! {
     debug_println!("\n{}", "Extra Info:".bold());
     debug_println!("    - Kernel Heap: \n{:#?}", get_global_alloc_debug());
 
-    exit_qemu(QemuExitCode::Success)
+    exit_qemu(QemuExitCode::Failed)
 }

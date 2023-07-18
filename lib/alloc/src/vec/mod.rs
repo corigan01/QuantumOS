@@ -26,7 +26,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 use core::cmp::Ordering;
 use core::fmt::{Debug, Formatter};
 use core::ops::{Index, IndexMut};
-use core::ptr;
+use core::{mem, ptr};
 use core::slice::{Iter, IterMut};
 use crate::heap::{AllocatorAPI, GlobalAlloc};
 use crate::vec::raw_vec::RawVec;

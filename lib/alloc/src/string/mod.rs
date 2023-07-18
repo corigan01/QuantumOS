@@ -23,7 +23,7 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use core::fmt::{Display, Write};
+use core::fmt::{Formatter, Write};
 use core::ops::Deref;
 use crate::heap::{AllocatorAPI, GlobalAlloc};
 use crate::vec::Vec;
@@ -51,8 +51,8 @@ impl String {
     }
 
     pub fn push_str(&mut self, s: &str) {
-        for i in s.chars() {
-            self.push(i);
+        for i in s.bytes() {
+            self.data.push(i);
         }
     }
 
@@ -95,8 +95,8 @@ impl Write for String {
     }
 }
 
-
-impl<T: Display> From<T> for String {
+impl<T> From<T> for String
+    where T: core::fmt::Display {
     fn from(value: T) -> Self {
         let mut tmp = String::new();
         write!(&mut tmp, "{}", value).unwrap();

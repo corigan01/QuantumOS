@@ -34,8 +34,19 @@ pub mod memory_layout;
 pub mod vec;
 pub mod bitfield;
 pub mod string;
+pub mod boxed;
 
 pub mod error;
 pub mod circular_buffer;
 
 pub use error::*;
+
+#[macro_export]
+macro_rules! format {
+    ($($arg:tt)*) => {{
+        use core::fmt::Write;
+        let mut new_string = qk_alloc::string::String::new();
+        write!(&mut new_string, "{}", format_args!($($arg)*)).unwrap();
+        new_string
+    }}
+}

@@ -23,27 +23,81 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use core::fmt::{Display, Formatter};
+use owo_colors::colors::css::Gray;
 use qk_alloc::vec::Vec;
 use quantum_lib::{debug_print, debug_println};
-use crate::ata::registers::{CommandRegister, Commands, DataRegister, DiskID, DriveHeadRegister, ErrorRegister, SectorRegisters, StatusFlags, StatusRegister};
+use crate::ata::registers::{CommandRegister, Commands, DataRegister, DiskID, DriveHeadRegister, ErrorRegister, FeaturesRegister, SectorRegisters, StatusFlags, StatusRegister};
 use owo_colors::OwoColorize;
+use quantum_lib::bitset::BitSet;
+use crate::ata::identify_parser::IdentifyParser;
 
 mod registers;
+mod identify_parser;
+
+#[derive(Clone, Copy, Debug)]
+pub enum DiskErr {
+    FailedToRead
+}
 
 pub struct ATADisk {
     device: DiskID,
-    pub identify: Vec<u16>
+    identify: IdentifyParser
 }
 
 impl ATADisk {
     fn new(device: DiskID, identify: Vec<u16>) -> Self {
         Self {
             device,
-            identify
+            identify: IdentifyParser::new(identify)
         }
     }
 
+    fn io_wait(&self) {
+        while StatusRegister::is_busy(self.device) &&
+            !StatusRegister::is_err_or_fault(self.device) &&
+            !StatusRegister::is_status(self.device, StatusFlags::DRQ) {}
+    }
 
+    pub fn read_raw(&self, sector: usize, sector_count: usize) -> Result<Vec<u16>, DiskErr> {
+        DriveHeadRegister::select_drive(self.device);
+        self.io_wait();
+
+        if StatusRegister::is_err_or_fault(self.device) {
+            return Err(DiskErr::FailedToRead);
+        }
+
+        let small_bits = sector.get_bits(24..28) as u8;
+        DriveHeadRegister::set_bits_24_to_27_of_lba(self.device, small_bits);
+        FeaturesRegister::reset_to_zero(self.device);
+        SectorRegisters::select_sectors(self.device, sector_count as u8);
+        SectorRegisters::select_lba_0_to_24_bits(self.device, sector);
+
+        CommandRegister::send_command(self.device, Commands::ReadSectorsPIO);
+        self.io_wait();
+
+        let mut new_vec: Vec<u16> = Vec::new();
+        for _ in 0..256 {
+            let value = DataRegister::read_u16(self.device);
+            new_vec.push(value);
+        }
+
+        Ok(new_vec)
+    }
+
+}
+
+impl Display for ATADisk {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        writeln!(f, "{} {:?} {:?} {:?}",
+                 self.identify.model_number().as_str(),
+                 self.identify.interconnect(),
+                 self.identify.specific_config(),
+                 self.identify.identify_completion_status()
+        )?;
+
+        Ok(())
+    }
 }
 
 pub fn scan_for_disks() -> Vec<ATADisk> {
@@ -51,7 +105,7 @@ pub fn scan_for_disks() -> Vec<ATADisk> {
 
     for disk in DiskID::iter() {
         let disk = *disk;
-        debug_print!("Scanning disk '{:?}' \t... ", disk);
+        debug_print!("Scanning disk '{:?}' \t ", disk);
 
         // Select the drive that we are using. Since we are preforming a disk change,
         // we must wait >400ns for the controller to push its status on the IO lines.
@@ -100,9 +154,11 @@ pub fn scan_for_disks() -> Vec<ATADisk> {
             read_identify.push(value);
         }
 
-        debug_println!("{}", "OK".green().bold());
+        let disk = ATADisk::new(disk, read_identify);
 
-        disks.push(ATADisk::new(disk, read_identify));
+        debug_println!("{}\t{}", "OK".green().bold(), disk.identify.model_number().as_str().dimmed());
+
+        disks.push(disk);
     }
 
     disks

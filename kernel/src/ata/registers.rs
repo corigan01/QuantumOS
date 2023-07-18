@@ -361,6 +361,15 @@ impl DriveHeadRegister {
         value & (1 << Self::ATA_DH_LBA) == 0
     }
 
+    pub fn set_bits_24_to_27_of_lba(device: DiskID, lba_bits: u8) {
+        if lba_bits & 0b11111000 > 0 {
+            panic!("Should not be sending more then 3 bits to DriveHeadRegister!");
+        }
+
+        let read_value = Self::read(device);
+        Self::write(device, (read_value & 0b11111000) | lba_bits);
+    }
+
     pub fn is_using_lba(device: DiskID) -> bool {
         !Self::is_using_chs(device)
     }
@@ -396,12 +405,22 @@ impl DriveHeadRegister {
 
 pub struct SectorRegisters {}
 impl SectorRegisters {
+    const SECTOR_COUNT: usize = 0;
+    const SECTOR_LOW: usize = 1;
+    const SECTOR_MID: usize = 2;
+    const SECTOR_HIGH: usize = 3;
+
     const IO_PORT_OFFSETS: [usize; 4] = [
         SECTOR_COUNT_OFFSET_FROM_IO_BASE,
         SECTOR_NUM_LOW_OFFSET_FROM_IO_BASE,
         SECTOR_NUM_MID_OFFSET_FROM_IO_BASE,
         SECTOR_NUM_HIGH_OFFSET_FROM_IO_BASE
     ];
+
+    fn my_port(device: DiskID, select: usize) -> IOPort {
+        let port = device.bus_base() + Self::IO_PORT_OFFSETS[select];
+        IOPort::new(port as u16)
+    }
 
     pub fn zero_registers(device: DiskID)  {
         for offset in Self::IO_PORT_OFFSETS {
@@ -425,11 +444,46 @@ impl SectorRegisters {
         true
     }
 
+    pub fn select_sectors(device: DiskID, sectors: u8) {
+        let port = Self::my_port(device, Self::SECTOR_COUNT);
 
+        unsafe { port.write_u8(sectors) };
+    }
+
+    pub fn select_lba_0_to_24_bits(device: DiskID, lba: usize) {
+        let low = Self::my_port(device, Self::SECTOR_LOW);
+        let mid = Self::my_port(device, Self::SECTOR_MID);
+        let high = Self::my_port(device, Self::SECTOR_HIGH);
+
+        unsafe {
+            low.write_u8((lba & 0xFF) as u8);
+            mid.write_u8(((lba >> 8) & 0xFF) as u8);
+            high.write_u8(((lba >> 16) & 0xFF) as u8);
+        }
+    }
+}
+
+pub struct FeaturesRegister {}
+impl FeaturesRegister {
+    fn my_port(device: DiskID) -> IOPort {
+        let port = device.bus_base() + FEATURES_REGISTER_OFFSET_FROM_IO_BASE;
+        IOPort::new(port as u16)
+    }
+
+    fn write(device: DiskID, value: u8) {
+        let port = Self::my_port(device);
+
+        unsafe { port.write_u8(value) };
+    }
+
+    pub fn reset_to_zero(device: DiskID) {
+        Self::write(device, 0);
+    }
 }
 
 pub enum Commands {
-    Identify
+    Identify,
+    ReadSectorsPIO
 }
 
 pub struct CommandRegister {}
@@ -454,6 +508,7 @@ impl CommandRegister {
 
         let command_id = match command {
             Commands::Identify => Self::ATA_IDENTIFY,
+            Commands::ReadSectorsPIO => Self::ATA_CMD_READ_PIO
         };
 
         unsafe { io_port.write_u8(command_id) };

@@ -23,6 +23,13 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use core::mem;
+use qk_alloc::boxed::Box;
+use qk_alloc::string::String;
+use qk_alloc::vec::Vec;
+use quantum_lib::bitset::BitSet;
+use crate::ata::identify_parser::SpecificConfig::DiskRequiresSetFeatures;
+
 type Word = u16;
 type DoubleWord = u32;
 type QuadWord = u64;
@@ -49,13 +56,13 @@ pub struct RawIdentifyStruct {
     pub reserved_for_cfa1: DoubleWord,
     pub retired2: Word,
     /// Serial number (see 7.12.7.10)
-    pub serial_number: [u8; 20],
+    pub serial_number: [Word; 10],
     pub retired3: DoubleWord,
     pub obsolete4: Word,
     /// Firmware revision (see 7.12.7.13)
-    pub firmware_revision: [u8; 8],
+    pub firmware_revision: [Word; 4],
     /// Model number (see 7.12.7.14)
-    pub model_number: [u8; 60],
+    pub model_number: [Word; 20],
     /// logical sectors per drq See 7.12.7.15
     // BF 15:8 80h
     // BF  7:0 00h = Reserved
@@ -97,7 +104,7 @@ pub struct RawIdentifyStruct {
     // BF   1 the fields reported in words 64..70 are valid
     // X    0 Obsolete
     pub free_fall_control_sensitivity_and_struct_info: Word,
-    pub obsolete6: QuadWord,
+    pub obsolete6: [Word; 5],
     /// See 7.12.7.21
     // BF  15 The BLOCK ERASE EXT command is supported (see 7.36.2)
     // BF  14 The OVERWRITE EXT command is supported (see 7.36.4)
@@ -431,7 +438,7 @@ pub struct RawIdentifyStruct {
     /// Inter-seek delay for ISO/IEC 7779 standard acoustic testing (see 7.12.7.57)
     pub inner_seek_delay: Word,
     /// World wide name (see 7.12.7.58)
-    pub world_wide_name: [u8; 8],
+    pub world_wide_name: QuadWord,
     pub reserved2: QuadWord,
     pub obsolete9: Word,
     /// Logical sector size (DWord) (see 7.12.7.61)
@@ -470,7 +477,7 @@ pub struct RawIdentifyStruct {
     // X      0 Obsolete
     pub commands_and_feature_sets_supported_or_enabled4: Word,
     /// Reserved for expanded supported and enabled settings
-    pub reserved_for_expanded_supported_and_enabled_settings: [u8; 14],
+    pub reserved_for_expanded_supported_and_enabled_settings: [Word; 6],
     pub obsolete10: Word,
     /// Security status (see 7.12.7.66)
     //    15:9 Reserved
@@ -483,9 +490,9 @@ pub struct RawIdentifyStruct {
     // BV    1 Security enabled
     // BF    0 Security supported
     pub security_status: Word,
-    pub vendor_specific: [u8; 60],
+    pub vendor_specific: [Word; 31],
     /// Reserved for CFA (see 7.12.7.68)
-    pub reserved_for_cfa2: [u8; 16],
+    pub reserved_for_cfa2: [Word; 8],
     /// See 7.12.7.69
     //     15:4 Reserved
     // OBF  3:0 Device Nominal Form Factor
@@ -498,7 +505,7 @@ pub struct RawIdentifyStruct {
     pub additional_product_identifier: QuadWord,
     pub reserved3: DoubleWord,
     /// Current media serial number (see 7.12.7.73)
-    pub current_media_serial_number: [u8; 60],
+    pub current_media_serial_number: [Word; 30],
     /// SCT Command Transport (see 7.12.7.74)
     // X  15:12 Vendor Specific
     //     11:8 Reserved
@@ -522,7 +529,7 @@ pub struct RawIdentifyStruct {
     pub write_read_verify_sector_mode_3_count: DoubleWord,
     /// Write-Read-Verify Sector Mode 2 Count (DWord) (see 7.12.7.77)
     pub write_read_verify_sector_mode_2_count: DoubleWord,
-    pub obsolete11: QuadWord,
+    pub obsolete11: [Word; 3],
     /// Nominal media rotation rate (see 7.12.7.79)
     pub nominal_media_rotation_rate: Word,
     pub reserved5: Word,
@@ -552,7 +559,7 @@ pub struct RawIdentifyStruct {
     pub transport_major_version_number: Word,
     /// Transport minor version number (see 7.12.7.85)
     pub transport_minor_version_number: Word,
-    pub reserved7: [u8; 12],
+    pub reserved7: [Word; 6],
     /// Extended Number of User Addressable Sectors (QWord) (see 7.12.7.87)
     pub ext_user_addressable_sectors: QuadWord,
     /// Minimum number of 512-byte data blocks per Download Microcode operation
@@ -561,13 +568,126 @@ pub struct RawIdentifyStruct {
     /// Maximum number of 512-byte data blocks per Download Microcode operation
     /// (see 7.12.7.89)
     pub maximum_512_byte_data_blocks_per_download_microcode_operation: Word,
-    pub reserved8: [u8; 42],
+    pub reserved8: [Word; 19],
     /// Integrity word (see 7.12.7.91)
     //     15:8 Checksum
     //      7:0 Checksum Validity Indicator
     pub integrity_word: Word
 }
 
+const _: () = assert!(mem::size_of::<RawIdentifyStruct>() == 512, "RawIdentifyStruct should be 512 bytes!");
+
+impl RawIdentifyStruct {
+
+    pub fn new() -> Self {
+        // This is safe because the entire struct is primitive integers,
+        // so their 'zero' *is* 0.
+        unsafe { mem::zeroed() }
+    }
+
+    pub fn from_vec(vec: Vec<u16>) -> Box<Self> {
+        Box::new( unsafe { (vec.as_ptr() as *const Self).read() })
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum Interconnect {
+    Parallel,
+    Serial,
+    Unknown(u16)
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum SpecificConfig {
+    DiskRequiresSetFeatures(CompletionStatus),
+    DiskDoesNotRequireSetFeatures(CompletionStatus)
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum CompletionStatus {
+    Complete,
+    Incomplete
+}
+
 pub struct IdentifyParser {
+    raw: Box<RawIdentifyStruct>
+}
+
+impl IdentifyParser {
+    pub fn new(raw_data: Vec<u16>) -> Self {
+        Self {
+            raw: RawIdentifyStruct::from_vec(raw_data)
+        }
+    }
+
+    pub fn identify_completion_status(&self) -> CompletionStatus {
+        let raw_value = self.raw.general_config;
+
+        match raw_value.get_bit(2) {
+            true => CompletionStatus::Incomplete,
+            false => CompletionStatus::Complete
+        }
+    }
+
+    pub fn specific_config(&self) -> Option<SpecificConfig> {
+        let raw_value = self.raw.specific_config;
+
+        use SpecificConfig::*;
+        use CompletionStatus::*;
+
+        match raw_value {
+            0x37C8 => Some(DiskRequiresSetFeatures(Incomplete)),
+            0x738C => Some(DiskRequiresSetFeatures(Complete)),
+            0x8C73 => Some(DiskDoesNotRequireSetFeatures(Incomplete)),
+            0xC837 => Some(DiskDoesNotRequireSetFeatures(Complete)),
+
+            _ => None
+        }
+    }
+
+    pub fn model_number(&self) -> String {
+        let mut string = String::new();
+        let model_number = self.raw.model_number;
+        'outer: for word in model_number {
+            let bytes = word.to_be_bytes();
+
+            for byte in bytes {
+                if byte == 0 || byte == 16 {
+                    break 'outer;
+                }
+
+                if !byte.is_ascii() {
+                    continue;
+                }
+
+                string.push(byte as char);
+            }
+        }
+
+        String::from(string.trim())
+    }
+
+    pub fn interconnect(&self) -> Interconnect {
+        let raw_word = self.raw.transport_major_version_number;
+
+        if raw_word == 0 || raw_word == Word::MAX {
+            return Interconnect::Unknown(raw_word);
+        }
+
+        let interconnect_value = raw_word.get_bits(12..16);
+
+        match interconnect_value {
+            0 => Interconnect::Parallel,
+            1 => Interconnect::Serial,
+
+            _ => Interconnect::Unknown(raw_word)
+        }
+    }
+
+    pub fn is_48_bit_addressing_supported(&self) -> bool {
+        let feature_opt_copy = self.raw.commands_and_feature_sets_supported_or_enabled2;
+
+        feature_opt_copy.get_bit(10)
+    }
 
 }
