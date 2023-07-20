@@ -483,7 +483,9 @@ impl FeaturesRegister {
 
 pub enum Commands {
     Identify,
-    ReadSectorsPIO
+    ReadSectorsPIO,
+    WriteSectorsPIO,
+    CacheFlush
 }
 
 pub struct CommandRegister {}
@@ -508,7 +510,9 @@ impl CommandRegister {
 
         let command_id = match command {
             Commands::Identify => Self::ATA_IDENTIFY,
-            Commands::ReadSectorsPIO => Self::ATA_CMD_READ_PIO
+            Commands::ReadSectorsPIO => Self::ATA_CMD_READ_PIO,
+            Commands::WriteSectorsPIO => Self::ATA_CMD_WRITE_PIO,
+            Commands::CacheFlush => Self::ATA_CMD_CACHE_FLUSH
         };
 
         unsafe { io_port.write_u8(command_id) };
@@ -533,6 +537,18 @@ impl DataRegister {
         let io_port = Self::my_port(device);
 
         unsafe { io_port.read_u16() }
+    }
+
+    pub fn write_u16(device: DiskID, value: u16) {
+        let my_port = Self::my_port(device);
+
+        unsafe { my_port.write_u16(value) };
+    }
+
+    pub fn write_u8(device: DiskID, value: u8) {
+        let my_port = Self::my_port(device);
+
+        unsafe { my_port.write_u8(value) };
     }
 
 }

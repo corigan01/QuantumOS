@@ -620,6 +620,13 @@ impl IdentifyParser {
         }
     }
 
+
+    pub fn max_sectors_per_request(&self) -> usize {
+        let raw_value = self.raw.logical_sectors_per_drq;
+
+        raw_value.get_bits(0..8) as usize
+    }
+
     pub fn identify_completion_status(&self) -> CompletionStatus {
         let raw_value = self.raw.general_config;
 

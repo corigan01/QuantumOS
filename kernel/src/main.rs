@@ -94,8 +94,8 @@ fn main(boot_info: &KernelBootInformation) {
     );
 
     // FIXME: The tmp alloc should be dynamic
-    let init_alloc_begin = 2 * Bytes::MIB;
-    let init_alloc_size = Bytes::from(1 * Bytes::MIB);
+    let init_alloc_begin = 0x000000f00001;
+    let init_alloc_size = Bytes::from(1 * Bytes::MIB) - 2.into();
 
     debug_print!("\nCreating Init Heap Allocator at (ptr: 0x{:x} size: {}) ... ",
         init_alloc_begin, init_alloc_size
@@ -158,9 +158,11 @@ fn main(boot_info: &KernelBootInformation) {
     }
 
     let main_disk = &disks[0];
-    let sector_data = main_disk.read_raw(0, 1).unwrap();
+
+    let sector_data = main_disk.read_raw(0, 2).unwrap();
     for (idx, word) in sector_data.iter().enumerate() {
-        debug_print!("{:04X} ", word);
+        let new_value = u16::from_be(*word);
+        debug_print!("{:04X} ", new_value);
 
         if (idx + 1) % 16 == 0 {
             debug_print!("\n");

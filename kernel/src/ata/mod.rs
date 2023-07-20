@@ -37,7 +37,8 @@ mod identify_parser;
 
 #[derive(Clone, Copy, Debug)]
 pub enum DiskErr {
-    FailedToRead
+    FailedToRead,
+    MalformedInput
 }
 
 pub struct ATADisk {
@@ -46,6 +47,8 @@ pub struct ATADisk {
 }
 
 impl ATADisk {
+    const WORDS_PER_SECTOR: usize = 256;
+
     fn new(device: DiskID, identify: Vec<u16>) -> Self {
         Self {
             device,
@@ -54,18 +57,31 @@ impl ATADisk {
     }
 
     fn io_wait(&self) {
-        while StatusRegister::is_busy(self.device) &&
+        while
+             StatusRegister::is_status(self.device, StatusFlags::SpinDown) &&
+             StatusRegister::is_busy(self.device) &&
             !StatusRegister::is_err_or_fault(self.device) &&
             !StatusRegister::is_status(self.device, StatusFlags::DRQ) {}
     }
 
-    pub fn read_raw(&self, sector: usize, sector_count: usize) -> Result<Vec<u16>, DiskErr> {
-        DriveHeadRegister::select_drive(self.device);
+    fn smart_wait(&self) -> Result<(), DiskErr> {
+        StatusRegister::perform_400ns_delay(self.device);
         self.io_wait();
 
         if StatusRegister::is_err_or_fault(self.device) {
             return Err(DiskErr::FailedToRead);
         }
+
+        Ok(())
+    }
+
+    fn select_sector(&self, sector: usize, sector_count: usize) -> Result<(), DiskErr> {
+        if sector_count == 0 {
+            return Err(DiskErr::MalformedInput);
+        }
+
+        DriveHeadRegister::select_drive(self.device);
+        self.smart_wait()?;
 
         let small_bits = sector.get_bits(24..28) as u8;
         DriveHeadRegister::set_bits_24_to_27_of_lba(self.device, small_bits);
@@ -73,27 +89,62 @@ impl ATADisk {
         SectorRegisters::select_sectors(self.device, sector_count as u8);
         SectorRegisters::select_lba_0_to_24_bits(self.device, sector);
 
+        Ok(())
+    }
+
+    pub fn read_raw(&self, sector: usize, sector_count: usize) -> Result<Vec<u16>, DiskErr> {
+        self.select_sector(sector, sector_count)?;
+
         CommandRegister::send_command(self.device, Commands::ReadSectorsPIO);
-        self.io_wait();
+        self.smart_wait()?;
 
         let mut new_vec: Vec<u16> = Vec::new();
-        for _ in 0..256 {
-            let value = DataRegister::read_u16(self.device);
-            new_vec.push(value);
+        for _ in 0..sector_count {
+            for _ in 0..Self::WORDS_PER_SECTOR {
+                let value = DataRegister::read_u16(self.device);
+                new_vec.push(value);
+            }
+
+            self.smart_wait()?;
         }
 
         Ok(new_vec)
+    }
+
+    pub fn write_raw(&mut self, mut vec: Vec<u16>, sector: usize, sector_count: usize) -> Result<(), DiskErr> {
+        if vec.len() < sector_count * Self::WORDS_PER_SECTOR {
+            return Err(DiskErr::MalformedInput);
+        }
+
+        self.select_sector(sector, sector_count)?;
+
+        CommandRegister::send_command(self.device, Commands::WriteSectorsPIO);
+        self.smart_wait()?;
+
+        for _ in 0..sector_count {
+            for _ in 0..Self::WORDS_PER_SECTOR {
+                let write_value = vec.remove(0);
+                DataRegister::write_u16(self.device, write_value);
+            }
+            self.smart_wait()?;
+        }
+
+        CommandRegister::send_command(self.device, Commands::CacheFlush);
+        self.smart_wait()?;
+
+        Ok(())
     }
 
 }
 
 impl Display for ATADisk {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
-        writeln!(f, "{} {:?} {:?} {:?}",
+        writeln!(f, "{} {:?} {:?} {:?} {}",
                  self.identify.model_number().as_str(),
                  self.identify.interconnect(),
                  self.identify.specific_config(),
-                 self.identify.identify_completion_status()
+                 self.identify.identify_completion_status(),
+                 self.identify.max_sectors_per_request()
         )?;
 
         Ok(())
