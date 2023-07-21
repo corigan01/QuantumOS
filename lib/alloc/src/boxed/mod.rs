@@ -25,10 +25,9 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 
 use core::fmt::{Debug, Display, Formatter};
-use core::{intrinsics, mem};
+use core::mem;
 use core::mem::MaybeUninit;
 use core::ops::{Deref, DerefMut};
-use core::panic::PanicInfo;
 use core::ptr::NonNull;
 use crate::AllocErr;
 use crate::heap::{AllocatorAPI, GlobalAlloc};
