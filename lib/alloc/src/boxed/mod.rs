@@ -23,19 +23,18 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+
 use core::fmt::{Debug, Display, Formatter};
-use core::mem;
+use core::{intrinsics, mem};
 use core::mem::MaybeUninit;
 use core::ops::{Deref, DerefMut};
+use core::panic::PanicInfo;
 use core::ptr::NonNull;
 use crate::AllocErr;
 use crate::heap::{AllocatorAPI, GlobalAlloc};
 use crate::memory_layout::MemoryLayout;
 
-pub struct Box<Type, Alloc: AllocatorAPI = GlobalAlloc> {
-    ptr: NonNull<Type>,
-    alloc: Alloc
-}
+pub struct Box<Type: ?Sized, Alloc: AllocatorAPI = GlobalAlloc>(NonNull<Type>, Alloc);
 
 impl<Type> Box<Type> {
     #[must_use]
@@ -57,7 +56,7 @@ impl<Type> Box<Type> {
 impl<Type, Alloc: AllocatorAPI> Box<Type, Alloc> {
     pub fn leak<'a>(self) -> &'a mut Type
         where Type: 'a {
-        unsafe { mem::ManuallyDrop::new(self).ptr.as_mut() }
+        unsafe { mem::ManuallyDrop::new(self).0.as_mut() }
     }
 
     pub fn try_new_uninit_in_impl(alloc: Alloc, zero: bool) -> Result<Box<MaybeUninit<Type>, Alloc>, AllocErr>
@@ -71,10 +70,7 @@ impl<Type, Alloc: AllocatorAPI> Box<Type, Alloc> {
         let ptr = NonNull::new(allocation.ptr as *mut MaybeUninit<Type>)
             .ok_or(AllocErr::InternalErr)?;
 
-        Ok(Box {
-            ptr,
-            alloc
-        })
+        Ok(Box(ptr, alloc))
     }
 
     fn handle_alloc_err<T>(value: Result<Box<T, Alloc>, AllocErr>) -> Box<T, Alloc> {
@@ -111,10 +107,7 @@ impl<Type, Alloc: AllocatorAPI> Box<Type, Alloc> {
     }
 
     pub unsafe fn from_raw_in(ptr: *mut Type, alloc: Alloc) -> Self {
-        Self {
-            ptr: NonNull::new_unchecked(ptr),
-            alloc
-        }
+        Self(NonNull::new_unchecked(ptr), alloc)
     }
 
 }
@@ -127,12 +120,12 @@ impl <Type: Default> Default for Box<Type> {
 
 impl<Type: Clone, Alloc: AllocatorAPI + Clone> Clone for Box<Type, Alloc> {
     fn clone(&self) -> Self {
-        let new_box = Box::new_uninit_in(self.alloc.clone());
-        new_box.write(unsafe { self.ptr.as_ref().clone() })
+        let new_box = Box::new_uninit_in(self.1.clone());
+        new_box.write(unsafe { self.0.as_ref().clone() })
     }
 
     fn clone_from(&mut self, source: &Self) {
-        unsafe { self.ptr.as_ptr().write(source.ptr.as_ref().clone()) }
+        unsafe { self.0.as_ptr().write(source.0.as_ref().clone()) }
     }
 }
 
@@ -144,7 +137,7 @@ impl<Type, Alloc: AllocatorAPI> Box<MaybeUninit<Type>, Alloc> {
 
     pub fn write(self, value: Type) -> Box<Type, Alloc> {
         unsafe {
-            (self.ptr.as_ptr() as *mut Type).write(value);
+            (self.0.as_ptr() as *mut Type).write(value);
             self.assume_init()
         }
     }
@@ -152,13 +145,13 @@ impl<Type, Alloc: AllocatorAPI> Box<MaybeUninit<Type>, Alloc> {
 
 impl<Type: Display, Alloc: AllocatorAPI> Display for Box<Type, Alloc> {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
-        Display::fmt(unsafe { self.ptr.as_ref() }, f)
+        Display::fmt(unsafe { self.0.as_ref() }, f)
     }
 }
 
 impl<Type: Debug, Alloc: AllocatorAPI> Debug for Box<Type, Alloc> {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
-        Debug::fmt(unsafe { self.ptr.as_ref() }, f)
+        Debug::fmt(unsafe { self.0.as_ref() }, f)
     }
 }
 
@@ -166,19 +159,20 @@ impl<Type, Alloc: AllocatorAPI> Deref for Box<Type, Alloc> {
     type Target = Type;
     
     fn deref(&self) -> &Self::Target {
-        unsafe { self.ptr.as_ref() }
+        unsafe { self.0.as_ref() }
     }
 }
 
 impl<Type, Alloc: AllocatorAPI> DerefMut for Box<Type, Alloc> {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        unsafe { self.ptr.as_mut() }
+        unsafe { self.0.as_mut() }
     }
 }
 
-impl<Type, Alloc: AllocatorAPI> Drop for Box<Type, Alloc> {
+impl<Type: ?Sized, Alloc: AllocatorAPI> Drop for Box<Type, Alloc> {
     fn drop(&mut self) {
-        unsafe { Alloc::free(self.ptr) }
+        unsafe { Alloc::free(NonNull::<u8>::new(self.0.as_ptr() as *mut u8).unwrap()) }
             .expect("Could not free Box");
     }
 }
+

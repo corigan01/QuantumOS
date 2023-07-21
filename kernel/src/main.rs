@@ -28,6 +28,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #![no_main] // disable all Rust-level entry points
 #![allow(dead_code)]
 
+use core::fmt::{Display, Formatter};
 use core::panic::PanicInfo;
 use qk_alloc::heap::alloc::KernelHeap;
 use qk_alloc::heap::{get_global_alloc, get_global_alloc_debug, set_global_alloc};
@@ -50,6 +51,7 @@ use quantum_os::clock::rtc::update_and_get_time;
 use owo_colors::OwoColorize;
 use qk_alloc::string::String;
 use quantum_lib::panic_utils::CRASH_MESSAGES;
+
 use quantum_os::ata::scan_for_disks;
 use quantum_os::qemu::{exit_qemu, QemuExitCode};
 

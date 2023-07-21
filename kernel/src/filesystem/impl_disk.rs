@@ -21,29 +21,73 @@ NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPO
 NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
 DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-Quantum OS Lib file, documentation coming soon!
 */
 
-#![no_std]
-#![no_main]
-#![allow(dead_code)]
+use qk_alloc::string::String;
+use qk_alloc::vec::Vec;
 
-#![feature(custom_test_frameworks)]
-#![test_runner(crate::test_handler::test_runner)]
-#![reexport_test_harness_main = "run_test"]
-
-pub mod qemu;
-pub mod ata;
-pub mod clock;
-pub mod filesystem;
-
-#[cfg(test)]
-pub mod test_handler;
-pub mod kernel_console;
-
-#[cfg(test)]
-pub fn test_main() {
-    run_test();
+pub enum MediumType {
+    Unknown,
+    HardDisk,
 }
 
+pub enum MediumBus {
+    Unknown,
+    Emulated,
+    ATA,
+    SATA,
+    Nvme,
+    Ram,
+}
+
+// FIXME: This should be a dyn error in the future
+pub enum MediumErr {
+    DiskErr
+}
+
+pub trait Medium {
+    fn is_writable(&self) -> bool {
+        false
+    }
+
+    fn is_readable(&self) -> bool {
+        false
+    }
+
+    fn disk_name(&self) -> String {
+        String::from("Unnamed Medium")
+    }
+
+    fn disk_type(&self) -> MediumType {
+        MediumType::Unknown
+    }
+
+    fn disk_bus(&self) -> MediumBus {
+        MediumBus::Unknown
+    }
+
+    fn seek(&mut self, seek: SeekFrom);
+
+    // FIXME: 'Vec<u8>' should be replaced with a custom type that
+    //        handles lazy memory, and over memory-protection
+    fn read_exact(&self, amount: usize) -> Result<Vec<u8>, MediumErr>;
+    fn write_exact(&mut self, buf: Vec<u8>) -> Result<(), MediumErr>;
+
+    fn read_append_into(&self, vec: &mut Vec<u8>, amount: usize) -> Result<(), MediumErr> {
+        let read = self.read_exact(amount)?;
+
+        for byte in read.iter() {
+            vec.push(*byte);
+        }
+
+        Ok(())
+    }
+
+    // Maybe 'write_consume(vec)' ?
+}
+
+pub enum SeekFrom {
+    Start(u64),
+    End(i64),
+    Current(i64)
+}
