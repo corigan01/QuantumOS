@@ -25,4 +25,4 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 mod ext2;
 mod partitioning;
-mod impl_disk;
+pub mod impl_disk;

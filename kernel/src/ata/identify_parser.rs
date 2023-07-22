@@ -620,6 +620,10 @@ impl IdentifyParser {
         }
     }
 
+    pub fn user_sectors_28bit_lba(&self) -> usize {
+        self.raw.user_addressable_logical_sectors_lba28 as usize
+    }
+
 
     pub fn max_sectors_per_request(&self) -> usize {
         let raw_value = self.raw.logical_sectors_per_drq;

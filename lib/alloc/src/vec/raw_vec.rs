@@ -56,7 +56,7 @@ impl<Type, Alloc: AllocatorAPI> RawVec<Type, Alloc> {
         let new_allocation = if self.cap == 0 {
             unsafe { Alloc::allocate(memory_disc) }.expect("Unable to reserve vector!")
         } else {
-            unsafe { Alloc::realloc(self.ptr, memory_disc) }.expect("Unable to reserve vector!")
+            unsafe { Alloc::realloc(self.ptr, memory_disc) }.expect("Unable to expand vector!")
         };
 
         self.ptr = NonNull::new(new_allocation.ptr as *mut Type).unwrap();

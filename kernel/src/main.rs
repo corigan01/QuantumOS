@@ -28,7 +28,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #![no_main] // disable all Rust-level entry points
 #![allow(dead_code)]
 
-use core::fmt::{Display, Formatter};
+use core::fmt::Display;
 use core::panic::PanicInfo;
 use qk_alloc::heap::alloc::KernelHeap;
 use qk_alloc::heap::{get_global_alloc, get_global_alloc_debug, set_global_alloc};
@@ -152,22 +152,25 @@ fn main(boot_info: &KernelBootInformation) {
     debug_println!("{}", "OK".bright_green().bold());
 
     debug_println!("\nScanning for disks");
-    let disks = scan_for_disks();
+    let mut disks = scan_for_disks();
     debug_println!("Found {} disk(s)!", disks.len());
 
     for disk in disks.iter() {
         debug_println!("{}", disk);
     }
 
-    let main_disk = &disks[0];
+    let main_disk = &mut disks[0];
+
+
 
     let sector_data = main_disk.read_raw(0, 2).unwrap();
-    for (idx, word) in sector_data.iter().enumerate() {
-        let new_value = u16::from_be(*word);
-        debug_print!("{:04X} ", new_value);
+    for (idx, byte) in sector_data.iter().enumerate() {
+        debug_print!("{:02X}", byte);
 
-        if (idx + 1) % 16 == 0 {
+        if (idx + 1) % 32 == 0 {
             debug_print!("\n");
+        } else if (idx + 1) % 2 == 0 {
+            debug_print!(" ");
         }
     }
 

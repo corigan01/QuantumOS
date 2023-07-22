@@ -166,11 +166,33 @@ impl<Type, Alloc: AllocatorAPI> Vec<Type, Alloc> {
         Some(return_value)
     }
 
+    pub fn retain<F>(&mut self, mut should_keep: F)
+        where F: FnMut(&Type) -> bool {
+
+        let mut index = 0;
+        loop {
+            if index >= self.len {
+                return;
+            }
+
+            let current = unsafe { &*self.as_ptr().add(index) };
+
+            if !should_keep(current) {
+                self.remove(index);
+                continue;
+            }
+
+            index += 1;
+        }
+    }
+
+    pub fn remove_all(&mut self) {
+        while let Some(_) = self.pop() {}
+    }
+
     pub fn remove(&mut self, index: usize) -> Type {
         assert!(index <= self.len || self.len == 0,
                 "Index out of bounds! Got index {}, but len is only {}", index, self.len);
-
-
 
         let return_value;
         unsafe {
@@ -178,7 +200,9 @@ impl<Type, Alloc: AllocatorAPI> Vec<Type, Alloc> {
 
             return_value = ptr::read(ptr);
 
-            ptr::copy(ptr.add(1), ptr, (self.len - index) - 1);
+            if self.len != 0 && self.len != index {
+                ptr::copy(ptr.add(1), ptr, self.len - index - 1);
+            }
         }
 
         self.len -= 1;
@@ -371,6 +395,22 @@ mod test {
         }
 
         assert_eq!(vec.len(), 256);
+    }
+
+    #[test]
+    fn test_retain() {
+        set_example_allocator(4096);
+        let mut vec: Vec<i32> = Vec::new();
+
+        for i in 0..10 {
+            vec.push(i);
+        }
+
+        vec.retain(|value| {
+           value % 2 == 0
+        });
+
+        assert_eq!(vec.as_slice(), &[0, 2, 4, 6, 8]);
     }
 
 

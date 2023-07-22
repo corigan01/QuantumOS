@@ -24,13 +24,14 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 use core::fmt::{Display, Formatter};
-use owo_colors::colors::css::Gray;
 use qk_alloc::vec::Vec;
 use quantum_lib::{debug_print, debug_println};
 use crate::ata::registers::{CommandRegister, Commands, DataRegister, DiskID, DriveHeadRegister, ErrorRegister, FeaturesRegister, SectorRegisters, StatusFlags, StatusRegister};
 use owo_colors::OwoColorize;
 use quantum_lib::bitset::BitSet;
+use quantum_utils::bytes::Bytes;
 use crate::ata::identify_parser::IdentifyParser;
+use crate::filesystem::impl_disk::{Medium, MediumErr, SeekFrom};
 
 mod registers;
 mod identify_parser;
@@ -43,7 +44,9 @@ pub enum DiskErr {
 
 pub struct ATADisk {
     device: DiskID,
-    identify: IdentifyParser
+    identify: IdentifyParser,
+    cache: Vec<(usize, Vec<u8>)>,
+    current: usize
 }
 
 impl ATADisk {
@@ -52,7 +55,9 @@ impl ATADisk {
     fn new(device: DiskID, identify: Vec<u16>) -> Self {
         Self {
             device,
-            identify: IdentifyParser::new(identify)
+            identify: IdentifyParser::new(identify),
+            cache: Vec::new(),
+            current: 0,
         }
     }
 
@@ -92,17 +97,21 @@ impl ATADisk {
         Ok(())
     }
 
-    pub fn read_raw(&self, sector: usize, sector_count: usize) -> Result<Vec<u16>, DiskErr> {
+    pub fn read_raw(&mut self, sector: usize, sector_count: usize) -> Result<Vec<u8>, DiskErr> {
         self.select_sector(sector, sector_count)?;
 
         CommandRegister::send_command(self.device, Commands::ReadSectorsPIO);
         self.smart_wait()?;
 
-        let mut new_vec: Vec<u16> = Vec::new();
+        let mut new_vec: Vec<u8> = Vec::new();
         for _ in 0..sector_count {
             for _ in 0..Self::WORDS_PER_SECTOR {
                 let value = DataRegister::read_u16(self.device);
-                new_vec.push(value);
+                let arr = value.to_be_bytes();
+
+                for b in arr {
+                    new_vec.push(b);
+                }
             }
 
             self.smart_wait()?;
@@ -111,8 +120,8 @@ impl ATADisk {
         Ok(new_vec)
     }
 
-    pub fn write_raw(&mut self, mut vec: Vec<u16>, sector: usize, sector_count: usize) -> Result<(), DiskErr> {
-        if vec.len() < sector_count * Self::WORDS_PER_SECTOR {
+    pub fn write_raw(&mut self, mut data: Vec<u8>, sector: usize, sector_count: usize) -> Result<(), DiskErr> {
+        if data.len() < sector_count * Self::WORDS_PER_SECTOR {
             return Err(DiskErr::MalformedInput);
         }
 
@@ -121,9 +130,11 @@ impl ATADisk {
         CommandRegister::send_command(self.device, Commands::WriteSectorsPIO);
         self.smart_wait()?;
 
+        self.invalidate_cached_sectors(sector, sector_count);
+
         for _ in 0..sector_count {
             for _ in 0..Self::WORDS_PER_SECTOR {
-                let write_value = vec.remove(0);
+                let write_value = ((data.remove(1) as u16) << 8) + (data.remove(0) as u16);
                 DataRegister::write_u16(self.device, write_value);
             }
             self.smart_wait()?;
@@ -135,16 +146,86 @@ impl ATADisk {
         Ok(())
     }
 
+    pub fn invalidate_cached_sectors(&mut self, base_lba: usize, amount: usize) {
+        self.cache.retain(|(sector, _)| {
+            *sector < base_lba && *sector > (base_lba + amount)
+        });
+    }
+
+    pub fn collect_cached_sectors(&self, lba: usize, amount: usize) -> Option<Vec<u8>> {
+        // Regardless if we have to loop over the cache multiple times,
+        // its way faster to loop then to heap allocate.
+        if !self.is_sectors_cached(lba, amount) {
+            return None;
+        }
+
+        let mut return_buffer = Vec::new();
+        let mut offset = 0;
+
+        for (sector, data) in self.cache.iter() {
+            if *sector == (lba + offset) {
+                for b in data.iter() {
+                    return_buffer.push(*b);
+                }
+
+                offset += 1;
+            }
+
+            if offset == amount {
+                return Some(return_buffer);
+            }
+        }
+
+        None
+    }
+
+    pub fn is_sectors_cached(&self, lba: usize, amount: usize) -> bool {
+        let mut offset = 0;
+        for (sector, _) in self.cache.iter() {
+            if *sector == (lba + offset) {
+                offset += 1;
+            }
+
+            if offset == amount {
+                return true;
+            }
+        }
+
+        false
+    }
+
+    pub fn add_single_sector_to_cache(&mut self, lba: usize, data: &[u8]) {
+        assert_eq!(data.len(), (Self::WORDS_PER_SECTOR * 2));
+
+        let data_clone = Vec::new();
+        for b in data {
+            data_clone.push(*b);
+        }
+
+        self.cache.push((
+                lba,
+                data_clone
+            ));
+    }
+
+    pub fn add_n_sectors_to_cache(&mut self, base_lba: usize, data: &[u8]) {
+        assert_eq!(data.len() % (Self::WORDS_PER_SECTOR * 2), 0);
+
+        data.s
+
+    }
+
 }
 
 impl Display for ATADisk {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
-        writeln!(f, "{} {:?} {:?} {:?} {}",
+        writeln!(f, "{} {:?} {:?} {:?} {} {}",
                  self.identify.model_number().as_str(),
                  self.identify.interconnect(),
                  self.identify.specific_config(),
                  self.identify.identify_completion_status(),
-                 self.identify.max_sectors_per_request()
+                 self.identify.max_sectors_per_request(),
+                 Bytes::from(self.identify.user_sectors_28bit_lba() * 512)
         )?;
 
         Ok(())
@@ -213,4 +294,29 @@ pub fn scan_for_disks() -> Vec<ATADisk> {
     }
 
     disks
+}
+
+impl Medium for ATADisk {
+    fn seek(&mut self, seek: SeekFrom) {
+        match seek {
+            SeekFrom::Start(start) => {
+                self.current = start as usize;
+            }
+            SeekFrom::End(end) => {
+                assert!(end <= 0);
+                self.current = ((self.identify.user_sectors_28bit_lba() as i64) + end) as usize;
+            }
+            SeekFrom::Current(current) => {
+                self.current = (current + (self.current as i64)) as usize;
+            }
+        }
+    }
+
+    fn read_exact(&self, amount: usize) -> Result<Vec<u8>, MediumErr> {
+        todo!()
+    }
+
+    fn write_exact(&mut self, buf: Vec<u8>) -> Result<(), MediumErr> {
+        todo!()
+    }
 }

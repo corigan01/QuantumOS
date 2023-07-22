@@ -25,3 +25,11 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 mod mbr;
 
+pub enum PartitionKind {
+    MBR,
+    GPT
+}
+
+pub struct Partition {
+    kind: PartitionKind
+}
