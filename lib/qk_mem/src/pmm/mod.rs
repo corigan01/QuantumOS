@@ -86,7 +86,7 @@ impl PhysicalMemoryManager {
     }
 
     pub fn allocate_free_page(&mut self) -> Result<PageAligned, PhyAllocErr> {
-        let Some(address) = self.usable.mut_iter().find_map(|entry| {
+        let Some(address) = self.usable.iter_mut().find_map(|entry| {
             entry.reserve_first_free()
         }) else {
             return Err(PhyAllocErr::NotEnoughMemory);
@@ -96,7 +96,7 @@ impl PhysicalMemoryManager {
     }
 
     pub fn allocate_free_pages(&mut self, qty: usize) -> Result<PageAligned, PhyAllocErr> {
-        let Some(start_address) = self.usable.mut_iter().find_map(|entry| {
+        let Some(start_address) = self.usable.iter_mut().find_map(|entry| {
             entry.reserve_first_free_of_many(qty)
         }) else {
             return Err(PhyAllocErr::NotEnoughMemory);

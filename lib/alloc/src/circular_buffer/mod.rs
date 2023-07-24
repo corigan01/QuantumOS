@@ -26,14 +26,13 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 use core::fmt::Write;
 use core::ops::Index;
 use core::str::Utf8Error;
-use crate::heap::{AllocatorAPI, GlobalAlloc};
 use crate::vec::Vec;
 
-pub struct CircularBuffer<Type, Alloc: AllocatorAPI = GlobalAlloc> {
-    buffer: Vec<Type, Alloc>
+pub struct CircularBuffer<Type> {
+    buffer: Vec<Type>
 }
 
-impl<Type, Alloc: AllocatorAPI> CircularBuffer<Type, Alloc> {
+impl<Type> CircularBuffer<Type> {
     pub fn new(cap: usize) -> Self {
         Self {
             buffer: Vec::with_capacity(cap)
@@ -80,7 +79,7 @@ impl<Type, Alloc: AllocatorAPI> CircularBuffer<Type, Alloc> {
         self.buffer.len()
     }
 
-    pub fn to_vec(&self) -> Vec<Type, Alloc>
+    pub fn to_vec(&self) -> Vec<Type>
         where Type: Clone {
         self.buffer.clone()
     }
@@ -90,7 +89,7 @@ impl<Type, Alloc: AllocatorAPI> CircularBuffer<Type, Alloc> {
     }
 }
 
-impl<Alloc: AllocatorAPI> CircularBuffer<u8, Alloc> {
+impl CircularBuffer<u8> {
     pub fn as_str(&self) -> Result<&str, Utf8Error> {
         core::str::from_utf8(self.as_slice())
     }
@@ -100,7 +99,7 @@ impl<Alloc: AllocatorAPI> CircularBuffer<u8, Alloc> {
     }
 }
 
-impl<Type, Alloc: AllocatorAPI> Index<usize> for CircularBuffer<Type, Alloc> {
+impl<Type> Index<usize> for CircularBuffer<Type> {
     type Output = Type;
 
     fn index(&self, index: usize) -> &Self::Output {
@@ -108,7 +107,7 @@ impl<Type, Alloc: AllocatorAPI> Index<usize> for CircularBuffer<Type, Alloc> {
     }
 }
 
-impl<Alloc: AllocatorAPI> Write for CircularBuffer<u8, Alloc> {
+impl Write for CircularBuffer<u8> {
     fn write_str(&mut self, s: &str) -> core::fmt::Result {
         for byte in s.bytes() {
             self.push_back(byte);

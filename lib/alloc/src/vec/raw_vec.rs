@@ -23,31 +23,48 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use core::marker::PhantomData;
 use core::mem::size_of;
 use core::ptr::NonNull;
-use crate::heap::AllocatorAPI;
+use crate::heap::{AllocatorAPI, GlobalAlloc};
 use crate::memory_layout::MemoryLayout;
 
 unsafe impl<T: Send, Alloc: AllocatorAPI> Send for RawVec<T, Alloc> {}
 unsafe impl<T: Sync, Alloc: AllocatorAPI> Sync for RawVec<T, Alloc> {}
 
+#[allow(dead_code)]
 pub struct RawVec<Type, Alloc: AllocatorAPI> {
     pub(crate) ptr: NonNull<Type>,
     pub(crate) cap: usize,
-    phn: PhantomData<Alloc>
+    alloc: Alloc
+}
+
+impl<Type> RawVec<Type, GlobalAlloc> {
+    pub unsafe fn from_raw_parts(ptr: *mut Type, capacity: usize) -> Self {
+        Self {
+            ptr: NonNull::new_unchecked(ptr),
+            cap: capacity,
+            alloc: GlobalAlloc
+        }
+    }
 }
 
 impl<Type, Alloc: AllocatorAPI> RawVec<Type, Alloc> {
-    pub const fn new() -> Self {
+    pub const fn new_in(alloc: Alloc) -> Self {
         let sizeof_type = size_of::<Type>();
         let cap = if sizeof_type == 0 { usize::MAX } else { 0 };
 
         Self {
             ptr: NonNull::dangling(),
             cap,
-            phn: PhantomData,
+            alloc,
         }
+    }
+
+    pub fn with_capacity_in(capacity: usize, alloc: Alloc) -> Self {
+        let mut new = Self::new_in(alloc);
+        new.reserve(capacity);
+
+        new
     }
 
     pub fn reserve(&mut self, additional: usize) {

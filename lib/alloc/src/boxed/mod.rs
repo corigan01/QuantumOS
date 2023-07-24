@@ -143,6 +143,18 @@ impl<Type, Alloc: AllocatorAPI> Box<MaybeUninit<Type>, Alloc> {
     }
 }
 
+impl<Type: ?Sized, Alloc: AllocatorAPI> PartialEq for Box<Type, Alloc>
+    where Type: PartialEq {
+
+    fn eq(&self, other: &Self) -> bool {
+        self.as_ref() == other.as_ref()
+    }
+
+    fn ne(&self, other: &Self) -> bool {
+        self.as_ref() != other.as_ref()
+    }
+}
+
 impl<Type: ?Sized, Alloc: AllocatorAPI> Receiver for Box<Type, Alloc> {}
 impl<T: ?Sized + Unsize<U>, U: ?Sized, A: AllocatorAPI> CoerceUnsized<Box<U, A>> for Box<T, A> {}
 impl<T: ?Sized + Unsize<U>, U: ?Sized> DispatchFromDyn<Box<U>> for Box<T, GlobalAlloc> {}

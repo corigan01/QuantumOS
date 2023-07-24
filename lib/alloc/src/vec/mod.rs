@@ -25,9 +25,10 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 use core::cmp::Ordering;
 use core::fmt::{Debug, Formatter};
-use core::ops::{Index, IndexMut};
+use core::mem::ManuallyDrop;
+use core::ops::{Deref, DerefMut, Index, IndexMut};
 use core::ptr;
-use core::slice::{Iter, IterMut};
+use crate::boxed::Box;
 use crate::heap::{AllocatorAPI, GlobalAlloc};
 use crate::vec::raw_vec::RawVec;
 
@@ -38,19 +39,36 @@ pub struct Vec<Type, Alloc: AllocatorAPI = GlobalAlloc>{
     len: usize
 }
 
-impl<Type, Alloc: AllocatorAPI> Vec<Type, Alloc> {
+impl<Type> Vec<Type, GlobalAlloc> {
     pub const fn new() -> Self {
+        Self::new_in(GlobalAlloc)
+    }
+
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self::with_capacity_in(capacity, GlobalAlloc)
+    }
+
+    pub unsafe fn from_raw_parts(ptr: *mut Type, len: usize, capacity: usize) -> Self {
         Self {
-            raw: RawVec::new(),
+            raw: RawVec::from_raw_parts(ptr, capacity),
+            len
+        }
+    }
+}
+
+impl<Type, Alloc: AllocatorAPI> Vec<Type, Alloc> {
+    pub const fn new_in(alloc: Alloc) -> Self {
+        Self {
+            raw: RawVec::new_in(alloc),
             len: 0
         }
     }
 
-    pub fn with_capacity(capacity: usize) -> Self {
-        let mut tmp = Self::new();
-        tmp.reserve(capacity);
-
-        tmp
+    pub fn with_capacity_in(capacity: usize, alloc: Alloc) -> Self {
+        Self {
+            raw: RawVec::with_capacity_in(capacity, alloc),
+            len: 0
+        }
     }
 
     pub const fn as_ptr(&self) -> *const Type {
@@ -107,6 +125,28 @@ impl<Type, Alloc: AllocatorAPI> Vec<Type, Alloc> {
         unsafe { ptr::write(self.as_mut_ptr().add(self.len), value) };
 
         self.len += 1;
+    }
+
+    pub fn append(&mut self, other: &mut Vec<Type, Alloc>) {
+        while let Some(value) = other.pop_front() {
+            self.push(value);
+        }
+    }
+
+    pub fn pop_front(&mut self) -> Option<Type> {
+        if self.len == 0 {
+            return None;
+        }
+
+        self.len -= 1;
+
+        let read;
+        unsafe {
+            read = ptr::read(self.as_mut_ptr());
+            ptr::copy(self.as_mut_ptr().add(1), self.as_mut_ptr(), self.len);
+        }
+
+        Some(read)
     }
 
     pub fn pop(&mut self) -> Option<Type> {
@@ -226,17 +266,54 @@ impl<Type, Alloc: AllocatorAPI> Vec<Type, Alloc> {
         where F: FnMut(&Type, &Type) -> Ordering {
         self.as_mut_slice().sort_unstable_by(function)
     }
+}
 
-    pub fn iter(&self) -> Iter<Type> {
-        self.as_slice().iter()
-    }
+impl<Type> From<Box<[Type]>> for Vec<Type> {
+    fn from(value: Box<[Type]>) -> Self {
+        let mut b = ManuallyDrop::new(value);
 
-    pub fn mut_iter(&mut self) -> IterMut<Type> {
-        self.as_mut_slice().iter_mut()
+        unsafe { Self::from_raw_parts(b.as_mut_ptr(), b.len(), b.len()) }
     }
 }
 
-impl<Type, Alloc: AllocatorAPI> Clone for Vec<Type, Alloc>
+impl<Type> From<&[Type]> for Vec<Type>
+    where Type: Clone {
+    fn from(value: &[Type]) -> Self {
+        let mut new_vec = Vec::with_capacity(value.len());
+        for item in value {
+            new_vec.push(item.clone());
+        }
+
+        new_vec
+    }
+}
+
+impl<Type, const SIZE: usize> From<[Type; SIZE]> for Vec<Type> {
+    fn from(value: [Type; SIZE]) -> Self {
+        let mut vec = Vec::with_capacity(value.len());
+        for item in value {
+            vec.push(item);
+        }
+
+        vec
+    }
+}
+
+impl<Type, Alloc: AllocatorAPI> Deref for Vec<Type, Alloc> {
+    type Target = [Type];
+
+    fn deref(&self) -> &Self::Target {
+        self.as_slice()
+    }
+}
+
+impl<Type, Alloc: AllocatorAPI> DerefMut for Vec<Type, Alloc> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.as_mut_slice()
+    }
+}
+
+impl<Type> Clone for Vec<Type>
     where Type: Clone
 {
     fn clone(&self) -> Self {
@@ -278,7 +355,7 @@ impl<Type, Alloc: AllocatorAPI> IndexMut<usize> for Vec<Type, Alloc> {
     }
 }
 
-impl<Type, Alloc: AllocatorAPI> FromIterator<Type> for Vec<Type, Alloc> {
+impl<Type> FromIterator<Type> for Vec<Type> {
     fn from_iter<T: IntoIterator<Item=Type>>(iter: T) -> Self {
         let mut tmp = Vec::new();
         for i in iter {
@@ -289,7 +366,7 @@ impl<Type, Alloc: AllocatorAPI> FromIterator<Type> for Vec<Type, Alloc> {
     }
 }
 
-impl<'a, Type, Alloc: AllocatorAPI> FromIterator<&'a Type> for Vec<Type, Alloc>
+impl<'a, Type> FromIterator<&'a Type> for Vec<Type>
     where Type: Clone + 'a
 {
     fn from_iter<T: IntoIterator<Item=&'a Type>>(iter: T) -> Self {
@@ -308,7 +385,7 @@ impl<Type, Alloc: AllocatorAPI> Drop for Vec<Type, Alloc> {
     }
 }
 
-impl<Type> Default for Vec<Type, GlobalAlloc> {
+impl<Type> Default for Vec<Type> {
     fn default() -> Self {
         Self::new()
     }
@@ -417,5 +494,24 @@ mod test {
         assert_eq!(vec.as_slice(), &[0, 2, 4, 6, 8]);
     }
 
+    #[test]
+    fn test_pop_front() {
+        set_example_allocator(4096);
+        let mut vec: Vec<i32> = Vec::new();
+
+        for i in 0..10 {
+            vec.push(i);
+        }
+    }
+
+    #[test]
+    fn test_from() {
+        set_example_allocator(4096);
+        let vec = Vec::from([0, 1, 2, 3, 4]);
+
+        for i in 0..5 {
+            assert!(vec[i], i);
+        }
+    }
 
 }

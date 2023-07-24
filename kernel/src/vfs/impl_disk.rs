@@ -108,8 +108,3 @@ pub trait Medium {
     // Maybe 'write_consume(vec)' ?
 }
 
-pub enum SeekFrom {
-    Start(u64),
-    End(i64),
-    Current(i64)
-}

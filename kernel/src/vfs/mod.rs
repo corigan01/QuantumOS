@@ -27,3 +27,4 @@ pub mod ata;
 pub mod filesystem;
 pub mod partitioning;
 pub mod impl_disk;
+pub mod io;

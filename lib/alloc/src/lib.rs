@@ -42,6 +42,7 @@ pub mod boxed;
 
 pub mod error;
 pub mod circular_buffer;
+pub mod borrowed_buf;
 
 pub use error::*;
 
