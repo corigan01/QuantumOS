@@ -25,6 +25,10 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 #![no_std]
 #![feature(test)]
+#![feature(receiver_trait)]
+#![feature(unsize)]
+#![feature(dispatch_from_dyn)]
+#![feature(coerce_unsized)]
 
 pub mod heap;
 pub mod usable_region;

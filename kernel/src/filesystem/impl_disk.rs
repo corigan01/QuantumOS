@@ -23,6 +23,7 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use qk_alloc::boxed::Box;
 use qk_alloc::string::String;
 use qk_alloc::vec::Vec;
 
@@ -41,9 +42,14 @@ pub enum MediumBus {
 }
 
 // FIXME: This should be a dyn error in the future
+#[derive(Clone, Copy, Debug)]
 pub enum MediumErr {
-    DiskErr
+    DiskErr,
+    NotReadable,
+    NotWriteable
 }
+
+pub type MediumBox = Box<dyn Medium>;
 
 pub trait Medium {
     fn is_writable(&self) -> bool {
@@ -68,12 +74,28 @@ pub trait Medium {
 
     fn seek(&mut self, seek: SeekFrom);
 
+    fn read_exact(&mut self, amount: usize) -> Result<Vec<u8>, MediumErr> {
+        if !self.is_readable() {
+            return Err(MediumErr::NotReadable)
+        }
+
+        self.read_exact_impl(amount)
+    }
+
+    fn write_exact(&mut self, buf: Vec<u8>) -> Result<(), MediumErr> {
+        if !self.is_writable() {
+            return Err(MediumErr::NotWriteable);
+        }
+
+        self.write_exact_impl(buf)
+    }
+
     // FIXME: 'Vec<u8>' should be replaced with a custom type that
     //        handles lazy memory, and over memory-protection
-    fn read_exact(&self, amount: usize) -> Result<Vec<u8>, MediumErr>;
-    fn write_exact(&mut self, buf: Vec<u8>) -> Result<(), MediumErr>;
+    fn read_exact_impl(&mut self, amount: usize) -> Result<Vec<u8>, MediumErr>;
+    fn write_exact_impl(&mut self, buf: Vec<u8>) -> Result<(), MediumErr>;
 
-    fn read_append_into(&self, vec: &mut Vec<u8>, amount: usize) -> Result<(), MediumErr> {
+    fn read_append_into(&mut self, vec: &mut Vec<u8>, amount: usize) -> Result<(), MediumErr> {
         let read = self.read_exact(amount)?;
 
         for byte in read.iter() {

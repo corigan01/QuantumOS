@@ -49,10 +49,15 @@ use quantum_lib::possibly_uninit::PossiblyUninit;
 use quantum_os::clock::rtc::update_and_get_time;
 
 use owo_colors::OwoColorize;
+use qk_alloc::boxed::Box;
 use qk_alloc::string::String;
+use quantum_lib::address_utils::region_map::RegionMap;
+use quantum_lib::address_utils::virtual_address::VirtAddress;
 use quantum_lib::panic_utils::CRASH_MESSAGES;
 
-use quantum_os::ata::scan_for_disks;
+use quantum_os::ata::{ATADisk, scan_for_disks};
+use quantum_os::filesystem::impl_disk::{Medium, MediumBox, SeekFrom};
+use quantum_os::filesystem::partitioning::mbr::MBR;
 use quantum_os::qemu::{exit_qemu, QemuExitCode};
 
 static mut SERIAL_CONNECTION: PossiblyUninit<SerialDevice> = PossiblyUninit::new_lazy(|| {
@@ -78,12 +83,7 @@ fn setup_serial_debug() {
     debug_println!("Welcome to Quantum OS! {}\n", update_and_get_time());
 }
 
-fn main(boot_info: &KernelBootInformation) {
-    setup_serial_debug();
-
-    debug_println!("\nUsing Bootloader framebuffer");
-    let mut framebuffer = boot_info.framebuffer.clone();
-
+fn setup_memory(boot_info: &KernelBootInformation) -> (RegionMap<PhyAddress>, RegionMap<VirtAddress>) {
     let mut physical_memory_map = boot_info.get_physical_memory().clone();
     let mut virtual_memory_map = boot_info.get_virtual_memory().clone();
 
@@ -137,6 +137,19 @@ fn main(boot_info: &KernelBootInformation) {
 
     set_global_alloc(new_kernel_heap);
 
+    (physical_memory_map, virtual_memory_map)
+}
+
+fn main(boot_info: &KernelBootInformation) {
+    setup_serial_debug();
+
+    debug_println!("\nUsing Bootloader framebuffer");
+    let mut framebuffer = boot_info.framebuffer.clone();
+
+    let (physical_memory_map, virtual_memory_map)
+        = setup_memory(boot_info);
+
+
     let string_test = String::from("OK".bright_green().bold());
     debug_println!("Test String ... {}", string_test.as_str());
 
@@ -154,31 +167,8 @@ fn main(boot_info: &KernelBootInformation) {
     debug_println!("\nScanning for disks");
     let mut disks = scan_for_disks();
     debug_println!("Found {} disk(s)!", disks.len());
-
-    for disk in disks.iter() {
-        debug_println!("{}", disk);
-    }
-
-    let main_disk = &mut disks[0];
-
-
-
-    let sector_data = main_disk.read_raw(0, 2).unwrap();
-    for (idx, byte) in sector_data.iter().enumerate() {
-        debug_print!("{:02X}", byte);
-
-        if (idx + 1) % 32 == 0 {
-            debug_print!("\n");
-        } else if (idx + 1) % 2 == 0 {
-            debug_print!(" ");
-        }
-    }
-
-
-
-
-
-
+    
+    let mbr = MBR::try_from(&mut disks[0]).expect("TODO: panic message");
 
     debug_println!("\n\n{}", get_global_alloc());
 
@@ -204,7 +194,7 @@ fn panic(info: &PanicInfo) -> ! {
     debug_println!("");
     debug_println!("{} {}", "Panic Reason:".bold(), info.red());
     debug_println!("\n{}", "Extra Info:".bold());
-    debug_println!("    - Kernel Heap: \n{:#?}", get_global_alloc_debug());
+    debug_println!("    - Kernel Heap: \n{}", get_global_alloc_debug().unwrap());
 
     exit_qemu(QemuExitCode::Failed)
 }

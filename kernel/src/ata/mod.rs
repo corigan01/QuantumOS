@@ -28,10 +28,11 @@ use qk_alloc::vec::Vec;
 use quantum_lib::{debug_print, debug_println};
 use crate::ata::registers::{CommandRegister, Commands, DataRegister, DiskID, DriveHeadRegister, ErrorRegister, FeaturesRegister, SectorRegisters, StatusFlags, StatusRegister};
 use owo_colors::OwoColorize;
+use qk_alloc::boxed::Box;
 use quantum_lib::bitset::BitSet;
 use quantum_utils::bytes::Bytes;
 use crate::ata::identify_parser::IdentifyParser;
-use crate::filesystem::impl_disk::{Medium, MediumErr, SeekFrom};
+use crate::filesystem::impl_disk::{Medium, MediumBox, MediumBus, MediumErr, MediumType, SeekFrom};
 
 mod registers;
 mod identify_parser;
@@ -46,18 +47,19 @@ pub struct ATADisk {
     device: DiskID,
     identify: IdentifyParser,
     cache: Vec<(usize, Vec<u8>)>,
-    current: usize
+    seek: usize
 }
 
 impl ATADisk {
     const WORDS_PER_SECTOR: usize = 256;
+    const BYTES_PER_SECTOR: usize = Self::WORDS_PER_SECTOR * 2;
 
     fn new(device: DiskID, identify: Vec<u16>) -> Self {
         Self {
             device,
             identify: IdentifyParser::new(identify),
             cache: Vec::new(),
-            current: 0,
+            seek: 0,
         }
     }
 
@@ -195,9 +197,9 @@ impl ATADisk {
     }
 
     pub fn add_single_sector_to_cache(&mut self, lba: usize, data: &[u8]) {
-        assert_eq!(data.len(), (Self::WORDS_PER_SECTOR * 2));
+        assert_eq!(data.len(), Self::BYTES_PER_SECTOR);
 
-        let data_clone = Vec::new();
+        let mut data_clone = Vec::new();
         for b in data {
             data_clone.push(*b);
         }
@@ -209,10 +211,18 @@ impl ATADisk {
     }
 
     pub fn add_n_sectors_to_cache(&mut self, base_lba: usize, data: &[u8]) {
-        assert_eq!(data.len() % (Self::WORDS_PER_SECTOR * 2), 0);
+        assert_eq!(data.len() % Self::BYTES_PER_SECTOR, 0);
+        let data_sectors = data.len() / Self::BYTES_PER_SECTOR;
 
-        data.s
+        for sector_offset in 0..data_sectors {
+            let real_sector = sector_offset + base_lba;
 
+            let start_lba = sector_offset * Self::BYTES_PER_SECTOR;
+            let end_lba = (sector_offset + 1) * Self::BYTES_PER_SECTOR;
+
+            let data_bytes = &data[start_lba..end_lba];
+            self.add_single_sector_to_cache(real_sector, data_bytes);
+        }
     }
 
 }
@@ -232,8 +242,8 @@ impl Display for ATADisk {
     }
 }
 
-pub fn scan_for_disks() -> Vec<ATADisk> {
-    let mut disks = Vec::new();
+pub fn scan_for_disks() -> Vec<MediumBox> {
+    let mut disks: Vec<MediumBox> = Vec::new();
 
     for disk in DiskID::iter() {
         let disk = *disk;
@@ -290,33 +300,63 @@ pub fn scan_for_disks() -> Vec<ATADisk> {
 
         debug_println!("{}\t{}", "OK".green().bold(), disk.identify.model_number().as_str().dimmed());
 
-        disks.push(disk);
+        disks.push(Box::new(disk));
     }
 
     disks
 }
 
 impl Medium for ATADisk {
+    fn is_writable(&self) -> bool {
+        true
+    }
+
+    fn is_readable(&self) -> bool {
+        true
+    }
+
+    fn disk_bus(&self) -> MediumBus {
+        MediumBus::ATA
+    }
+
     fn seek(&mut self, seek: SeekFrom) {
         match seek {
             SeekFrom::Start(start) => {
-                self.current = start as usize;
+                self.seek = start as usize;
             }
             SeekFrom::End(end) => {
                 assert!(end <= 0);
-                self.current = ((self.identify.user_sectors_28bit_lba() as i64) + end) as usize;
+                self.seek = (((self.identify.user_sectors_28bit_lba() * Self::BYTES_PER_SECTOR) as i64) + end) as usize;
             }
             SeekFrom::Current(current) => {
-                self.current = (current + (self.current as i64)) as usize;
+                self.seek = (current + (self.seek as i64)) as usize;
             }
         }
     }
 
-    fn read_exact(&self, amount: usize) -> Result<Vec<u8>, MediumErr> {
-        todo!()
+    fn read_exact_impl(&mut self, amount: usize) -> Result<Vec<u8>, MediumErr> {
+        let base_lba = self.seek / Self::BYTES_PER_SECTOR;
+        let offset_within_lba = self.seek % Self::BYTES_PER_SECTOR;
+        let lba_qty = ((offset_within_lba + amount) / Self::BYTES_PER_SECTOR) + 1;
+
+        let sectors = if let Some(cache) = self.collect_cached_sectors(base_lba, lba_qty) {
+            cache
+        } else {
+            let read = self.read_raw(base_lba, lba_qty).map_err(|_| MediumErr::DiskErr)?;
+            self.add_n_sectors_to_cache(base_lba, read.as_slice());
+
+            read
+        };
+
+        let mut new_return_vec = Vec::new();
+        for b in &sectors.as_slice()[offset_within_lba..(offset_within_lba + amount)] {
+            new_return_vec.push(*b);
+        }
+
+        Ok(new_return_vec)
     }
 
-    fn write_exact(&mut self, buf: Vec<u8>) -> Result<(), MediumErr> {
+    fn write_exact_impl(&mut self, buf: Vec<u8>) -> Result<(), MediumErr> {
         todo!()
     }
 }

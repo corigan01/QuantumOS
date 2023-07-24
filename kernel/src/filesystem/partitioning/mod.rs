@@ -23,13 +23,5 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-mod mbr;
+pub mod mbr;
 
-pub enum PartitionKind {
-    MBR,
-    GPT
-}
-
-pub struct Partition {
-    kind: PartitionKind
-}

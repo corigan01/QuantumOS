@@ -24,5 +24,5 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 mod ext2;
-mod partitioning;
+pub mod partitioning;
 pub mod impl_disk;

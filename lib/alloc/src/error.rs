@@ -30,9 +30,9 @@ use quantum_utils::bytes::Bytes;
 pub enum AllocErr {
     OutOfMemory(usize, usize),
     ImproperConfig(ImproperConfigReason),
-    NotFound,
+    NotFound(usize),
     InternalErr,
-    DoubleFree
+    DoubleFree(usize)
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -74,9 +74,10 @@ impl Debug for AllocErr {
                     }
                 }
             }
-            AllocErr::NotFound => {
+            AllocErr::NotFound(ptr) => {
                 write!(f,
-                       "(Not Found) Could not find that allocation to free!"
+                       "(Not Found) Could not find that allocation (ptr: 0x{:x}) to free!",
+                       ptr
                 )?;
             }
             AllocErr::InternalErr => {
@@ -84,9 +85,10 @@ impl Debug for AllocErr {
                        "(Internal Allocator Error) You should assert this type of error as these are for debugging!"
                 )?;
             }
-            AllocErr::DoubleFree => {
+            AllocErr::DoubleFree(ptr) => {
                 write!(f,
-                       "(Allocation Double Free) You tried to free the same memory twice. "
+                       "(Allocation Double Free) You tried to free the same memory (ptr: 0x{:x}) twice. ",
+                        ptr
                 )?;
             }
         }

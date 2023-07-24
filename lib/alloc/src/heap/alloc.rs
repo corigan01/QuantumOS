@@ -124,7 +124,7 @@ pub struct KernelHeap {
 }
 
 impl KernelHeap {
-    const VEC_ALLOC_MIN_SIZE_INCREASE: usize = 10;
+    const VEC_ALLOC_MIN_SIZE_INCREASE: usize = 20;
 
     pub fn new(region: UsableRegion) -> Option<Self> {
         let init_vec_size = size_of::<HeapEntry>() * Self::VEC_ALLOC_MIN_SIZE_INCREASE;
@@ -190,21 +190,22 @@ impl KernelHeap {
     fn ensure_buffer_health(&self, caller: DebugAllocationEvent) {
         self.allocations.iter().for_each(|entry| {
             assert_ne!(entry.ptr, 0,
-                       "{:?}:: Buffer Health out-of-sync! We should not contain entries with ptrs of 0 in the allocator. ", caller);
-            assert_ne!(entry.size, 0, "{:#?} Buffer Health out-of-sync! We should not have entries with size of 0 in the allocator", caller);
+                       "in {:?}:: Buffer Health out-of-sync! We should not contain entries with ptrs of 0 in the allocator. ", caller);
+            assert_ne!(entry.size, 0, "in {:#?}:: Buffer Health out-of-sync! We should not have entries with size of 0 in the allocator", caller);
+            assert!(entry.ptr >= self.init_ptr, "in {:#?}:: Buffer Health out-of-sync! Below Minimum ptr found!", caller);
         });
 
         assert_ne!(self.allocations.iter().filter(|entry| {
             entry.kind == HeapEntryType::UsedByHeap
         }).count(), 0,
-            "{:?}:: Buffer Health no-allocations-ptr found in the allocator!", caller);
+            "in {:?}:: Buffer Health no-allocations-ptr found in the allocator!", caller);
 
         let all_bytes: usize = self.allocations.iter().map(|entry| {
             entry.size as usize + entry.pad as usize
         }).sum();
 
         assert_eq!(all_bytes, self.total_allocated_bytes,
-                   "{:?}:: Buffer Health out-of-sync! Bytes in the buffer should equal bytes given!\nAllocations Dump: {:#?}", caller, self.allocations);
+                   "in {:?}:: Buffer Health out-of-sync! Bytes in the buffer should equal bytes given!\nAllocations Dump: {:#?}", caller, self.allocations);
     }
 
     pub fn total_bytes_of(&self, kind: HeapEntryType) -> usize {
@@ -251,7 +252,7 @@ impl KernelHeap {
 
     pub unsafe fn allocate_impl(&mut self, allocation_description: MemoryLayout, avoid_vec_safety_check: bool, mark_allocated_as: HeapEntryType)
                                 -> Result<UnsafeAllocationObject, AllocErr> {
-        if self.allocations.remaining() <= 2 && !avoid_vec_safety_check {
+        if self.allocations.remaining() <= 3 && !avoid_vec_safety_check {
             self.reallocate_internal_vector()?;
         }
 
@@ -392,7 +393,7 @@ impl KernelHeap {
             self.allocations.iter().find(|entry| {
                 (entry.ptr + (entry.pad as u64)) == searching_ptr
             }) else {
-            return Err(AllocErr::NotFound);
+            return Err(AllocErr::NotFound(searching_ptr as usize));
         };
         let old_alloc = *old_alloc;
         if (old_alloc.size - old_alloc.over) > new_alloc_desc.bytes() as u64 {
@@ -465,7 +466,7 @@ impl KernelHeap {
         let mut did_find = false;
         for entry in allocations_with_ptr {
             if entry.kind == HeapEntryType::Free {
-                return Err(AllocErr::DoubleFree);
+                return Err(AllocErr::DoubleFree(ptr.as_ptr() as usize));
             }
 
             entry.kind = HeapEntryType::Free;
@@ -478,7 +479,7 @@ impl KernelHeap {
         }
 
         if !did_find {
-            return Err(AllocErr::NotFound);
+            return Err(AllocErr::NotFound(ptr.as_ptr() as usize));
         }
 
         self.consolidate_entries();

@@ -25,9 +25,10 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 
 use core::fmt::{Debug, Display, Formatter};
-use core::mem;
+use core::{borrow, mem};
+use core::marker::Unsize;
 use core::mem::MaybeUninit;
-use core::ops::{Deref, DerefMut};
+use core::ops::{CoerceUnsized, Deref, DerefMut, DispatchFromDyn, Receiver};
 use core::ptr::NonNull;
 use crate::AllocErr;
 use crate::heap::{AllocatorAPI, GlobalAlloc};
@@ -142,6 +143,34 @@ impl<Type, Alloc: AllocatorAPI> Box<MaybeUninit<Type>, Alloc> {
     }
 }
 
+impl<Type: ?Sized, Alloc: AllocatorAPI> Receiver for Box<Type, Alloc> {}
+impl<T: ?Sized + Unsize<U>, U: ?Sized, A: AllocatorAPI> CoerceUnsized<Box<U, A>> for Box<T, A> {}
+impl<T: ?Sized + Unsize<U>, U: ?Sized> DispatchFromDyn<Box<U>> for Box<T, GlobalAlloc> {}
+
+impl<Type: ?Sized, Alloc: AllocatorAPI> borrow::Borrow<Type> for Box<Type, Alloc> {
+    fn borrow(&self) -> &Type {
+        unsafe { self.0.as_ref() }
+    }
+}
+
+impl<Type: ?Sized, Alloc: AllocatorAPI> borrow::BorrowMut<Type> for Box<Type, Alloc> {
+    fn borrow_mut(&mut self) -> &mut Type {
+        unsafe { self.0.as_mut() }
+    }
+}
+
+impl<Type: ?Sized, Alloc: AllocatorAPI> AsRef<Type> for Box<Type, Alloc> {
+    fn as_ref(&self) -> &Type {
+        unsafe { self.0.as_ref() }
+    }
+}
+
+impl<Type: ?Sized, Alloc: AllocatorAPI> AsMut<Type> for Box<Type, Alloc> {
+    fn as_mut(&mut self) -> &mut Type {
+        unsafe { self.0.as_mut() }
+    }
+}
+
 impl<Type: Display, Alloc: AllocatorAPI> Display for Box<Type, Alloc> {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         Display::fmt(unsafe { self.0.as_ref() }, f)
@@ -154,7 +183,7 @@ impl<Type: Debug, Alloc: AllocatorAPI> Debug for Box<Type, Alloc> {
     }
 }
 
-impl<Type, Alloc: AllocatorAPI> Deref for Box<Type, Alloc> {
+impl<Type: ?Sized, Alloc: AllocatorAPI> Deref for Box<Type, Alloc> {
     type Target = Type;
     
     fn deref(&self) -> &Self::Target {
@@ -162,7 +191,7 @@ impl<Type, Alloc: AllocatorAPI> Deref for Box<Type, Alloc> {
     }
 }
 
-impl<Type, Alloc: AllocatorAPI> DerefMut for Box<Type, Alloc> {
+impl<Type: ?Sized, Alloc: AllocatorAPI> DerefMut for Box<Type, Alloc> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         unsafe { self.0.as_mut() }
     }
