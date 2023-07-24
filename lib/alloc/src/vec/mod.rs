@@ -26,7 +26,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 use core::cmp::Ordering;
 use core::fmt::{Debug, Formatter};
 use core::ops::{Index, IndexMut};
-use core::{mem, ptr};
+use core::ptr;
 use core::slice::{Iter, IterMut};
 use crate::heap::{AllocatorAPI, GlobalAlloc};
 use crate::vec::raw_vec::RawVec;
@@ -308,6 +308,12 @@ impl<Type, Alloc: AllocatorAPI> Drop for Vec<Type, Alloc> {
     }
 }
 
+impl<Type> Default for Vec<Type, GlobalAlloc> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[cfg(test)]
 mod test {
     use crate::heap::set_example_allocator;
@@ -336,8 +342,6 @@ mod test {
         for i in 0..10 {
             vector.push(i);
         }
-
-
     }
 
     #[test]

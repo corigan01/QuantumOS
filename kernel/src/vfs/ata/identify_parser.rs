@@ -28,7 +28,6 @@ use qk_alloc::boxed::Box;
 use qk_alloc::string::String;
 use qk_alloc::vec::Vec;
 use quantum_lib::bitset::BitSet;
-use crate::ata::identify_parser::SpecificConfig::DiskRequiresSetFeatures;
 
 type Word = u16;
 type DoubleWord = u32;

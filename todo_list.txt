@@ -1,0 +1,47 @@
+# TODO LIST
+--> * Make Read, Write, Seek (just like how normal rust does it)
+     - However, need to have functionality if the disk is read / write only
+* Use RefCell to share disks, or use global disk id's
+     - RefCell might be better because then all things *readable* and or *writeable* are able to
+       be used in the same code (e.g. the disk has no partitions and just has fs)
+     - However, Disk-id's could be a good idea because less memory gets used, and could have other
+       benefits down the road
+* Partitions need to act like disks, Seek, Write, and Read all need to be things.
+     - ext2 and fat need to be typeless to whatever they interact with
+* Filesystems need to be 'global'? (for lack of a better word)
+     - VFS::mount(disk, "/"); ??
+     - VFS::open("/etc/k.conf") ?? -- Maybe works just like files in ue (how would the kernel know?)
+     - Look how other VFS work in rust
+* Memory needs to be figured out
+     - How and where do I reserve physical/virtual pages?
+             - We have a PMM, but its uncompleted, and needs to be global
+             - Virtual Memory is going to be an entire project on its own with Higher kernel
+     - How are we going to expand the kernel heap if needed?
+     - How are we going to separate user programs?
+     - Which things need to know 'what/where' they are going to be used? (e.g. to which program they are attached, or are they kernel)
+* Interrupts / GDT
+     - Work needs to be started on IRQ, ISR, GDT, and TSR
+     - Are they going to be heap / static allocated?
+     - Keyboard / Mouse support
+     - PIC / PIT support
+* PCI + PCIe support
+     - Maybe USB?
+     - Same problem as the disks, as how are we going to keep them alive / shared between parts of the code
+             - We could again have the global ID for them ( I believe this is how linux does it )
+             - We could have a Cell of some kind
+             - Make a new type to hold these things ? (would that be unsafe / cause problems tho?)
+     - GPU (botch's) support
+     - DMA / NVMe disk support?
+     - Sound Card
+     - Wi-fi / Ethernet Card
+     - (More in the future)
+* CPUID Parsing
+* Userspace Programs
+     - How?
+* Bootloader needs to be fixed with kvm
+     - This will also probably fix real hardware support
+* Graphics Lib
+     - Will we just send a framebuffer to userspace?
+     - Will the entire driver be in userspace, or are we just going to copy the userspace buffer into the MMIO?
+     - How will it look? GTK?
+     - How will it be programmed? Window::new() ? Or something like trait App ?

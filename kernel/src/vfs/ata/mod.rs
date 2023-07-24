@@ -29,10 +29,11 @@ use quantum_lib::{debug_print, debug_println};
 use crate::ata::registers::{CommandRegister, Commands, DataRegister, DiskID, DriveHeadRegister, ErrorRegister, FeaturesRegister, SectorRegisters, StatusFlags, StatusRegister};
 use owo_colors::OwoColorize;
 use qk_alloc::boxed::Box;
+use qk_alloc::string::String;
 use quantum_lib::bitset::BitSet;
 use quantum_utils::bytes::Bytes;
 use crate::ata::identify_parser::IdentifyParser;
-use crate::filesystem::impl_disk::{Medium, MediumBox, MediumBus, MediumErr, MediumType, SeekFrom};
+use crate::filesystem::impl_disk::{Medium, MediumBox, MediumBus, MediumErr, SeekFrom};
 
 mod registers;
 mod identify_parser;
@@ -313,6 +314,10 @@ impl Medium for ATADisk {
 
     fn is_readable(&self) -> bool {
         true
+    }
+
+    fn disk_name(&self) -> String {
+        self.identify.model_number()
     }
 
     fn disk_bus(&self) -> MediumBus {

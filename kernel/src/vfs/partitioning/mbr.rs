@@ -25,7 +25,6 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 use core::fmt::{Display, Formatter};
 use qk_alloc::boxed::Box;
-use quantum_lib::debug_println;
 use crate::filesystem::impl_disk::{MediumBox, SeekFrom};
 
 #[repr(C, packed)]

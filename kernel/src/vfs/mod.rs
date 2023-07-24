@@ -21,28 +21,9 @@ NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPO
 NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
 DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-Quantum OS Lib file, documentation coming soon!
 */
 
-#![no_std]
-#![no_main]
-#![allow(dead_code)]
-
-#![feature(custom_test_frameworks)]
-#![test_runner(crate::test_handler::test_runner)]
-#![reexport_test_harness_main = "run_test"]
-
-pub mod qemu;
-pub mod clock;
-
-#[cfg(test)]
-pub mod test_handler;
-pub mod kernel_console;
-pub mod vfs;
-
-#[cfg(test)]
-pub fn test_main() {
-    run_test();
-}
-
+pub mod ata;
+pub mod filesystem;
+pub mod partitioning;
+pub mod impl_disk;

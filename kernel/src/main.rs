@@ -49,15 +49,12 @@ use quantum_lib::possibly_uninit::PossiblyUninit;
 use quantum_os::clock::rtc::update_and_get_time;
 
 use owo_colors::OwoColorize;
-use qk_alloc::boxed::Box;
 use qk_alloc::string::String;
 use quantum_lib::address_utils::region_map::RegionMap;
 use quantum_lib::address_utils::virtual_address::VirtAddress;
 use quantum_lib::panic_utils::CRASH_MESSAGES;
 
 use quantum_os::ata::{ATADisk, scan_for_disks};
-use quantum_os::filesystem::impl_disk::{Medium, MediumBox, SeekFrom};
-use quantum_os::filesystem::partitioning::mbr::MBR;
 use quantum_os::qemu::{exit_qemu, QemuExitCode};
 
 static mut SERIAL_CONNECTION: PossiblyUninit<SerialDevice> = PossiblyUninit::new_lazy(|| {
@@ -164,11 +161,7 @@ fn main(boot_info: &KernelBootInformation) {
     framebuffer.draw_rect(rect!(0, 15 ; 150, 2), Pixel::WHITE);
     debug_println!("{}", "OK".bright_green().bold());
 
-    debug_println!("\nScanning for disks");
-    let mut disks = scan_for_disks();
-    debug_println!("Found {} disk(s)!", disks.len());
-    
-    let mbr = MBR::try_from(&mut disks[0]).expect("TODO: panic message");
+
 
     debug_println!("\n\n{}", get_global_alloc());
 

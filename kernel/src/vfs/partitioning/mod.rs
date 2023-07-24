@@ -23,5 +23,18 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use crate::filesystem::impl_disk::MediumBox;
+
 pub mod mbr;
 
+pub enum PartitionProvider {
+    Unknown,
+    MasterBootRecord
+}
+
+pub struct PartitionEntry {
+    provider: PartitionProvider,
+    base_lba: usize,
+    size_lba: usize,
+    disk: MediumBox
+}
