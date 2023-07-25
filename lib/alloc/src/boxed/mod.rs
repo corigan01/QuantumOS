@@ -183,13 +183,15 @@ impl<Type: ?Sized, Alloc: AllocatorAPI> AsMut<Type> for Box<Type, Alloc> {
     }
 }
 
-impl<Type: Display, Alloc: AllocatorAPI> Display for Box<Type, Alloc> {
+impl<Type: ?Sized, Alloc: AllocatorAPI> Display for Box<Type, Alloc>
+    where Type: Display {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         Display::fmt(unsafe { self.0.as_ref() }, f)
     }
 }
 
-impl<Type: Debug, Alloc: AllocatorAPI> Debug for Box<Type, Alloc> {
+impl<Type: ?Sized, Alloc: AllocatorAPI> Debug for Box<Type, Alloc>
+    where Type: Debug {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         Debug::fmt(unsafe { self.0.as_ref() }, f)
     }

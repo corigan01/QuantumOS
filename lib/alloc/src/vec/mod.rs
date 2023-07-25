@@ -25,7 +25,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 use core::cmp::Ordering;
 use core::fmt::{Debug, Formatter};
-use core::mem::ManuallyDrop;
+use core::mem::{ManuallyDrop, MaybeUninit};
 use core::ops::{Deref, DerefMut, Index, IndexMut};
 use core::ptr;
 use crate::boxed::Box;
@@ -93,6 +93,15 @@ impl<Type, Alloc: AllocatorAPI> Vec<Type, Alloc> {
             core::slice::from_raw_parts_mut(
                 self.raw.ptr.as_ptr(),
                 self.len
+            )
+        }
+    }
+
+    pub fn as_mut_uninit_slice<'a>(&mut self) -> &'a mut [MaybeUninit<Type>] {
+        unsafe {
+            core::slice::from_raw_parts_mut(
+                self.raw.ptr.as_ptr() as *mut MaybeUninit<Type>,
+                self.raw.cap
             )
         }
     }

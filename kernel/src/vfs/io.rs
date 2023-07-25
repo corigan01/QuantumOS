@@ -25,11 +25,14 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 use core::error::Error;
 use qk_alloc::boxed::Box;
-use qk_alloc::vec::Vec;
+use qk_alloc::string::String;
+use quantum_utils::bytes::Bytes;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum ErrorKind {
-    Interrupted
+    Unknown,
+    Interrupted,
+    NotSeekable
 }
 
 pub trait IOError: Error {
@@ -38,7 +41,7 @@ pub trait IOError: Error {
 
 impl PartialEq<ErrorKind> for dyn IOError {
     fn eq(&self, other: &ErrorKind) -> bool {
-        self.error_kind() == other
+        self.error_kind() == *other
     }
 }
 
@@ -50,7 +53,7 @@ impl PartialEq<dyn IOError> for dyn IOError {
 
 impl PartialEq<dyn IOError> for ErrorKind {
     fn eq(&self, other: &dyn IOError) -> bool {
-        self == other.error_kind()
+        *self == other.error_kind()
     }
 }
 
@@ -65,7 +68,7 @@ pub enum SeekFrom {
 pub trait Seek {
     fn seek(&mut self, seek: SeekFrom) -> IOResult<u64>;
 
-    fn rewind(&mut self) -> Result<(), ()> {
+    fn rewind(&mut self) -> IOResult<()> {
         self.seek(SeekFrom::Start(0))?;
 
         Ok(())
@@ -91,12 +94,12 @@ pub trait Read {
     fn read_exact(&mut self, buf: &mut [u8]) -> IOResult<()> {
         let mut filled = 0;
 
-        while filled != buf.len() - 1 {
+        while filled <= buf.len() - 1{
             match self.read(&mut buf[filled..]) {
                 Ok(amount) => {
                     filled += amount;
                 }
-                Err(e) if &*e == ErrorKind::Interrupted => {
+                Err(e) if *e == ErrorKind::Interrupted => {
                     filled = 0;
                 }
                 Err(e) => {
@@ -107,9 +110,62 @@ pub trait Read {
 
         Ok(())
     }
+}
 
-    fn read_n_into_vec(&mut self, n: usize) -> IOResult<Vec<u8>> {
+pub trait Write {
+    fn write(&mut self, buf: &[u8]) -> IOResult<usize>;
+    fn flush(&mut self) -> IOResult<()>;
 
+    fn write_all(&mut self, buf: &[u8]) -> IOResult<()> {
+        let mut written = 0;
+        while written <= buf.len() - 1 {
+            match self.write(&buf[written..]) {
+                Ok(amount) => {
+                    written += amount;
+                }
+                Err(e) if *e == ErrorKind::Interrupted => {
+                    written = 0;
+                }
+                Err(e) => {
+                    return Err(e);
+                }
+            }
+        }
+
+        Ok(())
     }
 }
 
+pub enum DiskType {
+    Unknown,
+    HardDisk,
+    SSD,
+    Emulated
+}
+
+pub enum DiskBus {
+    Unknown,
+    ParallelPIO,
+    ParallelDMA,
+    Sata,
+    NVMe,
+    Emulated
+}
+
+pub trait DiskInfo {
+    fn disk_type(&self) -> DiskType {
+        DiskType::Unknown
+    }
+
+    fn disk_bus(&self) -> DiskBus {
+        DiskBus::Unknown
+    }
+
+    fn disk_model(&self) -> String {
+        String::from("Unknown")
+    }
+
+    fn disk_capacity(&self) -> Bytes {
+        Bytes::from(0)
+    }
+}

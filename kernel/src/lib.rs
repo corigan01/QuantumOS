@@ -33,6 +33,7 @@ Quantum OS Lib file, documentation coming soon!
 #![test_runner(crate::test_handler::test_runner)]
 #![reexport_test_harness_main = "run_test"]
 #![feature(error_in_core)]
+#![feature(maybe_uninit_slice)]
 
 pub mod qemu;
 pub mod clock;

@@ -25,7 +25,6 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 use core::fmt::{Display, Formatter};
 use qk_alloc::boxed::Box;
-use crate::filesystem::impl_disk::{MediumBox, SeekFrom};
 
 #[repr(C, packed)]
 #[derive(Clone, Copy, Debug)]
@@ -78,22 +77,3 @@ pub enum MBRErr {
     NotValid
 }
 
-impl TryFrom<&mut MediumBox> for MBR {
-    type Error = MBRErr;
-
-    fn try_from(value: &mut MediumBox) -> Result<Self, Self::Error> {
-        value.seek(SeekFrom::Start(0));
-        let first_sector = value.read_exact(512).map_err(|_| MBRErr::CouldNotRead)?;
-
-        let read_from_sectors = unsafe { &*(first_sector.as_ptr() as *const Header) };
-        if !read_from_sectors.is_valid() {
-            return Err(MBRErr::NotValid)
-        }
-
-        let box_copy = Box::new(read_from_sectors.clone());
-
-        Ok(Self {
-            header: box_copy
-        })
-    }
-}

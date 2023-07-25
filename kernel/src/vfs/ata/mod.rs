@@ -23,17 +23,19 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use core::fmt::{Display, Formatter};
+use core::error::Error;
+use core::fmt::{Display, Formatter, Write};
 use qk_alloc::vec::Vec;
 use quantum_lib::{debug_print, debug_println};
-use crate::ata::registers::{CommandRegister, Commands, DataRegister, DiskID, DriveHeadRegister, ErrorRegister, FeaturesRegister, SectorRegisters, StatusFlags, StatusRegister};
+use crate::vfs::ata::registers::{CommandRegister, Commands, DataRegister, DiskID, DriveHeadRegister, ErrorRegister, FeaturesRegister, SectorRegisters, StatusFlags, StatusRegister};
 use owo_colors::OwoColorize;
 use qk_alloc::boxed::Box;
 use qk_alloc::string::String;
 use quantum_lib::bitset::BitSet;
 use quantum_utils::bytes::Bytes;
-use crate::ata::identify_parser::IdentifyParser;
-use crate::filesystem::impl_disk::{Medium, MediumBox, MediumBus, MediumErr, SeekFrom};
+use crate::vfs::ata::identify_parser::IdentifyParser;
+use crate::vfs::{io, VFSDisk, VFSDiskID};
+use crate::vfs::io::{DiskBus, DiskType, ErrorKind, IOError, IOResult, SeekFrom};
 
 mod registers;
 mod identify_parser;
@@ -41,14 +43,42 @@ mod identify_parser;
 #[derive(Clone, Copy, Debug)]
 pub enum DiskErr {
     FailedToRead,
-    MalformedInput
+    MalformedInput,
+    Interrupted,
+    NotSeekable
+}
+
+impl Error for DiskErr {}
+
+impl Display for DiskErr {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        let str = match self {
+            DiskErr::FailedToRead => { "Failed to read!" }
+            DiskErr::MalformedInput => { "Malformed Input to disk" }
+            DiskErr::Interrupted => { "Disk Operation was Interrupted" }
+            DiskErr::NotSeekable => { "Not a valid Seekable Operation" }
+        };
+
+        f.write_str(str)?;
+
+        Ok(())
+    }
+}
+
+impl IOError for DiskErr {
+    fn error_kind(&self) -> ErrorKind {
+        match self {
+            DiskErr::Interrupted => ErrorKind::Interrupted,
+            DiskErr::NotSeekable => ErrorKind::NotSeekable,
+            _ => ErrorKind::Unknown
+        }
+    }
 }
 
 pub struct ATADisk {
     device: DiskID,
     identify: IdentifyParser,
-    cache: Vec<(usize, Vec<u8>)>,
-    seek: usize
+    seek: u64
 }
 
 impl ATADisk {
@@ -59,7 +89,6 @@ impl ATADisk {
         Self {
             device,
             identify: IdentifyParser::new(identify),
-            cache: Vec::new(),
             seek: 0,
         }
     }
@@ -72,20 +101,20 @@ impl ATADisk {
             !StatusRegister::is_status(self.device, StatusFlags::DRQ) {}
     }
 
-    fn smart_wait(&self) -> Result<(), DiskErr> {
+    fn smart_wait(&self) -> IOResult<()> {
         StatusRegister::perform_400ns_delay(self.device);
         self.io_wait();
 
         if StatusRegister::is_err_or_fault(self.device) {
-            return Err(DiskErr::FailedToRead);
+            return Err(Box::new(DiskErr::FailedToRead));
         }
 
         Ok(())
     }
 
-    fn select_sector(&self, sector: usize, sector_count: usize) -> Result<(), DiskErr> {
+    fn select_sector(&self, sector: usize, sector_count: usize) -> IOResult<()> {
         if sector_count == 0 {
-            return Err(DiskErr::MalformedInput);
+            return Err(Box::new(DiskErr::MalformedInput));
         }
 
         DriveHeadRegister::select_drive(self.device);
@@ -100,7 +129,7 @@ impl ATADisk {
         Ok(())
     }
 
-    pub fn read_raw(&mut self, sector: usize, sector_count: usize) -> Result<Vec<u8>, DiskErr> {
+    pub fn read_raw(&mut self, sector: usize, sector_count: usize) -> IOResult<Vec<u8>> {
         self.select_sector(sector, sector_count)?;
 
         CommandRegister::send_command(self.device, Commands::ReadSectorsPIO);
@@ -123,9 +152,9 @@ impl ATADisk {
         Ok(new_vec)
     }
 
-    pub fn write_raw(&mut self, mut data: Vec<u8>, sector: usize, sector_count: usize) -> Result<(), DiskErr> {
-        if data.len() < sector_count * Self::WORDS_PER_SECTOR {
-            return Err(DiskErr::MalformedInput);
+    pub fn write_raw(&mut self, buf: &[u8], sector: usize, sector_count: usize) -> IOResult<()> {
+        if buf.len() < sector_count * Self::WORDS_PER_SECTOR {
+            return Err(Box::new(DiskErr::MalformedInput));
         }
 
         self.select_sector(sector, sector_count)?;
@@ -133,11 +162,11 @@ impl ATADisk {
         CommandRegister::send_command(self.device, Commands::WriteSectorsPIO);
         self.smart_wait()?;
 
-        self.invalidate_cached_sectors(sector, sector_count);
+        for sec in 0..sector_count {
+            for word in 0..Self::WORDS_PER_SECTOR {
+                let idx = ((sec * Self::WORDS_PER_SECTOR) + word) * 2;
 
-        for _ in 0..sector_count {
-            for _ in 0..Self::WORDS_PER_SECTOR {
-                let write_value = ((data.remove(1) as u16) << 8) + (data.remove(0) as u16);
+                let write_value = ((buf[idx + 1] as u16) << 8) + (buf[idx + 0] as u16);
                 DataRegister::write_u16(self.device, write_value);
             }
             self.smart_wait()?;
@@ -149,83 +178,9 @@ impl ATADisk {
         Ok(())
     }
 
-    pub fn invalidate_cached_sectors(&mut self, base_lba: usize, amount: usize) {
-        self.cache.retain(|(sector, _)| {
-            *sector < base_lba && *sector > (base_lba + amount)
-        });
+    pub fn total_disk_bytes(&self) -> Bytes {
+        Bytes::from(self.identify.user_sectors_28bit_lba() * Self::BYTES_PER_SECTOR)
     }
-
-    pub fn collect_cached_sectors(&self, lba: usize, amount: usize) -> Option<Vec<u8>> {
-        // Regardless if we have to loop over the cache multiple times,
-        // its way faster to loop then to heap allocate.
-        if !self.is_sectors_cached(lba, amount) {
-            return None;
-        }
-
-        let mut return_buffer = Vec::new();
-        let mut offset = 0;
-
-        for (sector, data) in self.cache.iter() {
-            if *sector == (lba + offset) {
-                for b in data.iter() {
-                    return_buffer.push(*b);
-                }
-
-                offset += 1;
-            }
-
-            if offset == amount {
-                return Some(return_buffer);
-            }
-        }
-
-        None
-    }
-
-    pub fn is_sectors_cached(&self, lba: usize, amount: usize) -> bool {
-        let mut offset = 0;
-        for (sector, _) in self.cache.iter() {
-            if *sector == (lba + offset) {
-                offset += 1;
-            }
-
-            if offset == amount {
-                return true;
-            }
-        }
-
-        false
-    }
-
-    pub fn add_single_sector_to_cache(&mut self, lba: usize, data: &[u8]) {
-        assert_eq!(data.len(), Self::BYTES_PER_SECTOR);
-
-        let mut data_clone = Vec::new();
-        for b in data {
-            data_clone.push(*b);
-        }
-
-        self.cache.push((
-                lba,
-                data_clone
-            ));
-    }
-
-    pub fn add_n_sectors_to_cache(&mut self, base_lba: usize, data: &[u8]) {
-        assert_eq!(data.len() % Self::BYTES_PER_SECTOR, 0);
-        let data_sectors = data.len() / Self::BYTES_PER_SECTOR;
-
-        for sector_offset in 0..data_sectors {
-            let real_sector = sector_offset + base_lba;
-
-            let start_lba = sector_offset * Self::BYTES_PER_SECTOR;
-            let end_lba = (sector_offset + 1) * Self::BYTES_PER_SECTOR;
-
-            let data_bytes = &data[start_lba..end_lba];
-            self.add_single_sector_to_cache(real_sector, data_bytes);
-        }
-    }
-
 }
 
 impl Display for ATADisk {
@@ -243,8 +198,8 @@ impl Display for ATADisk {
     }
 }
 
-pub fn scan_for_disks() -> Vec<MediumBox> {
-    let mut disks: Vec<MediumBox> = Vec::new();
+fn scan_for_disks() -> Vec<ATADisk> {
+    let mut disks: Vec<ATADisk> = Vec::new();
 
     for disk in DiskID::iter() {
         let disk = *disk;
@@ -301,67 +256,117 @@ pub fn scan_for_disks() -> Vec<MediumBox> {
 
         debug_println!("{}\t{}", "OK".green().bold(), disk.identify.model_number().as_str().dimmed());
 
-        disks.push(Box::new(disk));
+        disks.push(disk);
     }
 
     disks
 }
 
-impl Medium for ATADisk {
-    fn is_writable(&self) -> bool {
-        true
+pub fn init_ata_disks() {
+    let mut disks = scan_for_disks();
+    while let Some(disk) = disks.pop_front() {
+        let boxed_disk: Box<dyn VFSDisk> = Box::new(disk);
+
+        VFSDiskID::publish_disk(boxed_disk);
+    }
+}
+
+impl io::Seek for ATADisk {
+    fn seek(&mut self, seek: SeekFrom) -> IOResult<u64> {
+        let total_bytes = self.total_disk_bytes().into();
+        match seek {
+            SeekFrom::Start(v) => {
+                if v > total_bytes {
+                    return Err(Box::new(DiskErr::NotSeekable))
+                }
+
+                self.seek = v;
+            }
+            SeekFrom::End(v) => {
+                if v > 0 || (-v) > total_bytes as i64 {
+                    return Err(Box::new(DiskErr::NotSeekable));
+                }
+
+                self.seek = (total_bytes as i64 + v) as u64;
+            }
+            SeekFrom::Current(v) => {
+                if v + (self.seek as i64) > total_bytes as i64 ||
+                    v + (self.seek as i64) < 0 {
+                    return Err(Box::new(DiskErr::NotSeekable));
+                }
+
+                self.seek = (self.seek as i64 + v) as u64
+            }
+        }
+
+        Ok(self.seek)
+    }
+}
+
+impl io::Read for ATADisk {
+    fn read(&mut self, buf: &mut [u8]) -> IOResult<usize> {
+        let amount_to_read = buf.len();
+        let current_idx = self.seek as usize;
+
+        let translated_sector = current_idx / Self::BYTES_PER_SECTOR;
+        let sect_across_bounds = current_idx % Self::BYTES_PER_SECTOR;
+        let amount_of_sectors = ((amount_to_read + sect_across_bounds) / Self::BYTES_PER_SECTOR) + 1;
+
+        // TODO: since we are already reading into a buf, why do we have to read into a vector?
+        // FIXME: If we read too many sectors with `read_raw`, it will not complete successfully,
+        //        so we need some way in the future to call read_raw multiple times if needed!
+        let read = self.read_raw(translated_sector, amount_of_sectors)?;
+
+        for i in 0..amount_to_read {
+            buf[i] = read[i + sect_across_bounds];
+        }
+
+        Ok(amount_to_read)
+    }
+}
+
+impl io::Write for ATADisk {
+    fn write(&mut self, buf: &[u8]) -> IOResult<usize> {
+        let amount_to_write = buf.len();
+        let current_idx = self.seek as usize;
+
+        let translated_sector = current_idx / Self::BYTES_PER_SECTOR;
+        let sect_across_bounds = current_idx % Self::BYTES_PER_SECTOR;
+        let amount_of_sectors = ((amount_to_write + sect_across_bounds) / Self::BYTES_PER_SECTOR) + 1;
+
+        // FIXME: When writing small amounts in-between sector boundaries, we should not have
+        //        to read the data, *then* write it back!
+        let mut read = self.read_raw(translated_sector, amount_of_sectors)?;
+
+        for i in 0..amount_to_write {
+            read[i + sect_across_bounds] = buf[i];
+        }
+
+        self.write_raw(read.as_slice(), translated_sector, amount_of_sectors)?;
+
+        Ok(amount_to_write)
     }
 
-    fn is_readable(&self) -> bool {
-        true
+    fn flush(&mut self) -> IOResult<()> {
+        // TODO: We should buffer the write operation, and actually take the flush into account!
+        Ok(())
+    }
+}
+
+impl io::DiskInfo for ATADisk {
+    fn disk_type(&self) -> DiskType {
+        DiskType::HardDisk
     }
 
-    fn disk_name(&self) -> String {
+    fn disk_bus(&self) -> DiskBus {
+        DiskBus::ParallelPIO
+    }
+
+    fn disk_model(&self) -> String {
         self.identify.model_number()
     }
 
-    fn disk_bus(&self) -> MediumBus {
-        MediumBus::ATA
-    }
-
-    fn seek(&mut self, seek: SeekFrom) {
-        match seek {
-            SeekFrom::Start(start) => {
-                self.seek = start as usize;
-            }
-            SeekFrom::End(end) => {
-                assert!(end <= 0);
-                self.seek = (((self.identify.user_sectors_28bit_lba() * Self::BYTES_PER_SECTOR) as i64) + end) as usize;
-            }
-            SeekFrom::Current(current) => {
-                self.seek = (current + (self.seek as i64)) as usize;
-            }
-        }
-    }
-
-    fn read_exact_impl(&mut self, amount: usize) -> Result<Vec<u8>, MediumErr> {
-        let base_lba = self.seek / Self::BYTES_PER_SECTOR;
-        let offset_within_lba = self.seek % Self::BYTES_PER_SECTOR;
-        let lba_qty = ((offset_within_lba + amount) / Self::BYTES_PER_SECTOR) + 1;
-
-        let sectors = if let Some(cache) = self.collect_cached_sectors(base_lba, lba_qty) {
-            cache
-        } else {
-            let read = self.read_raw(base_lba, lba_qty).map_err(|_| MediumErr::DiskErr)?;
-            self.add_n_sectors_to_cache(base_lba, read.as_slice());
-
-            read
-        };
-
-        let mut new_return_vec = Vec::new();
-        for b in &sectors.as_slice()[offset_within_lba..(offset_within_lba + amount)] {
-            new_return_vec.push(*b);
-        }
-
-        Ok(new_return_vec)
-    }
-
-    fn write_exact_impl(&mut self, buf: Vec<u8>) -> Result<(), MediumErr> {
-        todo!()
+    fn disk_capacity(&self) -> Bytes {
+        self.total_disk_bytes()
     }
 }
