@@ -30,8 +30,8 @@ pub mod pmm;
 
 #[cfg(test)]
 pub fn set_example_allocator(size_in_bytes: usize) {
-    use qk_alloc::heap::{free_lock, reserve_lock, set_global_alloc, THE_GLOBAL_ALLOC};
     use qk_alloc::heap::alloc::KernelHeap;
+    use qk_alloc::heap::{free_lock, reserve_lock, set_global_alloc, THE_GLOBAL_ALLOC};
     use qk_alloc::usable_region::UsableRegion;
 
     unsafe {

@@ -30,7 +30,7 @@ pub struct PossiblyUninit<Type> {
     data: MaybeUninit<Type>,
     func: MaybeUninit<fn() -> Type>,
     has_func: bool,
-    has_been_init: bool
+    has_been_init: bool,
 }
 
 impl<Type> PossiblyUninit<Type> {
@@ -39,7 +39,7 @@ impl<Type> PossiblyUninit<Type> {
             data: MaybeUninit::uninit(),
             func: MaybeUninit::uninit(),
             has_func: false,
-            has_been_init: false
+            has_been_init: false,
         }
     }
 
@@ -48,7 +48,7 @@ impl<Type> PossiblyUninit<Type> {
             data: MaybeUninit::uninit(),
             func: MaybeUninit::new(fnc),
             has_func: true,
-            has_been_init: false
+            has_been_init: false,
         }
     }
 
@@ -67,7 +67,7 @@ impl<Type> PossiblyUninit<Type> {
             data: MaybeUninit::new(t),
             func: MaybeUninit::uninit(),
             has_func: false,
-            has_been_init: true
+            has_been_init: true,
         }
     }
 

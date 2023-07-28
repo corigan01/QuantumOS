@@ -27,8 +27,8 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
  * # Heapless Bits
  */
 
-use core::fmt::{Debug, Formatter};
 use crate::heapless_vector::{HeaplessVec, HeaplessVecErr};
+use core::fmt::{Debug, Formatter};
 
 /// # Heapless Bits
 /// Bits aids in the control of bit level modification, this is often used to create
@@ -145,7 +145,12 @@ impl<const BYTES: usize> HeaplessBits<BYTES> {
         ))
     }
 
-    pub fn set_bit_qty(&mut self, index: usize, qty: usize, flag: bool) -> Result<(), HeaplessVecErr> {
+    pub fn set_bit_qty(
+        &mut self,
+        index: usize,
+        qty: usize,
+        flag: bool,
+    ) -> Result<(), HeaplessVecErr> {
         for i in index..(index + qty) {
             self.set_bit(i, flag)?;
         }

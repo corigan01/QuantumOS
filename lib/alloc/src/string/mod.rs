@@ -23,20 +23,18 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use core::fmt::{Display, Formatter, Write};
-use core::ops::Deref;
 use crate::heap::{AllocatorAPI, GlobalAlloc};
 use crate::vec::Vec;
+use core::fmt::Write;
+use core::ops::Deref;
 
 pub struct String<Alloc: AllocatorAPI = GlobalAlloc> {
-    data: Vec<u8, Alloc>
+    data: Vec<u8, Alloc>,
 }
 
 impl String {
     pub const fn new() -> Self {
-        Self {
-            data: Vec::new()
-        }
+        Self { data: Vec::new() }
     }
 
     pub fn push(&mut self, c: char) {
@@ -60,7 +58,6 @@ impl String {
         // We know its valid utf8 because we can only push valid utf8 into the array
         unsafe { core::str::from_utf8_unchecked(self.data.as_slice()) }
     }
-
 }
 
 impl PartialEq<&str> for String {
@@ -96,7 +93,9 @@ impl Write for String {
 }
 
 impl<T> From<T> for String
-    where T: core::fmt::Display {
+where
+    T: core::fmt::Display,
+{
     fn from(value: T) -> Self {
         let mut tmp = String::new();
         write!(&mut tmp, "{}", value).unwrap();
@@ -107,8 +106,8 @@ impl<T> From<T> for String
 
 #[cfg(test)]
 mod test {
-    use crate::heap::set_example_allocator;
     use super::*;
+    use crate::heap::set_example_allocator;
 
     #[test]
     fn test_string_from_literal() {
@@ -148,5 +147,4 @@ mod test {
         assert_eq!(example.is_empty(), false);
         assert_eq!(example.as_str(), "QuantumOS");
     }
-
 }

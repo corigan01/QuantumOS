@@ -23,10 +23,10 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use core::mem::size_of;
-use core::ptr::NonNull;
 use crate::heap::{AllocatorAPI, GlobalAlloc};
 use crate::memory_layout::MemoryLayout;
+use core::mem::size_of;
+use core::ptr::NonNull;
 
 unsafe impl<T: Send, Alloc: AllocatorAPI> Send for RawVec<T, Alloc> {}
 unsafe impl<T: Sync, Alloc: AllocatorAPI> Sync for RawVec<T, Alloc> {}
@@ -35,7 +35,7 @@ unsafe impl<T: Sync, Alloc: AllocatorAPI> Sync for RawVec<T, Alloc> {}
 pub struct RawVec<Type, Alloc: AllocatorAPI> {
     pub(crate) ptr: NonNull<Type>,
     pub(crate) cap: usize,
-    alloc: Alloc
+    alloc: Alloc,
 }
 
 impl<Type> RawVec<Type, GlobalAlloc> {
@@ -43,7 +43,7 @@ impl<Type> RawVec<Type, GlobalAlloc> {
         Self {
             ptr: NonNull::new_unchecked(ptr),
             cap: capacity,
-            alloc: GlobalAlloc
+            alloc: GlobalAlloc,
         }
     }
 }

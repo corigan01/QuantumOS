@@ -23,29 +23,38 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use crate::vfs::ata::identify_parser::IdentifyParser;
+use crate::vfs::ata::registers::{
+    CommandRegister, Commands, DataRegister, DiskID, DriveHeadRegister, ErrorRegister,
+    FeaturesRegister, SectorRegisters, StatusFlags, StatusRegister,
+};
+use crate::vfs::io::{DiskBus, DiskType, ErrorKind, IOError, IOResult, SeekFrom};
+use crate::vfs::{io, VFSDisk, VFSDiskID};
 use core::error::Error;
 use core::fmt::{Display, Formatter, Write};
-use qk_alloc::vec::Vec;
-use quantum_lib::{debug_print, debug_println};
-use crate::vfs::ata::registers::{CommandRegister, Commands, DataRegister, DiskID, DriveHeadRegister, ErrorRegister, FeaturesRegister, SectorRegisters, StatusFlags, StatusRegister};
 use owo_colors::OwoColorize;
 use qk_alloc::boxed::Box;
 use qk_alloc::string::String;
+use qk_alloc::vec::Vec;
 use quantum_lib::bitset::BitSet;
+use quantum_lib::{debug_print, debug_println};
 use quantum_utils::bytes::Bytes;
-use crate::vfs::ata::identify_parser::IdentifyParser;
-use crate::vfs::{io, VFSDisk, VFSDiskID};
-use crate::vfs::io::{DiskBus, DiskType, ErrorKind, IOError, IOResult, SeekFrom};
 
-mod registers;
 mod identify_parser;
+mod registers;
 
 #[derive(Clone, Copy, Debug)]
 pub enum DiskErr {
     FailedToRead,
     MalformedInput,
     Interrupted,
-    NotSeekable
+    NotSeekable,
+}
+
+impl From<DiskErr> for Box<dyn IOError> {
+    fn from(value: DiskErr) -> Self {
+        Box::new(value)
+    }
 }
 
 impl Error for DiskErr {}
@@ -53,10 +62,10 @@ impl Error for DiskErr {}
 impl Display for DiskErr {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         let str = match self {
-            DiskErr::FailedToRead => { "Failed to read!" }
-            DiskErr::MalformedInput => { "Malformed Input to disk" }
-            DiskErr::Interrupted => { "Disk Operation was Interrupted" }
-            DiskErr::NotSeekable => { "Not a valid Seekable Operation" }
+            DiskErr::FailedToRead => "Failed to read!",
+            DiskErr::MalformedInput => "Malformed Input to disk",
+            DiskErr::Interrupted => "Disk Operation was Interrupted",
+            DiskErr::NotSeekable => "Not a valid Seekable Operation",
         };
 
         f.write_str(str)?;
@@ -70,7 +79,7 @@ impl IOError for DiskErr {
         match self {
             DiskErr::Interrupted => ErrorKind::Interrupted,
             DiskErr::NotSeekable => ErrorKind::NotSeekable,
-            _ => ErrorKind::Unknown
+            _ => ErrorKind::Unknown,
         }
     }
 }
@@ -78,7 +87,7 @@ impl IOError for DiskErr {
 pub struct ATADisk {
     device: DiskID,
     identify: IdentifyParser,
-    seek: u64
+    seek: u64,
 }
 
 impl ATADisk {
@@ -94,11 +103,11 @@ impl ATADisk {
     }
 
     fn io_wait(&self) {
-        while
-             StatusRegister::is_status(self.device, StatusFlags::SpinDown) &&
-             StatusRegister::is_busy(self.device) &&
-            !StatusRegister::is_err_or_fault(self.device) &&
-            !StatusRegister::is_status(self.device, StatusFlags::DRQ) {}
+        while StatusRegister::is_status(self.device, StatusFlags::SpinDown)
+            && StatusRegister::is_busy(self.device)
+            && !StatusRegister::is_err_or_fault(self.device)
+            && !StatusRegister::is_status(self.device, StatusFlags::DRQ)
+        {}
     }
 
     fn smart_wait(&self) -> IOResult<()> {
@@ -139,7 +148,7 @@ impl ATADisk {
         for _ in 0..sector_count {
             for _ in 0..Self::WORDS_PER_SECTOR {
                 let value = DataRegister::read_u16(self.device);
-                let arr = value.to_be_bytes();
+                let arr: [u8; 2] = value.to_le_bytes();
 
                 for b in arr {
                     new_vec.push(b);
@@ -185,13 +194,15 @@ impl ATADisk {
 
 impl Display for ATADisk {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
-        writeln!(f, "{} {:?} {:?} {:?} {} {}",
-                 self.identify.model_number().as_str(),
-                 self.identify.interconnect(),
-                 self.identify.specific_config(),
-                 self.identify.identify_completion_status(),
-                 self.identify.max_sectors_per_request(),
-                 Bytes::from(self.identify.user_sectors_28bit_lba() * 512)
+        writeln!(
+            f,
+            "{} {:?} {:?} {:?} {} {}",
+            self.identify.model_number().as_str(),
+            self.identify.interconnect(),
+            self.identify.specific_config(),
+            self.identify.identify_completion_status(),
+            self.identify.max_sectors_per_request(),
+            Bytes::from(self.identify.user_sectors_28bit_lba() * 512)
         )?;
 
         Ok(())
@@ -230,9 +241,10 @@ fn scan_for_disks() -> Vec<ATADisk> {
         }
 
         // Loop while busy
-        while StatusRegister::is_busy(disk) &&
-            !StatusRegister::is_err_or_fault(disk) &&
-            !StatusRegister::is_status(disk, StatusFlags::DRQ) {}
+        while StatusRegister::is_busy(disk)
+            && !StatusRegister::is_err_or_fault(disk)
+            && !StatusRegister::is_status(disk, StatusFlags::DRQ)
+        {}
 
         if StatusRegister::is_err_or_fault(disk) {
             let errors = ErrorRegister::all_flags(disk);
@@ -254,7 +266,11 @@ fn scan_for_disks() -> Vec<ATADisk> {
 
         let disk = ATADisk::new(disk, read_identify);
 
-        debug_println!("{}\t{}", "OK".green().bold(), disk.identify.model_number().as_str().dimmed());
+        debug_println!(
+            "{}\t{}",
+            "OK".green().bold(),
+            disk.identify.model_number().as_str().dimmed()
+        );
 
         disks.push(disk);
     }
@@ -274,30 +290,9 @@ pub fn init_ata_disks() {
 impl io::Seek for ATADisk {
     fn seek(&mut self, seek: SeekFrom) -> IOResult<u64> {
         let total_bytes = self.total_disk_bytes().into();
-        match seek {
-            SeekFrom::Start(v) => {
-                if v > total_bytes {
-                    return Err(Box::new(DiskErr::NotSeekable))
-                }
-
-                self.seek = v;
-            }
-            SeekFrom::End(v) => {
-                if v > 0 || (-v) > total_bytes as i64 {
-                    return Err(Box::new(DiskErr::NotSeekable));
-                }
-
-                self.seek = (total_bytes as i64 + v) as u64;
-            }
-            SeekFrom::Current(v) => {
-                if v + (self.seek as i64) > total_bytes as i64 ||
-                    v + (self.seek as i64) < 0 {
-                    return Err(Box::new(DiskErr::NotSeekable));
-                }
-
-                self.seek = (self.seek as i64 + v) as u64
-            }
-        }
+        self.seek = seek
+            .modify_pos(total_bytes, 0, self.seek)
+            .ok_or(DiskErr::NotSeekable)?;
 
         Ok(self.seek)
     }
@@ -310,7 +305,8 @@ impl io::Read for ATADisk {
 
         let translated_sector = current_idx / Self::BYTES_PER_SECTOR;
         let sect_across_bounds = current_idx % Self::BYTES_PER_SECTOR;
-        let amount_of_sectors = ((amount_to_read + sect_across_bounds) / Self::BYTES_PER_SECTOR) + 1;
+        let amount_of_sectors =
+            ((amount_to_read + sect_across_bounds) / Self::BYTES_PER_SECTOR) + 1;
 
         // TODO: since we are already reading into a buf, why do we have to read into a vector?
         // FIXME: If we read too many sectors with `read_raw`, it will not complete successfully,
@@ -332,7 +328,8 @@ impl io::Write for ATADisk {
 
         let translated_sector = current_idx / Self::BYTES_PER_SECTOR;
         let sect_across_bounds = current_idx % Self::BYTES_PER_SECTOR;
-        let amount_of_sectors = ((amount_to_write + sect_across_bounds) / Self::BYTES_PER_SECTOR) + 1;
+        let amount_of_sectors =
+            ((amount_to_write + sect_across_bounds) / Self::BYTES_PER_SECTOR) + 1;
 
         // FIXME: When writing small amounts in-between sector boundaries, we should not have
         //        to read the data, *then* write it back!

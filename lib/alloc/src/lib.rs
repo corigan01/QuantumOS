@@ -31,18 +31,18 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #![feature(coerce_unsized)]
 
 pub mod heap;
-pub mod usable_region;
 pub mod memory_layout;
+pub mod usable_region;
 
 // std(like) libs for heap allocation
-pub mod vec;
 pub mod bitfield;
-pub mod string;
 pub mod boxed;
+pub mod string;
+pub mod vec;
 
-pub mod error;
-pub mod circular_buffer;
 pub mod borrowed_buf;
+pub mod circular_buffer;
+pub mod error;
 
 pub use error::*;
 

@@ -84,7 +84,7 @@ impl Display for Bytes {
             i if i < 100 => 2,
             i if i < 1000 => 3,
             i if i < 10000 => 4,
-            _ => 0
+            _ => 0,
         };
         let symb_chars = symb.chars().count();
 

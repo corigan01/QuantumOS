@@ -23,8 +23,8 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use crate::gfx::{FramebufferPixelLayout, PixelLocation};
 use crate::gfx::rectangle::Rect;
+use crate::gfx::{FramebufferPixelLayout, PixelLocation};
 
 #[derive(Clone, Copy, Debug)]
 pub struct FrameInfo {
@@ -54,8 +54,7 @@ impl FrameInfo {
     }
 
     pub const fn is_rect_inside_view_port(&self, rect: Rect) -> bool {
-        self.is_location_inside_view_port(rect.start) &&
-            self.is_location_inside_view_port(rect.end)
+        self.is_location_inside_view_port(rect.start) && self.is_location_inside_view_port(rect.end)
     }
 
     pub const fn is_location_inside_view_port(&self, loc: PixelLocation) -> bool {
@@ -75,4 +74,3 @@ impl FrameInfo {
         y_offset + x_offset
     }
 }
-

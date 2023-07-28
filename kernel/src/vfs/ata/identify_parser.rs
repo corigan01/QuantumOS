@@ -571,13 +571,15 @@ pub struct RawIdentifyStruct {
     /// Integrity word (see 7.12.7.91)
     //     15:8 Checksum
     //      7:0 Checksum Validity Indicator
-    pub integrity_word: Word
+    pub integrity_word: Word,
 }
 
-const _: () = assert!(mem::size_of::<RawIdentifyStruct>() == 512, "RawIdentifyStruct should be 512 bytes!");
+const _: () = assert!(
+    mem::size_of::<RawIdentifyStruct>() == 512,
+    "RawIdentifyStruct should be 512 bytes!"
+);
 
 impl RawIdentifyStruct {
-
     pub fn new() -> Self {
         // This is safe because the entire struct is primitive integers,
         // so their 'zero' *is* 0.
@@ -585,7 +587,7 @@ impl RawIdentifyStruct {
     }
 
     pub fn from_vec(vec: Vec<u16>) -> Box<Self> {
-        Box::new( unsafe { (vec.as_ptr() as *const Self).read() })
+        Box::new(unsafe { (vec.as_ptr() as *const Self).read() })
     }
 }
 
@@ -593,36 +595,35 @@ impl RawIdentifyStruct {
 pub enum Interconnect {
     Parallel,
     Serial,
-    Unknown(u16)
+    Unknown(u16),
 }
 
 #[derive(Clone, Copy, Debug)]
 pub enum SpecificConfig {
     DiskRequiresSetFeatures(CompletionStatus),
-    DiskDoesNotRequireSetFeatures(CompletionStatus)
+    DiskDoesNotRequireSetFeatures(CompletionStatus),
 }
 
 #[derive(Clone, Copy, Debug)]
 pub enum CompletionStatus {
     Complete,
-    Incomplete
+    Incomplete,
 }
 
 pub struct IdentifyParser {
-    raw: Box<RawIdentifyStruct>
+    raw: Box<RawIdentifyStruct>,
 }
 
 impl IdentifyParser {
     pub fn new(raw_data: Vec<u16>) -> Self {
         Self {
-            raw: RawIdentifyStruct::from_vec(raw_data)
+            raw: RawIdentifyStruct::from_vec(raw_data),
         }
     }
 
     pub fn user_sectors_28bit_lba(&self) -> usize {
         self.raw.user_addressable_logical_sectors_lba28 as usize
     }
-
 
     pub fn max_sectors_per_request(&self) -> usize {
         let raw_value = self.raw.logical_sectors_per_drq;
@@ -635,15 +636,15 @@ impl IdentifyParser {
 
         match raw_value.get_bit(2) {
             true => CompletionStatus::Incomplete,
-            false => CompletionStatus::Complete
+            false => CompletionStatus::Complete,
         }
     }
 
     pub fn specific_config(&self) -> Option<SpecificConfig> {
         let raw_value = self.raw.specific_config;
 
-        use SpecificConfig::*;
         use CompletionStatus::*;
+        use SpecificConfig::*;
 
         match raw_value {
             0x37C8 => Some(DiskRequiresSetFeatures(Incomplete)),
@@ -651,7 +652,7 @@ impl IdentifyParser {
             0x8C73 => Some(DiskDoesNotRequireSetFeatures(Incomplete)),
             0xC837 => Some(DiskDoesNotRequireSetFeatures(Complete)),
 
-            _ => None
+            _ => None,
         }
     }
 
@@ -690,7 +691,7 @@ impl IdentifyParser {
             0 => Interconnect::Parallel,
             1 => Interconnect::Serial,
 
-            _ => Interconnect::Unknown(raw_word)
+            _ => Interconnect::Unknown(raw_word),
         }
     }
 
@@ -699,5 +700,4 @@ impl IdentifyParser {
 
         feature_opt_copy.get_bit(10)
     }
-
 }

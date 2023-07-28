@@ -27,22 +27,17 @@ use core::ptr::NonNull;
 
 pub struct NonNullRegion<Type> {
     ptr: NonNull<Type>,
-    qty: usize
+    qty: usize,
 }
 
 impl<Type> NonNullRegion<Type> {
     pub fn new(ptr: NonNull<Type>, qty: usize) -> Self {
-        Self {
-            ptr,
-            qty
-        }
+        Self { ptr, qty }
     }
-
 }
 
 impl<Type> PartialEq for NonNullRegion<Type> {
     fn eq(&self, other: &Self) -> bool {
-        (self.ptr.as_ptr() as u64) == (other.ptr.as_ptr() as u64) &&
-            self.qty == other.qty
+        (self.ptr.as_ptr() as u64) == (other.ptr.as_ptr() as u64) && self.qty == other.qty
     }
 }

@@ -29,7 +29,7 @@ use core::ptr::NonNull;
 
 pub struct OwnPtr<Type: ?Sized> {
     ptr: NonNull<Type>,
-    ph: PhantomData<Type>
+    ph: PhantomData<Type>,
 }
 
 impl<Type: Sized> OwnPtr<Type> {
@@ -53,7 +53,7 @@ impl<Type: ?Sized> OwnPtr<Type> {
     pub unsafe fn new_unchecked(ptr: *mut Type) -> Self {
         Self {
             ptr: NonNull::new_unchecked(ptr),
-            ph: PhantomData::default()
+            ph: PhantomData::default(),
         }
     }
 

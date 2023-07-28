@@ -29,18 +29,18 @@ use core::fmt::Debug;
 #[repr(C, packed)]
 pub struct TransferableDataProtector<T> {
     data: T,
-    safety_magic: u64
+    safety_magic: u64,
 }
 
 pub enum MagicType {
     BuiltinMagic,
-    CustomMagic(u64)
+    CustomMagic(u64),
 }
 
 impl MagicType {
     const BUILT_IN_MAGIC: u64 = 0x5175616E74756D;
 
-    pub fn  to_magic(&self) -> u64 {
+    pub fn to_magic(&self) -> u64 {
         match self {
             Self::BuiltinMagic => Self::BUILT_IN_MAGIC,
             Self::CustomMagic(value) => *value,
@@ -65,15 +65,13 @@ impl PartialEq for MagicType {
 }
 
 impl<T> TransferableDataProtector<T>
-    where T: Clone + Copy + Debug {
-
+where
+    T: Clone + Copy + Debug,
+{
     pub fn special_transfer(data: T, magic_type: MagicType) -> Self {
         let safety_magic = magic_type.to_magic();
 
-        Self {
-            data,
-            safety_magic
-        }
+        Self { data, safety_magic }
     }
 
     pub fn transfer(data: T) -> Self {
@@ -103,7 +101,7 @@ impl<T> TransferableDataProtector<T>
         let typed_ptr = ptr as *const Self;
         let value = *typed_ptr;
 
-        if MagicType::from_magic(value.safety_magic) != expected_magic{
+        if MagicType::from_magic(value.safety_magic) != expected_magic {
             return None;
         }
 
@@ -112,13 +110,13 @@ impl<T> TransferableDataProtector<T>
 }
 
 pub struct DataProtector {
-    magic: u64
+    magic: u64,
 }
 
 impl DataProtector {
     pub fn new() -> Self {
         Self {
-            magic: MagicType::BuiltinMagic.to_magic()
+            magic: MagicType::BuiltinMagic.to_magic(),
         }
     }
 
@@ -131,7 +129,9 @@ impl DataProtector {
     }
 
     pub unsafe fn collapse_ptr<T>(&self, ptr: u64) -> Option<T>
-        where T: Clone + Copy {
+    where
+        T: Clone + Copy,
+    {
         if !self.is_magic_valid() {
             return None;
         }
@@ -140,7 +140,9 @@ impl DataProtector {
     }
 
     pub unsafe fn collapse_ptr_ref<T>(&self, ptr: u64) -> Option<&T>
-        where T: Clone + Copy {
+    where
+        T: Clone + Copy,
+    {
         if !self.is_magic_valid() {
             return None;
         }
@@ -149,7 +151,9 @@ impl DataProtector {
     }
 
     pub unsafe fn special_collapse_ptr<T>(&self, magic: MagicType, ptr: u64) -> Option<T>
-        where T: Clone + Copy {
+    where
+        T: Clone + Copy,
+    {
         if !self.is_special_magic_valid(magic) {
             return None;
         }
@@ -158,7 +162,9 @@ impl DataProtector {
     }
 
     pub unsafe fn special_collapse_ptr_ref<T>(&self, magic: MagicType, ptr: u64) -> Option<&T>
-        where T: Clone + Copy {
+    where
+        T: Clone + Copy,
+    {
         if !self.is_special_magic_valid(magic) {
             return None;
         }

@@ -38,21 +38,24 @@ pub enum KernelBootInfoErr {
 // TODO: implement a bootloader callback which will tell the bootloader
 //       that we successfully booted into the kernel!
 
-
 pub struct KernelBootInformation {
     pub physical_regions: RegionMap<PhyAddress>,
     pub virtual_regions: RegionMap<VirtAddress>,
     pub framebuffer: LinearFramebuffer,
-    magic: DataProtector
+    magic: DataProtector,
 }
 
 impl KernelBootInformation {
-    pub fn new(physical_regions: RegionMap<PhyAddress>, virtual_regions: RegionMap<VirtAddress>, framebuffer: LinearFramebuffer) -> Self {
+    pub fn new(
+        physical_regions: RegionMap<PhyAddress>,
+        virtual_regions: RegionMap<VirtAddress>,
+        framebuffer: LinearFramebuffer,
+    ) -> Self {
         Self {
             physical_regions,
             virtual_regions,
             framebuffer,
-            magic: DataProtector::new()
+            magic: DataProtector::new(),
         }
     }
 
@@ -60,9 +63,9 @@ impl KernelBootInformation {
         self as *const Self as u64
     }
 
-    pub unsafe fn load_from_bootloader<'a>(ptr: *const KernelBootInformation)
-        -> Result<&'a KernelBootInformation, KernelBootInfoErr> {
-
+    pub unsafe fn load_from_bootloader<'a>(
+        ptr: *const KernelBootInformation,
+    ) -> Result<&'a KernelBootInformation, KernelBootInfoErr> {
         if ptr as usize == 0 {
             return Err(KernelBootInfoErr::NullPtr);
         }
@@ -91,4 +94,3 @@ impl KernelBootInformation {
         &self.framebuffer
     }
 }
-

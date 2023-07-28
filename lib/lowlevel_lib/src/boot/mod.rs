@@ -35,12 +35,14 @@ macro_rules! kernel_entry {
             use quantum_lib::boot::boot_info::KernelBootInformation;
 
             let boot_info = unsafe {
-                KernelBootInformation::load_from_bootloader(boot_struct_raw as *const KernelBootInformation)
-            }.expect("Unable to determine boot information");
+                KernelBootInformation::load_from_bootloader(
+                    boot_struct_raw as *const KernelBootInformation,
+                )
+            }
+            .expect("Unable to determine boot information");
 
             $function(boot_info);
             panic!("Kernel should not finish!");
         }
     };
 }
-

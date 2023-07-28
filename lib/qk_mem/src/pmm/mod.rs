@@ -23,12 +23,12 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use crate::pmm::phy_part::PhyPart;
 use qk_alloc::vec::Vec;
-use quantum_lib::address_utils::PAGE_SIZE;
 use quantum_lib::address_utils::physical_address::{Aligned, PhyAddress};
 use quantum_lib::address_utils::region::MemoryRegion;
 use quantum_lib::address_utils::region_map::RegionMap;
-use crate::pmm::phy_part::PhyPart;
+use quantum_lib::address_utils::PAGE_SIZE;
 
 pub mod phy_part;
 
@@ -37,7 +37,7 @@ pub type PageAligned = PhyAddress<Aligned, 12>;
 pub enum PhyAllocErr {
     NotAligned,
     NotFree,
-    NotEnoughMemory
+    NotEnoughMemory,
 }
 
 #[allow(dead_code)]
@@ -45,19 +45,19 @@ pub struct PhysicalMemoryManager {
     usable: Vec<PhyPart>,
     kernel: Vec<MemoryRegion<PhyAddress>>,
     io: Vec<MemoryRegion<PhyAddress>>,
-    other: Vec<MemoryRegion<PhyAddress>>
+    other: Vec<MemoryRegion<PhyAddress>>,
 }
 
 impl PhysicalMemoryManager {
     pub fn new(map: &RegionMap<PhyAddress>) -> Self {
-        let mut free_allocations: Vec<PhyPart> = map.iter()
+        let mut free_allocations: Vec<PhyPart> = map
+            .iter()
             .filter(|region| region.is_usable() && region.size() > PAGE_SIZE as u64)
             .map(|region| {
                 PhyPart::new(
                     region.get_start_address().align_up(),
-
                     // We have to subtract one because aligning up will mean that we lose the bottom one page
-                    (region.size() as usize / PAGE_SIZE) - 1
+                    (region.size() as usize / PAGE_SIZE) - 1,
                 )
             })
             .collect();
@@ -69,19 +69,17 @@ impl PhysicalMemoryManager {
             this.cmp(&other)
         });
 
-        let kernel_allocations: Vec<MemoryRegion<PhyAddress>> = map.iter()
-            .filter(|region| region.is_kernel())
-            .collect();
+        let kernel_allocations: Vec<MemoryRegion<PhyAddress>> =
+            map.iter().filter(|region| region.is_kernel()).collect();
 
-        let other: Vec<MemoryRegion<PhyAddress>> = map.iter()
-            .filter(|region| region.is_reserved())
-            .collect();
+        let other: Vec<MemoryRegion<PhyAddress>> =
+            map.iter().filter(|region| region.is_reserved()).collect();
 
         Self {
             usable: free_allocations,
             kernel: kernel_allocations,
             io: Vec::new(),
-            other
+            other,
         }
     }
 
@@ -104,6 +102,4 @@ impl PhysicalMemoryManager {
 
         Ok(start_address)
     }
-
-
 }

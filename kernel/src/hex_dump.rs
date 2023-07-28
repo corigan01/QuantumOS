@@ -1,11 +1,11 @@
 /*
-  ____                 __               __   _ __
- / __ \__ _____ ____  / /___ ____ _    / /  (_) /
-/ /_/ / // / _ `/ _ \/ __/ // /  ' \  / /__/ / _ \
-\___\_\_,_/\_,_/_//_/\__/\_,_/_/_/_/ /____/_/_.__/
-  Part of the Quantum OS Project
+  ____                 __               __ __                 __
+ / __ \__ _____ ____  / /___ ____ _    / //_/__ _______  ___ / /
+/ /_/ / // / _ `/ _ \/ __/ // /  ' \  / ,< / -_) __/ _ \/ -_) /
+\___\_\_,_/\_,_/_//_/\__/\_,_/_/_/_/ /_/|_|\__/_/ /_//_/\__/_/
+  Part of the Quantum OS Kernel
 
-Copyright 2023 Gavin Kellam
+Copyright 2022 Gavin Kellam
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
 associated documentation files (the "Software"), to deal in the Software without restriction,
@@ -23,36 +23,20 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use core::mem::size_of;
-use core::ptr::NonNull;
+use quantum_lib::{debug_print, debug_println};
 
-pub struct UsableRegion {
-    ptr: NonNull<u8>,
-    size: usize,
-}
+const ROWS_TO_PRINT: usize = 16;
+const BYTES_PER_ROW: usize = 2;
 
-impl UsableRegion {
-    pub fn new<Type: Sized>(ptr: &mut [Type]) -> Self {
-        let size = ptr.len() * size_of::<Type>();
+pub fn dump_array(arr: &[u8]) {
+    for (index, byte) in arr.iter().enumerate() {
+        debug_print!("{:02X}", byte);
 
-        Self {
-            ptr: NonNull::from(ptr).cast(),
-            size,
+        if (index + 1) % 2 == 0 {
+            debug_print!(" ");
         }
-    }
-
-    pub unsafe fn from_raw_parts(ptr: *mut u8, size: usize) -> Option<Self> {
-        Some(Self {
-            ptr: NonNull::new(ptr)?,
-            size,
-        })
-    }
-
-    pub fn ptr(&self) -> NonNull<u8> {
-        self.ptr
-    }
-
-    pub fn size(&self) -> usize {
-        self.size
+        if (index + 1) % (ROWS_TO_PRINT * BYTES_PER_ROW) == 0 {
+            debug_println!();
+        }
     }
 }

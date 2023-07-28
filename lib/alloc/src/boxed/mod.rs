@@ -23,16 +23,15 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-
+use crate::heap::{AllocatorAPI, GlobalAlloc};
+use crate::memory_layout::MemoryLayout;
+use crate::AllocErr;
 use core::fmt::{Debug, Display, Formatter};
-use core::{borrow, mem};
 use core::marker::Unsize;
 use core::mem::MaybeUninit;
 use core::ops::{CoerceUnsized, Deref, DerefMut, DispatchFromDyn, Receiver};
 use core::ptr::NonNull;
-use crate::AllocErr;
-use crate::heap::{AllocatorAPI, GlobalAlloc};
-use crate::memory_layout::MemoryLayout;
+use core::{borrow, mem};
 
 pub struct Box<Type: ?Sized, Alloc: AllocatorAPI = GlobalAlloc>(NonNull<Type>, Alloc);
 
@@ -55,20 +54,29 @@ impl<Type> Box<Type> {
 
 impl<Type, Alloc: AllocatorAPI> Box<Type, Alloc> {
     pub fn leak<'a>(self) -> &'a mut Type
-        where Type: 'a {
+    where
+        Type: 'a,
+    {
         unsafe { mem::ManuallyDrop::new(self).0.as_mut() }
     }
 
-    pub fn try_new_uninit_in_impl(alloc: Alloc, zero: bool) -> Result<Box<MaybeUninit<Type>, Alloc>, AllocErr>
-        where Alloc: AllocatorAPI {
+    pub fn try_new_uninit_in_impl(
+        alloc: Alloc,
+        zero: bool,
+    ) -> Result<Box<MaybeUninit<Type>, Alloc>, AllocErr>
+    where
+        Alloc: AllocatorAPI,
+    {
         let layout = MemoryLayout::from_type::<Type>();
-        let allocation = unsafe { if zero {
-            Alloc::allocate_zero(layout)
-        } else {
-            Alloc::allocate(layout)
-        }}?;
-        let ptr = NonNull::new(allocation.ptr as *mut MaybeUninit<Type>)
-            .ok_or(AllocErr::InternalErr)?;
+        let allocation = unsafe {
+            if zero {
+                Alloc::allocate_zero(layout)
+            } else {
+                Alloc::allocate(layout)
+            }
+        }?;
+        let ptr =
+            NonNull::new(allocation.ptr as *mut MaybeUninit<Type>).ok_or(AllocErr::InternalErr)?;
 
         Ok(Box(ptr, alloc))
     }
@@ -81,7 +89,7 @@ impl<Type, Alloc: AllocatorAPI> Box<Type, Alloc> {
         Self::try_new_uninit_in_impl(alloc, true)
     }
 
-    pub fn try_new_uninit_in(alloc: Alloc) -> Result<Box<MaybeUninit<Type>, Alloc>, AllocErr>{
+    pub fn try_new_uninit_in(alloc: Alloc) -> Result<Box<MaybeUninit<Type>, Alloc>, AllocErr> {
         Self::try_new_uninit_in_impl(alloc, false)
     }
 
@@ -103,16 +111,21 @@ impl<Type, Alloc: AllocatorAPI> Box<Type, Alloc> {
     }
 
     pub fn into_raw_with_alloc(self) -> (*mut Type, Alloc) {
-        (self.leak() as *mut Type, unsafe { MaybeUninit::uninit().assume_init() })
+        (self.leak() as *mut Type, unsafe {
+            MaybeUninit::uninit().assume_init()
+        })
     }
 
     pub unsafe fn from_raw_in(ptr: *mut Type, alloc: Alloc) -> Self {
         Self(NonNull::new_unchecked(ptr), alloc)
     }
 
+    pub fn as_ptr(&self) -> *mut Type {
+        self.0.as_ptr()
+    }
 }
 
-impl <Type: Default> Default for Box<Type> {
+impl<Type: Default> Default for Box<Type> {
     fn default() -> Self {
         Box::new(Type::default())
     }
@@ -144,8 +157,9 @@ impl<Type, Alloc: AllocatorAPI> Box<MaybeUninit<Type>, Alloc> {
 }
 
 impl<Type: ?Sized, Alloc: AllocatorAPI> PartialEq for Box<Type, Alloc>
-    where Type: PartialEq {
-
+where
+    Type: PartialEq,
+{
     fn eq(&self, other: &Self) -> bool {
         self.as_ref() == other.as_ref()
     }
@@ -184,14 +198,18 @@ impl<Type: ?Sized, Alloc: AllocatorAPI> AsMut<Type> for Box<Type, Alloc> {
 }
 
 impl<Type: ?Sized, Alloc: AllocatorAPI> Display for Box<Type, Alloc>
-    where Type: Display {
+where
+    Type: Display,
+{
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         Display::fmt(unsafe { self.0.as_ref() }, f)
     }
 }
 
 impl<Type: ?Sized, Alloc: AllocatorAPI> Debug for Box<Type, Alloc>
-    where Type: Debug {
+where
+    Type: Debug,
+{
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         Debug::fmt(unsafe { self.0.as_ref() }, f)
     }
@@ -199,7 +217,7 @@ impl<Type: ?Sized, Alloc: AllocatorAPI> Debug for Box<Type, Alloc>
 
 impl<Type: ?Sized, Alloc: AllocatorAPI> Deref for Box<Type, Alloc> {
     type Target = Type;
-    
+
     fn deref(&self) -> &Self::Target {
         unsafe { self.0.as_ref() }
     }
@@ -217,4 +235,3 @@ impl<Type: ?Sized, Alloc: AllocatorAPI> Drop for Box<Type, Alloc> {
             .expect("Could not free Box");
     }
 }
-

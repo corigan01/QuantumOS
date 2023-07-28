@@ -54,29 +54,35 @@ use core::ops::Range;
 pub struct BitsIter<Type: Sized> {
     value: Type,
     forward_index: usize,
-    back_index: usize
+    back_index: usize,
 }
 
 impl<Type> Iterator for BitsIter<Type>
-    where Type: BitSet {
+where
+    Type: BitSet,
+{
     type Item = bool;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.forward_index >= Type::max_bits()
-            || ((Type::max_bits() - self.back_index) + self.forward_index) >= Type::max_bits() {
+            || ((Type::max_bits() - self.back_index) + self.forward_index) >= Type::max_bits()
+        {
             return None;
         }
 
         self.forward_index += 1;
-        Some(self.value.get_bit((self.forward_index - 1) as u8 ))
+        Some(self.value.get_bit((self.forward_index - 1) as u8))
     }
 }
 
 impl<Type> DoubleEndedIterator for BitsIter<Type>
-    where Type: BitSet {
+where
+    Type: BitSet,
+{
     fn next_back(&mut self) -> Option<Self::Item> {
         if self.back_index == 0
-            || ((Type::max_bits() - self.back_index) + self.forward_index) >= Type::max_bits() {
+            || ((Type::max_bits() - self.back_index) + self.forward_index) >= Type::max_bits()
+        {
             return None;
         }
 
@@ -96,7 +102,9 @@ pub trait BitSet {
     fn get_bit(&self, bit: u8) -> bool;
     fn get_bits(&self, r: Range<u8>) -> Self;
 
-    fn bits(&self) -> BitsIter<Self> where Self: Sized;
+    fn bits(&self) -> BitsIter<Self>
+    where
+        Self: Sized;
 
     fn max_bits() -> usize;
 }

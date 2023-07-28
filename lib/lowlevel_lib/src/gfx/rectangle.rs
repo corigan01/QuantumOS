@@ -33,16 +33,13 @@ pub struct Rect {
 
 impl Rect {
     pub fn new(start: PixelLocation, end: PixelLocation) -> Self {
-        Self {
-            start,
-            end
-        }
+        Self { start, end }
     }
 
     pub fn dist(start: PixelLocation, size: PixelLocation) -> Self {
         Self {
             start,
-            end: start + size
+            end: start + size,
         }
     }
 
@@ -69,5 +66,5 @@ macro_rules! rect {
 
     ($x:literal, $y:literal ; $xx:literal, $yy:literal) => {
         Rect::dist(PixelLocation::new($x, $y), PixelLocation::new($xx, $yy))
-    }
+    };
 }

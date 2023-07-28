@@ -34,17 +34,17 @@ use qk_alloc::heap::alloc::KernelHeap;
 use qk_alloc::heap::{get_global_alloc, get_global_alloc_debug, set_global_alloc};
 use qk_alloc::usable_region::UsableRegion;
 
-use quantum_lib::{debug_print, debug_println, kernel_entry, rect};
-use quantum_lib::address_utils::PAGE_SIZE;
 use quantum_lib::address_utils::physical_address::PhyAddress;
 use quantum_lib::address_utils::region::{MemoryRegion, MemoryRegionType};
+use quantum_lib::address_utils::PAGE_SIZE;
 use quantum_lib::boot::boot_info::KernelBootInformation;
-use quantum_utils::bytes::Bytes;
 use quantum_lib::com::serial::{SerialBaud, SerialDevice, SerialPort};
-use quantum_lib::debug::{add_connection_to_global_stream, set_panic};
 use quantum_lib::debug::stream_connection::StreamConnectionBuilder;
-use quantum_lib::gfx::{Pixel, PixelLocation, rectangle::Rect};
+use quantum_lib::debug::{add_connection_to_global_stream, set_panic};
+use quantum_lib::gfx::{rectangle::Rect, Pixel, PixelLocation};
 use quantum_lib::possibly_uninit::PossiblyUninit;
+use quantum_lib::{debug_print, debug_println, kernel_entry, rect};
+use quantum_utils::bytes::Bytes;
 
 use quantum_os::clock::rtc::update_and_get_time;
 
@@ -60,7 +60,6 @@ use quantum_os::vfs;
 static mut SERIAL_CONNECTION: PossiblyUninit<SerialDevice> = PossiblyUninit::new_lazy(|| {
     SerialDevice::new(SerialPort::Com1, SerialBaud::Baud115200).unwrap()
 });
-
 
 kernel_entry!(main);
 
@@ -80,14 +79,19 @@ fn setup_serial_debug() {
     debug_println!("Welcome to Quantum OS! {}\n", update_and_get_time());
 }
 
-fn setup_memory(boot_info: &KernelBootInformation) -> (RegionMap<PhyAddress>, RegionMap<VirtAddress>) {
+fn setup_memory(
+    boot_info: &KernelBootInformation,
+) -> (RegionMap<PhyAddress>, RegionMap<VirtAddress>) {
     let mut physical_memory_map = boot_info.get_physical_memory().clone();
     let mut virtual_memory_map = boot_info.get_virtual_memory().clone();
 
-    let total_phy: u64 = physical_memory_map.total_mem_for_type(MemoryRegionType::Usable).into();
+    let total_phy: u64 = physical_memory_map
+        .total_mem_for_type(MemoryRegionType::Usable)
+        .into();
     let total_pages: u64 = total_phy / (PAGE_SIZE as u64);
 
-    debug_println!("Total Usable Physical Memory {} ({} -- 4k Pages)",
+    debug_println!(
+        "Total Usable Physical Memory {} ({} -- 4k Pages)",
         Bytes::from(total_phy),
         total_pages
     );
@@ -96,18 +100,23 @@ fn setup_memory(boot_info: &KernelBootInformation) -> (RegionMap<PhyAddress>, Re
     let init_alloc_begin = 0x000000f00001;
     let init_alloc_size = Bytes::from(1 * Bytes::MIB) - 2.into();
 
-    debug_print!("\nCreating Init Heap Allocator at (ptr: 0x{:x} size: {}) ... ",
-        init_alloc_begin, init_alloc_size
+    debug_print!(
+        "\nCreating Init Heap Allocator at (ptr: 0x{:x} size: {}) ... ",
+        init_alloc_begin,
+        init_alloc_size
     );
 
     let mut heap_region = MemoryRegion::from_distance(
         PhyAddress::try_from(init_alloc_begin).unwrap(),
         init_alloc_size,
-        MemoryRegionType::Usable
+        MemoryRegionType::Usable,
     );
 
     let is_within = physical_memory_map.is_within(&heap_region);
-    assert!(is_within, "Failed, the region is not within the memory map! TODO: Make the Init region dynamic!");
+    assert!(
+        is_within,
+        "Failed, the region is not within the memory map! TODO: Make the Init region dynamic!"
+    );
 
     unsafe {
         heap_region.reassign_region_type(MemoryRegionType::KernelInitHeap);
@@ -123,14 +132,12 @@ fn setup_memory(boot_info: &KernelBootInformation) -> (RegionMap<PhyAddress>, Re
     debug_println!("Physical Memory Map:\n{physical_memory_map}");
 
     let usable_region = unsafe {
-        UsableRegion::from_raw_parts(
-            init_alloc_begin as *mut u8,
-            init_alloc_size.into()
-        )
-    }.unwrap();
+        UsableRegion::from_raw_parts(init_alloc_begin as *mut u8, init_alloc_size.into())
+    }
+    .unwrap();
 
-    let new_kernel_heap = KernelHeap::new(usable_region)
-        .expect("Unable to create init kernel allocator");
+    let new_kernel_heap =
+        KernelHeap::new(usable_region).expect("Unable to create init kernel allocator");
 
     set_global_alloc(new_kernel_heap);
 
@@ -143,9 +150,7 @@ fn main(boot_info: &KernelBootInformation) {
     debug_println!("\nUsing Bootloader framebuffer");
     let mut framebuffer = boot_info.framebuffer.clone();
 
-    let (physical_memory_map, virtual_memory_map)
-        = setup_memory(boot_info);
-
+    let (physical_memory_map, virtual_memory_map) = setup_memory(boot_info);
 
     let string_test = String::from("OK".bright_green().bold());
     debug_println!("Test String ... {}", string_test.as_str());
@@ -178,7 +183,8 @@ fn panic(info: &PanicInfo) -> ! {
     let time = update_and_get_time();
     let panic_message_randomness = time.second as usize % CRASH_MESSAGES.len();
 
-    debug_println!("{}{}\n{}",
+    debug_println!(
+        "{}{}\n{}",
         "KERNEL PANIC ---------- ".red().bold(),
         time,
         CRASH_MESSAGES[panic_message_randomness].dimmed()

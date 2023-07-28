@@ -32,11 +32,11 @@ use quantum_utils::bytes::Bytes;
 pub enum ErrorKind {
     Unknown,
     Interrupted,
-    NotSeekable
+    NotSeekable,
 }
 
 pub trait IOError: Error {
-    fn error_kind(&self) ->  ErrorKind;
+    fn error_kind(&self) -> ErrorKind;
 }
 
 impl PartialEq<ErrorKind> for dyn IOError {
@@ -62,7 +62,36 @@ pub type IOResult<T> = Result<T, Box<dyn IOError>>;
 pub enum SeekFrom {
     Start(u64),
     End(i64),
-    Current(i64)
+    Current(i64),
+}
+
+impl SeekFrom {
+    pub fn modify_pos(self, max: u64, min: u64, current: u64) -> Option<u64> {
+        return match self {
+            SeekFrom::Start(pos) => {
+                if pos > max || pos < min {
+                    return None;
+                }
+
+                Some(pos)
+            }
+            SeekFrom::End(pos) => {
+                if pos > 0 || pos + (max + min) as i64 > 0 {
+                    return None;
+                }
+
+                Some(((max as i64) + pos) as u64)
+            }
+            SeekFrom::Current(pos) => {
+                let pos_current = pos + current as i64;
+                if pos_current > max as i64 || pos_current < min as i64 {
+                    return None;
+                }
+
+                Some(pos_current as u64)
+            }
+        };
+    }
 }
 
 pub trait Seek {
@@ -94,12 +123,12 @@ pub trait Read {
     fn read_exact(&mut self, buf: &mut [u8]) -> IOResult<()> {
         let mut filled = 0;
 
-        while filled <= buf.len() - 1{
+        while filled <= buf.len() - 1 {
             match self.read(&mut buf[filled..]) {
                 Ok(amount) => {
                     filled += amount;
                 }
-                Err(e) if *e == ErrorKind::Interrupted => {
+                Err(e) if e.error_kind() == ErrorKind::Interrupted => {
                     filled = 0;
                 }
                 Err(e) => {
@@ -140,7 +169,7 @@ pub enum DiskType {
     Unknown,
     HardDisk,
     SSD,
-    Emulated
+    Emulated,
 }
 
 pub enum DiskBus {
@@ -149,7 +178,7 @@ pub enum DiskBus {
     ParallelDMA,
     Sata,
     NVMe,
-    Emulated
+    Emulated,
 }
 
 pub trait DiskInfo {
@@ -167,5 +196,23 @@ pub trait DiskInfo {
 
     fn disk_capacity(&self) -> Bytes {
         Bytes::from(0)
+    }
+}
+
+pub enum PartitionType {
+    Unknown,
+    MBR,
+}
+
+pub trait PartitionInfo {
+    fn seek_start(&self) -> u64;
+    fn seek_end(&self) -> u64;
+
+    fn is_bootable(&self) -> bool {
+        false
+    }
+
+    fn partition_type(&self) -> PartitionType {
+        PartitionType::Unknown
     }
 }

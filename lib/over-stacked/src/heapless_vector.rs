@@ -94,8 +94,8 @@ pub struct HeaplessVec<Type, const SIZE: usize> {
 }
 
 impl<Type, const SIZE: usize> Clone for HeaplessVec<Type, SIZE>
-    where
-        Type: Clone,
+where
+    Type: Clone,
 {
     fn clone(&self) -> Self {
         let mut new_vector = HeaplessVec::new();
@@ -197,8 +197,8 @@ impl<Type, const SIZE: usize> HeaplessVec<Type, SIZE> {
     }
 
     pub fn retain<Function>(&mut self, mut runner: Function)
-        where
-            Function: FnMut(&Type) -> bool,
+    where
+        Function: FnMut(&Type) -> bool,
     {
         let mut removed_indexes: HeaplessVec<bool, SIZE> = HeaplessVec::new();
 
@@ -240,8 +240,8 @@ impl<Type, const SIZE: usize> HeaplessVec<Type, SIZE> {
     }
 
     pub fn find_index_of(&self, value: &Type) -> Option<usize>
-        where
-            Type: PartialEq,
+    where
+        Type: PartialEq,
     {
         let mut index = None;
 
@@ -333,12 +333,16 @@ impl<Type, const SIZE: usize> HeaplessVec<Type, SIZE> {
     }
 
     pub fn sort(&mut self)
-        where Type: Ord {
+    where
+        Type: Ord,
+    {
         self.as_mut_slice().sort_unstable()
     }
 
     pub fn sort_by<F>(&mut self, function: F)
-        where F: FnMut(&Type, &Type) -> Ordering {
+    where
+        F: FnMut(&Type, &Type) -> Ordering,
+    {
         self.as_mut_slice().sort_unstable_by(function)
     }
 
@@ -352,9 +356,9 @@ impl<Type, const SIZE: usize> HeaplessVec<Type, SIZE> {
 }
 
 impl<Type, const SIZE: usize> Debug for HeaplessVec<Type, SIZE>
-    where
-        Type: Sized,
-        Type: Debug,
+where
+    Type: Sized,
+    Type: Debug,
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         write!(f, "{:?}", &self.internal_data[0..self.used_data])

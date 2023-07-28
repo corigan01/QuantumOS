@@ -389,6 +389,10 @@ impl KernelHeap {
     pub unsafe fn impl_realloc<Type>(&mut self, old_ptr: NonNull<Type>, new_alloc_desc: MemoryLayout, can_skip_fill: bool, fill: u8) -> Result<UnsafeAllocationObject, AllocErr> {
         let searching_ptr = old_ptr.as_ptr() as u64;
 
+        if searching_ptr < self.init_ptr {
+            return Err(AllocErr::NotFound(searching_ptr as usize));
+        }
+
         let Some(old_alloc) =
             self.allocations.iter().find(|entry| {
                 (entry.ptr + (entry.pad as u64)) == searching_ptr
@@ -402,7 +406,6 @@ impl KernelHeap {
             );
         }
 
-
         let new_alloc = self.allocate(new_alloc_desc)?;
         let new_alloc_ptr = new_alloc.ptr as *mut u8;
 
@@ -410,7 +413,7 @@ impl KernelHeap {
             ptr::write_bytes(new_alloc_ptr.add(old_alloc.size as usize), fill, new_alloc.size - (old_alloc.size - old_alloc.over) as usize);
         }
 
-        ptr::copy(searching_ptr as *const u8, new_alloc_ptr, old_alloc.size as usize);
+        ptr::copy(searching_ptr as *const u8, new_alloc_ptr, (old_alloc.size - old_alloc.over) as usize);
 
         self.free(old_ptr)?;
 
@@ -451,7 +454,6 @@ impl KernelHeap {
             }
 
             index += 1;
-
         }
     }
 

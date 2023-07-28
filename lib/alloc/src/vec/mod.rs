@@ -23,20 +23,20 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use crate::boxed::Box;
+use crate::heap::{AllocatorAPI, GlobalAlloc};
+use crate::vec::raw_vec::RawVec;
 use core::cmp::Ordering;
 use core::fmt::{Debug, Formatter};
 use core::mem::{ManuallyDrop, MaybeUninit};
 use core::ops::{Deref, DerefMut, Index, IndexMut};
 use core::ptr;
-use crate::boxed::Box;
-use crate::heap::{AllocatorAPI, GlobalAlloc};
-use crate::vec::raw_vec::RawVec;
 
 mod raw_vec;
 
-pub struct Vec<Type, Alloc: AllocatorAPI = GlobalAlloc>{
+pub struct Vec<Type, Alloc: AllocatorAPI = GlobalAlloc> {
     raw: RawVec<Type, Alloc>,
-    len: usize
+    len: usize,
 }
 
 impl<Type> Vec<Type, GlobalAlloc> {
@@ -51,7 +51,7 @@ impl<Type> Vec<Type, GlobalAlloc> {
     pub unsafe fn from_raw_parts(ptr: *mut Type, len: usize, capacity: usize) -> Self {
         Self {
             raw: RawVec::from_raw_parts(ptr, capacity),
-            len
+            len,
         }
     }
 }
@@ -60,14 +60,14 @@ impl<Type, Alloc: AllocatorAPI> Vec<Type, Alloc> {
     pub const fn new_in(alloc: Alloc) -> Self {
         Self {
             raw: RawVec::new_in(alloc),
-            len: 0
+            len: 0,
         }
     }
 
     pub fn with_capacity_in(capacity: usize, alloc: Alloc) -> Self {
         Self {
             raw: RawVec::with_capacity_in(capacity, alloc),
-            len: 0
+            len: 0,
         }
     }
 
@@ -80,28 +80,18 @@ impl<Type, Alloc: AllocatorAPI> Vec<Type, Alloc> {
     }
 
     pub fn as_slice<'a>(&self) -> &'a [Type] {
-        unsafe {
-            core::slice::from_raw_parts(
-                self.raw.ptr.as_ptr(),
-                self.len
-            )
-        }
+        unsafe { core::slice::from_raw_parts(self.raw.ptr.as_ptr(), self.len) }
     }
 
     pub fn as_mut_slice<'a>(&self) -> &'a mut [Type] {
-        unsafe {
-            core::slice::from_raw_parts_mut(
-                self.raw.ptr.as_ptr(),
-                self.len
-            )
-        }
+        unsafe { core::slice::from_raw_parts_mut(self.raw.ptr.as_ptr(), self.len) }
     }
 
     pub fn as_mut_uninit_slice<'a>(&mut self) -> &'a mut [MaybeUninit<Type>] {
         unsafe {
             core::slice::from_raw_parts_mut(
                 self.raw.ptr.as_ptr() as *mut MaybeUninit<Type>,
-                self.raw.cap
+                self.raw.cap,
             )
         }
     }
@@ -165,14 +155,16 @@ impl<Type, Alloc: AllocatorAPI> Vec<Type, Alloc> {
 
         self.len -= 1;
 
-        Some(unsafe {
-            ptr::read(self.as_ptr().add(self.len))
-        })
+        Some(unsafe { ptr::read(self.as_ptr().add(self.len)) })
     }
 
     pub fn insert(&mut self, index: usize, value: Type) {
-        assert!(index <= self.len,
-                "Index out of bounds! Got index {}, but len is only {}", index, self.len);
+        assert!(
+            index <= self.len,
+            "Index out of bounds! Got index {}, but len is only {}",
+            index,
+            self.len
+        );
 
         if self.should_reserve() {
             self.reserve(1);
@@ -192,8 +184,12 @@ impl<Type, Alloc: AllocatorAPI> Vec<Type, Alloc> {
     }
 
     pub fn replace(&mut self, index: usize, value: Type) -> Option<Type> {
-        assert!(index <= self.len,
-                "Index out of bounds! Got index {}, but len is only {}", index, self.len);
+        assert!(
+            index <= self.len,
+            "Index out of bounds! Got index {}, but len is only {}",
+            index,
+            self.len
+        );
 
         if self.should_reserve() {
             self.reserve(1);
@@ -216,8 +212,9 @@ impl<Type, Alloc: AllocatorAPI> Vec<Type, Alloc> {
     }
 
     pub fn retain<F>(&mut self, mut should_keep: F)
-        where F: FnMut(&Type) -> bool {
-
+    where
+        F: FnMut(&Type) -> bool,
+    {
         let mut index = 0;
         loop {
             if index >= self.len {
@@ -240,8 +237,12 @@ impl<Type, Alloc: AllocatorAPI> Vec<Type, Alloc> {
     }
 
     pub fn remove(&mut self, index: usize) -> Type {
-        assert!(index <= self.len || self.len == 0,
-                "Index out of bounds! Got index {}, but len is only {}", index, self.len);
+        assert!(
+            index <= self.len || self.len == 0,
+            "Index out of bounds! Got index {}, but len is only {}",
+            index,
+            self.len
+        );
 
         let return_value;
         unsafe {
@@ -259,20 +260,36 @@ impl<Type, Alloc: AllocatorAPI> Vec<Type, Alloc> {
     }
 
     pub fn get(&self, index: usize) -> Option<&Type> {
-        self.as_slice().get(index)
+        if index > self.len() {
+            return None;
+        }
+
+        let value_ref = unsafe { &*self.raw.ptr.as_ptr().add(index) };
+
+        Some(value_ref)
     }
 
     pub fn get_mut(&mut self, index: usize) -> Option<&mut Type> {
-        self.as_mut_slice().get_mut(index)
+        if index > self.len() {
+            return None;
+        }
+
+        let value_mut = unsafe { &mut *self.raw.ptr.as_ptr().add(index) };
+
+        Some(value_mut)
     }
 
     pub fn sort(&mut self)
-        where Type: Ord {
+    where
+        Type: Ord,
+    {
         self.as_mut_slice().sort_unstable()
     }
 
     pub fn sort_by<F>(&mut self, function: F)
-        where F: FnMut(&Type, &Type) -> Ordering {
+    where
+        F: FnMut(&Type, &Type) -> Ordering,
+    {
         self.as_mut_slice().sort_unstable_by(function)
     }
 }
@@ -286,7 +303,9 @@ impl<Type> From<Box<[Type]>> for Vec<Type> {
 }
 
 impl<Type> From<&[Type]> for Vec<Type>
-    where Type: Clone {
+where
+    Type: Clone,
+{
     fn from(value: &[Type]) -> Self {
         let mut new_vec = Vec::with_capacity(value.len());
         for item in value {
@@ -323,7 +342,8 @@ impl<Type, Alloc: AllocatorAPI> DerefMut for Vec<Type, Alloc> {
 }
 
 impl<Type> Clone for Vec<Type>
-    where Type: Clone
+where
+    Type: Clone,
 {
     fn clone(&self) -> Self {
         let mut new = Vec::new();
@@ -336,12 +356,12 @@ impl<Type> Clone for Vec<Type>
 }
 
 impl<Type, Alloc: AllocatorAPI> Debug for Vec<Type, Alloc>
-    where Type: Debug
+where
+    Type: Debug,
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         if f.alternate() {
             write!(f, "{:#?}", self.as_slice())?;
-
         } else {
             write!(f, "{:?}", self.as_slice())?;
         }
@@ -365,7 +385,7 @@ impl<Type, Alloc: AllocatorAPI> IndexMut<usize> for Vec<Type, Alloc> {
 }
 
 impl<Type> FromIterator<Type> for Vec<Type> {
-    fn from_iter<T: IntoIterator<Item=Type>>(iter: T) -> Self {
+    fn from_iter<T: IntoIterator<Item = Type>>(iter: T) -> Self {
         let mut tmp = Vec::new();
         for i in iter {
             tmp.push(i);
@@ -376,9 +396,10 @@ impl<Type> FromIterator<Type> for Vec<Type> {
 }
 
 impl<'a, Type> FromIterator<&'a Type> for Vec<Type>
-    where Type: Clone + 'a
+where
+    Type: Clone + 'a,
 {
-    fn from_iter<T: IntoIterator<Item=&'a Type>>(iter: T) -> Self {
+    fn from_iter<T: IntoIterator<Item = &'a Type>>(iter: T) -> Self {
         let mut tmp = Vec::new();
         for i in iter {
             tmp.push(i.clone());
@@ -402,9 +423,9 @@ impl<Type> Default for Vec<Type> {
 
 #[cfg(test)]
 mod test {
+    use super::*;
     use crate::heap::set_example_allocator;
     use crate::string::String;
-    use super::*;
 
     #[test]
     fn test_push_of_elements() {
@@ -496,9 +517,7 @@ mod test {
             vec.push(i);
         }
 
-        vec.retain(|value| {
-           value % 2 == 0
-        });
+        vec.retain(|value| value % 2 == 0);
 
         assert_eq!(vec.as_slice(), &[0, 2, 4, 6, 8]);
     }
@@ -522,5 +541,4 @@ mod test {
             assert!(vec[i], i);
         }
     }
-
 }

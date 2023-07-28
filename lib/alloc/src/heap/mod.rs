@@ -23,33 +23,50 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use crate::heap::alloc::{KernelHeap, UnsafeAllocationObject};
+use crate::memory_layout::MemoryLayout;
+use crate::AllocErr;
 use core::ptr;
 use core::ptr::NonNull;
 use core::sync::atomic::{AtomicBool, Ordering};
-use crate::AllocErr;
-use crate::heap::alloc::{KernelHeap, UnsafeAllocationObject};
-use crate::memory_layout::MemoryLayout;
 
 pub mod alloc;
 
 pub trait AllocatorAPI {
-    unsafe fn allocate(allocation_description: MemoryLayout) -> Result<UnsafeAllocationObject, AllocErr>;
-    unsafe fn realloc<Type>(old_ptr: NonNull<Type>, new_alloc_desc: MemoryLayout) -> Result<UnsafeAllocationObject, AllocErr>;
-    unsafe fn realloc_fill<Type>(old_ptr: NonNull<Type>, new_alloc_desc: MemoryLayout, fill: u8) -> Result<UnsafeAllocationObject, AllocErr>;
+    unsafe fn allocate(
+        allocation_description: MemoryLayout,
+    ) -> Result<UnsafeAllocationObject, AllocErr>;
+    unsafe fn realloc<Type>(
+        old_ptr: NonNull<Type>,
+        new_alloc_desc: MemoryLayout,
+    ) -> Result<UnsafeAllocationObject, AllocErr>;
+    unsafe fn realloc_fill<Type>(
+        old_ptr: NonNull<Type>,
+        new_alloc_desc: MemoryLayout,
+        fill: u8,
+    ) -> Result<UnsafeAllocationObject, AllocErr>;
     unsafe fn free<Type>(ptr: NonNull<Type>) -> Result<(), AllocErr>;
 
-    unsafe fn allocate_fill(allocation_description: MemoryLayout, fill: u8) -> Result<UnsafeAllocationObject, AllocErr> {
+    unsafe fn allocate_fill(
+        allocation_description: MemoryLayout,
+        fill: u8,
+    ) -> Result<UnsafeAllocationObject, AllocErr> {
         let allocation = Self::allocate(allocation_description)?;
         ptr::write_bytes(allocation.ptr as *mut u8, fill, allocation.size);
 
         Ok(allocation)
     }
 
-    unsafe fn allocate_zero(allocation_description: MemoryLayout) -> Result<UnsafeAllocationObject, AllocErr> {
+    unsafe fn allocate_zero(
+        allocation_description: MemoryLayout,
+    ) -> Result<UnsafeAllocationObject, AllocErr> {
         Self::allocate_fill(allocation_description, 0)
     }
 
-    unsafe fn realloc_zero<Type>(old_ptr: NonNull<Type>, new_alloc_desc: MemoryLayout) -> Result<UnsafeAllocationObject, AllocErr> {
+    unsafe fn realloc_zero<Type>(
+        old_ptr: NonNull<Type>,
+        new_alloc_desc: MemoryLayout,
+    ) -> Result<UnsafeAllocationObject, AllocErr> {
         Self::realloc_fill(old_ptr, new_alloc_desc, 0)
     }
 }
@@ -57,7 +74,9 @@ pub trait AllocatorAPI {
 pub struct GlobalAlloc;
 
 impl AllocatorAPI for GlobalAlloc {
-    unsafe fn allocate(allocation_description: MemoryLayout) -> Result<UnsafeAllocationObject, AllocErr> {
+    unsafe fn allocate(
+        allocation_description: MemoryLayout,
+    ) -> Result<UnsafeAllocationObject, AllocErr> {
         reserve_lock();
         let u = get_global_alloc().allocate(allocation_description);
         free_lock();
@@ -65,7 +84,10 @@ impl AllocatorAPI for GlobalAlloc {
         u
     }
 
-    unsafe fn realloc<Type>(old_ptr: NonNull<Type>, new_alloc_desc: MemoryLayout) -> Result<UnsafeAllocationObject, AllocErr> {
+    unsafe fn realloc<Type>(
+        old_ptr: NonNull<Type>,
+        new_alloc_desc: MemoryLayout,
+    ) -> Result<UnsafeAllocationObject, AllocErr> {
         reserve_lock();
         let u = get_global_alloc().realloc(old_ptr, new_alloc_desc);
         free_lock();
@@ -73,7 +95,11 @@ impl AllocatorAPI for GlobalAlloc {
         u
     }
 
-    unsafe fn realloc_fill<Type>(old_ptr: NonNull<Type>, new_alloc_desc: MemoryLayout, fill: u8) -> Result<UnsafeAllocationObject, AllocErr> {
+    unsafe fn realloc_fill<Type>(
+        old_ptr: NonNull<Type>,
+        new_alloc_desc: MemoryLayout,
+        fill: u8,
+    ) -> Result<UnsafeAllocationObject, AllocErr> {
         reserve_lock();
         let u = get_global_alloc().realloc_fill(old_ptr, new_alloc_desc, fill);
         free_lock();
@@ -96,7 +122,10 @@ pub static mut THE_GLOBAL_LOCK: AtomicBool = AtomicBool::new(false);
 #[inline(never)]
 pub fn reserve_lock() {
     unsafe {
-        while !THE_GLOBAL_LOCK.compare_exchange(false, true, Ordering::Acquire, Ordering::Acquire).is_ok() { }
+        while !THE_GLOBAL_LOCK
+            .compare_exchange(false, true, Ordering::Acquire, Ordering::Acquire)
+            .is_ok()
+        {}
     }
 }
 
@@ -109,26 +138,28 @@ pub fn free_lock() {
 
 pub fn set_global_alloc(alloc: KernelHeap) {
     unsafe {
-        assert!(THE_GLOBAL_ALLOC.is_none(), "Can not move allocations! Unable to set the global allocator multiple times.");
+        assert!(
+            THE_GLOBAL_ALLOC.is_none(),
+            "Can not move allocations! Unable to set the global allocator multiple times."
+        );
         THE_GLOBAL_ALLOC = Some(alloc);
     }
 }
 
 pub fn get_global_alloc() -> &'static mut KernelHeap {
     unsafe {
-        THE_GLOBAL_ALLOC.as_mut().expect("No global allocator set, please set a global allocator!")
+        THE_GLOBAL_ALLOC
+            .as_mut()
+            .expect("No global allocator set, please set a global allocator!")
     }
 }
 
 pub fn get_global_alloc_debug() -> Option<&'static KernelHeap> {
-    unsafe {
-        THE_GLOBAL_ALLOC.as_ref()
-    }
+    unsafe { THE_GLOBAL_ALLOC.as_ref() }
 }
 
 #[cfg(test)]
 pub fn set_example_allocator(size_in_bytes: usize) {
-
     unsafe {
         if THE_GLOBAL_ALLOC.is_some() {
             return;
@@ -143,7 +174,8 @@ pub fn set_example_allocator(size_in_bytes: usize) {
     unsafe {
         let allocation = alloc::alloc::alloc(memory_layout);
 
-        let usable_region = crate::usable_region::UsableRegion::from_raw_parts(allocation, size_in_bytes).unwrap();
+        let usable_region =
+            crate::usable_region::UsableRegion::from_raw_parts(allocation, size_in_bytes).unwrap();
         let new_kern_heap = KernelHeap::new(usable_region).unwrap();
 
         set_global_alloc(new_kern_heap);

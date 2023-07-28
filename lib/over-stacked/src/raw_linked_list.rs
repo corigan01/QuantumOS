@@ -29,33 +29,35 @@ use core::ptr::NonNull;
 use quantum_utils::own_ptr::OwnPtr;
 
 pub struct LinkedListComponentIter<'a, Type>
-    where Type: ?Sized {
+where
+    Type: ?Sized,
+{
     linked_list: &'a LinkedListComponent<Type>,
-    index: usize
+    index: usize,
 }
 
 impl<'a, Type> Iterator for LinkedListComponentIter<'a, Type>
-    where Type: Copy + ?Sized {
-
+where
+    Type: Copy + ?Sized,
+{
     type Item = &'a Type;
 
     fn next(&mut self) -> Option<Self::Item> {
         self.index += 1;
         self.linked_list.get_nth_ref(self.index - 1)
     }
-
 }
 
 pub struct LinkedListComponent<Type: ?Sized> {
     own_ptr: OwnPtr<Type>,
-    next_element_ptr: Option<NonNull<Self>>
+    next_element_ptr: Option<NonNull<Self>>,
 }
 
 impl<Type: ?Sized> LinkedListComponent<Type> {
     pub fn new(value: OwnPtr<Type>) -> Self {
         Self {
             own_ptr: value,
-            next_element_ptr: None
+            next_element_ptr: None,
         }
     }
 
@@ -92,12 +94,11 @@ impl<Type: ?Sized> LinkedListComponent<Type> {
     }
 
     pub fn last_list_ref(&self) -> &Self {
-        let mut next =
-            if let Some(value) = self.next_list_ref() {
-                value
-            } else {
-                return self;
-            };
+        let mut next = if let Some(value) = self.next_list_ref() {
+            value
+        } else {
+            return self;
+        };
 
         loop {
             if let Some(value) = next.next_list_ref() {
@@ -176,13 +177,12 @@ impl<Type: ?Sized> LinkedListComponent<Type> {
             index: 0,
         }
     }
-
 }
 
 #[cfg(test)]
 mod test {
-    use quantum_utils::own_ptr::OwnPtr;
     use crate::raw_linked_list::LinkedListComponent;
+    use quantum_utils::own_ptr::OwnPtr;
 
     #[test]
     fn test_storing_one_value() {
@@ -235,11 +235,21 @@ mod test {
         assert!(matches!(main_linked_list.next_list_mut(), Some(_)));
 
         // Test getting the second, and then try to add to it
-        main_linked_list.next_list_mut().unwrap().recurse_next_element(linked_three.self_ptr());
+        main_linked_list
+            .next_list_mut()
+            .unwrap()
+            .recurse_next_element(linked_three.self_ptr());
 
         assert_eq!(main_linked_list.as_ref(), &1);
         assert_eq!(main_linked_list.next_ref().unwrap(), &2);
-        assert_eq!(main_linked_list.next_list_ref().unwrap().next_ref().unwrap(), &3);
+        assert_eq!(
+            main_linked_list
+                .next_list_ref()
+                .unwrap()
+                .next_ref()
+                .unwrap(),
+            &3
+        );
     }
 
     #[test]
@@ -261,7 +271,9 @@ mod test {
 
         assert!(matches!(main_linked_list.next_list_mut(), Some(_)));
 
-        main_linked_list.last_list_mut().recurse_next_element(linked_three.self_ptr());
+        main_linked_list
+            .last_list_mut()
+            .recurse_next_element(linked_three.self_ptr());
 
         assert!(matches!(linked_two.next_list_mut(), Some(_)));
 
@@ -271,8 +283,5 @@ mod test {
         assert_eq!(linked_list_iter.next(), Some(&2));
         assert_eq!(linked_list_iter.next(), Some(&3));
         assert_eq!(linked_list_iter.next(), None);
-
     }
-
 }
-

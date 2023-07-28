@@ -25,9 +25,9 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 use crate::debug::heapless_stream_collections::HeaplessStreamCollections;
 use crate::debug::stream_connection::StreamConnection;
-use over_stacked::heapless_vector::HeaplessVecErr;
 use core::fmt::Write;
 use lazy_static::lazy_static;
+use over_stacked::heapless_vector::HeaplessVecErr;
 use spin::Mutex;
 
 pub mod heapless_stream_collections;
@@ -48,7 +48,8 @@ pub fn add_connection_to_global_stream(stream: StreamConnection) -> Result<(), H
         crate::debug_println!(
             "\n{}\n'{}' was just added! All project log/debug messages will be shown here.",
             "---------------------------------------------------------------------------",
-            stream_info_copy.connection_name);
+            stream_info_copy.connection_name
+        );
     }
 
     status

@@ -32,52 +32,54 @@ pub enum AllocErr {
     ImproperConfig(ImproperConfigReason),
     NotFound(usize),
     InternalErr,
-    DoubleFree(usize)
+    DoubleFree(usize),
 }
 
 #[derive(Clone, Copy, PartialEq)]
 pub enum ImproperConfigReason {
     AlignmentInvalid(usize),
     ZeroSize,
-    Smaller(usize, usize)
+    Smaller(usize, usize),
 }
-
 
 impl Debug for AllocErr {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         match self {
             AllocErr::OutOfMemory(requested, total) => {
-                write!(f,
-                       "(Allocator is Out-Of-Memory) Requested {}, but only have {} available.",
-                       Bytes::from(*requested), Bytes::from(*total)
+                write!(
+                    f,
+                    "(Allocator is Out-Of-Memory) Requested {}, but only have {} available.",
+                    Bytes::from(*requested),
+                    Bytes::from(*total)
                 )?;
             }
-            AllocErr::ImproperConfig(reason) => {
-                match reason {
-                    ImproperConfigReason::AlignmentInvalid(alignment) => {
-                        write!(f,
-                               "(Alignment {} is Invalid) Alignment must be a power of 2 and not 0.",
-                                alignment
-                        )?;
-                    }
-                    ImproperConfigReason::ZeroSize => {
-                        write!(f,
-                               "(Requested Zero Size Allocation) Allocations must be 1 or more bytes."
-                        )?;
-                    }
-                    ImproperConfigReason::Smaller(old, new) => {
-                        write!(f,
+            AllocErr::ImproperConfig(reason) => match reason {
+                ImproperConfigReason::AlignmentInvalid(alignment) => {
+                    write!(
+                        f,
+                        "(Alignment {} is Invalid) Alignment must be a power of 2 and not 0.",
+                        alignment
+                    )?;
+                }
+                ImproperConfigReason::ZeroSize => {
+                    write!(
+                        f,
+                        "(Requested Zero Size Allocation) Allocations must be 1 or more bytes."
+                    )?;
+                }
+                ImproperConfigReason::Smaller(old, new) => {
+                    write!(f,
                                "(Does Not Fit) Your old allocation is {}, however we are trying to fit it in only {}!",
                             Bytes::from(*old),
                             Bytes::from(*new)
                         )?;
-                    }
                 }
-            }
+            },
             AllocErr::NotFound(ptr) => {
-                write!(f,
-                       "(Not Found) Could not find that allocation (ptr: 0x{:x}) to free!",
-                       ptr
+                write!(
+                    f,
+                    "(Not Found) Could not find that allocation (ptr: 0x{:x}) to free!",
+                    ptr
                 )?;
             }
             AllocErr::InternalErr => {

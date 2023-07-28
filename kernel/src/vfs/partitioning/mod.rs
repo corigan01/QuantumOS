@@ -23,5 +23,51 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use crate::vfs::io::{ErrorKind, IOError};
+use crate::vfs::partitioning::mbr::init_mbr_for_disk;
+use crate::vfs::VFSDiskID;
+use core::error::Error;
+use core::fmt::{Debug, Display, Formatter};
+use qk_alloc::boxed::Box;
+
 pub mod mbr;
 
+#[derive(Debug)]
+pub enum PartitionErr {
+    Unknown,
+    NotSeekable,
+    NotValidPartition
+}
+
+impl From<PartitionErr> for Box<dyn IOError> {
+    fn from(value: PartitionErr) -> Self {
+        Box::new(value)
+    }
+}
+
+impl Error for PartitionErr {}
+
+impl Display for PartitionErr {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        f.write_fmt(format_args!("{:?}", self))
+    }
+}
+
+impl IOError for PartitionErr {
+    fn error_kind(&self) -> ErrorKind {
+        match self {
+            Self::NotSeekable => ErrorKind::NotSeekable,
+            _ => ErrorKind::Unknown,
+        }
+    }
+}
+
+pub fn init_partitioning_for_one_disk(disk: VFSDiskID) {
+    init_mbr_for_disk(disk).expect("Unable to partition disk!");
+}
+
+pub fn init_partitioning_for_disks() {
+    VFSDiskID::run_on_all_disk_ids(|id| {
+        init_partitioning_for_one_disk(*id);
+    })
+}

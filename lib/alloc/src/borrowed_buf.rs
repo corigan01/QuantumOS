@@ -29,6 +29,5 @@ use core::mem::MaybeUninit;
 pub struct BorrowedBuf<'data> {
     buf: &'data mut [MaybeUninit<u8>],
     filled: usize,
-    initialized: usize
+    initialized: usize,
 }
-

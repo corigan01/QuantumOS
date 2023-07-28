@@ -91,11 +91,16 @@ pub enum DiskID {
     PrimaryFirst,
     PrimarySecond,
     SecondaryFirst,
-    SecondarySecond
+    SecondarySecond,
 }
 
 impl DiskID {
-    const ALL_DISKS: [DiskID; 4] = [DiskID::PrimaryFirst, DiskID::PrimarySecond, DiskID::SecondaryFirst, DiskID::SecondarySecond];
+    const ALL_DISKS: [DiskID; 4] = [
+        DiskID::PrimaryFirst,
+        DiskID::PrimarySecond,
+        DiskID::SecondaryFirst,
+        DiskID::SecondarySecond,
+    ];
 
     pub fn iter() -> Iter<'static, DiskID> {
         Self::ALL_DISKS.iter()
@@ -124,7 +129,7 @@ impl DiskID {
             DiskID::PrimaryFirst => true,
             DiskID::PrimarySecond => false,
             DiskID::SecondaryFirst => true,
-            DiskID::SecondarySecond => false
+            DiskID::SecondarySecond => false,
         }
     }
 
@@ -150,7 +155,7 @@ pub enum StatusFlags {
     SpinDown,
     /// Indicates the drive is preparing to send/receive data (wait for it to clear).
     /// In case of 'hang' (it never clears), do a software reset.
-    Busy
+    Busy,
 }
 
 pub struct StatusRegister {}
@@ -200,21 +205,20 @@ impl StatusRegister {
             StatusFlags::SRV => Self::ATA_SR_DRDY_BIT,
             StatusFlags::DriveFault => Self::ATA_SR_DF_BIT,
             StatusFlags::SpinDown => Self::ATA_SR_DSC_BIT,
-            StatusFlags::Busy => Self::ATA_SR_BSY_BIT
+            StatusFlags::Busy => Self::ATA_SR_BSY_BIT,
         };
 
         read_value.get_bit(bit)
     }
 
     pub fn is_err_or_fault(device: DiskID) -> bool {
-        Self::is_status(device, StatusFlags::Err) ||
-            Self::is_status(device, StatusFlags::DriveFault)
+        Self::is_status(device, StatusFlags::Err)
+            || Self::is_status(device, StatusFlags::DriveFault)
     }
 
     pub fn is_busy(device: DiskID) -> bool {
         Self::is_status(device, StatusFlags::Busy)
     }
-
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -246,7 +250,7 @@ impl ErrorFlags {
         ErrorFlags::IDNotFound,
         ErrorFlags::MediaChanged,
         ErrorFlags::UncorrectableDataError,
-        ErrorFlags::BadBlockDetected
+        ErrorFlags::BadBlockDetected,
     ];
 
     pub fn iter() -> Iter<'static, ErrorFlags> {
@@ -289,30 +293,14 @@ impl ErrorRegister {
         }
 
         match error {
-            ErrorFlags::AddressMarkNotFound => {
-                value & (1 << Self::ATA_ER_AMNF_BIT) != 0
-            }
-            ErrorFlags::TrackZeroNotFound => {
-                value & (1 << Self::ATA_ER_TKONF_BIT) != 0
-            }
-            ErrorFlags::AbortedCommand => {
-                value & (1 << Self::ATA_ER_ABRT_BIT) != 0
-            }
-            ErrorFlags::MediaChangeRequest => {
-                value & (1 << Self::ATA_ER_MCR_BIT) != 0
-            }
-            ErrorFlags::IDNotFound => {
-                value & (1 << Self::ATA_ER_IDNF_BIT) != 0
-            }
-            ErrorFlags::MediaChanged => {
-                value & (1 << Self::ATA_ER_MC_BIT) != 0
-            }
-            ErrorFlags::UncorrectableDataError => {
-                value & (1 << Self::ATA_ER_UNC_BIT) != 0
-            }
-            ErrorFlags::BadBlockDetected => {
-                value & (1 << Self::ATA_ER_BBK_BIT) != 0
-            }
+            ErrorFlags::AddressMarkNotFound => value & (1 << Self::ATA_ER_AMNF_BIT) != 0,
+            ErrorFlags::TrackZeroNotFound => value & (1 << Self::ATA_ER_TKONF_BIT) != 0,
+            ErrorFlags::AbortedCommand => value & (1 << Self::ATA_ER_ABRT_BIT) != 0,
+            ErrorFlags::MediaChangeRequest => value & (1 << Self::ATA_ER_MCR_BIT) != 0,
+            ErrorFlags::IDNotFound => value & (1 << Self::ATA_ER_IDNF_BIT) != 0,
+            ErrorFlags::MediaChanged => value & (1 << Self::ATA_ER_MC_BIT) != 0,
+            ErrorFlags::UncorrectableDataError => value & (1 << Self::ATA_ER_UNC_BIT) != 0,
+            ErrorFlags::BadBlockDetected => value & (1 << Self::ATA_ER_BBK_BIT) != 0,
         }
     }
 
@@ -414,7 +402,7 @@ impl SectorRegisters {
         SECTOR_COUNT_OFFSET_FROM_IO_BASE,
         SECTOR_NUM_LOW_OFFSET_FROM_IO_BASE,
         SECTOR_NUM_MID_OFFSET_FROM_IO_BASE,
-        SECTOR_NUM_HIGH_OFFSET_FROM_IO_BASE
+        SECTOR_NUM_HIGH_OFFSET_FROM_IO_BASE,
     ];
 
     fn my_port(device: DiskID, select: usize) -> IOPort {
@@ -422,7 +410,7 @@ impl SectorRegisters {
         IOPort::new(port as u16)
     }
 
-    pub fn zero_registers(device: DiskID)  {
+    pub fn zero_registers(device: DiskID) {
         for offset in Self::IO_PORT_OFFSETS {
             let port = offset + device.bus_base();
             let io_port = IOPort::new(port as u16);
@@ -485,7 +473,7 @@ pub enum Commands {
     Identify,
     ReadSectorsPIO,
     WriteSectorsPIO,
-    CacheFlush
+    CacheFlush,
 }
 
 pub struct CommandRegister {}
@@ -512,7 +500,7 @@ impl CommandRegister {
             Commands::Identify => Self::ATA_IDENTIFY,
             Commands::ReadSectorsPIO => Self::ATA_CMD_READ_PIO,
             Commands::WriteSectorsPIO => Self::ATA_CMD_WRITE_PIO,
-            Commands::CacheFlush => Self::ATA_CMD_CACHE_FLUSH
+            Commands::CacheFlush => Self::ATA_CMD_CACHE_FLUSH,
         };
 
         unsafe { io_port.write_u8(command_id) };
@@ -521,7 +509,6 @@ impl CommandRegister {
 
 pub struct DataRegister {}
 impl DataRegister {
-
     fn my_port(device: DiskID) -> IOPort {
         let port = device.bus_base() + DATA_REGISTER_OFFSET_FROM_IO_BASE;
         IOPort::new(port as u16)
@@ -550,5 +537,4 @@ impl DataRegister {
 
         unsafe { my_port.write_u8(value) };
     }
-
 }

@@ -23,19 +23,19 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use crate::vec::Vec;
 use core::fmt::Write;
 use core::ops::Index;
 use core::str::Utf8Error;
-use crate::vec::Vec;
 
 pub struct CircularBuffer<Type> {
-    buffer: Vec<Type>
+    buffer: Vec<Type>,
 }
 
 impl<Type> CircularBuffer<Type> {
     pub fn new(cap: usize) -> Self {
         Self {
-            buffer: Vec::with_capacity(cap)
+            buffer: Vec::with_capacity(cap),
         }
     }
 
@@ -80,7 +80,9 @@ impl<Type> CircularBuffer<Type> {
     }
 
     pub fn to_vec(&self) -> Vec<Type>
-        where Type: Clone {
+    where
+        Type: Clone,
+    {
         self.buffer.clone()
     }
 
@@ -163,6 +165,4 @@ mod test {
         write!(buf, "Hello World!").unwrap();
         assert_eq!(buf.as_str(), Ok("World!"));
     }
-
-
 }

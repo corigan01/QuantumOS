@@ -68,14 +68,14 @@ impl PhyAddress {
         if self.try_aligned::<ALIGNED_BITS>().is_ok() {
             return PhyAddress {
                 value: self.value,
-                reserved: PhantomData
+                reserved: PhantomData,
             };
         }
 
         let shifted_up = 1 << ALIGNED_BITS;
         PhyAddress {
             value: self.value.set_bits(0..(ALIGNED_BITS as u8), 0) + shifted_up,
-            reserved: PhantomData
+            reserved: PhantomData,
         }
     }
 

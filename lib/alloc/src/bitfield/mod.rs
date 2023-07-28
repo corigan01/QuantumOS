@@ -93,7 +93,6 @@ impl Bitmap {
         }
     }
 
-
     pub fn first_of(&self, flag: bool) -> Option<usize> {
         let skip_if_equal = if flag { 0 } else { usize::MAX };
 
@@ -326,7 +325,6 @@ mod test {
         assert_eq!(bitmap.first_of_many(true, 10), Some(0));
         assert_eq!(bitmap.first_of_many(true, 1000), Some(0));
         assert_eq!(bitmap.first_of_many(false, 10), Some(1000));
-
 
         bitmap.set_bit(0, false);
 

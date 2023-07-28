@@ -23,9 +23,9 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use core::fmt::Write;
 pub use crate::com::serial::options::*;
 use crate::com::serial::registers::*;
+use core::fmt::Write;
 
 use crate::x86_64::io::port::IOPort;
 

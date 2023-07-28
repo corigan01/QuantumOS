@@ -23,18 +23,17 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use crate::pmm::PageAligned;
 use qk_alloc::bitfield::Bitmap;
 use qk_alloc::vec::Vec;
-use quantum_lib::address_utils::PAGE_SIZE;
 use quantum_lib::address_utils::physical_address::PhyAddress;
-use crate::pmm::PageAligned;
-
+use quantum_lib::address_utils::PAGE_SIZE;
 
 pub struct PhyPart {
     address: PageAligned,
     pages: usize,
     bitmap: Bitmap,
-    many: Vec<(usize, usize)>
+    many: Vec<(usize, usize)>,
 }
 
 impl PhyPart {
@@ -77,15 +76,19 @@ impl PhyPart {
         let mut self_address = self.address.as_u64();
         self_address += (page_offset * PAGE_SIZE) as u64;
 
-        PhyAddress::new(self_address).unwrap().try_aligned().unwrap()
+        PhyAddress::new(self_address)
+            .unwrap()
+            .try_aligned()
+            .unwrap()
     }
 
     #[inline]
     fn preform_reverse_address_calculation(&self, address: PageAligned) -> usize {
-        assert!(address >= self.address,
-                "Expected given address to be larger then base address. Given {}, base {}. ",
-                address.as_u64(),
-                self.address.as_u64(),
+        assert!(
+            address >= self.address,
+            "Expected given address to be larger then base address. Given {}, base {}. ",
+            address.as_u64(),
+            self.address.as_u64(),
         );
 
         let norm_address = address.as_u64() - self.address.as_u64();
@@ -145,15 +148,17 @@ impl PhyPart {
     pub fn free(&mut self, address: PageAligned) {
         let bit_index = self.preform_reverse_address_calculation(address);
 
-        let many_qty = self.many.iter()
+        let many_qty = self
+            .many
+            .iter()
             .enumerate()
             .find_map(|(index, (first, qty))| {
-           if bit_index == *first {
-               Some((index, qty))
-           } else {
-               None
-           }
-        });
+                if bit_index == *first {
+                    Some((index, qty))
+                } else {
+                    None
+                }
+            });
 
         if let Some((index, many_qty)) = many_qty {
             self.bitmap.set_many(bit_index, false, *many_qty);
@@ -166,8 +171,8 @@ impl PhyPart {
 
 #[cfg(test)]
 mod test {
-    use crate::set_example_allocator;
     use super::*;
+    use crate::set_example_allocator;
 
     #[test]
     fn test_creating_new_phy_part() {
@@ -177,8 +182,11 @@ mod test {
         let qty_pages = 10;
 
         let phy_part = PhyPart::new(
-            PhyAddress::new(start_address).unwrap().try_aligned().unwrap(),
-            qty_pages
+            PhyAddress::new(start_address)
+                .unwrap()
+                .try_aligned()
+                .unwrap(),
+            qty_pages,
         );
 
         assert_eq!(phy_part.first_of(false).unwrap().as_u64(), start_address);
@@ -192,8 +200,11 @@ mod test {
         let size = 100;
 
         let mut phy_part = PhyPart::new(
-            PhyAddress::new(start_address).unwrap().try_aligned().unwrap(),
-            size
+            PhyAddress::new(start_address)
+                .unwrap()
+                .try_aligned()
+                .unwrap(),
+            size,
         );
 
         let first_free = phy_part.reserve_first_free().unwrap();

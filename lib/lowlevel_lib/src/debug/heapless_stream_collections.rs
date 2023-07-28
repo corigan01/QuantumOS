@@ -29,14 +29,14 @@ use owo_colors::OwoColorize;
 
 pub struct HeaplessStreamCollections {
     pub(crate) stream_connections: HeaplessVec<StreamConnection, 4>,
-    pub(crate) is_panic: bool
+    pub(crate) is_panic: bool,
 }
 
 impl HeaplessStreamCollections {
     pub fn new() -> Self {
         Self {
             stream_connections: HeaplessVec::new(),
-            is_panic: false
+            is_panic: false,
         }
     }
 }
@@ -54,17 +54,20 @@ impl ::core::fmt::Write for HeaplessStreamCollections {
                 for char in s.chars() {
                     if char == '\n' {
                         if self.is_panic {
-                            write!(outlet, "\n[{}: {}]: ",
-                                   stream.info.who_using.dimmed().bold(),
-                                   "PANIC".red().bold().blink()
+                            write!(
+                                outlet,
+                                "\n[{}: {}]: ",
+                                stream.info.who_using.dimmed().bold(),
+                                "PANIC".red().bold().blink()
                             )?;
                             continue;
                         }
 
-
-                        write!(outlet, "\n[{} -> {}]: ",
-                               stream.info.who_using.dimmed().bold(),
-                               stream.info.connection_name.dimmed().bold()
+                        write!(
+                            outlet,
+                            "\n[{} -> {}]: ",
+                            stream.info.who_using.dimmed().bold(),
+                            stream.info.connection_name.dimmed().bold()
                         )?;
 
                         continue;

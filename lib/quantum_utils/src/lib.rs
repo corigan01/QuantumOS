@@ -26,7 +26,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #![no_std]
 #![feature(test)]
 
-pub mod own_ptr;
-pub mod nonnull_region;
 pub mod bitset;
 pub mod bytes;
+pub mod nonnull_region;
+pub mod own_ptr;

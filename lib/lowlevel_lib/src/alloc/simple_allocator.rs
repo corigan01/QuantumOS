@@ -46,7 +46,6 @@ pub struct SimpleBumpAllocator<'a> {
 }
 
 impl<'a> SimpleBumpAllocator<'a> {
-
     /// Creates a new `SimpleBumpAllocator` that will allocate memory regions from the given memory slice.
     ///
     /// # Arguments

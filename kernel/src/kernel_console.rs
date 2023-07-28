@@ -24,16 +24,16 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 use core::ptr::NonNull;
-use quantum_lib::gfx::linear_framebuffer::LinearFramebuffer;
 use qk_alloc::circular_buffer::CircularBuffer;
 use quantum_lib::basic_font::BuiltInFont;
+use quantum_lib::gfx::linear_framebuffer::LinearFramebuffer;
 use quantum_lib::gfx::Pixel;
 
 pub struct TextInfo {
     cursor_x: usize,
     cursor_y: usize,
     screen_x: usize,
-    screen_y: usize
+    screen_y: usize,
 }
 
 impl TextInfo {
@@ -42,7 +42,7 @@ impl TextInfo {
             cursor_x: 0,
             cursor_y: 0,
             screen_x,
-            screen_y
+            screen_y,
         }
     }
 }
@@ -50,7 +50,7 @@ impl TextInfo {
 pub struct KernelConsole {
     buf: CircularBuffer<u8>,
     framebuffer: NonNull<LinearFramebuffer>,
-    text_info: TextInfo
+    text_info: TextInfo,
 }
 
 impl KernelConsole {
@@ -64,15 +64,12 @@ impl KernelConsole {
         Self {
             buf: CircularBuffer::new(screen_x * screen_y),
             framebuffer: NonNull::from(framebuffer),
-            text_info: TextInfo::new(screen_x, screen_y)
+            text_info: TextInfo::new(screen_x, screen_y),
         }
     }
 
     pub fn draw(&mut self) {
         let framebuffer = unsafe { self.framebuffer.as_mut() };
         framebuffer.fill_entire(Pixel::from_hex(0x111111)).unwrap();
-
-
-
     }
 }
