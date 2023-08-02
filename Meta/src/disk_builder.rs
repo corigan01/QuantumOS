@@ -1,11 +1,11 @@
 /*
-  ____                 __               __ __                 __
- / __ \__ _____ ____  / /___ ____ _    / //_/__ _______  ___ / /
-/ /_/ / // / _ `/ _ \/ __/ // /  ' \  / ,< / -_) __/ _ \/ -_) /
-\___\_\_,_/\_,_/_//_/\__/\_,_/_/_/_/ /_/|_|\__/_/ /_//_/\__/_/
-  Part of the Quantum OS Kernel
+  ____                 __
+ / __ \__ _____ ____  / /___ ____ _
+/ /_/ / // / _ `/ _ \/ __/ // /  ' \
+\___\_\_,_/\_,_/_//_/\__/\_,_/_/_/_/
+  Part of the Quantum OS Project
 
-Copyright 2022 Gavin Kellam
+Copyright 2023 Gavin Kellam
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
 associated documentation files (the "Software"), to deal in the Software without restriction,
@@ -21,7 +21,9 @@ NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPO
 NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
 DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
 */
 
-mod ext2;
+pub fn build_bios_disk() {
 
+}

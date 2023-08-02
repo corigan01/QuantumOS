@@ -1,3 +1,3 @@
 # Quantum Kernel
-This is the kernel of the Quantum Operating System.
+This is the Kernel of the Quantum Operating System.
 

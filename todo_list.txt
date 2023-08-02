@@ -10,15 +10,15 @@
      - ext2 and fat need to be typeless to whatever they interact with
 * Filesystems need to be 'global'? (for lack of a better word)
      - VFS::mount(disk, "/"); ??
-     - VFS::open("/etc/k.conf") ?? -- Maybe works just like files in ue (how would the kernel know?)
+     - VFS::open("/etc/k.conf") ?? -- Maybe works just like files in ue (how would the Kernel know?)
      - Look how other VFS work in rust
 * Memory needs to be figured out
      - How and where do I reserve physical/virtual pages?
              - We have a PMM, but its uncompleted, and needs to be global
-             - Virtual Memory is going to be an entire project on its own with Higher kernel
-     - How are we going to expand the kernel heap if needed?
+             - Virtual Memory is going to be an entire project on its own with Higher Kernel
+     - How are we going to expand the Kernel heap if needed?
      - How are we going to separate user programs?
-     - Which things need to know 'what/where' they are going to be used? (e.g. to which program they are attached, or are they kernel)
+     - Which things need to know 'what/where' they are going to be used? (e.g. to which program they are attached, or are they Kernel)
 * Interrupts / GDT
      - Work needs to be started on IRQ, ISR, GDT, and TSR
      - Are they going to be heap / static allocated?

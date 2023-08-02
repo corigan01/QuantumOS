@@ -84,10 +84,29 @@ impl IOError for DiskErr {
     }
 }
 
+pub struct DiskDataCollection {
+    raw_sectors_written: usize,
+    raw_sectors_read: usize,
+    gross_bytes_written: usize,
+    gross_bytes_read: usize,
+}
+
+impl DiskDataCollection {
+    pub fn new() -> Self {
+        Self {
+            raw_sectors_written: 0,
+            raw_sectors_read: 0,
+            gross_bytes_written: 0,
+            gross_bytes_read: 0,
+        }
+    }
+}
+
 pub struct ATADisk {
     device: DiskID,
     identify: IdentifyParser,
     seek: u64,
+    logs: DiskDataCollection
 }
 
 impl ATADisk {
@@ -99,6 +118,7 @@ impl ATADisk {
             device,
             identify: IdentifyParser::new(identify),
             seek: 0,
+            logs: DiskDataCollection::new(),
         }
     }
 
@@ -158,6 +178,8 @@ impl ATADisk {
             self.smart_wait()?;
         }
 
+        self.logs.raw_sectors_read += sector_count;
+
         Ok(new_vec)
     }
 
@@ -183,6 +205,8 @@ impl ATADisk {
 
         CommandRegister::send_command(self.device, Commands::CacheFlush);
         self.smart_wait()?;
+
+        self.logs.raw_sectors_written += sector_count;
 
         Ok(())
     }
@@ -317,6 +341,8 @@ impl io::Read for ATADisk {
             buf[i] = read[i + sect_across_bounds];
         }
 
+        self.logs.gross_bytes_read += amount_to_read;
+
         Ok(amount_to_read)
     }
 }
@@ -340,6 +366,8 @@ impl io::Write for ATADisk {
         }
 
         self.write_raw(read.as_slice(), translated_sector, amount_of_sectors)?;
+
+        self.logs.gross_bytes_written += amount_to_write;
 
         Ok(amount_to_write)
     }

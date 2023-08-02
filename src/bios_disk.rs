@@ -29,6 +29,8 @@ use fatfs::{FileSystem, FormatVolumeOptions, FsOptions};
 use std::fs;
 use std::fs::OpenOptions;
 use std::io::{Read, Seek, SeekFrom, Write};
+use std::path::Path;
+use std::process::Command;
 use owo_colors::OwoColorize;
 
 pub fn delete_disk_img(disk_name: String) -> Result<(), Box<dyn std::error::Error>> {
@@ -115,6 +117,37 @@ pub fn create_fat_img_from_directory(
     }
 
     Ok(fat_img_path)
+}
+
+pub fn make_ext2_fs(
+    ext2_img_path_root: &Path,
+    directory_path: &Path,
+    image_size: usize
+) -> Result<Path, Box<dyn std::error::Error>> {
+    let ext2_img = format!("{}/ext2.img", ext2_img_path_root.display());
+
+    {
+        let image = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .open(&ext2_img)?;
+
+        image.set_len(image_size as u64)?;
+        image.sync_all()?;
+    }
+
+    let status = Command::new("mkfs.ext2")
+        .arg(ext2_img)
+        .status()
+        .expect("Unable to run 'mkfs.ext2' which is required to format ext2 partition");
+
+    if !status.success() {
+        panic!("Could not generate ext2fs partition");
+    }
+
+
+    Ok(*Path::new(&ext2_img))
 }
 
 pub fn make_mbr_disk(
