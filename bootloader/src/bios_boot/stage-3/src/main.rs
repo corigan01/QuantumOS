@@ -44,7 +44,7 @@ use quantum_lib::com::serial::{SerialBaud, SerialDevice, SerialPort};
 use quantum_lib::elf::{ElfHeader, ElfArch, ElfBits, ElfSegmentType};
 use quantum_lib::x86_64::PrivlLevel;
 use quantum_lib::x86_64::registers::{Segment, SegmentRegs};
-use quantum_utils::bytes::Bytes;
+use quantum_utils::human_bytes::HumanBytes;
 use quantum_lib::gfx::frame_info::FrameInfo;
 use quantum_lib::gfx::FramebufferPixelLayout;
 use quantum_lib::gfx::linear_framebuffer::LinearFramebuffer;
@@ -213,8 +213,8 @@ fn main(boot_info: &BootInfo) {
 
     // TODO: Yeah lets maybe not have the stack just hard coded here :)
     debug_println!("Zero-ing Kernel Stack region");
-    let stack_ptr = 15 * Bytes::MIB;
-    for ptr in (stack_ptr - (2 * Bytes::MIB))..stack_ptr {
+    let stack_ptr = 15 * HumanBytes::MIB;
+    for ptr in (stack_ptr - (2 * HumanBytes::MIB))..stack_ptr {
         unsafe { ptr::write(ptr as *mut u8, 0_u8); }
     }
 
@@ -231,7 +231,7 @@ fn main(boot_info: &BootInfo) {
         };
 
         let start_address = PhyAddress::new(e820_entry.address).unwrap();
-        let size_bytes = Bytes::from(e820_entry.len);
+        let size_bytes = HumanBytes::from(e820_entry.len);
 
         let region= MemoryRegion::from_distance(start_address, size_bytes, region_type);
 
@@ -240,7 +240,7 @@ fn main(boot_info: &BootInfo) {
     region_map.add_new_region(kernel_region).unwrap();
 
     let stack_region = MemoryRegion::new(
-        PhyAddress::new(stack_ptr - Bytes::MIB).unwrap(),
+        PhyAddress::new(stack_ptr - HumanBytes::MIB).unwrap(),
         PhyAddress::new(stack_ptr).unwrap(),
         MemoryRegionType::KernelStack
     );
@@ -251,7 +251,7 @@ fn main(boot_info: &BootInfo) {
     let virtual_region_map = unsafe { VRT_REGION_MAP.get_mut_ref().unwrap() };
     let virtual_region = MemoryRegion::<VirtAddress>::new(
         VirtAddress::new(0).unwrap(),
-        VirtAddress::new(5 * Bytes::GIB).unwrap(),
+        VirtAddress::new(5 * HumanBytes::GIB).unwrap(),
         MemoryRegionType::Unknown
     );
 

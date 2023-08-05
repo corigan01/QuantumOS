@@ -8,3 +8,8 @@ edition = "2021"
 [dependencies]
 clap = { version = "4.3.0", features = ["derive"] }
 owo-colors = "3.5.0"
+mbrman = "0.5.2"
+fatfs = "0.3.6"
+ext2 = "0.1.1"
+anyhow = "1.0.71"
+walkdir = "2.3.3"

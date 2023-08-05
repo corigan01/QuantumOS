@@ -31,7 +31,7 @@ use core::ptr::NonNull;
 use core::slice::Iter;
 use over_stacked::raw_vec::RawVec;
 use owo_colors::OwoColorize;
-use quantum_utils::bytes::Bytes;
+use quantum_utils::human_bytes::HumanBytes;
 use crate::{AllocErr, ImproperConfigReason};
 use crate::memory_layout::MemoryLayout;
 use crate::usable_region::UsableRegion;
@@ -497,8 +497,8 @@ impl Display for KernelHeap {
         let percent_free = (bytes_free as f64) / (self.total_allocated_bytes as f64);
 
         writeln!(f, "Heap: {} {} ({:.2}%)",
-            Bytes::from(bytes_free).green().bold(),
-            "Free".green().bold(),
+                 HumanBytes::from(bytes_free).green().bold(),
+                 "Free".green().bold(),
                  (percent_free * 100.0),
         )?;
 
@@ -512,11 +512,11 @@ impl Display for KernelHeap {
             let percent = ((size + loss) as f64) / (self.total_allocated_bytes as f64);
 
             writeln!(f, "| 0x{:012x} | {:10} | {:10} | {:#10} | {:7.4}% |",
-                start,
-                Bytes::from(size),
-                Bytes::from(loss),
-                kind,
-                percent * 100.0
+                     start,
+                     HumanBytes::from(size),
+                     HumanBytes::from(loss),
+                     kind,
+                     percent * 100.0
             )?;
         }
         writeln!(f, "+----------------+------------+------------+------------+----------+")?;

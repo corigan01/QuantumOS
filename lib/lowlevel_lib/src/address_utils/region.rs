@@ -27,7 +27,7 @@ use crate::address_utils::addressable::Addressable;
 use core::any::type_name;
 use core::fmt::{Debug, Formatter};
 use owo_colors::OwoColorize;
-use quantum_utils::bytes::Bytes;
+use quantum_utils::human_bytes::HumanBytes;
 
 #[derive(Copy, Clone, PartialEq, Eq)]
 #[repr(u8)]
@@ -139,7 +139,7 @@ where
         }
     }
 
-    pub fn from_distance(start: Type, distance: Bytes, region_type: MemoryRegionType) -> Self {
+    pub fn from_distance(start: Type, distance: HumanBytes, region_type: MemoryRegionType) -> Self {
         Self::new(start, start.copy_by_offset(distance.into()), region_type)
     }
 
@@ -196,8 +196,8 @@ where
         self.region_type
     }
 
-    pub fn bytes(&self) -> Bytes {
-        Bytes::from(self.size())
+    pub fn bytes(&self) -> HumanBytes {
+        HumanBytes::from(self.size())
     }
 }
 
@@ -208,7 +208,7 @@ where
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         let type_name = type_name::<Type>().split("::").last().unwrap_or("");
         if f.alternate() {
-            write!(f, "MemoryRegion<{}> {{\n    type:  {:?}\n    start: 0x{:x},\n    end:   0x{:x},\n    size:  {}\n}}", type_name, self.region_type, self.start.address_as_u64(), self.end.address_as_u64(), Bytes::from(self.size()))
+            write!(f, "MemoryRegion<{}> {{\n    type:  {:?}\n    start: 0x{:x},\n    end:   0x{:x},\n    size:  {}\n}}", type_name, self.region_type, self.start.address_as_u64(), self.end.address_as_u64(), HumanBytes::from(self.size()))
         } else {
             write!(
                 f,
@@ -217,7 +217,7 @@ where
                 self.region_type,
                 self.start.address_as_u64(),
                 self.end.address_as_u64(),
-                Bytes::from(self.size())
+                HumanBytes::from(self.size())
             )
         }
     }

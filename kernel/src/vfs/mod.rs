@@ -31,7 +31,7 @@ use core::slice::{Iter, IterMut};
 use qk_alloc::boxed::Box;
 use qk_alloc::vec::Vec;
 use quantum_lib::debug_println;
-use quantum_utils::bytes::Bytes;
+use quantum_utils::human_bytes::HumanBytes;
 
 pub mod ata;
 pub mod filesystem;
@@ -107,7 +107,7 @@ impl VFSDiskID {
             debug_println!("    0x{:012x} --> 0x{:012x} ({:10}) -- {}",
                 part.seek_start(),
                 part.seek_end(),
-                Bytes::from(part.seek_end() - part.seek_start()),
+                HumanBytes::from(part.seek_end() - part.seek_start()),
                 if part.is_bootable() { "bootable" } else { "" }
             );
         }

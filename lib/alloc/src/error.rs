@@ -24,7 +24,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 use core::fmt::{Debug, Formatter};
-use quantum_utils::bytes::Bytes;
+use quantum_utils::human_bytes::HumanBytes;
 
 #[derive(Clone, Copy, PartialEq)]
 pub enum AllocErr {
@@ -49,8 +49,8 @@ impl Debug for AllocErr {
                 write!(
                     f,
                     "(Allocator is Out-Of-Memory) Requested {}, but only have {} available.",
-                    Bytes::from(*requested),
-                    Bytes::from(*total)
+                    HumanBytes::from(*requested),
+                    HumanBytes::from(*total)
                 )?;
             }
             AllocErr::ImproperConfig(reason) => match reason {
@@ -69,9 +69,9 @@ impl Debug for AllocErr {
                 }
                 ImproperConfigReason::Smaller(old, new) => {
                     write!(f,
-                               "(Does Not Fit) Your old allocation is {}, however we are trying to fit it in only {}!",
-                            Bytes::from(*old),
-                            Bytes::from(*new)
+                           "(Does Not Fit) Your old allocation is {}, however we are trying to fit it in only {}!",
+                           HumanBytes::from(*old),
+                           HumanBytes::from(*new)
                         )?;
                 }
             },

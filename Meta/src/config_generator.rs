@@ -24,6 +24,41 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 */
 
-pub fn build_bios_disk() {
+use std::fmt::{Display, Formatter};
 
+pub struct BiosBootConfig {
+    pub stage2_filepath: String,
+    pub stage3_filepath: String,
+    pub kernel_address: String,
+    pub kernel_filepath: String,
+    pub video_mode_preferred: (usize, usize),
 }
+
+impl BiosBootConfig {
+    const KERNEL_FILE_LOCATION_KEY: &'static str = "KERNEL_ELF";
+    const KERNEL_START_LOCATION_KEY: &'static str = "KERNEL_BEGIN";
+    const NEXT_2_STAGE_LOCATION_KEY: &'static str = "NEXT_2_STAGE_BIN";
+    const NEXT_3_STAGE_LOCATION_KEY: &'static str = "NEXT_3_STAGE_BIN";
+    const VIDEO_MODE_KEY: &'static str = "VIDEO";
+}
+
+impl Display for BiosBootConfig {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        writeln!(
+            f,
+            "{}={}\n{}={}\n{}={}\n{}={}\n{}={}x{}\n",
+            Self::KERNEL_START_LOCATION_KEY,
+            self.kernel_address,
+            Self::KERNEL_FILE_LOCATION_KEY,
+            self.kernel_filepath,
+            Self::NEXT_2_STAGE_LOCATION_KEY,
+            self.stage2_filepath,
+            Self::NEXT_3_STAGE_LOCATION_KEY,
+            self.stage3_filepath,
+            Self::VIDEO_MODE_KEY,
+            self.video_mode_preferred.0,
+            self.video_mode_preferred.1
+        )
+    }
+}
+

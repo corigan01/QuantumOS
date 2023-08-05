@@ -29,7 +29,7 @@ use core::slice::Iter;
 use crate::address_utils::addressable::Addressable;
 use crate::address_utils::region::{HowOverlapping, MemoryRegion, MemoryRegionType};
 use over_stacked::heapless_vector::{HeaplessVec, HeaplessVecErr};
-use quantum_utils::bytes::Bytes;
+use quantum_utils::human_bytes::HumanBytes;
 
 const MAX_ALLOCATABLE_REGIONS: usize = 40;
 
@@ -177,8 +177,8 @@ where
         self.regions.iter()
     }
 
-    pub fn total_mem(&self) -> Bytes {
-        let mut total_bytes = Bytes::from(0);
+    pub fn total_mem(&self) -> HumanBytes {
+        let mut total_bytes = HumanBytes::from(0);
         for region in self.regions.iter() {
             total_bytes += region.bytes();
         }
@@ -186,8 +186,8 @@ where
         total_bytes
     }
 
-    pub fn total_mem_for_type(&self, t: MemoryRegionType) -> Bytes {
-        let mut total_bytes = Bytes::from(0);
+    pub fn total_mem_for_type(&self, t: MemoryRegionType) -> HumanBytes {
+        let mut total_bytes = HumanBytes::from(0);
         for region in self.regions.iter() {
             if region.region_type() == t {
                 total_bytes += region.bytes();
@@ -261,7 +261,7 @@ mod test {
     use crate::address_utils::region::{MemoryRegion, MemoryRegionType};
     use crate::address_utils::region_map::RegionMap;
     use alloc::vec;
-    use quantum_utils::bytes::Bytes;
+    use quantum_utils::human_bytes::HumanBytes;
 
     #[test]
     fn test_within_consolidation() {
@@ -493,7 +493,7 @@ mod test {
 
         assert_eq!(
             region_map.total_mem_for_type(Usable),
-            before_net_bytes - Bytes::from(3)
+            before_net_bytes - HumanBytes::from(3)
         );
     }
 }

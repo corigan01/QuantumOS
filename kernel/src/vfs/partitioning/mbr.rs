@@ -32,7 +32,7 @@ use core::mem::size_of;
 use qk_alloc::boxed::Box;
 use qk_alloc::vec::Vec;
 use quantum_lib::debug_println;
-use quantum_utils::bytes::Bytes;
+use quantum_utils::human_bytes::HumanBytes;
 use crate::hex_dump::dump_array;
 
 #[repr(C, packed)]
@@ -87,7 +87,7 @@ pub struct MBRPartitionEntry {
 }
 
 impl MBRPartitionEntry {
-    pub fn total_bytes(&self) -> Bytes {
+    pub fn total_bytes(&self) -> HumanBytes {
         ((self.end_lba - self.start_lba) * 512).into()
     }
 }

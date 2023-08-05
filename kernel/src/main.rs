@@ -44,7 +44,7 @@ use quantum_lib::debug::{add_connection_to_global_stream, set_panic};
 use quantum_lib::gfx::{rectangle::Rect, Pixel, PixelLocation};
 use quantum_lib::possibly_uninit::PossiblyUninit;
 use quantum_lib::{debug_print, debug_println, kernel_entry, rect};
-use quantum_utils::bytes::Bytes;
+use quantum_utils::human_bytes::HumanBytes;
 
 use quantum_os::clock::rtc::update_and_get_time;
 
@@ -92,13 +92,13 @@ fn setup_memory(
 
     debug_println!(
         "Total Usable Physical Memory {} ({} -- 4k Pages)",
-        Bytes::from(total_phy),
+        HumanBytes::from(total_phy),
         total_pages
     );
 
     // FIXME: The tmp alloc should be dynamic
     let init_alloc_begin = 0x000000f00001;
-    let init_alloc_size = Bytes::from(1 * Bytes::MIB) - 2.into();
+    let init_alloc_size = HumanBytes::from(1 * HumanBytes::MIB) - 2.into();
 
     debug_print!(
         "\nCreating Init Heap Allocator at (ptr: 0x{:x} size: {}) ... ",

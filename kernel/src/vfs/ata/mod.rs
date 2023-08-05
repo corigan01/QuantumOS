@@ -38,7 +38,7 @@ use qk_alloc::string::String;
 use qk_alloc::vec::Vec;
 use quantum_lib::bitset::BitSet;
 use quantum_lib::{debug_print, debug_println};
-use quantum_utils::bytes::Bytes;
+use quantum_utils::human_bytes::HumanBytes;
 
 mod identify_parser;
 mod registers;
@@ -211,8 +211,8 @@ impl ATADisk {
         Ok(())
     }
 
-    pub fn total_disk_bytes(&self) -> Bytes {
-        Bytes::from(self.identify.user_sectors_28bit_lba() * Self::BYTES_PER_SECTOR)
+    pub fn total_disk_bytes(&self) -> HumanBytes {
+        HumanBytes::from(self.identify.user_sectors_28bit_lba() * Self::BYTES_PER_SECTOR)
     }
 }
 
@@ -226,7 +226,7 @@ impl Display for ATADisk {
             self.identify.specific_config(),
             self.identify.identify_completion_status(),
             self.identify.max_sectors_per_request(),
-            Bytes::from(self.identify.user_sectors_28bit_lba() * 512)
+            HumanBytes::from(self.identify.user_sectors_28bit_lba() * 512)
         )?;
 
         Ok(())
@@ -391,7 +391,7 @@ impl io::DiskInfo for ATADisk {
         self.identify.model_number()
     }
 
-    fn disk_capacity(&self) -> Bytes {
+    fn disk_capacity(&self) -> HumanBytes {
         self.total_disk_bytes()
     }
 }

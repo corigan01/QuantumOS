@@ -27,7 +27,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 use quantum_lib::{debug_print, debug_println};
 use quantum_lib::address_utils::virtual_address::VirtAddress;
-use quantum_utils::bytes::Bytes;
+use quantum_utils::human_bytes::HumanBytes;
 use quantum_lib::x86_64::paging::config::PageConfigBuilder;
 use quantum_lib::x86_64::paging::structures::{PageMapLevel2, PageMapLevel3, PageMapLevel4};
 use quantum_lib::x86_64::PrivlLevel;
@@ -45,10 +45,10 @@ pub unsafe fn enable_paging() {
     let level2_tables = &mut LEVEL2;
 
     for (offset, level2) in level2_tables.iter_mut().enumerate() {
-        let offset_addition = offset as u64 * Bytes::GIB as u64;
+        let offset_addition = offset as u64 * HumanBytes::GIB as u64;
 
         for i in 0..512 {
-            let huge_address = VirtAddress::new((i * 2 * Bytes::MIB as u64 + offset_addition) as u64)
+            let huge_address = VirtAddress::new((i * 2 * HumanBytes::MIB as u64 + offset_addition) as u64)
                 .unwrap()
                 .try_aligned()
                 .unwrap();

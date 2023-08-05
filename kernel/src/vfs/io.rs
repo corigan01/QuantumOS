@@ -26,7 +26,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 use core::error::Error;
 use qk_alloc::boxed::Box;
 use qk_alloc::string::String;
-use quantum_utils::bytes::Bytes;
+use quantum_utils::human_bytes::HumanBytes;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum ErrorKind {
@@ -194,8 +194,8 @@ pub trait DiskInfo {
         String::from("Unknown")
     }
 
-    fn disk_capacity(&self) -> Bytes {
-        Bytes::from(0)
+    fn disk_capacity(&self) -> HumanBytes {
+        HumanBytes::from(0)
     }
 }
 

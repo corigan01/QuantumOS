@@ -26,9 +26,14 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use owo_colors::OwoColorize;
+use crate::artifacts::{build_bios_bootloader_items, build_kernel, get_target_directory, remove_target_root};
+use crate::emulator_spawner::spawn_qemu;
+use crate::filesystem_constructor::make_and_construct_bios_image;
 
-pub mod disk_builder;
 mod artifacts;
+mod filesystem_constructor;
+mod config_generator;
+mod emulator_spawner;
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum, Debug)]
 pub enum BootloaderOption {
@@ -50,6 +55,15 @@ pub enum RunCommands {
     Clean
 }
 
+impl RunCommands {
+    pub fn get_run_options(&self) -> Option<RunOptions> {
+        match self {
+            Self::Run(options) => { Some(*options) },
+            _ => { None }
+        }
+    }
+}
+
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Args, Debug)]
 pub struct RunOptions {
     /// Choice to run QuantumOS without a visible qemu window
@@ -58,7 +72,7 @@ pub struct RunOptions {
 
     /// Should Skip building
     #[arg(short = 's', long)]
-    pub skip_build: bool
+    pub skip_build: bool,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Args, Debug)]
@@ -86,7 +100,11 @@ pub struct CompileOptions {
 
     /// Enable KVM
     #[arg(long)]
-    pub kvm: bool
+    pub kvm: bool,
+
+    /// Debug Compile Mode
+    #[arg(short, long)]
+    pub debug_compile: bool
 }
 
 #[macro_export]
@@ -109,10 +127,22 @@ const BUILD_ARTIFACTS_DIR: &str = "target";
 
 pub fn build(options: &CompileOptions) {
     status_println!("Building QuantumOS");
+
+    let kern = build_kernel(options).unwrap();
+
+    if options.bootloader == BootloaderOption::Bios {
+        let bios = build_bios_bootloader_items(options).unwrap();
+        make_and_construct_bios_image(&kern, &bios).unwrap();
+    } else {
+        todo!("Make UEFI bootloader!");
+    }
 }
 
 pub fn run(options: &CompileOptions) {
     status_println!("Running QuantumOS");
+
+    let disk_path = format!("{}/disk.img", get_target_directory().unwrap());
+    spawn_qemu(&disk_path, options).unwrap();
 }
 
 pub fn test(options: &CompileOptions) {
@@ -142,5 +172,6 @@ pub fn test_libs() {
 }
 
 pub fn clean() {
-
+    status_println!("Cleaning Artifacts");
+    remove_target_root().unwrap();
 }

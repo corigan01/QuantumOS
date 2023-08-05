@@ -38,7 +38,7 @@ use core::marker::PhantomData;
 use types::FileSystemTypes;
 
 #[cfg(debug)]
-use quantum_utils::bytes::Bytes;
+use quantum_utils::human_bytes::HumanBytes;
 
 pub struct UnQuarried;
 pub struct Quarried;
@@ -245,7 +245,7 @@ impl<DiskType: DiskMedia> FileSystem<DiskType, MountedRoot> {
 
         #[cfg(debug)]
         if self.logging_enable {
-            let bytes: Bytes = self.get_filesize_bytes(filename).unwrap_or(0).into();
+            let bytes: HumanBytes = self.get_filesize_bytes(filename).unwrap_or(0).into();
 
             bios_println!(" Done ({})", bytes);
         }
