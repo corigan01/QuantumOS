@@ -29,6 +29,7 @@ use crate::vfs::partitioning::init_partitioning_for_disks;
 use core::fmt::{Display, Formatter};
 use core::slice::{Iter, IterMut};
 use qk_alloc::boxed::Box;
+use qk_alloc::string::String;
 use qk_alloc::vec::Vec;
 use quantum_lib::debug_println;
 use quantum_utils::human_bytes::HumanBytes;
@@ -54,10 +55,24 @@ impl Display for dyn VFSDisk {
 pub trait VFSPartition: PartitionInfo + Seek + Read + Write {}
 impl<T> VFSPartition for T where T: PartitionInfo + Seek + Read + Write {}
 
+pub trait VFSFilesystem {
+
+}
+
+pub struct VFSFilesystemEntry {
+    entry_point: String,
+    driver: Box<dyn VFSFilesystem>
+}
+
+pub struct VFSPartitionEntry {
+    partition: Box<dyn VFSPartition>,
+    filesystem: Option<VFSFilesystemEntry>
+}
+
 pub struct VFSEntry {
     id: VFSDiskID,
     disk: Box<dyn VFSDisk>,
-    parts: Vec<Box<dyn VFSPartition>>,
+    parts: Vec<VFSPartitionEntry>,
 }
 
 static mut VFS_DISK_NEXT_ID: usize = 0;
@@ -100,19 +115,22 @@ impl VFSDiskID {
         }
     }
 
-    pub fn publish_partitions(&self, mut partitions: Vec<Box<dyn VFSPartition>>) {
+    pub fn publish_partitions(&self, partitions: Vec<Box<dyn VFSPartition>>) {
         let own_entry = self.get_entry_mut();
         debug_println!("VFS Registered {} new partitions on disk {}:", partitions.len(), self.0);
-        for part in partitions.iter() {
+        for partition in partitions.into_iter() {
             debug_println!("    0x{:012x} --> 0x{:012x} ({:10}) -- {}",
-                part.seek_start(),
-                part.seek_end(),
-                HumanBytes::from(part.seek_end() - part.seek_start()),
-                if part.is_bootable() { "bootable" } else { "" }
+                partition.seek_start(),
+                partition.seek_end(),
+                HumanBytes::from(partition.seek_end() - partition.seek_start()),
+                if partition.is_bootable() { "bootable" } else { "" }
             );
-        }
 
-        own_entry.parts.append(&mut partitions);
+            own_entry.parts.push(VFSPartitionEntry {
+                partition,
+                filesystem: None,
+            });
+        }
     }
 
     pub fn disks_iter() -> Iter<'static, VFSEntry> {
