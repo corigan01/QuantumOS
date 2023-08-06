@@ -201,7 +201,10 @@ pub fn build_bios_stage_2(options: &CompileOptions) -> anyhow::Result<String> {
     let stage_2_root = format!("{}/bootloader/src/bios_boot/stage-2", project_root);
     let stage_2_target_root = format!("{}/stage2", target_root);
 
-    let release_mode = if options.debug_compile { "dev" } else { "release" };
+    // FIXME: We should try to get stage2 working in debug mode
+    const CAN_STAGE2_WORK_IN_DEBUG: bool = false;
+
+    let release_mode = if options.debug_compile && CAN_STAGE2_WORK_IN_DEBUG { "dev" } else { "release" };
 
     let stage_2_build = Command::new(&cargo_dir)
         .current_dir(stage_2_root)
@@ -220,7 +223,7 @@ pub fn build_bios_stage_2(options: &CompileOptions) -> anyhow::Result<String> {
 
     let exe_path = format!("{}/i686-quantum_loader/{}/stage-2",
                            stage_2_target_root,
-                           if options.debug_compile { "debug" } else { "release" }
+                           if options.debug_compile && CAN_STAGE2_WORK_IN_DEBUG { "debug" } else { "release" }
     );
 
     assert!(Path::new(&exe_path).exists(), "Stage2 compiled, but does not exist at path {}", exe_path);

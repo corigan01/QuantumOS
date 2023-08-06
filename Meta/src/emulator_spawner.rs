@@ -40,7 +40,11 @@ pub fn spawn_qemu(disk_target_path: &String, options: &CompileOptions) -> anyhow
 
     if options.options.get_run_options().unwrap().headless {
         user_extra_args.push("-nographic");
+        user_extra_args.push("-serial");
+        user_extra_args.push("mon:stdio");
     } else {
+        user_extra_args.push("-serial");
+        user_extra_args.push("stdio");
         user_extra_args.push("-display");
         user_extra_args.push("gtk");
     }
@@ -56,8 +60,6 @@ pub fn spawn_qemu(disk_target_path: &String, options: &CompileOptions) -> anyhow
         .arg("256M")
         .arg("-k")
         .arg("en-us")
-        .arg("-serial")
-        .arg("stdio")
         .arg("-nic")
         .arg("none")
         .arg("-drive")

@@ -24,7 +24,9 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 */
 
+use std::process::exit;
 use clap::{Args, Parser, Subcommand, ValueEnum};
+use indicatif::{MultiProgress, ProgressStyle};
 use owo_colors::OwoColorize;
 use crate::artifacts::{build_bios_bootloader_items, build_kernel, get_target_directory, remove_target_root};
 use crate::emulator_spawner::spawn_qemu;
@@ -110,7 +112,7 @@ pub struct CompileOptions {
 #[macro_export]
 macro_rules! status_print {
     ($($arg:tt)*) => {
-        print!("    {}", format_args!($($arg)*).bold().green());
+        print!("    {}", format_args!($($arg)*));
     };
 }
 
@@ -128,10 +130,14 @@ const BUILD_ARTIFACTS_DIR: &str = "target";
 pub fn build(options: &CompileOptions) {
     status_println!("Building QuantumOS");
 
+
+
     let kern = build_kernel(options).unwrap();
 
     if options.bootloader == BootloaderOption::Bios {
         let bios = build_bios_bootloader_items(options).unwrap();
+
+
         make_and_construct_bios_image(&kern, &bios).unwrap();
     } else {
         todo!("Make UEFI bootloader!");
@@ -142,7 +148,11 @@ pub fn run(options: &CompileOptions) {
     status_println!("Running QuantumOS");
 
     let disk_path = format!("{}/disk.img", get_target_directory().unwrap());
-    spawn_qemu(&disk_path, options).unwrap();
+    let qemu_status = spawn_qemu(&disk_path, options).unwrap();
+
+    if qemu_status != 33 {
+        exit(qemu_status);
+    }
 }
 
 pub fn test(options: &CompileOptions) {
