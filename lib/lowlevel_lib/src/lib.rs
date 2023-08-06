@@ -24,31 +24,27 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 #![no_std]
-
 #![feature(abi_x86_interrupt)]
 #![feature(test)]
 #![feature(try_trait_v2)]
 
-
-pub mod x86_64;
+pub mod address_utils;
+pub mod alloc;
 pub mod basic_font;
 pub mod bitset;
-pub mod bytes;
+pub mod boot;
+pub mod com;
+pub mod data_portal;
 pub mod debug;
+pub mod elf;
+pub mod enum_flags;
+pub mod enum_iterator;
 pub mod gfx;
+pub mod magic;
 pub mod panic_utils;
 pub mod possibly_uninit;
 pub mod ptr;
 pub mod time;
-pub mod address_utils;
-pub mod elf;
-pub mod magic;
-pub mod data_portal;
-pub mod enum_iterator;
-pub mod com;
-pub mod enum_flags;
-pub mod boot;
-pub mod alloc;
+pub mod x86_64;
 
 pub type Nothing = ();
-

@@ -23,12 +23,13 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use core::fmt::{Debug, Formatter};
+use core::fmt::{Debug, Display, Formatter};
+use core::slice::Iter;
 
 use crate::address_utils::addressable::Addressable;
 use crate::address_utils::region::{HowOverlapping, MemoryRegion, MemoryRegionType};
-use crate::bytes::Bytes;
 use over_stacked::heapless_vector::{HeaplessVec, HeaplessVecErr};
+use quantum_utils::human_bytes::HumanBytes;
 
 const MAX_ALLOCATABLE_REGIONS: usize = 40;
 
@@ -38,30 +39,33 @@ pub struct RegionMap<Type> {
 }
 
 impl<Type> RegionMap<Type>
-    where Type: Addressable + Copy {
+where
+    Type: Addressable + Copy,
+{
     pub fn new() -> Self {
         Self {
-            regions: Default::default()
+            regions: Default::default(),
         }
     }
 
     // TODO: Maybe there is a better way of doing this in the future
     pub fn consolidate(&mut self) -> Result<(), HeaplessVecErr> {
         loop {
-            let mut new_free_regions: HeaplessVec<MemoryRegion<Type>, MAX_ALLOCATABLE_REGIONS> = HeaplessVec::new();
+            let mut new_free_regions: HeaplessVec<MemoryRegion<Type>, MAX_ALLOCATABLE_REGIONS> =
+                HeaplessVec::new();
 
-            let usable_iterator =
-                self.regions.iter().filter(|region|
-                    region.region_type() == MemoryRegionType::Usable
-                );
+            let usable_iterator = self
+                .regions
+                .iter()
+                .filter(|region| region.region_type() == MemoryRegionType::Usable);
 
             let mut was_work_done = false;
 
             'outer: for free_regions in usable_iterator {
-                let non_usable_iterator =
-                    self.regions.iter().filter(|region|
-                        region.region_type() != MemoryRegionType::Usable
-                    );
+                let non_usable_iterator = self
+                    .regions
+                    .iter()
+                    .filter(|region| region.region_type() != MemoryRegionType::Usable);
 
                 let free_start = free_regions.get_start_address().address_as_u64();
 
@@ -90,7 +94,9 @@ impl<Type> RegionMap<Type>
                         HowOverlapping::StartsIn => {
                             let shrunk_region = MemoryRegion::new(
                                 *free_regions.get_start_address(),
-                                free_regions.get_start_address().copy_by_offset((other_start - free_start) - 1),
+                                free_regions
+                                    .get_start_address()
+                                    .copy_by_offset((other_start - free_start) - 1),
                                 free_regions.region_type(),
                             );
 
@@ -102,7 +108,9 @@ impl<Type> RegionMap<Type>
                         HowOverlapping::Within => {
                             let before_region = MemoryRegion::new(
                                 *free_regions.get_start_address(),
-                                free_regions.get_start_address().copy_by_offset((other_start - free_start) - 1),
+                                free_regions
+                                    .get_start_address()
+                                    .copy_by_offset((other_start - free_start) - 1),
                                 free_regions.region_type(),
                             );
 
@@ -132,13 +140,18 @@ impl<Type> RegionMap<Type>
                 break;
             }
 
-            self.regions.retain(|region| {
-                region.region_type() != MemoryRegionType::Usable
-            });
+            self.regions
+                .retain(|region| region.region_type() != MemoryRegionType::Usable);
 
             self.regions.push_vec(new_free_regions)?;
         }
 
+        self.regions.sort_by(|this, other| {
+            let this = this.get_start_address().address_as_u64();
+            let other = other.get_start_address().address_as_u64();
+
+            this.cmp(&other)
+        });
 
         Ok(())
     }
@@ -148,7 +161,9 @@ impl<Type> RegionMap<Type>
     }
 
     pub fn run_on_type<Function>(&self, t: MemoryRegionType, runner: &mut Function)
-        where Function: FnMut(&MemoryRegion<Type>) {
+    where
+        Function: FnMut(&MemoryRegion<Type>),
+    {
         for region in self.regions.iter() {
             let region_type = region.region_type();
 
@@ -158,8 +173,12 @@ impl<Type> RegionMap<Type>
         }
     }
 
-    pub fn total_mem(&self) -> Bytes {
-        let mut total_bytes = Bytes::from(0);
+    pub fn iter(&self) -> Iter<MemoryRegion<Type>> {
+        self.regions.iter()
+    }
+
+    pub fn total_mem(&self) -> HumanBytes {
+        let mut total_bytes = HumanBytes::from(0);
         for region in self.regions.iter() {
             total_bytes += region.bytes();
         }
@@ -167,8 +186,8 @@ impl<Type> RegionMap<Type>
         total_bytes
     }
 
-    pub fn total_mem_for_type(&self, t: MemoryRegionType) -> Bytes {
-        let mut total_bytes = Bytes::from(0);
+    pub fn total_mem_for_type(&self, t: MemoryRegionType) -> HumanBytes {
+        let mut total_bytes = HumanBytes::from(0);
         for region in self.regions.iter() {
             if region.region_type() == t {
                 total_bytes += region.bytes();
@@ -177,10 +196,22 @@ impl<Type> RegionMap<Type>
 
         total_bytes
     }
+
+    pub fn is_within(&self, rhs: &MemoryRegion<Type>) -> bool {
+        let Some(region) = self.iter().find(|region| {
+            region.how_overlapping(&rhs) == HowOverlapping::Within
+        }) else {
+            return false
+        };
+
+        region.region_type() == rhs.region_type()
+    }
 }
 
 impl<Type> Debug for RegionMap<Type>
-    where Type: Addressable + Debug + Copy {
+where
+    Type: Addressable + Debug + Copy,
+{
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         for (index, region) in self.regions.iter().enumerate() {
             writeln!(f, "[{index}]: {region:?}")?;
@@ -190,15 +221,47 @@ impl<Type> Debug for RegionMap<Type>
     }
 }
 
+impl<Type> Display for RegionMap<Type>
+where
+    Type: Addressable + Copy,
+{
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        writeln!(
+            f,
+            "|     Start      |       End      |    Size   |       Type       |"
+        )?;
+        writeln!(
+            f,
+            "+----------------+----------------+-----------+------------------+"
+        )?;
+        for region in self.regions.iter() {
+            writeln!(
+                f,
+                "| 0x{:012x} | 0x{:012x} | {:9} | {:#16?} |",
+                region.get_start_address().address_as_u64(),
+                region.get_end_address().address_as_u64(),
+                region.bytes(),
+                region.region_type()
+            )?;
+        }
+        writeln!(
+            f,
+            "+----------------+----------------+-----------+------------------+"
+        )?;
+
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod test {
     extern crate alloc;
 
-    use alloc::vec;
     use crate::address_utils::physical_address::PhyAddress;
     use crate::address_utils::region::{MemoryRegion, MemoryRegionType};
     use crate::address_utils::region_map::RegionMap;
-    use crate::bytes::Bytes;
+    use alloc::vec;
+    use quantum_utils::human_bytes::HumanBytes;
 
     #[test]
     fn test_within_consolidation() {
@@ -222,31 +285,37 @@ mod test {
         region_map.consolidate().unwrap();
 
         // TODO: We are not sure which region will be first, so maybe don't hard code this later
-        let not_free_region = *region_map.regions.get(0).unwrap();
-        let free_1_region = *region_map.regions.get(1).unwrap();
-        let free_2_region = *region_map.regions.get(2).unwrap();
+        let free_1_region = *region_map.regions.get(0).unwrap();
+        let used_2_region = *region_map.regions.get(1).unwrap();
+        let free_3_region = *region_map.regions.get(2).unwrap();
 
         assert_eq!(region_map.regions.len(), 3);
 
         assert_eq!(
-            not_free_region,
-            kernel_code_region
+            free_1_region,
+            MemoryRegion::new(
+                PhyAddress::new(0).unwrap(),
+                PhyAddress::new(0x4f).unwrap(),
+                MemoryRegionType::Usable,
+            )
         );
 
-        assert_eq!(free_1_region,
-                   MemoryRegion::new(
-                       PhyAddress::new(0).unwrap(),
-                       PhyAddress::new(0x4f).unwrap(),
-                       MemoryRegionType::Usable,
-                   )
+        assert_eq!(
+            used_2_region,
+            MemoryRegion::new(
+                PhyAddress::new(0x050).unwrap(),
+                PhyAddress::new(0x0090).unwrap(),
+                MemoryRegionType::KernelCode,
+            )
         );
 
-        assert_eq!(free_2_region,
-                   MemoryRegion::new(
-                       PhyAddress::new(0x91).unwrap(),
-                       PhyAddress::new(0x1000).unwrap(),
-                       MemoryRegionType::Usable,
-                   )
+        assert_eq!(
+            free_3_region,
+            MemoryRegion::new(
+                PhyAddress::new(0x91).unwrap(),
+                PhyAddress::new(0x1000).unwrap(),
+                MemoryRegionType::Usable,
+            )
         );
     }
 
@@ -279,12 +348,13 @@ mod test {
 
         assert_eq!(not_free_region, reserved_region);
 
-        assert_eq!(free_1_region,
-                   MemoryRegion::new(
-                       PhyAddress::new(0x601).unwrap(),
-                       PhyAddress::new(0x1000).unwrap(),
-                       MemoryRegionType::Usable,
-                   )
+        assert_eq!(
+            free_1_region,
+            MemoryRegion::new(
+                PhyAddress::new(0x601).unwrap(),
+                PhyAddress::new(0x1000).unwrap(),
+                MemoryRegionType::Usable,
+            )
         );
     }
 
@@ -317,12 +387,13 @@ mod test {
 
         assert_eq!(not_free_region, reserved_region);
 
-        assert_eq!(free_1_region,
-                   MemoryRegion::new(
-                       PhyAddress::new(0x500).unwrap(),
-                       PhyAddress::new(0x8ff).unwrap(),
-                       MemoryRegionType::Usable,
-                   )
+        assert_eq!(
+            free_1_region,
+            MemoryRegion::new(
+                PhyAddress::new(0x500).unwrap(),
+                PhyAddress::new(0x8ff).unwrap(),
+                MemoryRegionType::Usable,
+            )
         );
     }
 
@@ -399,17 +470,19 @@ mod test {
             (Reserved, 0xfffc0000, 0x100000000),
             (Reserved, 0xfd00000000, 0x10000000000),
             (KernelCode, 0x1000000, 0x1009250),
-            (KernelCode, 0x100000, 0x200000)
+            (KernelCode, 0x100000, 0x200000),
         ];
 
         let mut region_map = RegionMap::new();
 
         for fake_region in region_vector {
-            region_map.add_new_region(MemoryRegion::new(
-               PhyAddress::new(fake_region.1).unwrap(),
-                PhyAddress::new(fake_region.2).unwrap(),
-                fake_region.0
-            )).unwrap();
+            region_map
+                .add_new_region(MemoryRegion::new(
+                    PhyAddress::new(fake_region.1).unwrap(),
+                    PhyAddress::new(fake_region.2).unwrap(),
+                    fake_region.0,
+                ))
+                .unwrap();
         }
 
         let before_gross_free_bytes = region_map.total_mem_for_type(Usable);
@@ -418,6 +491,9 @@ mod test {
 
         region_map.consolidate().unwrap();
 
-        assert_eq!(region_map.total_mem_for_type(Usable), before_net_bytes - Bytes::from(3));
+        assert_eq!(
+            region_map.total_mem_for_type(Usable),
+            before_net_bytes - HumanBytes::from(3)
+        );
     }
 }

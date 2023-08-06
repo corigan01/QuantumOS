@@ -31,16 +31,16 @@ use core::ops::{Add, AddAssign, Mul, MulAssign, Sub, SubAssign};
 ///
 /// # Example
 /// ```
-/// use quantum_lib::bytes::Bytes;
+/// use quantum_utils::human_bytes::HumanBytes;
 ///
-/// let size = Bytes::from(1024);
+/// let size = HumanBytes::from(1024);
 ///
 /// assert_eq!(format!("{}", size), "1 Kib");
 /// ```
 #[derive(Clone, Copy, PartialOrd, PartialEq, Default, Debug)]
-pub struct Bytes(u64);
+pub struct HumanBytes(u64);
 
-impl Bytes {
+impl HumanBytes {
     pub const KIB: u64 = 1024;
     pub const MIB: u64 = 1024 * 1024;
     pub const GIB: u64 = 1024 * 1024 * 1024;
@@ -51,14 +51,14 @@ impl Bytes {
     }
 }
 
-impl Display for Bytes {
+impl Display for HumanBytes {
     /// Formats the `Bytes` instance as a human-readable string.
     ///
     /// # Examples
     /// ```
-    /// use quantum_lib::bytes::Bytes;
+    /// use quantum_utils::human_bytes::HumanBytes;
     ///
-    /// let size = Bytes::from(2048);
+    /// let size = HumanBytes::from(2048);
     ///
     /// assert_eq!(format!("{}", size), "2 Kib");
     /// ```
@@ -75,47 +75,71 @@ impl Display for Bytes {
 
         write!(f, "{} {}", bytes, symb)?;
 
+        let Some(width) = f.width() else {
+            return Ok(());
+        };
+
+        let digit_chars = match bytes {
+            i if i < 10 => 1,
+            i if i < 100 => 2,
+            i if i < 1000 => 3,
+            i if i < 10000 => 4,
+            _ => 0,
+        };
+        let symb_chars = symb.chars().count();
+
+        let total_chars = digit_chars + symb_chars + 1;
+        if total_chars > width {
+            return Ok(());
+        }
+
+        let padding = width - total_chars;
+
+        for _ in 0..padding {
+            write!(f, " ")?;
+        }
+
         Ok(())
     }
 }
 
-impl Add for Bytes {
-    type Output = Bytes;
+impl Add for HumanBytes {
+    type Output = HumanBytes;
 
     fn add(self, rhs: Self) -> Self::Output {
-        Bytes::from(self.0 + rhs.0)
+        HumanBytes::from(self.0 + rhs.0)
     }
 }
 
-impl Mul for Bytes {
-    type Output = Bytes;
+impl Mul for HumanBytes {
+    type Output = HumanBytes;
 
     fn mul(self, rhs: Self) -> Self::Output {
-        Bytes::from(self.0 * rhs.0)
+        HumanBytes::from(self.0 * rhs.0)
     }
 }
 
-impl Sub for Bytes {
-    type Output = Bytes;
+impl Sub for HumanBytes {
+    type Output = HumanBytes;
 
     fn sub(self, rhs: Self) -> Self::Output {
-        Bytes::from(self.0 - rhs.0)
+        HumanBytes::from(self.0 - rhs.0)
     }
 }
 
-impl AddAssign for Bytes {
+impl AddAssign for HumanBytes {
     fn add_assign(&mut self, rhs: Self) {
         self.0 = self.0 + rhs.0;
     }
 }
 
-impl SubAssign for Bytes {
+impl SubAssign for HumanBytes {
     fn sub_assign(&mut self, rhs: Self) {
         self.0 = self.0 - rhs.0;
     }
 }
 
-impl MulAssign for Bytes {
+impl MulAssign for HumanBytes {
     fn mul_assign(&mut self, rhs: Self) {
         self.0 = self.0 * rhs.0;
     }
@@ -125,23 +149,23 @@ impl MulAssign for Bytes {
 ///
 /// # Examples
 /// ```
-/// use quantum_lib::bytes::Bytes;
+/// use quantum_utils::human_bytes::HumanBytes;
 ///
-/// let size: Bytes = 1024.into();
+/// let size: HumanBytes = 1024.into();
 ///
 /// assert_eq!(format!("{}", size), "1 Kib");
 /// ```
 macro_rules! from_all_types {
     ($($t:ty)*) => ($(
-        impl From<$t> for Bytes  {
+        impl From<$t> for HumanBytes  {
             fn from(value: $t) -> Self {
-                Bytes {
+                HumanBytes {
                     0: (value as u64)
                 }
             }
         }
 
-        impl Into<$t> for Bytes {
+        impl Into<$t> for HumanBytes {
             fn into(self) -> $t {
                 self.0 as $t
             }

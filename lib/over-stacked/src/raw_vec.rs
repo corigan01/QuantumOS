@@ -34,15 +34,14 @@ use core::slice::{Iter, IterMut};
 pub enum RawVecErr {
     NotEnoughMem,
     OutOfBounds,
-    Invalid
+    Invalid,
 }
 
 pub struct RawVec<Type> {
     data: NonNull<Type>,
     total: usize,
-    used: usize
+    used: usize,
 }
-
 
 impl<Type> RawVec<Type> {
     pub fn new() -> Self {
@@ -57,7 +56,7 @@ impl<Type> RawVec<Type> {
         Self {
             data: ptr,
             total: size,
-            used: 0
+            used: 0,
         }
     }
 
@@ -65,7 +64,11 @@ impl<Type> RawVec<Type> {
         self.data = NonNull::new_unchecked(ptr);
     }
 
-    pub fn grow(&mut self, new_ptr: NonNull<Type>, total_size: usize) -> Result<NonNull<Type>, RawVecErr> {
+    pub fn grow(
+        &mut self,
+        new_ptr: NonNull<Type>,
+        total_size: usize,
+    ) -> Result<NonNull<Type>, RawVecErr> {
         if total_size < self.used {
             return Err(RawVecErr::Invalid);
         }
@@ -108,7 +111,7 @@ impl<Type> RawVec<Type> {
             return None;
         }
 
-        Some(unsafe {&mut *self.data.as_ptr().add(index)})
+        Some(unsafe { &mut *self.data.as_ptr().add(index) })
     }
 
     pub(crate) fn read(&self, index: usize) -> Option<Type> {
@@ -124,7 +127,7 @@ impl<Type> RawVec<Type> {
             return Err(RawVecErr::OutOfBounds);
         }
 
-        unsafe { ptr::write(self.data.as_ptr().add(index),data) };
+        unsafe { ptr::write(self.data.as_ptr().add(index), data) };
 
         Ok(())
     }
@@ -198,7 +201,10 @@ impl<Type> RawVec<Type> {
         Ok(())
     }
 
-    pub fn retain<Function>(&mut self, mut runner: Function) where Function: FnMut(&Type) -> bool {
+    pub fn retain<Function>(&mut self, mut runner: Function)
+    where
+        Function: FnMut(&Type) -> bool,
+    {
         let mut how_many_removed = 0;
 
         for i in 0..self.used {
@@ -232,8 +238,9 @@ impl<Type> RawVec<Type> {
     }
 
     pub fn find_index_of(&self, a: &Type) -> Option<usize>
-        where Type: PartialEq {
-
+    where
+        Type: PartialEq,
+    {
         for i in 0..self.used {
             let data_ref = self.get_ref(i)?;
 
@@ -246,15 +253,11 @@ impl<Type> RawVec<Type> {
     }
 
     pub fn as_slice(&self) -> &[Type] {
-        unsafe {
-            core::slice::from_raw_parts(self.data.as_ptr(), self.used)
-        }
+        unsafe { core::slice::from_raw_parts(self.data.as_ptr(), self.used) }
     }
 
     pub fn as_mut_slice(&mut self) -> &mut [Type] {
-        unsafe {
-            core::slice::from_raw_parts_mut(self.data.as_ptr(), self.used)
-        }
+        unsafe { core::slice::from_raw_parts_mut(self.data.as_ptr(), self.used) }
     }
 
     pub fn as_ptr(&self) -> *const Type {
@@ -288,7 +291,10 @@ impl<Type> IndexMut<usize> for RawVec<Type> {
     }
 }
 
-impl<Type> Debug for RawVec<Type> where Type: Debug {
+impl<Type> Debug for RawVec<Type>
+where
+    Type: Debug,
+{
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         if f.alternate() {
             write!(f, "{:#?}", self.as_slice())
@@ -307,10 +313,15 @@ mod tests {
         let mut data_storage = [0_i32; 10];
         let mut raw_vec = RawVec::new();
 
-        assert!(raw_vec.grow(
-            NonNull::new(data_storage.as_mut_ptr()).unwrap(),
-            data_storage.len()
-        ).is_ok(), "RawVec grow failed!");
+        assert!(
+            raw_vec
+                .grow(
+                    NonNull::new(data_storage.as_mut_ptr()).unwrap(),
+                    data_storage.len()
+                )
+                .is_ok(),
+            "RawVec grow failed!"
+        );
 
         assert_eq!(raw_vec.as_ptr(), data_storage.as_ptr());
     }
@@ -320,16 +331,26 @@ mod tests {
         let mut data_storage = [0_i32; 10];
         let mut raw_vec = RawVec::new();
 
-        assert!(raw_vec.grow(
-            NonNull::new(data_storage.as_mut_ptr()).unwrap(),
-            data_storage.len()
-        ).is_ok(), "RawVec grow failed!");
+        assert!(
+            raw_vec
+                .grow(
+                    NonNull::new(data_storage.as_mut_ptr()).unwrap(),
+                    data_storage.len()
+                )
+                .is_ok(),
+            "RawVec grow failed!"
+        );
 
-        assert!(raw_vec.push_within_capacity(69).is_ok(),
-            "Push '69' into RawVec failed!");
+        assert!(
+            raw_vec.push_within_capacity(69).is_ok(),
+            "Push '69' into RawVec failed!"
+        );
 
-        assert_eq!(raw_vec.get_ref(0), Some(&69),
-            "Get '69' from RawVec failed!");
+        assert_eq!(
+            raw_vec.get_ref(0),
+            Some(&69),
+            "Get '69' from RawVec failed!"
+        );
     }
 
     #[test]
@@ -337,26 +358,42 @@ mod tests {
         let mut data_storage = [0_i32; 10];
         let mut raw_vec = RawVec::new();
 
-        assert!(raw_vec.grow(
-            NonNull::new(data_storage.as_mut_ptr()).unwrap(),
-            data_storage.len()
-        ).is_ok(), "RawVec grow failed!");
+        assert!(
+            raw_vec
+                .grow(
+                    NonNull::new(data_storage.as_mut_ptr()).unwrap(),
+                    data_storage.len()
+                )
+                .is_ok(),
+            "RawVec grow failed!"
+        );
 
         for i in 0..10 {
-            assert!(raw_vec.push_within_capacity(i).is_ok(),
-                    "Push '{}' into RawVec failed!", i);
+            assert!(
+                raw_vec.push_within_capacity(i).is_ok(),
+                "Push '{}' into RawVec failed!",
+                i
+            );
         }
 
-        assert!(raw_vec.push_within_capacity(11).is_err(),
-                "RawVec allowed us to push 11 elements into a 10 element array!");
+        assert!(
+            raw_vec.push_within_capacity(11).is_err(),
+            "RawVec allowed us to push 11 elements into a 10 element array!"
+        );
 
         for i in 0..10 {
-            assert_eq!(raw_vec.get_ref(i), Some(&(i as i32)),
-                       "Get '{}' from RawVec failed!", i);
+            assert_eq!(
+                raw_vec.get_ref(i),
+                Some(&(i as i32)),
+                "Get '{}' from RawVec failed!",
+                i
+            );
         }
 
-        assert!(raw_vec.get_ref(11).is_none(),
-                "RawVec allowed us to access index '11' from a 10 element array");
+        assert!(
+            raw_vec.get_ref(11).is_none(),
+            "RawVec allowed us to access index '11' from a 10 element array"
+        );
     }
 
     #[test]
@@ -364,10 +401,15 @@ mod tests {
         let mut data_storage = [0_i32; 10];
         let mut raw_vec = RawVec::new();
 
-        assert!(raw_vec.grow(
-            NonNull::new(data_storage.as_mut_ptr()).unwrap(),
-            data_storage.len()
-        ).is_ok(), "RawVec grow failed!");
+        assert!(
+            raw_vec
+                .grow(
+                    NonNull::new(data_storage.as_mut_ptr()).unwrap(),
+                    data_storage.len()
+                )
+                .is_ok(),
+            "RawVec grow failed!"
+        );
 
         assert!(raw_vec.push_within_capacity(1).is_ok());
         assert!(raw_vec.push_within_capacity(2).is_ok());
@@ -383,10 +425,15 @@ mod tests {
         let mut data_storage = [0_i32; 10];
         let mut raw_vec = RawVec::new();
 
-        assert!(raw_vec.grow(
-            NonNull::new(data_storage.as_mut_ptr()).unwrap(),
-            data_storage.len()
-        ).is_ok(), "RawVec grow failed!");
+        assert!(
+            raw_vec
+                .grow(
+                    NonNull::new(data_storage.as_mut_ptr()).unwrap(),
+                    data_storage.len()
+                )
+                .is_ok(),
+            "RawVec grow failed!"
+        );
 
         assert!(raw_vec.push_within_capacity(1).is_ok());
         assert!(raw_vec.push_within_capacity(2).is_ok());
@@ -400,10 +447,15 @@ mod tests {
         let mut data_storage = [0_i32; 10];
         let mut raw_vec = RawVec::new();
 
-        assert!(raw_vec.grow(
-            NonNull::new(data_storage.as_mut_ptr()).unwrap(),
-            data_storage.len()
-        ).is_ok(), "RawVec grow failed!");
+        assert!(
+            raw_vec
+                .grow(
+                    NonNull::new(data_storage.as_mut_ptr()).unwrap(),
+                    data_storage.len()
+                )
+                .is_ok(),
+            "RawVec grow failed!"
+        );
 
         assert!(raw_vec.push_within_capacity(1).is_ok());
         assert!(raw_vec.push_within_capacity(3).is_ok());
@@ -422,18 +474,28 @@ mod tests {
         let mut data_storage1 = [0_i32; 10];
         let mut raw_vec1 = RawVec::new();
 
-        assert!(raw_vec1.grow(
-            NonNull::new(data_storage1.as_mut_ptr()).unwrap(),
-            data_storage1.len()
-        ).is_ok(), "RawVec1 grow failed!");
+        assert!(
+            raw_vec1
+                .grow(
+                    NonNull::new(data_storage1.as_mut_ptr()).unwrap(),
+                    data_storage1.len()
+                )
+                .is_ok(),
+            "RawVec1 grow failed!"
+        );
 
         let mut data_storage2 = [0_i32; 10];
         let mut raw_vec2 = RawVec::new();
 
-        assert!(raw_vec2.grow(
-            NonNull::new(data_storage2.as_mut_ptr()).unwrap(),
-            data_storage2.len()
-        ).is_ok(), "RawVec2 grow failed!");
+        assert!(
+            raw_vec2
+                .grow(
+                    NonNull::new(data_storage2.as_mut_ptr()).unwrap(),
+                    data_storage2.len()
+                )
+                .is_ok(),
+            "RawVec2 grow failed!"
+        );
 
         assert!(raw_vec1.push_within_capacity(1).is_ok());
         assert!(raw_vec1.push_within_capacity(2).is_ok());
@@ -459,10 +521,15 @@ mod tests {
         let mut data_storage = [0_i32; 10];
         let mut raw_vec = RawVec::new();
 
-        assert!(raw_vec.grow(
-            NonNull::new(data_storage.as_mut_ptr()).unwrap(),
-            data_storage.len()
-        ).is_ok(), "RawVec grow failed!");
+        assert!(
+            raw_vec
+                .grow(
+                    NonNull::new(data_storage.as_mut_ptr()).unwrap(),
+                    data_storage.len()
+                )
+                .is_ok(),
+            "RawVec grow failed!"
+        );
 
         assert!(raw_vec.push_within_capacity(1).is_ok());
         assert!(raw_vec.push_within_capacity(2).is_ok());
@@ -482,10 +549,15 @@ mod tests {
         let mut data_storage = [0_i32; 10];
         let mut raw_vec = RawVec::new();
 
-        assert!(raw_vec.grow(
-            NonNull::new(data_storage.as_mut_ptr()).unwrap(),
-            data_storage.len()
-        ).is_ok(), "RawVec grow failed!");
+        assert!(
+            raw_vec
+                .grow(
+                    NonNull::new(data_storage.as_mut_ptr()).unwrap(),
+                    data_storage.len()
+                )
+                .is_ok(),
+            "RawVec grow failed!"
+        );
 
         assert!(raw_vec.push_within_capacity(1).is_ok());
         assert!(raw_vec.push_within_capacity(2).is_ok());
@@ -500,18 +572,20 @@ mod tests {
         assert_eq!(raw_vec.as_slice(), &[1, 2, 3, 4]);
 
         let mut data_storage2 = [0_i32; 20];
-        assert!(raw_vec.grow(
-            NonNull::new(data_storage2.as_mut_ptr()).unwrap(),
-            data_storage2.len()
-        ).is_ok(), "RawVec grow failed!");
+        assert!(
+            raw_vec
+                .grow(
+                    NonNull::new(data_storage2.as_mut_ptr()).unwrap(),
+                    data_storage2.len()
+                )
+                .is_ok(),
+            "RawVec grow failed!"
+        );
 
         assert_eq!(raw_vec.as_slice(), &[1, 2, 3, 4]);
         assert_eq!(raw_vec.len(), 4);
 
         assert!(raw_vec.insert(0, 0).is_ok());
         assert_eq!(raw_vec.as_slice(), &[0, 1, 2, 3, 4]);
-
     }
 }
-
-

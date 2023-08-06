@@ -35,13 +35,17 @@ pub struct DrawPacket<'a> {
 impl<'a> DrawPacket<'a> {
     pub fn new_packet(draw_size: Rect, data: &'a [Pixel]) -> Option<Self> {
         if data.len() < draw_size.pixel_area() {
-            debug_println!("Data len {}, Pixel len {}", data.len(), draw_size.pixel_area());
+            debug_println!(
+                "Data len {}, Pixel len {}",
+                data.len(),
+                draw_size.pixel_area()
+            );
             return None;
         }
 
         Some(Self {
             rect: draw_size,
-            raw_data: data
+            raw_data: data,
         })
     }
 }

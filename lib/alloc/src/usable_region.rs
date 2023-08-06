@@ -37,17 +37,15 @@ impl UsableRegion {
 
         Self {
             ptr: NonNull::from(ptr).cast(),
-            size
+            size,
         }
     }
 
     pub unsafe fn from_raw_parts(ptr: *mut u8, size: usize) -> Option<Self> {
-        Some(
-            Self {
-                ptr: NonNull::new(ptr)?,
-                size
-            }
-        )
+        Some(Self {
+            ptr: NonNull::new(ptr)?,
+            size,
+        })
     }
 
     pub fn ptr(&self) -> NonNull<u8> {

@@ -23,7 +23,36 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-pub struct MemoryAllocator<'a> {
-    allocatable_region: &'a mut [u8],
+#![no_std]
+#![feature(test)]
 
+pub mod pmm;
+
+#[cfg(test)]
+pub fn set_example_allocator(size_in_bytes: usize) {
+    use qk_alloc::heap::alloc::KernelHeap;
+    use qk_alloc::heap::{free_lock, reserve_lock, set_global_alloc, THE_GLOBAL_ALLOC};
+    use qk_alloc::usable_region::UsableRegion;
+
+    unsafe {
+        if THE_GLOBAL_ALLOC.is_some() {
+            return;
+        }
+    }
+
+    reserve_lock();
+
+    extern crate alloc;
+
+    let memory_layout = core::alloc::Layout::from_size_align(size_in_bytes, 1).unwrap();
+    unsafe {
+        let allocation = alloc::alloc::alloc(memory_layout);
+
+        let usable_region = UsableRegion::from_raw_parts(allocation, size_in_bytes).unwrap();
+        let new_kern_heap = KernelHeap::new(usable_region).unwrap();
+
+        set_global_alloc(new_kern_heap);
+    }
+
+    free_lock();
 }

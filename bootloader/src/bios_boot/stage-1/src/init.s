@@ -153,3 +153,8 @@ DATAPACKET:
     .4byte   0x0001                         # Starting LBA
     .4byte   0x0000
     .4byte   0x0000
+
+# For style, I put 'QuantumOS Bootloader' into the binary, so when viewed with a hex editor you can see the text!
+.align 64
+Q_OS:
+    .ascii "QuantumOS Bootloader"           # Q-OS

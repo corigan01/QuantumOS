@@ -24,14 +24,14 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 */
 
+use crate::qemu::{exit_qemu, QemuExitCode};
 use core::panic::PanicInfo;
 use owo_colors::OwoColorize;
-use crate::qemu::{exit_qemu, QemuExitCode};
-use quantum_lib::{debug_println, debug_print};
+use quantum_lib::{debug_print, debug_println};
 
 struct RuntimeInfo {
     success_count: usize,
-    failed_count: usize
+    failed_count: usize,
 }
 
 impl RuntimeInfo {
@@ -77,7 +77,10 @@ impl RuntimeInfo {
     }
 }
 
-static mut CURRENT_RUN : RuntimeInfo = RuntimeInfo { success_count: 0, failed_count: 0};
+static mut CURRENT_RUN: RuntimeInfo = RuntimeInfo {
+    success_count: 0,
+    failed_count: 0,
+};
 static mut SYSTEM_TESTS: Option<&[&dyn Testable]> = None;
 
 pub trait Testable {
@@ -85,13 +88,17 @@ pub trait Testable {
 }
 
 impl<T> Testable for T
-    where
-        T: Fn(),
+where
+    T: Fn(),
 {
     fn run(&self) {
         let mut current_run = unsafe { &mut CURRENT_RUN };
 
-        debug_print!("{:#4}: {:120} ", current_run.get_run_count() + 1, core::any::type_name::<T>().blue().bold());
+        debug_print!(
+            "{:#4}: {:120} ",
+            current_run.get_run_count() + 1,
+            core::any::type_name::<T>().blue().bold()
+        );
         self();
         debug_println!("{}", "OK".bright_green().bold());
 
@@ -102,19 +109,23 @@ pub fn end_tests() {
     let current_run = unsafe { &CURRENT_RUN };
 
     if !current_run.has_failed() {
-        debug_println!("\n{}\n\n", "All tests passed! Exiting...".bright_green().bold());
+        debug_println!(
+            "\n{}\n\n",
+            "All tests passed! Exiting...".bright_green().bold()
+        );
 
         exit_qemu(QemuExitCode::Success);
     } else {
-        debug_println!("\n{}/{} {}\n\n",
+        debug_println!(
+            "\n{}/{} {}\n\n",
             current_run.get_failed(),
             current_run.get_run_count(),
-            "tests have failed!".red());
+            "tests have failed!".red()
+        );
 
         exit_qemu(QemuExitCode::Failed);
     }
 }
-
 
 pub fn test_runner(tests: &'static [&dyn Testable]) {
     debug_println!("Running {} tests...", tests.len());

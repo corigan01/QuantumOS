@@ -337,7 +337,6 @@ pub const BUILT_IN_FONT: [[u8; 13]; 96] = [
     ],
 ];
 
-
 pub struct BuiltInFont {}
 
 impl BuiltInFont {

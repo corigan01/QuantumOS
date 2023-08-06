@@ -34,11 +34,11 @@ pub struct ReadOnlyPort;
 pub struct IOPort(u16);
 
 impl IOPort {
-    pub fn new(n: u16) -> IOPort {
+    pub const fn new(n: u16) -> IOPort {
         IOPort(n)
     }
 
-    pub fn as_u16(&self) -> u16 {
+    pub const fn as_u16(&self) -> u16 {
         self.0
     }
 

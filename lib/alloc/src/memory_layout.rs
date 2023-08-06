@@ -27,29 +27,33 @@ use core::mem::{align_of, size_of};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct MemoryLayout {
-    alignment: usize, 
-    bytes: usize
+    alignment: usize,
+    bytes: usize,
 }
 
 impl MemoryLayout {
     pub fn new(alignment: usize, bytes: usize) -> Self {
-        Self {
-            alignment,
-            bytes
-        }
+        Self { alignment, bytes }
     }
-    
+
     pub fn from_type<T>() -> Self {
         let alignment = align_of::<T>();
         let size = size_of::<T>();
-        
+
         Self::new(alignment, size)
     }
-    
+
+    pub fn from_type_array<T>(elements: usize) -> Self {
+        let alignment = align_of::<T>();
+        let size = size_of::<T>() * elements;
+
+        Self::new(alignment, size)
+    }
+
     pub fn alignment(&self) -> usize {
         self.alignment
     }
-    
+
     pub fn bytes(&self) -> usize {
         self.bytes
     }

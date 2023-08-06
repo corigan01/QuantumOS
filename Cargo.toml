@@ -8,7 +8,7 @@ build = "build.rs"
 
 # [workspace]
 # members = [
-#     "kernel",
+#     "Kernel",
 #     "lowlevel_lib",
 #     "bootloader/src/bios_boot/stage-1",
 #     "bootloader/src/bios_boot/stage-2"

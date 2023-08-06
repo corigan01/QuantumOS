@@ -8,3 +8,4 @@ edition = "2021"
 [dependencies]
 over-stacked = { path = "../over-stacked" }
 quantum_utils = { path = "../quantum_utils" }
+owo-colors = "3.5.0"

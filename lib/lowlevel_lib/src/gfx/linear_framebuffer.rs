@@ -23,13 +23,13 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use core::ops::{ControlFlow, FromResidual, Try};
 use crate::basic_font::BuiltInFont;
 use crate::bitset::BitSet;
-use crate::gfx::frame_info::FrameInfo;
-use crate::gfx::{Pixel, PixelLocation};
 use crate::gfx::draw_packet::DrawPacket;
+use crate::gfx::frame_info::FrameInfo;
 use crate::gfx::rectangle::Rect;
+use crate::gfx::{Pixel, PixelLocation};
+use core::ops::{ControlFlow, FromResidual, Try};
 
 #[derive(Clone, Copy, Debug)]
 pub struct LinearFramebuffer {
@@ -37,11 +37,10 @@ pub struct LinearFramebuffer {
     pub info: FrameInfo,
 }
 
-
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum DrawStatus {
     Successful,
-    Failed
+    Failed,
 }
 
 impl DrawStatus {
@@ -69,17 +68,14 @@ impl Try for DrawStatus {
     fn branch(self) -> ControlFlow<Self::Residual, Self::Output> {
         match self {
             Self::Successful => ControlFlow::Continue(()),
-            Self::Failed => ControlFlow::Break(())
+            Self::Failed => ControlFlow::Break(()),
         }
     }
 }
 
 impl LinearFramebuffer {
     pub fn new(ptr: *mut u8, info: FrameInfo) -> Self {
-        Self {
-            ptr,
-            info
-        }
+        Self { ptr, info }
     }
 
     pub const fn ptr(&self) -> *mut u8 {
@@ -95,8 +91,10 @@ impl LinearFramebuffer {
         let ptr_base_offset = self.info.calculate_linear_ptr_offset(location);
 
         // FIXME: We should re-calculate the color to fit the viewport color depth
-        assert_eq!(self.info.depth, 32,
-                   "FIXME: Currently we do not support color depths lower then 32-bits / pixel");
+        assert_eq!(
+            self.info.depth, 32,
+            "FIXME: Currently we do not support color depths lower then 32-bits / pixel"
+        );
 
         let pixel_value = color.to_hex_with_layout(self.info.pixel_layout) << 8;
 
@@ -148,10 +146,7 @@ impl LinearFramebuffer {
     }
 
     pub fn fill_entire(&mut self, fill: Pixel) -> DrawStatus {
-        self.draw_rect(
-            Rect::dist(PixelLocation::new(0,0), self.info.size),
-            fill
-        )
+        self.draw_rect(Rect::dist(PixelLocation::new(0, 0), self.info.size), fill)
     }
 
     pub fn draw_built_in_char(&mut self, loc: PixelLocation, color: Pixel, c: char) -> DrawStatus {
@@ -173,7 +168,12 @@ impl LinearFramebuffer {
         DrawStatus::Successful
     }
 
-    pub fn draw_built_in_text(&mut self, loc: PixelLocation, color: Pixel, text: &str) -> DrawStatus {
+    pub fn draw_built_in_text(
+        &mut self,
+        loc: PixelLocation,
+        color: Pixel,
+        text: &str,
+    ) -> DrawStatus {
         for (x_char_offset, c) in text.chars().enumerate() {
             let loc_x = x_char_offset * (BuiltInFont::WIDTH + 2) + loc.x;
             let loc_y = loc.y;
@@ -187,18 +187,17 @@ impl LinearFramebuffer {
     }
 }
 
-
 #[cfg(test)]
 mod test {
-    extern crate std;
     extern crate alloc;
+    extern crate std;
 
-    use alloc::vec;
-    use alloc::vec::Vec;
-    use core::mem::MaybeUninit;
     use crate::gfx::frame_info::FrameInfo;
     use crate::gfx::linear_framebuffer::LinearFramebuffer;
     use crate::gfx::{FramebufferPixelLayout, Pixel, PixelLocation};
+    use alloc::vec;
+    use alloc::vec::Vec;
+    use core::mem::MaybeUninit;
 
     const FRAMEBUFFER_X: usize = 1920;
     const FRAMEBUFFER_Y: usize = 1080;
@@ -247,12 +246,13 @@ mod test {
         };
 
         unsafe { TEST_FRAMEBUFFER_ADDRESS_SPACE = MaybeUninit::new(FakeFramebuffer::new()) };
-        let ptr = unsafe { TEST_FRAMEBUFFER_ADDRESS_SPACE.assume_init_mut().as_mut_ptr() };
+        let ptr = unsafe {
+            TEST_FRAMEBUFFER_ADDRESS_SPACE
+                .assume_init_mut()
+                .as_mut_ptr()
+        };
 
-        LinearFramebuffer {
-            ptr,
-            info,
-        }
+        LinearFramebuffer { ptr, info }
     }
 
     #[test]
@@ -261,9 +261,7 @@ mod test {
 
         framebuffer.draw_pixel(Pixel::RED, PixelLocation::new(0, 0));
 
-        let test_address_space = unsafe {
-            TEST_FRAMEBUFFER_ADDRESS_SPACE.assume_init_mut()
-        };
+        let test_address_space = unsafe { TEST_FRAMEBUFFER_ADDRESS_SPACE.assume_init_mut() };
 
         assert_eq!(test_address_space.get(0), 0xFF_u8);
         assert_eq!(test_address_space.get(1), 0x00_u8);
@@ -277,9 +275,7 @@ mod test {
 
         framebuffer.draw_pixel(Pixel::GREEN, PixelLocation::new(0, 0));
 
-        let test_address_space = unsafe {
-            TEST_FRAMEBUFFER_ADDRESS_SPACE.assume_init_mut()
-        };
+        let test_address_space = unsafe { TEST_FRAMEBUFFER_ADDRESS_SPACE.assume_init_mut() };
 
         assert_eq!(test_address_space.get(0), 0x00_u8);
         assert_eq!(test_address_space.get(1), 0xFF_u8);
@@ -293,9 +289,7 @@ mod test {
 
         framebuffer.draw_pixel(Pixel::BLUE, PixelLocation::new(0, 0));
 
-        let test_address_space = unsafe {
-            TEST_FRAMEBUFFER_ADDRESS_SPACE.assume_init_mut()
-        };
+        let test_address_space = unsafe { TEST_FRAMEBUFFER_ADDRESS_SPACE.assume_init_mut() };
 
         assert_eq!(test_address_space.get(0), 0x00_u8);
         assert_eq!(test_address_space.get(1), 0x00_u8);
@@ -309,9 +303,7 @@ mod test {
 
         framebuffer.draw_pixel(Pixel::WHITE, PixelLocation::new(0, 0));
 
-        let test_address_space = unsafe {
-            TEST_FRAMEBUFFER_ADDRESS_SPACE.assume_init_mut()
-        };
+        let test_address_space = unsafe { TEST_FRAMEBUFFER_ADDRESS_SPACE.assume_init_mut() };
 
         assert_eq!(test_address_space.get(0), 0xFF_u8);
         assert_eq!(test_address_space.get(1), 0xFF_u8);
@@ -325,14 +317,11 @@ mod test {
 
         framebuffer.draw_pixel(Pixel::BLACK, PixelLocation::new(0, 0));
 
-        let test_address_space = unsafe {
-            TEST_FRAMEBUFFER_ADDRESS_SPACE.assume_init_mut()
-        };
+        let test_address_space = unsafe { TEST_FRAMEBUFFER_ADDRESS_SPACE.assume_init_mut() };
 
         assert_eq!(test_address_space.get(0), 0x00_u8);
         assert_eq!(test_address_space.get(1), 0x00_u8);
         assert_eq!(test_address_space.get(2), 0x00_u8);
         assert_eq!(test_address_space.get(3), 0x00_u8);
     }
-
 }

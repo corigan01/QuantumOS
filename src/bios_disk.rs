@@ -29,6 +29,8 @@ use fatfs::{FileSystem, FormatVolumeOptions, FsOptions};
 use std::fs;
 use std::fs::OpenOptions;
 use std::io::{Read, Seek, SeekFrom, Write};
+use std::path::Path;
+use std::process::Command;
 use owo_colors::OwoColorize;
 
 pub fn delete_disk_img(disk_name: String) -> Result<(), Box<dyn std::error::Error>> {

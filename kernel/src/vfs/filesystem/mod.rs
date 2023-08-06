@@ -1,11 +1,11 @@
 /*
-  ____                 __               __   _ __
- / __ \__ _____ ____  / /___ ____ _    / /  (_) /
-/ /_/ / // / _ `/ _ \/ __/ // /  ' \  / /__/ / _ \
-\___\_\_,_/\_,_/_//_/\__/\_,_/_/_/_/ /____/_/_.__/
-  Part of the Quantum OS Project
+  ____                 __               __ __                 __
+ / __ \__ _____ ____  / /___ ____ _    / //_/__ _______  ___ / /
+/ /_/ / // / _ `/ _ \/ __/ // /  ' \  / ,< / -_) __/ _ \/ -_) /
+\___\_\_,_/\_,_/_//_/\__/\_,_/_/_/_/ /_/|_|\__/_/ /_//_/\__/_/
+  Part of the Quantum OS Kernel
 
-Copyright 2023 Gavin Kellam
+Copyright 2022 Gavin Kellam
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
 associated documentation files (the "Software"), to deal in the Software without restriction,
@@ -23,27 +23,5 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use over_stacked::heapless_vector::HeaplessVec;
+mod ext2;
 
-// Just like the SerenityOS Project,
-// This is a quick and dirty allocator to get things going! :^)
-
-#[repr(C, packed)]
-pub struct Allocation {
-    ptr: *mut u8,
-    len: u32
-}
-
-#[allow(dead_code)]
-pub struct ComplexAllocator {
-    ptr: *mut u8,
-    size: usize,
-
-    // The idea is that this can store a first few memory allocations,
-    // then when it fills up it will dump them into the allocation array
-    pool_allocation: HeaplessVec<Allocation, 10>,
-
-
-    allocation_array: *mut Allocation,
-    allocation_array_len: usize
-}

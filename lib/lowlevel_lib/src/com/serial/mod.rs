@@ -25,7 +25,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 pub use crate::com::serial::options::*;
 use crate::com::serial::registers::*;
-use crate::debug::StreamableConnection;
+use core::fmt::Write;
 
 use crate::x86_64::io::port::IOPort;
 
@@ -115,8 +115,12 @@ impl SerialDevice {
     }
 }
 
-impl StreamableConnection for SerialDevice {
-    fn display_char(&self, c: char) {
-        self.send_byte_sync(c as u8);
+impl Write for SerialDevice {
+    fn write_str(&mut self, s: &str) -> core::fmt::Result {
+        for byte in s.bytes() {
+            self.send_byte_sync(byte);
+        }
+
+        Ok(())
     }
 }

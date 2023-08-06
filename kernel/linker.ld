@@ -4,7 +4,7 @@ SECTIONS {
     . = 0x1000000;
 
     .start : {
-        *(.start)
+        *(.start .start.*)
     }
     .text : {
         *(.text .text.*)

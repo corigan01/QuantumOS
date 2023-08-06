@@ -28,16 +28,20 @@ Quantum OS Lib file, documentation coming soon!
 #![no_std]
 #![no_main]
 #![allow(dead_code)]
-
 #![feature(custom_test_frameworks)]
 #![test_runner(crate::test_handler::test_runner)]
 #![reexport_test_harness_main = "run_test"]
+#![feature(error_in_core)]
+#![feature(maybe_uninit_slice)]
 
-pub mod qemu;
 pub mod clock;
+pub mod qemu;
 
+pub mod kernel_console;
 #[cfg(test)]
 pub mod test_handler;
+pub mod vfs;
+pub mod hex_dump;
 
 #[cfg(test)]
 pub fn test_main() {

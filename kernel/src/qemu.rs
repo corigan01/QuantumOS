@@ -33,8 +33,10 @@ pub enum QemuExitCode {
     Failed = 0x11,
 }
 
-pub fn exit_qemu(exit_code: QemuExitCode) {
-    unsafe {
-        byte_out(0xF4, exit_code as u8);
+pub fn exit_qemu(exit_code: QemuExitCode) -> ! {
+    loop {
+        unsafe {
+            byte_out(0xF4, exit_code as u8);
+        }
     }
 }

@@ -27,5 +27,5 @@ use crate::gfx::Pixel;
 
 pub struct Glyph<const PIXELS_X: usize, const PIXELS_Y: usize> {
     c: char,
-    pixel_data: [[Pixel; PIXELS_X]; PIXELS_Y]
+    pixel_data: [[Pixel; PIXELS_X]; PIXELS_Y],
 }

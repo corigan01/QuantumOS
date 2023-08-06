@@ -27,11 +27,11 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 use core::ops::{Add, AddAssign, Sub, SubAssign};
 
+pub mod bitmap_font;
 pub mod draw_packet;
 pub mod frame_info;
-pub mod rectangle;
 pub mod linear_framebuffer;
-pub mod bitmap_font;
+pub mod rectangle;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum FramebufferPixelLayout {
@@ -51,10 +51,7 @@ pub struct PixelLocation {
 
 impl PixelLocation {
     pub fn new(x: usize, y: usize) -> Self {
-        Self {
-            x,
-            y
-        }
+        Self { x, y }
     }
 }
 
@@ -96,10 +93,7 @@ impl AddAssign for PixelLocation {
 
 impl Default for PixelLocation {
     fn default() -> Self {
-        Self {
-            x: 0,
-            y: 0
-        }
+        Self { x: 0, y: 0 }
     }
 }
 
@@ -113,9 +107,9 @@ pub struct Pixel {
 }
 
 impl Pixel {
-    pub const RED: Pixel =   Pixel::from_hex(0xFF0000);
+    pub const RED: Pixel = Pixel::from_hex(0xFF0000);
     pub const GREEN: Pixel = Pixel::from_hex(0x00FF00);
-    pub const BLUE: Pixel =  Pixel::from_hex(0x0000FF);
+    pub const BLUE: Pixel = Pixel::from_hex(0x0000FF);
     pub const WHITE: Pixel = Pixel::from_hex(0xFFFFFF);
     pub const BLACK: Pixel = Pixel::from_hex(0x000000);
 
@@ -124,7 +118,7 @@ impl Pixel {
             red: ((hex & 0xFF0000) >> 16) as u8,
             green: ((hex & 0x00FF00) >> 8) as u8,
             blue: (hex & 0x0000FF) as u8,
-            alpha: 255
+            alpha: 255,
         }
     }
 
@@ -133,7 +127,7 @@ impl Pixel {
             red: ((rgba_hex & 0xFF0000) >> 24) as u8,
             green: ((rgba_hex & 0x00FF00) >> 16) as u8,
             blue: ((rgba_hex & 0x0000FF) >> 8) as u8,
-            alpha: ((rgba_hex & 0x0000FF) >> 0) as u8
+            alpha: ((rgba_hex & 0x0000FF) >> 0) as u8,
         }
     }
 
@@ -142,26 +136,26 @@ impl Pixel {
             red,
             green,
             blue,
-            alpha: 255
+            alpha: 255,
         }
     }
 
     pub const fn to_hex_with_layout(&self, layout: FramebufferPixelLayout) -> u32 {
         match layout {
             FramebufferPixelLayout::RGB => {
-                ((self.red as u32) << 2*8)          |
-                    ((self.green as u32) << 1*8)    |
-                    ((self.blue as u32) << 0*8)
+                ((self.red as u32) << 2 * 8)
+                    | ((self.green as u32) << 1 * 8)
+                    | ((self.blue as u32) << 0 * 8)
             }
             FramebufferPixelLayout::GRB => {
-                ((self.red as u32) << 1*8)          |
-                    ((self.green as u32) << 2*8)    |
-                    ((self.blue as u32) << 0*8)
+                ((self.red as u32) << 1 * 8)
+                    | ((self.green as u32) << 2 * 8)
+                    | ((self.blue as u32) << 0 * 8)
             }
             FramebufferPixelLayout::BGR => {
-                ((self.red as u32) << 0*8)          |
-                    ((self.green as u32) << 1*8)    |
-                    ((self.blue as u32) << 2*8)
+                ((self.red as u32) << 0 * 8)
+                    | ((self.green as u32) << 1 * 8)
+                    | ((self.blue as u32) << 2 * 8)
             }
             FramebufferPixelLayout::WB => {
                 unimplemented!()
@@ -189,7 +183,6 @@ mod test {
         let pixel = pixel.to_hex_with_layout(FramebufferPixelLayout::RGB);
 
         assert_eq!(pixel, 0xFF0000);
-
     }
 
     #[test]

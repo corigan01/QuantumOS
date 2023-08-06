@@ -23,8 +23,8 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use crate::debug::{SimpleStreamFunction, StreamableConnection};
-use core::fmt::Debug;
+use crate::debug::SimpleStreamFunction;
+use core::fmt::{Debug, Write};
 use core::marker::PhantomData;
 
 pub enum StreamType {
@@ -34,11 +34,11 @@ pub enum StreamType {
     Other,
 }
 
-#[derive(Clone, Copy)]
+//#[derive(Clone, Copy)]
 #[allow(dead_code)]
 pub struct StreamConnection {
     pub(crate) info: StreamConnectionInformation,
-    pub(crate) outlet: Option<&'static (dyn StreamableConnection + Send + Sync)>,
+    pub(crate) outlet: Option<&'static mut (dyn Write + Send + Sync)>,
     pub(crate) ignore_welcome: bool,
     pub(crate) simple_outlet: Option<SimpleStreamFunction>,
 }
@@ -49,6 +49,7 @@ pub(crate) struct StreamConnectionInformation {
     pub(crate) does_support_scrolling: bool,
     pub(crate) data_rate: Option<usize>,
     pub(crate) connection_name: &'static str,
+    pub(crate) who_using: &'static str,
 }
 
 impl StreamConnectionInformation {
@@ -57,7 +58,8 @@ impl StreamConnectionInformation {
             max_chars: None,
             does_support_scrolling: true,
             data_rate: None,
-            connection_name: "Unnamed Connection",
+            connection_name: "Unknown",
+            who_using: "Unknown",
         }
     }
 }
@@ -78,7 +80,7 @@ pub struct ConsoleStreamType;
 
 pub struct StreamConnectionBuilder<Type = UnknownConnectionType> {
     info: StreamConnectionInformation,
-    outlet: Option<&'static (dyn StreamableConnection + Send + Sync)>,
+    outlet: Option<&'static mut (dyn Write + Send + Sync)>,
     simple_outlet: Option<SimpleStreamFunction>,
     ignore_welcome: bool,
     reserved: PhantomData<Type>,
@@ -115,7 +117,7 @@ impl StreamConnectionBuilder<ConsoleStreamType> {
         self
     }
 
-    pub fn add_outlet(mut self, outlet: &'static (dyn StreamableConnection + Send + Sync)) -> Self {
+    pub fn add_outlet(mut self, outlet: &'static mut (dyn Write + Send + Sync)) -> Self {
         self.outlet = Some(outlet);
 
         self
@@ -129,6 +131,12 @@ impl StreamConnectionBuilder<ConsoleStreamType> {
 
     pub fn add_connection_name(mut self, name: &'static str) -> Self {
         self.info.connection_name = name;
+
+        self
+    }
+
+    pub fn add_who_using(mut self, name: &'static str) -> Self {
+        self.info.who_using = name;
 
         self
     }

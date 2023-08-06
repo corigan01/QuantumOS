@@ -8,6 +8,10 @@ build="build.rs"
 spin = "0.9.8"
 quantum_lib = {path = "../lib/lowlevel_lib" }
 bootloader = {path = "../bootloader/bootloader"}
+qk_alloc = { path = "../lib/alloc" }
+qk_mem = { path = "../lib/qk_mem" }
+quantum_utils = { path = "../lib/quantum_utils" }
+
 owo-colors = "3.5.0"
 
 [dependencies.lazy_static]
