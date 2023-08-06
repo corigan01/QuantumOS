@@ -39,6 +39,8 @@ use crate::artifacts::{get_program_path, get_project_root, get_target_directory,
 use walkdir::WalkDir;
 use crate::config_generator::BiosBootConfig;
 
+const BYTES_TO_READ_AT_A_TIME: usize = 1024 * 1024;
+
 pub fn make_and_construct_bios_image(kernel: &String, bios_stages: &Vec<(StageID, String)>) -> anyhow::Result<String> {
     // Make the formatted raw images first
     let multi_progress = MultiProgress::new();
@@ -410,13 +412,13 @@ pub fn make_mbr_disk(fat_img: &String, ext2_img: &String, progress: &MultiProgre
         .progress_chars("##-"));
     bar.set_message("Copying FAT");
 
-    let mut fat_image_buffer = vec![0_u8; 512];
+    let mut image_buffer = vec![0_u8; BYTES_TO_READ_AT_A_TIME];
     loop {
-        match fat_image.read(&mut fat_image_buffer) {
+        match fat_image.read(&mut image_buffer) {
             Ok(0) => break,
             Ok(n) => {
                 bar.inc(n as u64);
-                disk_image.write_all(&fat_image_buffer[0..n])?;
+                disk_image.write_all(&image_buffer[0..n])?;
             }
             Err(e) => return Err(e.into())
         }
@@ -433,13 +435,12 @@ pub fn make_mbr_disk(fat_img: &String, ext2_img: &String, progress: &MultiProgre
         .progress_chars("##-"));
     bar.set_message("Copying EXT2");
 
-    let mut ext2_image_buffer = vec![0_u8; 512];
     loop {
-        match ext2_image.read(&mut ext2_image_buffer) {
+        match ext2_image.read(&mut image_buffer) {
             Ok(0) => break,
             Ok(n) => {
                 bar.inc(n as u64);
-                disk_image.write_all(&ext2_image_buffer[0..n])?;
+                disk_image.write_all(&image_buffer[0..n])?;
             }
             Err(e) => return Err(e.into())
         }
