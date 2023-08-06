@@ -26,8 +26,6 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 use std::process::exit;
 use clap::{Args, Parser, Subcommand, ValueEnum};
-use indicatif::{MultiProgress, ProgressStyle};
-use owo_colors::OwoColorize;
 use crate::artifacts::{build_bios_bootloader_items, build_kernel, get_target_directory, remove_target_root};
 use crate::emulator_spawner::spawn_qemu;
 use crate::filesystem_constructor::make_and_construct_bios_image;
@@ -125,19 +123,14 @@ macro_rules! status_println {
     }
 }
 
-const BUILD_ARTIFACTS_DIR: &str = "target";
 
 pub fn build(options: &CompileOptions) {
     status_println!("Building QuantumOS");
-
-
 
     let kern = build_kernel(options).unwrap();
 
     if options.bootloader == BootloaderOption::Bios {
         let bios = build_bios_bootloader_items(options).unwrap();
-
-
         make_and_construct_bios_image(&kern, &bios).unwrap();
     } else {
         todo!("Make UEFI bootloader!");

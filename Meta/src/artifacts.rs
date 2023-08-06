@@ -24,27 +24,13 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 */
 
-use std::{env, fs};
+use std::env;
 use std::fs::remove_dir_all;
 use anyhow::{anyhow, Context};
 use std::path::Path;
 use std::process::Command;
 use crate::{CompileOptions, RunCommands};
 use owo_colors::OwoColorize;
-
-pub fn ensure_artifact_dir_exists(path: &Path) -> anyhow::Result<()> {
-    if path.is_file() {
-        fs::remove_file(path)?;
-    }
-
-    if path.exists() {
-        return Ok(());
-    }
-
-    fs::create_dir(path)?;
-
-    Ok(())
-}
 
 /// # Get Program Path
 /// Finds the true path of any program in the $PATH

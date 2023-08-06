@@ -24,11 +24,8 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 */
 
-use owo_colors::OwoColorize;
 use meta::{BootloaderOption, build, clean, CompileOptions, run, RunCommands, status_println, test};
 use clap::Parser;
-
-
 
 fn main() {
     let args = CompileOptions::parse();
@@ -37,7 +34,7 @@ fn main() {
         "Booting in uefi is not currently supported!"
     );
 
-    status_println!("Quantum Builder \n{:#?}\n", args.white());
+    status_println!("Quantum Builder");
 
     match args.options {
         RunCommands::Build => {
