@@ -30,29 +30,49 @@ use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::Path;
 use std::process::Command;
 use anyhow::{anyhow, Context};
+use ext2::Ext2;
 use fatfs::FatType::Fat16;
 use fatfs::FormatVolumeOptions;
+use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use mbrman::MBR;
-use crate::artifacts::{get_program_path, get_target_directory, StageID};
+use crate::artifacts::{get_program_path, get_project_root, get_target_directory, StageID};
 use walkdir::WalkDir;
 use crate::config_generator::BiosBootConfig;
 
-
 pub fn make_and_construct_bios_image(kernel: &String, bios_stages: &Vec<(StageID, String)>) -> anyhow::Result<String> {
     // Make the formatted raw images first
+    let multi_progress = MultiProgress::new();
+    let progress = multi_progress.add(ProgressBar::new(13));
+    progress.set_style(
+        ProgressStyle::with_template(
+            "[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len:7} {msg}",
+        )
+        .unwrap()
+        .progress_chars("##-")
+    );
+
+
+    progress.set_message("Making EXT2");
     let ext2_img = make_ext2_fs(400 * 1024 * 1024)?;
+    progress.inc(1);
+    progress.set_message("Making FAT");
     let fat_img = make_fat_fs(50 * 1024 * 1024)?;
+    progress.inc(1);
 
     // Move artifacts into directories
+    progress.set_message("Making Build Directories");
     let target_path = get_target_directory()?;
     let bootloader_build_target_path = format!("{}/bootloader_build", target_path);
     let bootloader_sub_target_path = format!("{}/bootloader", bootloader_build_target_path);
 
     create_dir_all(&bootloader_build_target_path)?;
+    progress.inc(1);
     create_dir_all(&bootloader_sub_target_path)?;
+    progress.inc(1);
 
     let config_target_path = format!("{}/bootloader.cfg", bootloader_sub_target_path);
 
+    progress.set_message("Making Loader Config");
     make_bootloader_config_file(
         &config_target_path,
         16,
@@ -61,7 +81,9 @@ pub fn make_and_construct_bios_image(kernel: &String, bios_stages: &Vec<(StageID
         format!("/bootloader/{}", StageID::Stage2.to_stage_id_string()),
         format!("/bootloader/{}", StageID::Stage3.to_stage_id_string())
     ).context(anyhow!("Could not generate bootloader config file"))?;
+    progress.inc(1);
 
+    progress.set_message("Copying Artifacts");
     // Copy the bootloader stages to the tmp folder
     for (stage_id, stage_path) in bios_stages {
         fs::copy(
@@ -69,12 +91,14 @@ pub fn make_and_construct_bios_image(kernel: &String, bios_stages: &Vec<(StageID
             format!("{}/{}", bootloader_sub_target_path, stage_id.to_stage_id_string())
         )?;
     }
+    progress.inc(1);
 
     // Copy the kernel to the tmp folder
     fs::copy(
         kernel,
         format!("{}/kernel.elf", bootloader_build_target_path)
     )?;
+    progress.inc(1);
 
     let stage1 = bios_stages.iter().find_map(|(stage_id, stage_path)| {
         if stage_id == &StageID::Stage1 {
@@ -84,13 +108,28 @@ pub fn make_and_construct_bios_image(kernel: &String, bios_stages: &Vec<(StageID
         }
     }).ok_or(anyhow!("Could not get Stage1 path"))?;
 
+    let base_image_target_path = format!("{}/base", get_project_root()?);
+
+    progress.set_message("Making Images");
+
     write_directory_into_fat_img(&bootloader_build_target_path, &fat_img)?;
+    progress.inc(1);
+    write_directory_into_ext2_img(&base_image_target_path, &ext2_img)?;
+    progress.inc(1);
 
-    let disk_target_path = make_mbr_disk(&fat_img, &ext2_img)?;
+    progress.set_message("Constructing Disk");
+    let disk_target_path = make_mbr_disk(&fat_img, &ext2_img, &multi_progress)?;
+    progress.inc(1);
+    progress.set_message("Embedding Stage1");
     embed_stage1_into_img(&disk_target_path, stage1)?;
+    progress.inc(1);
 
+    progress.set_message("Cleaning Up");
     remove_file(&fat_img)?;
+    progress.inc(1);
     remove_file(&ext2_img)?;
+    progress.inc(1);
+    progress.finish_and_clear();
 
     Ok(disk_target_path)
 }
@@ -191,6 +230,45 @@ pub fn make_fat_fs(file_size: usize) -> anyhow::Result<String> {
     Ok(fat_target_file)
 }
 
+pub fn write_directory_into_ext2_img(dir_path: &String, ext2_img: &String) -> anyhow::Result<()> {
+    let ext2_img_open = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(ext2_img)?;
+
+    let mut ext2_filesystem = Ext2::new(&ext2_img_open)?;
+
+    let mut root_chars_to_chop = 0;
+    for entry in WalkDir::new(dir_path) {
+        let entry = entry.context(anyhow!("Could not open DirEntry"))?;
+
+        if root_chars_to_chop == 0 {
+            root_chars_to_chop = entry.path().to_string_lossy().len();
+            continue;
+        }
+
+        let system_path = entry.path();
+        let quantum_path = &entry.path().to_string_lossy()[root_chars_to_chop..];
+
+        if system_path.is_dir() {
+            ext2_filesystem.create_dir(quantum_path)?;
+            continue;
+        }
+
+        let mut system_file = OpenOptions::new()
+            .read(true)
+            .open(system_path)?;
+
+        let mut ext2_path = ext2_filesystem.create(quantum_path)?;
+
+        let mut system_file_contents = Vec::new();
+        system_file.read_to_end(&mut system_file_contents)?;
+        ext2_path.write_all(&system_file_contents)?;
+    }
+
+    Ok(())
+}
+
 pub fn write_directory_into_fat_img(dir_path: &String, fat_img: &String) -> anyhow::Result<()> {
     let fat_img_open = OpenOptions::new()
         .read(true)
@@ -255,7 +333,7 @@ pub fn embed_stage1_into_img(img: &String, stage1: &String) -> anyhow::Result<()
     Ok(())
 }
 
-pub fn make_mbr_disk(fat_img: &String, ext2_img: &String) -> anyhow::Result<String> {
+pub fn make_mbr_disk(fat_img: &String, ext2_img: &String, progress: &MultiProgress) -> anyhow::Result<String> {
     let target_dir = get_target_directory()?;
     let mbr_target_path = format!("{}/disk.img", target_dir);
 
@@ -326,31 +404,47 @@ pub fn make_mbr_disk(fat_img: &String, ext2_img: &String) -> anyhow::Result<Stri
     disk_image.seek(SeekFrom::Start(fat_start_disk_offset))?;
     fat_image.seek(SeekFrom::Start(0))?;
 
+    let bar = progress.add(ProgressBar::new(fat_size));
+    bar.set_style(ProgressStyle::with_template("[{elapsed_precise}] {bar:40.cyan/blue} {bytes}/{total_bytes} ({bytes_per_sec}, {eta})")
+        .unwrap()
+        .progress_chars("##-"));
+    bar.set_message("Copying FAT");
+
     let mut fat_image_buffer = vec![0_u8; 512];
     loop {
         match fat_image.read(&mut fat_image_buffer) {
             Ok(0) => break,
             Ok(n) => {
+                bar.inc(n as u64);
                 disk_image.write_all(&fat_image_buffer[0..n])?;
             }
             Err(e) => return Err(e.into())
         }
     }
+    bar.finish_and_clear();
 
     // Write ext2 image onto disk
     disk_image.seek(SeekFrom::Start(ext2_start_disk_offset))?;
     ext2_image.seek(SeekFrom::Start(0))?;
+
+    let bar = progress.add(ProgressBar::new(ext2_size));
+    bar.set_style(ProgressStyle::with_template("[{elapsed_precise}] {bar:40.cyan/blue} {bytes}/{total_bytes} ({bytes_per_sec}, {eta})")
+        .unwrap()
+        .progress_chars("##-"));
+    bar.set_message("Copying EXT2");
 
     let mut ext2_image_buffer = vec![0_u8; 512];
     loop {
         match ext2_image.read(&mut ext2_image_buffer) {
             Ok(0) => break,
             Ok(n) => {
+                bar.inc(n as u64);
                 disk_image.write_all(&ext2_image_buffer[0..n])?;
             }
             Err(e) => return Err(e.into())
         }
     }
+    bar.finish_and_clear();
 
     disk_image.sync_all()?;
 

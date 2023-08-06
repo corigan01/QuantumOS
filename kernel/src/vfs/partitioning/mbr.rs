@@ -31,9 +31,7 @@ use core::mem;
 use core::mem::size_of;
 use qk_alloc::boxed::Box;
 use qk_alloc::vec::Vec;
-use quantum_lib::debug_println;
 use quantum_utils::human_bytes::HumanBytes;
-use crate::hex_dump::dump_array;
 
 #[repr(C, packed)]
 #[derive(Clone, Copy, Debug)]

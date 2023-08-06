@@ -31,7 +31,7 @@ use crate::vfs::ata::registers::{
 use crate::vfs::io::{DiskBus, DiskType, ErrorKind, IOError, IOResult, SeekFrom};
 use crate::vfs::{io, VFSDisk, VFSDiskID};
 use core::error::Error;
-use core::fmt::{Display, Formatter, Write};
+use core::fmt::{Display, Formatter};
 use owo_colors::OwoColorize;
 use qk_alloc::boxed::Box;
 use qk_alloc::string::String;

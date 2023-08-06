@@ -26,7 +26,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 use crate::vfs::ata::init_ata_disks;
 use crate::vfs::io::{DiskInfo, PartitionInfo, Read, Seek, Write};
 use crate::vfs::partitioning::init_partitioning_for_disks;
-use core::fmt::{Debug, Display, Formatter};
+use core::fmt::{Display, Formatter};
 use core::slice::{Iter, IterMut};
 use qk_alloc::boxed::Box;
 use qk_alloc::vec::Vec;

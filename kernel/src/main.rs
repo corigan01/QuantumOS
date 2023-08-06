@@ -28,7 +28,6 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #![no_main] // disable all Rust-level entry points
 #![allow(dead_code)]
 
-use core::fmt::Display;
 use core::panic::PanicInfo;
 use qk_alloc::heap::alloc::KernelHeap;
 use qk_alloc::heap::{get_global_alloc, get_global_alloc_debug, set_global_alloc};
@@ -150,7 +149,7 @@ fn main(boot_info: &KernelBootInformation) {
     debug_println!("\nUsing Bootloader framebuffer");
     let mut framebuffer = boot_info.framebuffer.clone();
 
-    let (physical_memory_map, virtual_memory_map) = setup_memory(boot_info);
+    let (_physical_memory_map, _virtual_memory_map) = setup_memory(boot_info);
 
     let string_test = String::from("OK".bright_green().bold());
     debug_println!("Test String ... {}", string_test.as_str());
