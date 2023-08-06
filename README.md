@@ -31,25 +31,50 @@ Since the Kernel is small, its super easy to build and get running. Follow the f
 (Auto install script coming soon)
 ```
 
-### First time compiling
-```bash
-# If its your first time compiling QuantumOS on this machine, you are
-# going to need to run one extra script to get things running.
-
-&> bash auto_up.sh
-
-# This script will install and configure all the needed cargo and rust
-# features QuantumOS needs to compile!
-```
-
 ### Compiling and Running
 
 ```bash
+# There is a cargo project dedicated to building and running QuantumOS
+&> cd Meta/
+&/Meta/> cargo run -- help
+Meta QuantumOS Compile Script
 
-# After successfully running the `auto_up.sh` script, now all you need to do is run
-# cargo!
+Usage: meta [OPTIONS] <COMMAND>
 
-&> cargo run
+Commands:
+  build  Build QuantumOS and all of its dependencies
+  run    Run QuantumOS
+  test   Test QuantumOS
+  clean  Delete Build artifacts
+  help   Print this message or the help of the given subcommand(s)
+
+Options:
+  -b, --bootloader <BOOTLOADER>
+          Which bootloader to use (bios / uefi)
+          
+          [default: bios]
+
+          Possible values:
+          - bios: Use bios booting
+          - uefi: use uefi booting
+
+      --kvm
+          Enable KVM
+
+  -d, --debug-compile
+          Debug Compile Mode
+
+  -h, --help
+          Print help (see a summary with '-h')
+
+  -V, --version
+          Print version
+&/Meta/> cargo run -- run
+...
+
+# This will build and run QuantumOS with normal bulid options!
+# There should be no extra work to get Quantum Booting :)
+
 
 ```
 ---
