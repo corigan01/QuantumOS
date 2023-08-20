@@ -205,8 +205,11 @@ pub enum PartitionType {
 }
 
 pub trait PartitionInfo {
-    fn seek_start(&self) -> u64;
-    fn seek_end(&self) -> u64;
+    fn logical_partition_start_byte(&self) -> u64;
+    fn logical_partition_end_byte(&self) -> u64;
+    fn partition_size(&self) -> u64 {
+        self.logical_partition_end_byte() - self.logical_partition_start_byte()
+    }
 
     fn is_bootable(&self) -> bool {
         false
@@ -216,3 +219,4 @@ pub trait PartitionInfo {
         PartitionType::Unknown
     }
 }
+

@@ -21,30 +21,56 @@ NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPO
 NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
 DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-Quantum OS Lib file, documentation coming soon!
 */
 
-#![no_std]
-#![no_main]
-#![allow(dead_code)]
-#![feature(custom_test_frameworks)]
-#![test_runner(crate::test_handler::test_runner)]
-#![reexport_test_harness_main = "run_test"]
-#![feature(error_in_core)]
-#![feature(maybe_uninit_slice)]
-#![feature(int_roundings)]
+mod boot_record;
 
-pub mod clock;
-pub mod qemu;
+use qk_alloc::boxed::Box;
+use qk_alloc::string::String;
+use crate::vfs::filesystem::fat::boot_record::BiosParameterBlock;
+use crate::vfs::io::IOResult;
+use crate::vfs::{VFSPartition, VFSPartitionID};
 
-pub mod kernel_console;
-#[cfg(test)]
-pub mod test_handler;
-pub mod vfs;
-pub mod hex_dump;
+#[derive(Clone, Copy, Debug)]
+pub enum EntryType {
+    RootDir,
+    Dir,
+    File
+}
 
-#[cfg(test)]
-pub fn test_main() {
-    run_test();
+#[derive(Clone, Debug)]
+pub struct FatEntry {
+    path: String,
+    start_cluster: u64,
+    sector_count: u64,
+    kind: EntryType
+}
+
+pub struct FatFilesystem {
+    partition_id: VFSPartitionID,
+    bpb: BiosParameterBlock,
+}
+
+impl FatFilesystem {
+    pub fn read_dir(filepath: &str) -> IOResult<>
+}
+
+pub fn init_fat_fs(partition_id: VFSPartitionID) -> IOResult<Box<dyn VFSPartition>> {
+    let bpb = BiosParameterBlock::populate_from_medium(
+        &mut partition_id.get_entry_mut().partition
+    )?;
+
+    let fat_fs = FatFilesystem {
+        partition_id,
+        bpb
+    };
+
+
+
+
+    Ok(Box::new(fat_fs))
+}
+
+pub fn is_media_fat_formatted(media: &mut Box<dyn VFSPartition>) -> IOResult<bool> {
+    Ok(BiosParameterBlock::populate_from_medium(media).is_ok())
 }

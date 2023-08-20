@@ -91,11 +91,11 @@ impl MBRPartitionEntry {
 }
 
 impl PartitionInfo for MBRPartitionEntry {
-    fn seek_start(&self) -> u64 {
+    fn logical_partition_start_byte(&self) -> u64 {
         self.start_lba * 512
     }
 
-    fn seek_end(&self) -> u64 {
+    fn logical_partition_end_byte(&self) -> u64 {
         self.end_lba * 512
     }
 
@@ -110,24 +110,26 @@ impl Seek for MBRPartitionEntry {
             .modify_pos(self.total_bytes().into(), 0, self.seek_current)
             .ok_or(PartitionErr::NotSeekable)?;
 
-        // Actually just offset the disk here, so when we go to read/write its just a
-        // transparent calling conversion :)
-        self.disk_id
-            .get_disk_mut()
-            .seek(SeekFrom::Start(self.seek_current + self.start_lba))?;
-
         Ok(self.seek_current)
     }
 }
 
 impl Read for MBRPartitionEntry {
     fn read(&mut self, buf: &mut [u8]) -> IOResult<usize> {
+        self.disk_id
+            .get_disk_mut()
+            .seek(SeekFrom::Start(self.seek_current + self.logical_partition_start_byte()))?;
+
         self.disk_id.get_disk_mut().read(buf)
     }
 }
 
 impl Write for MBRPartitionEntry {
     fn write(&mut self, buf: &[u8]) -> IOResult<usize> {
+        self.disk_id
+            .get_disk_mut()
+            .seek(SeekFrom::Start(self.seek_current + self.logical_partition_start_byte()))?;
+
         self.disk_id.get_disk_mut().write(buf)
     }
 
@@ -175,7 +177,7 @@ impl MBR {
                 continue;
             }
 
-            let mbr_entry = MBRPartitionEntry {
+            let mut mbr_entry = MBRPartitionEntry {
                 disk_id: self.disk_id,
                 seek_current: 0,
                 start_lba,
@@ -183,6 +185,8 @@ impl MBR {
                 partition_type,
                 drive_attributes,
             };
+
+            mbr_entry.seek(SeekFrom::Start(0))?;
 
             entries.push(Box::new(mbr_entry));
         }

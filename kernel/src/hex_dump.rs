@@ -23,20 +23,47 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use quantum_lib::{debug_print, debug_println};
+use quantum_lib::debug_print;
 
-const ROWS_TO_PRINT: usize = 16;
+const ROWS_TO_PRINT: usize = 10;
 const BYTES_PER_ROW: usize = 2;
 
 pub fn dump_array(arr: &[u8]) {
-    for (index, byte) in arr.iter().enumerate() {
-        debug_print!("{:02X}", byte);
+    debug_print!("\nDumping Array of size {}!\n| ", arr.len());
+    let mut line_string = [0u8; ROWS_TO_PRINT];
+
+    for index in 0..arr.len().checked_next_multiple_of(ROWS_TO_PRINT).unwrap_or(0) {
+        let byte = arr.get(index).unwrap_or(&0);
+
+        if index > arr.len() {
+            debug_print!("--");
+        } else {
+            debug_print!("{:02X}", byte);
+        }
+
+        line_string[index % ROWS_TO_PRINT] = *byte;
 
         if (index + 1) % 2 == 0 {
             debug_print!(" ");
         }
         if (index + 1) % (ROWS_TO_PRINT * BYTES_PER_ROW) == 0 {
-            debug_println!();
+            debug_print!("| ");
+
+            for char_byte in line_string.iter() {
+                if char_byte.is_ascii_alphanumeric() || char_byte.is_ascii_alphabetic() {
+                    debug_print!("{}", *char_byte as char);
+                } else {
+                    debug_print!(".");
+                }
+            }
+
+            debug_print!("\n");
+
+            if index < arr.len() - 1 {
+                debug_print!("| ");
+            } else {
+                debug_print!("\n");
+            }
         }
     }
 }

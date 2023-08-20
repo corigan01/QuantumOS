@@ -33,6 +33,7 @@ use qk_alloc::string::String;
 use qk_alloc::vec::Vec;
 use quantum_lib::debug_println;
 use quantum_utils::human_bytes::HumanBytes;
+use crate::vfs::filesystem::{SupportedFilesystem, try_init_on_all};
 
 pub mod ata;
 pub mod filesystem;
@@ -60,11 +61,13 @@ pub trait VFSFilesystem {
 }
 
 pub struct VFSFilesystemEntry {
-    entry_point: String,
+    entry_point: Option<String>,
+    filesystem: SupportedFilesystem,
     driver: Box<dyn VFSFilesystem>
 }
 
 pub struct VFSPartitionEntry {
+    id: VFSPartitionID,
     partition: Box<dyn VFSPartition>,
     filesystem: Option<VFSFilesystemEntry>
 }
@@ -76,9 +79,49 @@ pub struct VFSEntry {
 }
 
 static mut VFS_DISK_NEXT_ID: usize = 0;
+static mut VFS_PARTITION_NEXT_ID: usize = 0;
+
 static mut VFS_ENTRIES: Vec<VFSEntry> = Vec::new();
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub struct VFSPartitionID(usize);
+
+impl VFSPartitionID {
+    pub fn get_entry(&self) -> &VFSPartitionEntry {
+        VFSDiskID::resolve_partition_id_reference(self).unwrap()
+    }
+
+    pub fn get_entry_mut(&self) -> &mut VFSPartitionEntry {
+        VFSDiskID::resolve_partition_id_reference(self).unwrap()
+    }
+
+    pub fn resolve_parent_disk(&self) -> VFSDiskID {
+        for disks in VFSDiskID::disks_iter() {
+            for partitions in disks.parts.iter() {
+                if partitions.id == *self {
+                    return disks.id;
+                }
+            }
+        }
+
+        unreachable!("Should be able to resolve parent disk for partition")
+    }
+
+    pub fn attach_filesystem(&self, filesystem: VFSFilesystemEntry) {
+        self.get_entry_mut().filesystem = Some(filesystem);
+    }
+
+    pub fn fs_type(&self) -> Option<SupportedFilesystem> {
+        Some(self.get_entry().filesystem.as_ref()?.filesystem)
+    }
+
+    pub fn mount_point(&self) -> Option<String> {
+        self.get_entry().filesystem.as_ref()?.entry_point.clone()
+    }
+}
+
+
+#[derive(Clone, Copy, PartialEq)]
 pub struct VFSDiskID(usize);
 
 impl VFSDiskID {
@@ -120,16 +163,38 @@ impl VFSDiskID {
         debug_println!("VFS Registered {} new partitions on disk {}:", partitions.len(), self.0);
         for partition in partitions.into_iter() {
             debug_println!("    0x{:012x} --> 0x{:012x} ({:10}) -- {}",
-                partition.seek_start(),
-                partition.seek_end(),
-                HumanBytes::from(partition.seek_end() - partition.seek_start()),
+                partition.logical_partition_start_byte(),
+                partition.logical_partition_end_byte(),
+                HumanBytes::from(partition.logical_partition_end_byte() - partition.logical_partition_start_byte()),
                 if partition.is_bootable() { "bootable" } else { "" }
             );
 
             own_entry.parts.push(VFSPartitionEntry {
+                id: VFSPartitionID(unsafe { VFS_PARTITION_NEXT_ID }),
                 partition,
                 filesystem: None,
             });
+
+            unsafe { VFS_PARTITION_NEXT_ID += 1; }
+        }
+    }
+
+    pub fn resolve_partition_id_reference(id: &VFSPartitionID) -> Option<&mut VFSPartitionEntry> {
+        for disks in Self::disks_iter_mut() {
+            for partitions in disks.parts.iter_mut() {
+                if *id == partitions.id {
+                    return Some(partitions);
+                }
+            }
+        }
+
+        return None;
+    }
+
+    pub fn run_on_partition_ids<F>(&self, mut runner: F)
+        where F: FnMut(&VFSPartitionID) {
+        for partition in self.get_entry_mut().parts.iter() {
+            runner(&partition.id);
         }
     }
 
@@ -141,6 +206,12 @@ impl VFSDiskID {
         unsafe { VFS_ENTRIES.iter_mut() }
     }
 
+    pub fn get_entry(&self) -> &VFSEntry {
+        Self::disks_iter_mut()
+            .find(|disk_entry| disk_entry.id.0 == self.0)
+            .expect("Could not find own entry in disk list!")
+    }
+
     pub fn get_entry_mut(&self) -> &mut VFSEntry {
         Self::disks_iter_mut()
             .find(|disk_entry| disk_entry.id.0 == self.0)
@@ -150,12 +221,17 @@ impl VFSDiskID {
     pub fn get_disk_mut(&self) -> &mut Box<dyn VFSDisk> {
         &mut self.get_entry_mut().disk
     }
+
+    pub fn get_disk(&self) -> &Box<dyn VFSDisk> {
+        &self.get_entry_mut().disk
+    }
 }
 
 pub fn init() {
     debug_println!("\n\nVFS -----------------");
     init_ata_disks();
     init_partitioning_for_disks();
+    try_init_on_all();
 
     debug_println!("\n\n---------------------");
 }
