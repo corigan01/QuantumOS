@@ -574,6 +574,10 @@ pub struct RawIdentifyStruct {
     pub integrity_word: Word,
 }
 
+/// # Const Assert to ensure the datatype is exactly 'spec' sized
+/// Since this datatype is so large, some modifications or refactorings could
+/// introduce problems. This const assert is here to stop the most dangerous
+/// case.
 const _: () = assert!(
     mem::size_of::<RawIdentifyStruct>() == 512,
     "RawIdentifyStruct should be 512 bytes!"
@@ -582,7 +586,7 @@ const _: () = assert!(
 impl RawIdentifyStruct {
     pub fn new() -> Self {
         // This is safe because the entire struct is primitive integers,
-        // so their 'zero' *is* 0.
+        // so 0 is defined.
         unsafe { mem::zeroed() }
     }
 

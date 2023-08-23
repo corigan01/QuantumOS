@@ -121,7 +121,7 @@ pub trait FatProvider {
 }
 
 pub struct BiosParameterBlock {
-    bpb: Box<RawBiosParameterBlock>,
+    bpb: RawBiosParameterBlock,
     extended: Box<dyn FatProvider>
 }
 
@@ -132,7 +132,7 @@ impl BiosParameterBlock {
         let mut first_sector = Vec::from([0u8; 512]);
         medium.read_exact(&mut first_sector)?;
 
-        let bpb = Box::new(unsafe { ptr::read(first_sector.as_ptr() as *const RawBiosParameterBlock) });
+        let bpb = unsafe { ptr::read(first_sector.as_ptr() as *const RawBiosParameterBlock) };
 
         if !bpb.is_valid() {
             return Err(Box::new(FilesystemError::Invalid));

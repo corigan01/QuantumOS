@@ -27,6 +27,7 @@ mod boot_record;
 
 use qk_alloc::boxed::Box;
 use qk_alloc::string::String;
+use quantum_lib::debug_println;
 use crate::vfs::filesystem::fat::boot_record::BiosParameterBlock;
 use crate::vfs::io::IOResult;
 use crate::vfs::{VFSPartition, VFSPartitionID};
@@ -52,8 +53,13 @@ pub struct FatFilesystem {
 }
 
 impl FatFilesystem {
-    pub fn read_dir(filepath: &str) -> IOResult<>
+    pub fn get_root_entry(&self) -> FatEntry {
+        self.bpb.get_root_entry()
+    }
+
+
 }
+
 
 pub fn init_fat_fs(partition_id: VFSPartitionID) -> IOResult<Box<dyn VFSPartition>> {
     let bpb = BiosParameterBlock::populate_from_medium(
@@ -65,10 +71,16 @@ pub fn init_fat_fs(partition_id: VFSPartitionID) -> IOResult<Box<dyn VFSPartitio
         bpb
     };
 
+    let root_entry = fat_fs.get_root_entry();
+
+    debug_println!("{:#?}", root_entry);
 
 
 
-    Ok(Box::new(fat_fs))
+
+
+
+    todo!("Finish Fat")
 }
 
 pub fn is_media_fat_formatted(media: &mut Box<dyn VFSPartition>) -> IOResult<bool> {

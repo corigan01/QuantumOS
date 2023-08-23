@@ -110,6 +110,8 @@ pub struct ATADisk {
 }
 
 impl ATADisk {
+    // FIXME: We should not assume anything about the disk, and should be able to work with
+    //        different sectored disks.
     const WORDS_PER_SECTOR: usize = 256;
     const BYTES_PER_SECTOR: usize = Self::WORDS_PER_SECTOR * 2;
 
@@ -122,6 +124,7 @@ impl ATADisk {
         }
     }
 
+    // FIXME: We should setup a timeout in case the disk causes a kernel lockup
     fn io_wait(&self) {
         while StatusRegister::is_status(self.device, StatusFlags::SpinDown)
             && StatusRegister::is_busy(self.device)
@@ -233,6 +236,8 @@ impl Display for ATADisk {
     }
 }
 
+// FIXME: This is a lot of logic for one factory function. It should be mostly condensed into
+//        the type. This would eventually allow us to move on to different disk types.
 fn scan_for_disks() -> Vec<ATADisk> {
     let mut disks: Vec<ATADisk> = Vec::new();
 
@@ -259,12 +264,14 @@ fn scan_for_disks() -> Vec<ATADisk> {
 
         // If some bit got set for the sector registers, its not a ATA device.
         // Some ATAPI drives to not follow spec! At this point we *must* stop pulling.
+        // TODO: Implement ATAPI (CDROM) driver to support these types of medium
         if !SectorRegisters::are_all_zero(disk) {
             debug_println!("{}", "Skip".yellow());
             continue;
         }
 
         // Loop while busy
+        // FIXME: We should also setup a timeout in case the disk ends up locking the kernel
         while StatusRegister::is_busy(disk)
             && !StatusRegister::is_err_or_fault(disk)
             && !StatusRegister::is_status(disk, StatusFlags::DRQ)
@@ -332,7 +339,7 @@ impl io::Read for ATADisk {
         let amount_of_sectors =
             ((amount_to_read + sect_across_bounds) / Self::BYTES_PER_SECTOR) + 1;
 
-        // TODO: since we are already reading into a buf, why do we have to read into a vector?
+        // FIXME: since we are already reading into a buf, why do we have to read into a vector?
         // FIXME: If we read too many sectors with `read_raw`, it will not complete successfully,
         //        so we need some way in the future to call read_raw multiple times if needed!
         let read = self.read_raw(translated_sector, amount_of_sectors)?;
@@ -373,7 +380,7 @@ impl io::Write for ATADisk {
     }
 
     fn flush(&mut self) -> IOResult<()> {
-        // TODO: We should buffer the write operation, and actually take the flush into account!
+        // FIXME: We should buffer the write operation, and actually take the flush into account!
         Ok(())
     }
 }
