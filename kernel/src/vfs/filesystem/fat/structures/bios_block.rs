@@ -23,102 +23,16 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use core::mem::size_of;
 use core::ptr;
 use qk_alloc::boxed::Box;
 use qk_alloc::string::String;
 use qk_alloc::vec::Vec;
-use crate::vfs::filesystem::fat::{EntryType, FatEntry};
+
+use crate::vfs::filesystem::fat::structures::{EntryType, FatProvider, FatType, FileEntry};
+use crate::vfs::filesystem::fat::structures::raw::{RawBiosParameterBlock, RawExtendedBootRecord16};
 use crate::vfs::filesystem::FilesystemError;
-use crate::vfs::io::{IOError, IOResult, SeekFrom};
-use crate::vfs::VFSPartition;
-
-#[repr(C, packed)]
-#[derive(Debug)]
-struct RawBiosParameterBlock {
-    reserved: [u8; 3],
-    oem_id: [u8; 8],
-    bytes_per_sector: u16,
-    sectors_per_cluster: u8,
-    reserved_sectors: u16,
-    fat_tables: u8,
-    root_dir_entries: u16,
-    logical_sectors: u16,
-    media_descriptor_type: u8,
-    sectors_per_fat: u16,
-    sectors_per_track: u16,
-    number_of_heads: u16,
-    hidden_sectors: u32,
-    large_sector_count: u32
-}
-
-impl RawBiosParameterBlock {
-    const RESERVED_INSTRUCTIONS: [u8; 3] = [0xEB, 0x3C, 0x90];
-
-    pub fn is_valid(&self) -> bool {
-        self.fat_tables != 0 && self.reserved == Self::RESERVED_INSTRUCTIONS
-    }
-}
-
-#[repr(C, packed)]
-#[derive(Debug)]
-struct RawExtendedBootRecord16 {
-    drive_number: u8,
-    reserved: u8,
-    signature: u8,
-    volume_id: u32,
-    volume_label: [u8; 11],
-    system_identifier_string: u64,
-}
-
-impl RawExtendedBootRecord16 {
-    const VALID_SIG_1: u8 = 0x28;
-    const VALID_SIG_2: u8 = 0x29;
-
-    pub fn is_valid(&self) -> bool {
-        self.signature == Self::VALID_SIG_1 || self.signature == Self::VALID_SIG_2
-    }
-}
-
-impl TryFrom<&[u8]> for RawExtendedBootRecord16 {
-    type Error = Box<dyn IOError>;
-
-    fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
-        if value.len() < size_of::<Self>() {
-            return Err(Box::new(FilesystemError::Invalid));
-        }
-
-        let our_copy = unsafe { ptr::read(value.as_ptr() as *const Self) };
-
-        if !our_copy.is_valid() {
-            return Err(Box::new(FilesystemError::Invalid));
-        }
-
-        Ok(our_copy)
-    }
-}
-
-impl FatProvider for RawExtendedBootRecord16 {
-    fn fat_type(&self) -> FatType {
-        FatType::Fat16
-    }
-
-    fn volume_label(&self) -> String {
-        String::from(unsafe {
-            core::str::from_utf8_unchecked(&self.volume_label)
-        })
-    }
-}
-
-pub enum FatType {
-    Unknown,
-    Fat16,
-}
-
-pub trait FatProvider {
-    fn fat_type(&self) -> FatType;
-    fn volume_label(&self) -> String;
-}
+use crate::vfs::io::{IOResult, SeekFrom};
+use crate::vfs::{VFSPartition, VFSPartitionID};
 
 pub struct BiosParameterBlock {
     bpb: RawBiosParameterBlock,
@@ -126,7 +40,7 @@ pub struct BiosParameterBlock {
 }
 
 impl BiosParameterBlock {
-    pub fn populate_from_medium(medium: &mut Box<dyn VFSPartition>) -> IOResult<Self> {
+    pub fn populate_from_media(medium: &mut Box<dyn VFSPartition>) -> IOResult<Self> {
         medium.seek(SeekFrom::Start(0))?;
 
         let mut first_sector = Vec::from([0u8; 512]);
@@ -196,15 +110,23 @@ impl BiosParameterBlock {
         data_cluster_begin - root_sectors
     }
 
-    pub fn get_root_entry(&self) -> FatEntry {
+    pub fn get_root_entry(&self) -> FileEntry {
         let root_cluster = self.root_cluster_begin();
         let root_sectors = self.root_sectors();
 
-        FatEntry {
+        FileEntry {
             path: String::from("/"),
             start_cluster: root_cluster,
             sector_count: root_sectors,
             kind: EntryType::RootDir,
+        }
+    }
+
+    pub fn total_sectors(&self) -> usize {
+        if self.bpb.logical_sectors == 0 {
+            self.bpb.large_sector_count as usize
+        } else {
+            self.bpb.logical_sectors as usize
         }
     }
 

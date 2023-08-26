@@ -23,36 +23,3 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-#![no_std]
-#![feature(test)]
-#![feature(receiver_trait)]
-#![feature(unsize)]
-#![feature(dispatch_from_dyn)]
-#![feature(coerce_unsized)]
-
-pub mod heap;
-pub mod memory_layout;
-pub mod usable_region;
-
-// std(like) libs for heap allocation
-pub mod bitfield;
-pub mod boxed;
-pub mod string;
-pub mod vec;
-
-pub mod borrowed_buf;
-pub mod circular_buffer;
-pub mod error;
-pub mod buffer;
-
-pub use error::*;
-
-#[macro_export]
-macro_rules! format {
-    ($($arg:tt)*) => {{
-        use core::fmt::Write;
-        let mut new_string = qk_alloc::string::String::new();
-        write!(&mut new_string, "{}", format_args!($($arg)*)).unwrap();
-        new_string
-    }}
-}

@@ -24,6 +24,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 use core::error::Error;
+use core::fmt::{Display, Formatter};
 use qk_alloc::boxed::Box;
 use qk_alloc::string::String;
 use quantum_utils::human_bytes::HumanBytes;
@@ -172,6 +173,7 @@ pub enum DiskType {
     Emulated,
 }
 
+#[derive(Clone, Copy, Debug)]
 pub enum DiskBus {
     Unknown,
     ParallelPIO,
@@ -179,6 +181,21 @@ pub enum DiskBus {
     Sata,
     NVMe,
     Emulated,
+}
+
+impl Display for DiskBus {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        let str = match self {
+            DiskBus::Unknown => "Unknown",
+            DiskBus::ParallelPIO => "PIO",
+            DiskBus::ParallelDMA => "ATA",
+            DiskBus::Sata => "SATA",
+            DiskBus::NVMe => "NVMe",
+            DiskBus::Emulated => "VirtIO"
+        };
+
+        f.write_str(str)
+    }
 }
 
 pub trait DiskInfo {

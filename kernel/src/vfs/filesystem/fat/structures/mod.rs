@@ -23,55 +23,71 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-mod structures;
+use qk_alloc::string::String;
+use crate::vfs::io::IOError;
 
-use qk_alloc::boxed::Box;
-use quantum_lib::debug_println;
-use crate::vfs::io::IOResult;
-use crate::vfs::{VFSPartition, VFSPartitionID};
-use crate::vfs::filesystem::fat::structures::bios_block::BiosParameterBlock;
-use crate::vfs::filesystem::fat::structures::{ClusterId, FileEntry};
+pub mod bios_block;
+pub mod fat_table;
 
+mod raw;
 
-pub struct FatFilesystem {
-    partition_id: VFSPartitionID,
-    bpb: BiosParameterBlock,
+pub trait FatProvider {
+    fn fat_type(&self) -> FatType;
+    fn volume_label(&self) -> String;
 }
 
-impl FatFilesystem {
-    pub fn get_root_entry(&self) -> FileEntry {
-        self.bpb.get_root_entry()
+#[derive(Clone, Copy, Debug)]
+pub enum EntryType {
+    RootDir,
+    Dir,
+    File
+}
+
+#[derive(Clone, Debug)]
+pub struct FileEntry {
+    path: String,
+    start_cluster: u64,
+    sector_count: u64,
+    kind: EntryType
+}
+
+pub enum FatType {
+    Unknown,
+    Fat16,
+}
+
+pub enum FatEntry {
+    NextCluster(usize),
+    BadCluster,
+    Unused,
+    EndOfFile
+}
+
+impl FatEntry {
+    pub fn from_fat16_raw(value: usize) -> FatEntry {
+        todo!()
     }
 
-
-    pub fn read_cluster(&self, cluster_id: ClusterId, data: &mut [u8]) -> IOResult<()> {
-        todo!("Read the cluster contents")
+    pub fn into_fat16_raw(self) -> usize {
+        todo!()
     }
-
 }
 
+pub struct ClusterId(usize);
 
-pub fn init_fat_fs(partition_id: VFSPartitionID) -> IOResult<Box<dyn VFSPartition>> {
-    let bpb = BiosParameterBlock::populate_from_media(
-        &mut partition_id.get_entry_mut().partition
-    )?;
+impl TryFrom<usize> for ClusterId {
+    type Error = ();
 
-    let fat_fs = FatFilesystem {
-        partition_id,
-        bpb
-    };
-
-    let root_entry = fat_fs.get_root_entry();
-
-    debug_println!("{:#?}", root_entry);
-
-
-
-
-
-    todo!("Finish Fat")
+    fn try_from(value: usize) -> Result<Self, Self::Error> {
+        if value < 2 {
+            Err(())
+        } else {
+            Ok(Self(value))
+        }
+    }
 }
-
-pub fn is_media_fat_formatted(media: &mut Box<dyn VFSPartition>) -> IOResult<bool> {
-    Ok(BiosParameterBlock::populate_from_media(media).is_ok())
+impl Into<usize> for ClusterId {
+    fn into(self) -> usize {
+        self.0
+    }
 }

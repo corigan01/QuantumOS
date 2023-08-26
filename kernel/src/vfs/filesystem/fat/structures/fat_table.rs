@@ -23,55 +23,28 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-mod structures;
-
 use qk_alloc::boxed::Box;
-use quantum_lib::debug_println;
-use crate::vfs::io::IOResult;
-use crate::vfs::{VFSPartition, VFSPartitionID};
+use qk_alloc::vec::Vec;
+
 use crate::vfs::filesystem::fat::structures::bios_block::BiosParameterBlock;
-use crate::vfs::filesystem::fat::structures::{ClusterId, FileEntry};
+use crate::vfs::filesystem::fat::structures::FatType;
+use crate::vfs::io::IOResult;
+use crate::vfs::VFSPartition;
 
-
-pub struct FatFilesystem {
-    partition_id: VFSPartitionID,
-    bpb: BiosParameterBlock,
+pub struct FatTable {
+    data: Vec<usize>,
+    fat_type: FatType
 }
 
-impl FatFilesystem {
-    pub fn get_root_entry(&self) -> FileEntry {
-        self.bpb.get_root_entry()
+impl FatTable {
+    pub fn read_from_media(bpb: &BiosParameterBlock, media: &mut Box<dyn VFSPartition>) -> IOResult<Self> {
+        let fat_type = bpb.fat_kind();
+
+        let fat_table_start = bpb.file_allocation_table_offset();
+        let fat_table_size = bpb.file_allocation_table_size();
+
+
+
+        todo!("Read from Media")
     }
-
-
-    pub fn read_cluster(&self, cluster_id: ClusterId, data: &mut [u8]) -> IOResult<()> {
-        todo!("Read the cluster contents")
-    }
-
-}
-
-
-pub fn init_fat_fs(partition_id: VFSPartitionID) -> IOResult<Box<dyn VFSPartition>> {
-    let bpb = BiosParameterBlock::populate_from_media(
-        &mut partition_id.get_entry_mut().partition
-    )?;
-
-    let fat_fs = FatFilesystem {
-        partition_id,
-        bpb
-    };
-
-    let root_entry = fat_fs.get_root_entry();
-
-    debug_println!("{:#?}", root_entry);
-
-
-
-
-
-    todo!("Finish Fat")
-}
-
-pub fn is_media_fat_formatted(media: &mut Box<dyn VFSPartition>) -> IOResult<bool> {
-    Ok(BiosParameterBlock::populate_from_media(media).is_ok())
 }

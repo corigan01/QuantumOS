@@ -131,10 +131,11 @@ impl VFSDiskID {
             disk_id = Self(VFS_DISK_NEXT_ID);
 
             debug_println!(
-                "VFS Registered new disk [id: {}] ('{}', {})",
+                "VFS Registered new disk [id: {}] ('{}', {}) {}",
                 VFS_DISK_NEXT_ID,
                 disk.disk_model().as_str(),
-                disk.disk_capacity()
+                disk.disk_capacity(),
+                disk.disk_bus()
             );
 
             VFS_ENTRIES.push(VFSEntry {

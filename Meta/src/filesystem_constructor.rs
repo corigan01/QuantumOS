@@ -39,10 +39,40 @@ use crate::artifacts::{get_program_path, get_project_root, get_target_directory,
 use walkdir::WalkDir;
 use crate::config_generator::BiosBootConfig;
 
+/// # Bytes to read at a time
+/// The amount of bytes the disk image creator will store in memory at a time. This const might
+/// be too large for your machine, and could need tuning. Future iterations should be able to
+/// detect the remaining memory and plan accordingly.
+///
+/// ## Basically it boils down to the following:
+/// More Memory = Faster Imaging
+/// Less Memory = Slower Imaging
+///
+/// ## Tuning
+/// There is a progress bar that will inform you about how many bytes per second the disk image
+/// is able to process. This can be regulated with the amount of memory you want 'Meta' to use.
 const BYTES_TO_READ_AT_A_TIME: usize = 1024 * 1024;
 
+/// # EXT2 Image MB
+/// This is the size of the EXT2 image on the disk. This value can be changed to make the image
+/// larger or smaller. The larger the size of the disk the more time it takes to image.
+const EXT2_IMAGE_MB: usize = 400;
+
+/// # FAT Image MB
+/// This is the size of the FAT image on the disk. This value can be changed to make the image
+/// larger or smaller. The larger the size of the disk the more time it takes to image. However,
+/// with the fat image there is a problem with expanding the size too much. If the FAT image
+/// is too large, it will be flashed as a different form of fat. Currently, FAT16 is the only
+/// fat supported for the bootloader.
+const FAT_IMAGE_MB: usize = 50;
+
+/// # Total Disk Add MB
+/// This is the size of MB to add to the final disk image on-top of the size of FAT + EXT2. This is
+/// used to give padding to the partitioning the disk will have to undergo. Usually 1Mib is enough.
+const TOTAL_DISK_PADDING_MB: u64 = 1;
+
 pub fn make_and_construct_bios_image(kernel: &String, bios_stages: &Vec<(StageID, String)>) -> anyhow::Result<String> {
-    // Make the formatted raw images first
+    // Progress bar setup
     let multi_progress = MultiProgress::new();
     let progress = multi_progress.add(ProgressBar::new(13));
     progress.set_style(
@@ -53,12 +83,12 @@ pub fn make_and_construct_bios_image(kernel: &String, bios_stages: &Vec<(StageID
         .progress_chars("##-")
     );
 
-
+    // Make the formatted raw images first
     progress.set_message("Making EXT2");
-    let ext2_img = make_ext2_fs(400 * 1024 * 1024)?;
+    let ext2_img = make_ext2_fs(EXT2_IMAGE_MB * 1024 * 1024)?;
     progress.inc(1);
     progress.set_message("Making FAT");
-    let fat_img = make_fat_fs(50 * 1024 * 1024)?;
+    let fat_img = make_fat_fs(FAT_IMAGE_MB * 1024 * 1024)?;
     progress.inc(1);
 
     // Move artifacts into directories
@@ -74,6 +104,7 @@ pub fn make_and_construct_bios_image(kernel: &String, bios_stages: &Vec<(StageID
 
     let config_target_path = format!("{}/bootloader.cfg", bootloader_sub_target_path);
 
+    // Create the bootloader config file
     progress.set_message("Making Loader Config");
     make_bootloader_config_file(
         &config_target_path,
@@ -85,8 +116,8 @@ pub fn make_and_construct_bios_image(kernel: &String, bios_stages: &Vec<(StageID
     ).context(anyhow!("Could not generate bootloader config file"))?;
     progress.inc(1);
 
-    progress.set_message("Copying Artifacts");
     // Copy the bootloader stages to the tmp folder
+    progress.set_message("Copying Artifacts");
     for (stage_id, stage_path) in bios_stages {
         fs::copy(
             stage_path,
@@ -112,13 +143,14 @@ pub fn make_and_construct_bios_image(kernel: &String, bios_stages: &Vec<(StageID
 
     let base_image_target_path = format!("{}/base", get_project_root()?);
 
+    // Create the fat and ext2 disk images and copy all files into them
     progress.set_message("Making Images");
-
     write_directory_into_fat_img(&bootloader_build_target_path, &fat_img)?;
     progress.inc(1);
     write_directory_into_ext2_img(&base_image_target_path, &ext2_img)?;
     progress.inc(1);
 
+    // Make the final disk image and embed stage1 into its boot sector
     progress.set_message("Constructing Disk");
     let disk_target_path = make_mbr_disk(&fat_img, &ext2_img, &multi_progress)?;
     progress.inc(1);
@@ -126,6 +158,7 @@ pub fn make_and_construct_bios_image(kernel: &String, bios_stages: &Vec<(StageID
     embed_stage1_into_img(&disk_target_path, stage1)?;
     progress.inc(1);
 
+    // Remove the temp filesystem images 'fat.img' and 'ext2.img'
     progress.set_message("Cleaning Up");
     remove_file(&fat_img)?;
     progress.inc(1);
@@ -365,7 +398,7 @@ pub fn make_mbr_disk(fat_img: &String, ext2_img: &String, progress: &MultiProgre
     let fat_size_sectors = (fat_size / 512) as u32;
     let ext2_size_sectors = (ext2_size / 512) as u32;
 
-    disk_image.set_len(fat_size + ext2_size + (1024 * 1024))?;
+    disk_image.set_len(fat_size + ext2_size + (TOTAL_DISK_PADDING_MB * 1024 * 1024))?;
 
     let mut mbr = MBR::new_from(&mut disk_image, 512, [12, 51, 12, 43])?;
 

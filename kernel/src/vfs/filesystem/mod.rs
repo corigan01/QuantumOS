@@ -62,13 +62,14 @@ impl IOError for FilesystemError {
 pub enum FilesystemError {
     NotSupported,
     Invalid,
+    OutOfBounds
 }
 
 pub fn detect_filesystem_in_partition(partition: &VFSPartitionID) -> IOResult<SupportedFilesystem> {
     let partition_ref = &mut partition.get_entry_mut().partition;
 
     if is_media_fat_formatted(partition_ref)? {
-        init_fat_fs(*partition);
+        init_fat_fs(*partition).unwrap();
         Ok(SupportedFilesystem::Fat)
     } else {
         Err(Box::new(FilesystemError::NotSupported))
