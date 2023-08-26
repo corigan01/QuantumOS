@@ -44,6 +44,7 @@ impl FatFilesystem {
     }
 
 
+
     pub fn read_cluster(&self, cluster_id: ClusterId, data: &mut [u8]) -> IOResult<()> {
         todo!("Read the cluster contents")
     }
