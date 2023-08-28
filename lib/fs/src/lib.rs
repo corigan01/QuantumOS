@@ -25,4 +25,9 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 #![no_std]
 
+use crate::error::FsError;
+
 mod io;
+pub mod error;
+
+pub type FsResult<T> = Result<T, FsError>;
