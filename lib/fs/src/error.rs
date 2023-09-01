@@ -152,6 +152,19 @@ pub enum FsErrorKind {
 }
 
 impl FsErrorKind {
+    /// # As Str
+    /// Convert this type into a human readable string. This can be useful when printing, or showing
+    /// in UI.
+    ///
+    /// # Examples
+    /// ```rust
+    /// use fs::error::FsErrorKind;
+    ///
+    /// fn main() {
+    ///     let not_found_message = FsErrorKind::NotFound.as_str();
+    ///     assert_eq!(not_found_message, "not found");
+    /// }
+    /// ```
     pub fn as_str(&self) -> &'static str {
         match self {
             FsErrorKind::NotFound => "not found",

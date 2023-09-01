@@ -27,7 +27,10 @@ use crate::FsResult;
 use crate::io::SeekFrom;
 
 pub trait Read {
+    fn read(&mut self, buf: &mut [u8]) -> FsResult<usize>;
 
+    // # Provided
+    //fn read_vectored(&mut self, bufs: &mut [])
 }
 
 pub trait Write {
@@ -106,26 +109,70 @@ pub trait Seek {
     /// ```
     fn seek(&mut self, pos: SeekFrom) -> FsResult<u64>;
 
+    /// # Rewind
+    /// `rewind` is *exactly* defined to `self.seek(SeekFrom::Start(0))`. `rewind` is used
+    /// to 'reset' the cursor to the start of the buffer (like rewinding a vhs tape). Usually
+    /// this is used to be descriptive in your file for what you are doingt.
+    ///
+    /// # Example
+    /// ```no_run
+    /// use std::fs::File;
+    /// use std::io::Seek;
+    ///
+    /// fn main() {
+    ///     let mut file = File::open("my-file.txt").unwrap();
+    ///
+    ///     // -- snip --
+    ///     // file's buffer is no longer known, and we might want to reset it.
+    ///     file.rewind().unwrap();
+    /// }
+    /// ```
     #[inline]
     fn rewind(&mut self) -> FsResult<()> {
         self.seek(SeekFrom::Start(0))?;
         Ok(())
     }
 
+
+    /// # Stream Length
+    /// Gets the length of the stream by seeking to the end of the stream, then to prevent the
+    /// loss of stream position, it seeks back to the original position. This function uses
+    /// 3-calls to seek, and depending on implementation could be costly, so if the current
+    /// stream position is not important then you can use `stream_len_dirty` which will
+    /// not reset the current stream position.
+    ///
+    /// # Note
+    /// `stream_len` uses `stream_position`, `SeekFrom::Start(x)`, and `SeekFrom::End(0)` to
+    /// gather needed information and reset the stream. If implementation requires these
+    /// operations to not operate as expected, reimplementing this function is to be required.
+    ///
+    /// If seeking fails, this function dirties the current cursor position. This means that if
+    /// this function returns an error, the current seek position should not be trusted, and
+    /// will need to be reset by the caller.
     #[inline]
     fn stream_len(&mut self) -> FsResult<u64> {
-        let current = self.seek(SeekFrom::Current(0))?;
+        let current = self.stream_position()?;
         let end = self.seek(SeekFrom::End(0))?;
         self.seek(SeekFrom::Start(current))?;
 
         Ok(end)
     }
 
+    /// # Stream Length Dirty
+    /// This function is *exactly* `self.seek(SeekFrom::End(0))`, and will not reset the
+    /// current cursor position. It is to be expected for the caller to reset this before
+    /// calling another operation (like read, write, or seek).
+    ///
+    /// # Note
+    /// This function is not defined in the `std`, and its implementation here is for
+    /// QuantumOS use only.
     #[inline]
     fn stream_len_dirty(&mut self) -> FsResult<u64> {
         self.seek(SeekFrom::End(0))
     }
 
+    /// # Stream Position
+    /// This will retrieve the current stream position.
     #[inline]
     fn stream_position(&mut self) -> FsResult<u64> {
         self.seek(SeekFrom::Current(0))
