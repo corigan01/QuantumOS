@@ -23,12 +23,53 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-#![no_std]
+use crate::filesystems::dosfs::structures::{Byte, DoubleWord, Word};
 
-use crate::error::FsError;
+pub struct ExtendedBPB32 {
+    fat_sectors_32: DoubleWord,
+    extended_flags: Word,
+    filesystem_version: Word,
+    root_cluster_number: DoubleWord,
+    fs_info_sector: Word,
+    backup_boot_record: Word,
+    reserved_1: [u8; 12],
+    drive_number: Byte,
+    reserved_2: Byte,
+    boot_signature: Byte,
+    volume_serial_number: DoubleWord,
+    volume_label: [u8; 11],
+    filesystem_type: [u8; 8]
+}
 
-mod filesystems;
-mod io;
-pub mod error;
+impl ExtendedBPB32 {
+    pub fn verify_signature(&self) -> bool {
+        self.boot_signature == 0x29 &&
+            (self.volume_serial_number != 0 || self.volume_label[0] != 0)
+    }
 
-pub type FsResult<T> = Result<T, FsError>;
+    pub fn volume_serial_number(&self) -> u32 {
+        self.volume_serial_number
+    }
+
+    pub fn volume_label(&self) -> &str {
+        unsafe { core::str::from_utf8_unchecked(&self.volume_label) }
+    }
+
+    pub fn filesystem_string(&self) -> &str {
+        unsafe { core::str::from_utf8_unchecked(&self.volume_label) }
+    }
+
+    pub fn fat_sectors32(&self) -> usize {
+        self.fat_sectors_32 as usize
+    }
+
+    pub fn drive_number(&self) -> u8 {
+        self.drive_number
+    }
+
+    pub fn fs_info_sector(&self) -> usize {
+        self.fs_info_sector as usize
+    }
+
+
+}

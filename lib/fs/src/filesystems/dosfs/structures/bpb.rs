@@ -23,12 +23,49 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-#![no_std]
+use crate::filesystems::dosfs::structures::{Byte, DoubleWord, Word};
 
-use crate::error::FsError;
+pub struct BiosParameterBlock {
+    jmp_boot: [u8; 3],
+    oem_name: [u8; 8],
+    bytes_per_sector: Word,
+    sectors_per_cluster: Byte,
+    reserved_sector_count: Word,
+    number_of_fats: Byte,
+    root_entry_count: Word,
+    total_sectors_16: Word,
+    media: Byte,
+    fat_sectors_16: Word,
+    sectors_per_track: Word,
+    number_of_heads: Word,
+    hidden_sectors: DoubleWord,
+    total_sectors_32: DoubleWord
+}
 
-mod filesystems;
-mod io;
-pub mod error;
+impl BiosParameterBlock {
+    pub fn verify_jmp_instruction(&self) -> bool {
+        (self.jmp_boot[0] == 0xEB && self.jmp_boot[2] == 0x90) ||
+            (self.jmp_boot[0] == 0xE9)
+    }
 
-pub type FsResult<T> = Result<T, FsError>;
+    pub fn oem_name(&self) -> &str {
+        unsafe { core::str::from_utf8_unchecked(&self.oem_name) }
+    }
+
+    pub fn verify_sector_count_correctness(&self) -> bool {
+        (self.total_sectors_16 == 0 && self.total_sectors_32 > 0) &&
+            (self.total_sectors_32 == 0 && self.total_sectors_16 > 0)
+    }
+
+    pub fn sectors(&self) -> usize {
+        if self.total_sectors_16 == 0 {
+            self.total_sectors_32 as usize
+        } else {
+            self.total_sectors_16 as usize
+        }
+    }
+
+    pub fn sectors_occupied_by_fat16(&self) -> usize {
+        self.fat_sectors_16 as usize
+    }
+}

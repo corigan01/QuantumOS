@@ -146,7 +146,7 @@ fn parse_kernel_elf(kernel_elf: &ElfHeader) -> Option<(u32, MemoryRegion<PhyAddr
         let end_of_expected_address = expected_address + real_memory_size;
 
         debug_print!(
-            "Header {} = '{:x?}' -- {:?} => F: {} M: {} O: {} Vaddr: {:x}",
+            "Header {} = '{:10x?}' -- {:?} => F: {} M: {} O: {} Vaddr: {:x}",
             header_idx,
             header.type_of_segment(),
             header.flags(),
@@ -181,10 +181,10 @@ fn parse_kernel_elf(kernel_elf: &ElfHeader) -> Option<(u32, MemoryRegion<PhyAddr
                 }
             }
 
-            debug_println!("      LOADED");
+            debug_println!("      \tLOADED");
 
         } else {
-            debug_println!("       SKIP");
+            debug_println!("       \tSKIP");
         }
     }
 
