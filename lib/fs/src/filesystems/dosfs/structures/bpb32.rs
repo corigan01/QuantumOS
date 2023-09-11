@@ -23,7 +23,10 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use crate::filesystems::dosfs::structures::{Byte, DoubleWord, Word};
+use core::mem;
+use core::mem::size_of;
+use crate::error::{FsError, FsErrorKind};
+use crate::filesystems::dosfs::structures::{Byte, DoubleWord, ExtendedBiosBlock, Word};
 
 pub struct ExtendedBPB32 {
     fat_sectors_32: DoubleWord,
@@ -41,35 +44,43 @@ pub struct ExtendedBPB32 {
     filesystem_type: [u8; 8]
 }
 
-impl ExtendedBPB32 {
-    pub fn verify_signature(&self) -> bool {
+impl ExtendedBiosBlock for ExtendedBPB32 {
+    fn verify(&self) -> bool {
         self.boot_signature == 0x29 &&
             (self.volume_serial_number != 0 || self.volume_label[0] != 0)
     }
 
-    pub fn volume_serial_number(&self) -> u32 {
+    fn volume_serial_number(&self) -> u32 {
         self.volume_serial_number
     }
 
-    pub fn volume_label(&self) -> &str {
+    fn volume_label(&self) -> &str {
         unsafe { core::str::from_utf8_unchecked(&self.volume_label) }
     }
 
-    pub fn filesystem_string(&self) -> &str {
-        unsafe { core::str::from_utf8_unchecked(&self.volume_label) }
+    fn filesystem_string(&self) -> Option<&str> {
+        Some(unsafe { core::str::from_utf8_unchecked(&self.volume_label) })
     }
 
-    pub fn fat_sectors32(&self) -> usize {
-        self.fat_sectors_32 as usize
+    fn fat_sector(&self) -> Option<usize> {
+        Some(self.fat_sectors_32 as usize)
     }
 
-    pub fn drive_number(&self) -> u8 {
-        self.drive_number
+    fn fs_info_sector(&self) -> Option<usize> {
+        Some(self.fs_info_sector as usize)
     }
+}
 
-    pub fn fs_info_sector(&self) -> usize {
-        self.fs_info_sector as usize
+impl TryFrom<&[u8]> for ExtendedBPB32 {
+    type Error = FsError;
+
+    fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
+        if value.len() < size_of::<Self>() {
+            return Err(FsError::new(
+                FsErrorKind::InvalidInput,
+                "Can not construct ExtendedBPB32 from improperly sized array"
+            ));        }
+
+        Ok( unsafe { mem::transmute_copy(value) } )
     }
-
-
 }

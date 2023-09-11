@@ -30,3 +30,13 @@ mod bpb32;
 pub(crate) type Byte = u8;
 pub(crate) type Word = u16;
 pub(crate) type DoubleWord = u32;
+
+pub trait ExtendedBiosBlock: TryFrom<&[u8]> {
+    fn verify(&self) -> bool;
+    fn volume_serial_number(&self) -> u32;
+    fn volume_label(&self) -> &str;
+    fn filesystem_string(&self) -> Option<&str>;
+
+    fn fat_sector(&self) -> Option<usize>;
+    fn fs_info_sector(&self) -> Option<usize>;
+}

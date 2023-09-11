@@ -26,8 +26,15 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 mod traits;
 pub use traits::*;
 
+
+
+
+/// # Seek From 
+/// Seek options for seeking within a stream.
 pub enum SeekFrom {
     Start(u64),
     Current(i64),
     End(i64)
 }
+
+
