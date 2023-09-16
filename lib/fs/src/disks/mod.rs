@@ -23,13 +23,4 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-#![no_std]
-
-use crate::error::FsError;
-
-mod filesystems;
-mod io;
-mod disks;
-pub mod error;
-
-pub type FsResult<T> = Result<T, FsError>;
+mod ata;

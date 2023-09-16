@@ -26,6 +26,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 mod bpb;
 mod bpb16;
 mod bpb32;
+mod fat;
 
 pub(crate) type Byte = u8;
 pub(crate) type Word = u16;
@@ -39,4 +40,11 @@ pub trait ExtendedBiosBlock: TryFrom<&[u8]> {
 
     fn fat_sector(&self) -> Option<usize>;
     fn fs_info_sector(&self) -> Option<usize>;
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum FatType {
+    Fat12,
+    Fat16,
+    Fat32
 }

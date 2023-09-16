@@ -79,7 +79,8 @@ impl TryFrom<&[u8]> for ExtendedBPB32 {
             return Err(FsError::new(
                 FsErrorKind::InvalidInput,
                 "Can not construct ExtendedBPB32 from improperly sized array"
-            ));        }
+            ));
+        }
 
         Ok( unsafe { mem::transmute_copy(value) } )
     }

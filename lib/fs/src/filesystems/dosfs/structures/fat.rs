@@ -23,13 +23,9 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-#![no_std]
-
-use crate::error::FsError;
-
-mod filesystems;
-mod io;
-mod disks;
-pub mod error;
-
-pub type FsResult<T> = Result<T, FsError>;
+pub struct Fat {
+    // could just know where the data is stored on the disk to prevent us from having
+    // it entirely in memory,
+    // this would probably also need to know which fat it is so we can
+    // just read it like a usize and maybe even make a cluster abstraction
+}
