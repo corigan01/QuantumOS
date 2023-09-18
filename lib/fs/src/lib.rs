@@ -31,5 +31,6 @@ mod filesystems;
 mod io;
 mod disks;
 pub mod error;
+mod backed_buffer;
 
 pub type FsResult<T> = Result<T, FsError>;

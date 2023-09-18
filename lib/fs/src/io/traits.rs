@@ -34,6 +34,8 @@ pub trait Read {
 }
 
 pub trait Write {
+    fn write(&mut self, buf: &mut [u8]) -> FsResult<usize>;
+    fn flush(&mut self) -> FsResult<()>;
 
 }
 
