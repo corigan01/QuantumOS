@@ -41,7 +41,6 @@ pub mod qemu;
 pub mod kernel_console;
 #[cfg(test)]
 pub mod test_handler;
-pub mod vfs;
 pub mod hex_dump;
 
 #[cfg(test)]

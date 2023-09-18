@@ -23,7 +23,7 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use core::mem;
+use core::ptr;
 use core::mem::size_of;
 use crate::error::{FsError, FsErrorKind};
 use crate::filesystems::dosfs::structures::{Byte, DoubleWord, Word};
@@ -73,7 +73,7 @@ impl BiosParameterBlock {
     }
 }
 
-impl TryFrom<&[u8]> for BiosParameterBlock {
+impl TryFrom<&'_ [u8]> for BiosParameterBlock {
     type Error = FsError;
 
     fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
@@ -82,6 +82,6 @@ impl TryFrom<&[u8]> for BiosParameterBlock {
             "Can not construct BiosParameterBlock from improperly sized array"));
         }
 
-        Ok(unsafe { mem::transmute_copy(value) })
+        Ok(unsafe { ptr::read(value.as_ptr() as *const Self) })
     }
 }

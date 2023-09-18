@@ -11,6 +11,7 @@ bootloader = {path = "../bootloader/bootloader"}
 qk_alloc = { path = "../lib/alloc" }
 qk_mem = { path = "../lib/qk_mem" }
 quantum_utils = { path = "../lib/quantum_utils" }
+fs = { path = "../lib/fs" }
 
 owo-colors = "3.5.0"
 

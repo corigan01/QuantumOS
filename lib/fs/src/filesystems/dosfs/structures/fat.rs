@@ -23,9 +23,55 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use crate::backed_buffer::BackedBuffer;
+use qk_alloc::vec::Vec;
+use quantum_utils::bitset::BitSet;
+use crate::error::{FsError, FsErrorKind};
+use crate::FsResult;
 
 pub struct FileAllocationTable {
-    buffer: BackedBuffer,
+    data: Vec<u8>
+}
 
+impl FileAllocationTable {
+    const MAX_SECTORS_FOR_FAT12: usize = 4084;
+    const MAX_SECTORS_FOR_FAT16: usize = 65525;
+    const MAX_SECTORS_FOR_FAT32: usize = 268435447;
+
+    pub fn read_fat12_entry(&self, index: usize) -> FsResult<usize> {
+        todo!("FAT12 fat entry")
+    }
+
+    pub fn read_fat16_entry(&self, index: usize) -> FsResult<usize> {
+        if index >= Self::MAX_SECTORS_FOR_FAT16 {
+            return Err(FsError::new(FsErrorKind::InvalidInput,
+                                    "Cannot address more then 65525 clusters in fat16"));
+        }
+
+        let byte_offset = index * 2;
+
+        Ok(((self.data[byte_offset] as u16) << 8 | (self.data[byte_offset + 1] as u16)) as usize)
+    }
+
+    pub fn read_fat32_entry(&self, index: usize) -> FsResult<usize> {
+        if index >= Self::MAX_SECTORS_FOR_FAT32 {
+            return Err(FsError::new(FsErrorKind::InvalidInput,
+                                    "Cannot address more then 268435447 clusters in fat32"));
+        }
+
+        let byte_offset = index * 4;
+
+        let mut byte_slice = [0; 4];
+        byte_slice.copy_from_slice(&self.data.as_slice()[byte_offset..byte_offset + 4]);
+        let large_value = u32::from_le_bytes(byte_slice);
+
+        Ok(large_value as usize)
+    }
+}
+
+impl From<&[u8]> for FileAllocationTable {
+    fn from(value: &[u8]) -> Self {
+        FileAllocationTable {
+            data: value.into()
+        }
+    }
 }

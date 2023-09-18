@@ -54,7 +54,6 @@ use quantum_lib::address_utils::virtual_address::VirtAddress;
 use quantum_lib::panic_utils::CRASH_MESSAGES;
 
 use quantum_os::qemu::{exit_qemu, QemuExitCode};
-use quantum_os::vfs;
 
 static mut SERIAL_CONNECTION: PossiblyUninit<SerialDevice> = PossiblyUninit::new_lazy(|| {
     SerialDevice::new(SerialPort::Com1, SerialBaud::Baud115200).unwrap()
@@ -165,7 +164,6 @@ fn main(boot_info: &KernelBootInformation) {
     framebuffer.draw_rect(rect!(0, 15 ; 150, 2), Pixel::WHITE);
     debug_println!("{}", "OK".bright_green().bold());
 
-    vfs::init();
 
     debug_println!("\n\n{}", get_global_alloc());
 

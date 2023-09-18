@@ -23,7 +23,7 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use core::mem;
+use core::ptr;
 use core::mem::size_of;
 use crate::error::{FsError, FsErrorKind};
 use crate::filesystems::dosfs::structures::{Byte, DoubleWord, ExtendedBiosBlock, Word};
@@ -44,7 +44,7 @@ pub struct ExtendedBPB32 {
     filesystem_type: [u8; 8]
 }
 
-impl ExtendedBiosBlock for ExtendedBPB32 {
+impl ExtendedBiosBlock<'_> for ExtendedBPB32 {
     fn verify(&self) -> bool {
         self.boot_signature == 0x29 &&
             (self.volume_serial_number != 0 || self.volume_label[0] != 0)
@@ -71,7 +71,7 @@ impl ExtendedBiosBlock for ExtendedBPB32 {
     }
 }
 
-impl TryFrom<&[u8]> for ExtendedBPB32 {
+impl TryFrom<&'_ [u8]> for ExtendedBPB32 {
     type Error = FsError;
 
     fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
@@ -82,6 +82,6 @@ impl TryFrom<&[u8]> for ExtendedBPB32 {
             ));
         }
 
-        Ok( unsafe { mem::transmute_copy(value) } )
+        Ok( unsafe { ptr::read(value.as_ptr() as *const Self) } )
     }
 }

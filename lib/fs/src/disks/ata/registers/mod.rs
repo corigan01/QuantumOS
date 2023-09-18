@@ -88,7 +88,3 @@ pub const DEVICE_CONTROL_REGISTER_OFFSET_FROM_CONTROL_BASE: usize = 0;
 /// # R: Drive Address Register (8-bit / 8-bit)
 /// Provides drive select and head select information.
 pub const DRIVE_ADDRESS_REGISTER_OFFSET_FROM_CONTROL_BASE: usize = 1;
-
-pub trait RegisterPort {
-    fn io_port()
-}

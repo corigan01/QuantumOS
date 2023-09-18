@@ -32,7 +32,7 @@ pub(crate) type Byte = u8;
 pub(crate) type Word = u16;
 pub(crate) type DoubleWord = u32;
 
-pub trait ExtendedBiosBlock: TryFrom<&[u8]> {
+pub trait ExtendedBiosBlock<'a>: TryFrom<&'a [u8]> {
     fn verify(&self) -> bool;
     fn volume_serial_number(&self) -> u32;
     fn volume_label(&self) -> &str;

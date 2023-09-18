@@ -23,8 +23,8 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use core::fmt::{Debug, Display, Formatter, Write};
-use qk_alloc::boxed::Box;
+use core::fmt::{Debug, Display, Formatter};
+use qk_alloc::string::String;
 
 #[non_exhaustive]
 #[derive(Clone, Copy)]
@@ -248,35 +248,34 @@ impl Debug for FsErrorKind {
     }
 }
 
-pub trait Error: Debug + Display {
-    fn source(&self) -> Option<&(dyn Error + 'static)> {
-        None
+impl Display for FsError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        f.write_fmt(format_args!("{:#?}", self))
     }
 }
 
+#[derive(Debug)]
 pub struct FsError {
-    error: Option<Box<dyn Error + Send + Sync>>,
+    error: String,
     kind: FsErrorKind,
 }
 
 impl FsError {
-    pub fn new<ErrorType>(kind: FsErrorKind, error: ErrorType) -> FsError
-        where ErrorType: Into<Box<dyn Error + Send + Sync>> {
+    pub fn new(kind: FsErrorKind, error: &str) -> FsError {
         Self {
-            error: Some(error.into()),
+            error: String::from(error),
             kind
         }
     }
 
-    pub fn other<ErrorType>(error: ErrorType) -> FsError
-        where ErrorType: Into<Box<dyn Error + Send + Sync>> {
+    pub fn other(error: &str) -> FsError {
         Self {
-            error: Some(error.into()),
+            error: String::from(error),
             kind: FsErrorKind::Other
         }
     }
 
-    pub fn into_inner(self) -> Option<Box<dyn Error + Send + Sync>> {
+    pub fn into_inner(self) -> String {
         self.error
     }
 
@@ -288,9 +287,8 @@ impl FsError {
 impl From<FsErrorKind> for FsError {
     fn from(value: FsErrorKind) -> Self {
         Self {
-            error: None,
+            error: String::new(),
             kind: value
         }
     }
 }
-
