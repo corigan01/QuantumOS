@@ -27,8 +27,6 @@ mod traits;
 pub use traits::*;
 
 
-
-
 /// # Seek From 
 /// Seek options for seeking within a stream.
 pub enum SeekFrom {

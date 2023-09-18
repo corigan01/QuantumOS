@@ -5,9 +5,13 @@
       <sourceFolder url="file://$MODULE_DIR$/lib/fs/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/lib/alloc/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/bootloader/src/bios_boot/stage-1/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/kernel/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/lib/fs/target" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
       <excludeFolder url="file://$MODULE_DIR$/lib/alloc/target" />
+      <excludeFolder url="file://$MODULE_DIR$/bootloader/src/bios_boot/stage-1/target" />
+      <excludeFolder url="file://$MODULE_DIR$/kernel/target" />
     </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />
