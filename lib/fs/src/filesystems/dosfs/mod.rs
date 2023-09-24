@@ -23,4 +23,18 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use crate::filesystems::dosfs::structures::bpb::BiosParameterBlock;
+use crate::filesystems::dosfs::structures::ExtendedBiosBlock;
+use crate::filesystems::dosfs::structures::fat::FileAllocationTable;
+
 mod structures;
+
+pub struct Dosfs {
+    fat: FileAllocationTable,
+    bpb: BiosParameterBlock,
+}
+
+impl Dosfs {
+
+}
+

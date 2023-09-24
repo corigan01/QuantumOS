@@ -28,16 +28,18 @@ use core::mem::size_of;
 use crate::error::{FsError, FsErrorKind};
 use crate::filesystems::dosfs::structures::{Byte, DoubleWord, ExtendedBiosBlock};
 
+#[derive(Copy, Clone)]
+#[repr(C, packed)]
 pub struct ExtendedBPB16 {
-    drive_number: Byte,
-    reserved_1: Byte,
-    boot_signature: Byte,
-    volume_serial_number: DoubleWord,
-    volume_label: [u8; 11],
-    filesystem_type: [u8; 8]
+    pub(crate) drive_number: Byte,
+    pub(crate) reserved_1: Byte,
+    pub(crate) boot_signature: Byte,
+    pub(crate) volume_serial_number: DoubleWord,
+    pub(crate) volume_label: [u8; 11],
+    pub(crate) filesystem_type: [u8; 8]
 }
 
-impl ExtendedBiosBlock<'_> for ExtendedBPB16 {
+impl ExtendedBiosBlock for ExtendedBPB16 {
     fn verify(&self) -> bool {
         self.boot_signature == 0x29 &&
             (self.volume_serial_number != 0 || self.volume_label[0] != 0)
@@ -55,7 +57,7 @@ impl ExtendedBiosBlock<'_> for ExtendedBPB16 {
         Some(unsafe { core::str::from_utf8_unchecked(&self.volume_label) })
     }
 
-    fn fat_sector(&self) -> Option<usize> {
+    fn fat_sectors(&self) -> Option<usize> {
         None
     }
 
@@ -64,7 +66,7 @@ impl ExtendedBiosBlock<'_> for ExtendedBPB16 {
     }
 }
 
-impl TryFrom<&'_ [u8]> for ExtendedBPB16 {
+impl TryFrom<&[u8]> for ExtendedBPB16 {
     type Error = FsError;
 
     fn try_from(value: &[u8]) -> Result<Self, Self::Error> {

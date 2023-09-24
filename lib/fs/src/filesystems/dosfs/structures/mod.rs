@@ -23,22 +23,26 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-mod bpb;
-mod bpb16;
-mod bpb32;
-mod fat;
+pub mod bpb;
+pub mod bpb16;
+pub mod bpb32;
+pub mod fat;
 
 pub(crate) type Byte = u8;
 pub(crate) type Word = u16;
 pub(crate) type DoubleWord = u32;
 
-pub trait ExtendedBiosBlock<'a>: TryFrom<&'a [u8]> {
+pub(crate) const MAX_SECTORS_FOR_FAT12: usize = 4084;
+pub(crate) const MAX_SECTORS_FOR_FAT16: usize = 65525;
+pub(crate) const MAX_SECTORS_FOR_FAT32: usize = 268435447;
+
+pub trait ExtendedBiosBlock {
     fn verify(&self) -> bool;
     fn volume_serial_number(&self) -> u32;
     fn volume_label(&self) -> &str;
     fn filesystem_string(&self) -> Option<&str>;
 
-    fn fat_sector(&self) -> Option<usize>;
+    fn fat_sectors(&self) -> Option<usize>;
     fn fs_info_sector(&self) -> Option<usize>;
 }
 

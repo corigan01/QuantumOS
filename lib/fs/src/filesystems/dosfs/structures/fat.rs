@@ -24,8 +24,8 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 use qk_alloc::vec::Vec;
-use quantum_utils::bitset::BitSet;
 use crate::error::{FsError, FsErrorKind};
+use crate::filesystems::dosfs::structures::{MAX_SECTORS_FOR_FAT16, MAX_SECTORS_FOR_FAT32};
 use crate::FsResult;
 
 pub struct FileAllocationTable {
@@ -33,16 +33,12 @@ pub struct FileAllocationTable {
 }
 
 impl FileAllocationTable {
-    const MAX_SECTORS_FOR_FAT12: usize = 4084;
-    const MAX_SECTORS_FOR_FAT16: usize = 65525;
-    const MAX_SECTORS_FOR_FAT32: usize = 268435447;
-
     pub fn read_fat12_entry(&self, index: usize) -> FsResult<usize> {
         todo!("FAT12 fat entry")
     }
 
     pub fn read_fat16_entry(&self, index: usize) -> FsResult<usize> {
-        if index >= Self::MAX_SECTORS_FOR_FAT16 {
+        if index >= MAX_SECTORS_FOR_FAT16 {
             return Err(FsError::new(FsErrorKind::InvalidInput,
                                     "Cannot address more then 65525 clusters in fat16"));
         }
@@ -53,7 +49,7 @@ impl FileAllocationTable {
     }
 
     pub fn read_fat32_entry(&self, index: usize) -> FsResult<usize> {
-        if index >= Self::MAX_SECTORS_FOR_FAT32 {
+        if index >= MAX_SECTORS_FOR_FAT32 {
             return Err(FsError::new(FsErrorKind::InvalidInput,
                                     "Cannot address more then 268435447 clusters in fat32"));
         }

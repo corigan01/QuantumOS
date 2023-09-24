@@ -25,6 +25,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 #![no_std]
 #![feature(error_in_core)]
+#![feature(exclusive_range_pattern)]
 
 #![allow(unused_variables)]
 #![allow(dead_code)]
@@ -35,6 +36,7 @@ pub mod filesystems;
 pub mod io;
 pub mod disks;
 pub mod error;
+mod abstract_buffer;
 
 pub type FsResult<T> = Result<T, FsError>;
 

@@ -27,7 +27,7 @@ use core::fmt::{Debug, Display, Formatter};
 use qk_alloc::string::String;
 
 #[non_exhaustive]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 pub enum FsErrorKind {
     /// # Not Found
     /// An entity was not found. This is most often caused by a file.
@@ -254,7 +254,7 @@ impl Display for FsError {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct FsError {
     error: String,
     kind: FsErrorKind,

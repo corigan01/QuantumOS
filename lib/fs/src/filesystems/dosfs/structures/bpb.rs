@@ -24,10 +24,17 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 use core::ptr;
-use core::mem::size_of;
 use crate::error::{FsError, FsErrorKind};
-use crate::filesystems::dosfs::structures::{Byte, DoubleWord, Word};
+use crate::filesystems::dosfs::structures::{Byte, DoubleWord, ExtendedBiosBlock, FatType, MAX_SECTORS_FOR_FAT12, MAX_SECTORS_FOR_FAT32, Word};
+use crate::filesystems::dosfs::structures::bpb16::ExtendedBPB16;
+use crate::filesystems::dosfs::structures::bpb32::ExtendedBPB32;
 
+pub union ExtendedBlock {
+    fat16: ExtendedBPB16,
+    fat32: ExtendedBPB32
+}
+
+#[repr(packed, C)]
 pub struct BiosParameterBlock {
     jmp_boot: [u8; 3],
     oem_name: [u8; 8],
@@ -42,7 +49,8 @@ pub struct BiosParameterBlock {
     sectors_per_track: Word,
     number_of_heads: Word,
     hidden_sectors: DoubleWord,
-    total_sectors_32: DoubleWord
+    total_sectors_32: DoubleWord,
+    extended: ExtendedBlock
 }
 
 impl BiosParameterBlock {
@@ -68,20 +76,73 @@ impl BiosParameterBlock {
         }
     }
 
+    pub fn fat_size(&self) -> usize {
+        if self.fat_sectors_16 != 0 {
+            self.fat_sectors_16 as usize
+        } else {
+            (unsafe { self.extended.fat32.fat_sectors_32 }) as usize
+        }
+    }
+
+    pub fn root_dir_sectors(&self) -> usize {
+        ((self.root_entry_count * 32) + (self.bytes_per_sector - 1) / self.bytes_per_sector) as usize
+    }
+
+    pub fn data_sectors(&self) -> usize {
+        let sectors = self.sectors();
+        let fat_size = self.number_of_fats as usize * self.fat_size();
+
+        sectors - (self.reserved_sector_count as usize + fat_size + self.root_dir_sectors())
+    }
+
+    pub fn data_clusters(&self) -> usize {
+        self.data_clusters() / (self.sectors_per_cluster as usize)
+    }
+
+    pub fn get_fat_type(&self) -> FatType {
+        match self.data_clusters() {
+            0..MAX_SECTORS_FOR_FAT12 => FatType::Fat12,
+            MAX_SECTORS_FOR_FAT12..MAX_SECTORS_FOR_FAT32 => FatType::Fat16,
+            _ => FatType::Fat32
+        }
+    }
+
     pub fn sectors_occupied_by_fat16(&self) -> usize {
         self.fat_sectors_16 as usize
     }
 }
 
-impl TryFrom<&'_ [u8]> for BiosParameterBlock {
+impl TryFrom<&[u8]> for BiosParameterBlock {
     type Error = FsError;
 
     fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
-        if value.len() < size_of::<Self>() {
+        if value.len() < 512 {
             return Err(FsError::new(FsErrorKind::InvalidInput,
             "Can not construct BiosParameterBlock from improperly sized array"));
         }
 
-        Ok(unsafe { ptr::read(value.as_ptr() as *const Self) })
+        let raw_bpb = unsafe { ptr::read_unaligned(value.as_ptr() as *const Self) };
+
+        if !raw_bpb.verify_jmp_instruction() || !raw_bpb.verify_sector_count_correctness() {
+            return Err(FsError::new(FsErrorKind::InvalidData,
+                                    "Attempted BiosParameterBlock does not contain valid data. Not dosfs!"));
+        }
+
+        match raw_bpb.get_fat_type() {
+            FatType::Fat12 | FatType::Fat16 => unsafe {
+                if !raw_bpb.extended.fat16.verify() {
+                    return Err(FsError::new(FsErrorKind::InvalidData,
+                                            "Attempted Extended Fat12/Fat16 does not contain valid data. Not dosfs!"));
+                }
+            }
+            FatType::Fat32 => unsafe {
+                if !raw_bpb.extended.fat32.verify() {
+                    return Err(FsError::new(FsErrorKind::InvalidData,
+                                            "Attempted Extended Fat32 does not contain valid data. Not dosfs!"));
+                }
+            }
+        }
+
+        Ok(raw_bpb)
     }
 }

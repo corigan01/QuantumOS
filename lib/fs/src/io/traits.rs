@@ -26,6 +26,9 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 use crate::FsResult;
 use crate::io::SeekFrom;
 
+pub trait ReadWriteSeek: Read + Write + Seek { }
+impl<T: Read + Write + Seek> ReadWriteSeek for T { }
+
 pub trait Read {
     fn read(&mut self, buf: &mut [u8]) -> FsResult<usize>;
 
