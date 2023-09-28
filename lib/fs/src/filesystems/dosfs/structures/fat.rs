@@ -23,6 +23,7 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use crate::abstract_buffer::AbstractBuffer;
 use crate::error::{FsError, FsErrorKind};
 use crate::filesystems::dosfs::structures::{FatType, MAX_CLUSTERS_FOR_FAT12, MAX_CLUSTERS_FOR_FAT16, MAX_CLUSTERS_FOR_FAT32};
 use crate::FsResult;
@@ -108,13 +109,17 @@ impl FatEntry {
 
 
 pub struct FileAllocationTable {
-    fat_type: FatType
+    fat_type: FatType,
+    fat_begin: u64,
+    fat_size: u64
 }
 
 impl FileAllocationTable {
-    pub fn new(fat_type: FatType) -> Self {
+    pub fn new(fat_type: FatType, fat_begin: u64, fat_size: u64) -> Self {
         Self {
-            fat_type
+            fat_type,
+            fat_begin,
+            fat_size
         }
     }
 
@@ -158,12 +163,15 @@ impl FileAllocationTable {
         Ok(FatEntry::from_fat32(large_value))
     }
 
-    pub fn read_entry<Reader>(&self, index: usize, reader: &mut Reader) -> FsResult<FatEntry>
-        where Reader: ReadWriteSeek {
-        match self.fat_type {
-            FatType::Fat12 => self.read_fat12_entry(index, reader),
-            FatType::Fat16 => self.read_fat16_entry(index, reader),
-            FatType::Fat32 => self.read_fat32_entry(index, reader),
-        }
+    pub fn read_entry(&self, index: usize, reader: &mut AbstractBuffer) -> FsResult<FatEntry> {
+        let new_range = self.fat_begin..=(self.fat_size + self.fat_begin);
+
+        reader.temporary_shrink(new_range, |reader| {
+            match self.fat_type {
+                FatType::Fat12 => self.read_fat12_entry(index, reader),
+                FatType::Fat16 => self.read_fat16_entry(index, reader),
+                FatType::Fat32 => self.read_fat32_entry(index, reader),
+            }
+        })
     }
 }

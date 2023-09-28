@@ -30,9 +30,6 @@ use crate::FsResult;
 use crate::io::{Read, ReadWriteSeek, Seek, SeekFrom, Write};
 
 pub struct AbstractBuffer {
-    /// # Readable Range
-    /// This is the range in the buffer at-which we are allowed to read and write to. When
-    /// seeking in this datatype, SeekFrom::Start(0) will seek `data` from readable_range.start
     range_start: Bound<u64>,
     range_end: Bound<u64>,
     data: Box<dyn ReadWriteSeek>,
@@ -50,22 +47,20 @@ impl AbstractBuffer {
         }
     }
 
-    fn readable_range_begin(&self, buffer_end: u64) -> u64 {
-        match self.range_start {
-            Bound::Included(value) => min(value, buffer_end),
-            Bound::Unbounded => 0,
-            _ => unreachable!()
+    const fn decode_bound(bound: Bound<u64>, unbounded: u64) -> u64 {
+        match bound {
+            Bound::Included(val) => val,
+            Bound::Excluded(val) => val - 1,
+            Bound::Unbounded => unbounded
         }
     }
 
-    fn readable_range_end(&self, buffer_end: u64) -> u64 {
-        let readable_range = match self.range_end {
-            Bound::Included(value) => value,
-            Bound::Excluded(value) => value - 1,
-            Bound::Unbounded => buffer_end
-        };
+    fn readable_range_begin(&self, buffer_end: u64) -> u64 {
+        min(Self::decode_bound(self.range_start, 0), buffer_end)
+    }
 
-        min(readable_range, buffer_end)
+    fn readable_range_end(&self, buffer_end: u64) -> u64 {
+        min(Self::decode_bound(self.range_end, buffer_end), buffer_end)
     }
 
     fn readable_range_size(&self, buffer_end: u64) -> u64 {
@@ -80,38 +75,49 @@ impl AbstractBuffer {
         self.range_end
     }
 
-    /// TODO : We want to shrink a range,
-    /// e.g:
-    ///
-    /// Say we have the starting range `..=10`.
-    /// And we want to shrink that range with `2..5`
-    /// we would then have a range of `2..5`.
-    ///
-    /// Say we have the starting range `2..13`
-    /// and we want to shrink that range with `2..5`
-    /// we would then have a range of `4..6`
-    const fn range_add(lhs: Bound<u64>, rhs: Bound<u64>) -> Bound<u64> {
-        match rhs {
-            Bound::Included(inner_val) => {
-                match lhs {
-                    Bound::Included(outer_val) => Bound::Included(outer_val + inner_val),
-                    Bound::Excluded(outer_val) => Bound::Included((outer_val - 1) + inner_val),
-                    Bound::Unbounded => rhs,
-                }
-            }
-            Bound::Excluded(inner_val) => {
-                match lhs {
-                    Bound::Included(outer_val) => Bound::Excluded(outer_val + inner_val),
-                    Bound::Excluded(outer_val) => Bound::Excluded((outer_val - 1) + inner_val),
-                    Bound::Unbounded => rhs,
-                }
-            }
-            Bound::Unbounded => lhs,
-        }
-    }
+    #[inline]
+    fn shrink_range<RangeOrig, RangeNew>(original: RangeOrig, new: RangeNew, buffer_end: u64) -> (Bound<u64>, Bound<u64>)
+        where RangeOrig: RangeBounds<u64>,
+              RangeNew: RangeBounds<u64> {
 
-    fn range_sub(lhs: Bound<u64>, rhs: Bound<u64>) -> Bound<u64> {
-        todo!()
+        let original_bound_begin = Self::decode_bound(
+            original.start_bound().cloned(),
+            0
+        );
+
+        let new_bound_begin = Self::decode_bound(
+            new.start_bound().cloned(),
+            0
+        );
+
+        let bound_added = original_bound_begin + new_bound_begin;
+        let return_bound_begin = match bound_added {
+            0 => {
+                if matches!(original.start_bound(), Bound::Unbounded) && matches!(new.start_bound(), Bound::Unbounded) {
+                    Bound::Unbounded
+                } else {
+                    Bound::Included(0)
+                }
+            },
+            val => Bound::Included(val)
+        };
+
+        let original_bound_end = Self::decode_bound(
+            original.end_bound().cloned(),
+            buffer_end
+        );
+
+        let new_bound_end = Self::decode_bound(
+            new.end_bound().cloned(),
+            buffer_end
+        );
+
+        let return_bound_end = match new_bound_end {
+            v if v == buffer_end => original.end_bound().cloned(),
+            val => Bound::Included(min(val + new_bound_begin, original_bound_end))
+        };
+
+        (return_bound_begin, return_bound_end)
     }
 
     pub fn temporary_shrink<Func, Range, AnyOut>(&mut self, tmp_range: Range, mut func: Func) -> AnyOut
@@ -120,11 +126,19 @@ impl AbstractBuffer {
 
         let current_begin = self.range_start;
         let current_end = self.range_end;
+        let current_self_seek = self.current_seek;
+
+        (self.range_start, self.range_end) = Self::shrink_range(
+            (self.range_start, self.range_end),
+            tmp_range,
+            self.data.stream_len().unwrap()
+        );
 
         let return_result = func(self);
 
         self.range_start = current_begin;
         self.range_end = current_end;
+        self.current_seek = current_self_seek;
 
         return_result
     }
@@ -199,12 +213,7 @@ mod test {
     use crate::io::{Read, Seek, SeekFrom, Write};
     use crate::{FsResult, set_example_allocator};
 
-    #[test]
-    fn test_range_add() {
-        assert_eq!(AbstractBuffer::range_add(Bound::Included(2), Bound::Unbounded), Bound::Included(2));
-        assert_eq!(AbstractBuffer::range_add(Bound::Included(2), Bound::Included(1)), Bound::Included(3));
-        assert_eq!(AbstractBuffer::range_add(Bound::Unbounded, Bound::Unbounded), Bound::Unbounded);
-    }
+
 
     struct TestBuffer<const SIZE: usize> {
         seek_pos: u64
@@ -252,7 +261,14 @@ mod test {
         }
     }
 
-
+    #[test]
+    fn test_shrink_bounds() {
+        assert_eq!(AbstractBuffer::shrink_range(0..=10, 0..=5, 10), (Bound::Included(0), Bound::Included(5)));
+        assert_eq!(AbstractBuffer::shrink_range(..5, ..3, 5), (Bound::Unbounded, Bound::Included(2)));
+        assert_eq!(AbstractBuffer::shrink_range(..5, ..=3, 5), (Bound::Unbounded, Bound::Included(3)));
+        assert_eq!(AbstractBuffer::shrink_range(0..5, ..3, 5), (Bound::Included(0), Bound::Included(2)));
+        assert_eq!(AbstractBuffer::shrink_range(0.., 2.., 5), (Bound::Included(2), Bound::Unbounded));
+    }
 
     #[test]
     fn test_seek_no_bounds() {
