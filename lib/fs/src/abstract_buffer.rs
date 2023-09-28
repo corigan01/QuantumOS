@@ -72,6 +72,63 @@ impl AbstractBuffer {
         self.readable_range_end(buffer_end) - self.readable_range_begin(buffer_end)
     }
 
+    pub fn inner_range_begin(&self) -> Bound<u64> {
+        self.range_start
+    }
+
+    pub fn inner_range_end(&self) -> Bound<u64> {
+        self.range_end
+    }
+
+    /// TODO : We want to shrink a range,
+    /// e.g:
+    ///
+    /// Say we have the starting range `..=10`.
+    /// And we want to shrink that range with `2..5`
+    /// we would then have a range of `2..5`.
+    ///
+    /// Say we have the starting range `2..13`
+    /// and we want to shrink that range with `2..5`
+    /// we would then have a range of `4..6`
+    const fn range_add(lhs: Bound<u64>, rhs: Bound<u64>) -> Bound<u64> {
+        match rhs {
+            Bound::Included(inner_val) => {
+                match lhs {
+                    Bound::Included(outer_val) => Bound::Included(outer_val + inner_val),
+                    Bound::Excluded(outer_val) => Bound::Included((outer_val - 1) + inner_val),
+                    Bound::Unbounded => rhs,
+                }
+            }
+            Bound::Excluded(inner_val) => {
+                match lhs {
+                    Bound::Included(outer_val) => Bound::Excluded(outer_val + inner_val),
+                    Bound::Excluded(outer_val) => Bound::Excluded((outer_val - 1) + inner_val),
+                    Bound::Unbounded => rhs,
+                }
+            }
+            Bound::Unbounded => lhs,
+        }
+    }
+
+    fn range_sub(lhs: Bound<u64>, rhs: Bound<u64>) -> Bound<u64> {
+        todo!()
+    }
+
+    pub fn temporary_shrink<Func, Range, AnyOut>(&mut self, tmp_range: Range, mut func: Func) -> AnyOut
+        where Func: FnMut(&mut Self) -> AnyOut,
+              Range: RangeBounds<u64> {
+
+        let current_begin = self.range_start;
+        let current_end = self.range_end;
+
+        let return_result = func(self);
+
+        self.range_start = current_begin;
+        self.range_end = current_end;
+
+        return_result
+    }
+
 }
 
 impl Read for AbstractBuffer {
@@ -134,21 +191,20 @@ impl Seek for AbstractBuffer {
     }
 }
 
-pub struct TempAbstractBuffer<'a> {
-    range_start: Bound<u64>,
-    range_end: Bound<u64>,
-    data: &'a mut Box<dyn ReadWriteSeek>,
-    current_seek: u64,
-}
-
-
-
 #[cfg(test)]
 mod test {
+    use core::ops::Bound;
     use qk_alloc::boxed::Box;
     use crate::abstract_buffer::AbstractBuffer;
     use crate::io::{Read, Seek, SeekFrom, Write};
     use crate::{FsResult, set_example_allocator};
+
+    #[test]
+    fn test_range_add() {
+        assert_eq!(AbstractBuffer::range_add(Bound::Included(2), Bound::Unbounded), Bound::Included(2));
+        assert_eq!(AbstractBuffer::range_add(Bound::Included(2), Bound::Included(1)), Bound::Included(3));
+        assert_eq!(AbstractBuffer::range_add(Bound::Unbounded, Bound::Unbounded), Bound::Unbounded);
+    }
 
     struct TestBuffer<const SIZE: usize> {
         seek_pos: u64

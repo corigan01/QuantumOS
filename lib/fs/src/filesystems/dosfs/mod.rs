@@ -23,10 +23,11 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use core::ops::Bound;
 use qk_alloc::boxed::Box;
 use crate::abstract_buffer::AbstractBuffer;
 use crate::filesystems::dosfs::structures::bpb::BiosParameterBlock;
-use crate::filesystems::dosfs::structures::fat::FileAllocationTable;
+use crate::filesystems::dosfs::structures::fat::{FatEntry, FileAllocationTable};
 use crate::FsResult;
 use crate::io::{Read, Seek, SeekFrom};
 
@@ -56,5 +57,18 @@ impl Dosfs {
             buf
         })
     }
+
+    pub fn read_fat_entry(&mut self, entry_id: usize) -> FsResult<FatEntry> {
+        let fat_begin = self.bpb.fat_begin() as u64;
+        let fat_size = self.bpb.fat_size() as u64;
+
+        let new_range = fat_begin..=fat_size;
+
+        self.buf.temporary_shrink(new_range, |buffer| {
+            self.fat.read_entry(entry_id, buffer)
+        })
+    }
+
+
 }
 
