@@ -23,18 +23,38 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use qk_alloc::boxed::Box;
+use crate::abstract_buffer::AbstractBuffer;
 use crate::filesystems::dosfs::structures::bpb::BiosParameterBlock;
-use crate::filesystems::dosfs::structures::ExtendedBiosBlock;
 use crate::filesystems::dosfs::structures::fat::FileAllocationTable;
+use crate::FsResult;
+use crate::io::{Read, Seek, SeekFrom};
 
 mod structures;
 
 pub struct Dosfs {
     fat: FileAllocationTable,
-    bpb: BiosParameterBlock,
+    bpb: Box<BiosParameterBlock>,
+    buf: AbstractBuffer
 }
 
 impl Dosfs {
+    pub fn new(mut buf: AbstractBuffer) -> FsResult<Self> {
+        let mut bpb = [0_u8; 512];
+        buf.seek(SeekFrom::Start(0))?;
+        buf.read(&mut bpb)?;
 
+        let bpb = Box::new(
+            BiosParameterBlock::try_from(bpb.as_ref())?
+        );
+
+        let fat = FileAllocationTable::new(bpb.fat_type());
+
+        Ok(Self {
+            fat,
+            bpb,
+            buf
+        })
+    }
 }
 

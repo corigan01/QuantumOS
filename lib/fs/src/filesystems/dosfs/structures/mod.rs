@@ -32,9 +32,9 @@ pub(crate) type Byte = u8;
 pub(crate) type Word = u16;
 pub(crate) type DoubleWord = u32;
 
-pub(crate) const MAX_SECTORS_FOR_FAT12: usize = 4084;
-pub(crate) const MAX_SECTORS_FOR_FAT16: usize = 65525;
-pub(crate) const MAX_SECTORS_FOR_FAT32: usize = 268435447;
+pub(crate) const MAX_CLUSTERS_FOR_FAT12: usize = 0xFF4;
+pub(crate) const MAX_CLUSTERS_FOR_FAT16: usize = 0xFFF4;
+pub(crate) const MAX_CLUSTERS_FOR_FAT32: usize = 0xFFFFFF4;
 
 pub trait ExtendedBiosBlock {
     fn verify(&self) -> bool;

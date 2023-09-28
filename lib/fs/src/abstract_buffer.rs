@@ -29,37 +29,39 @@ use qk_alloc::boxed::Box;
 use crate::FsResult;
 use crate::io::{Read, ReadWriteSeek, Seek, SeekFrom, Write};
 
-pub struct AbstractBuffer<Range>
-    where Range: RangeBounds<u64> {
+pub struct AbstractBuffer {
     /// # Readable Range
     /// This is the range in the buffer at-which we are allowed to read and write to. When
     /// seeking in this datatype, SeekFrom::Start(0) will seek `data` from readable_range.start
-    readable_range: Range,
+    range_start: Bound<u64>,
+    range_end: Bound<u64>,
     data: Box<dyn ReadWriteSeek>,
     current_seek: u64,
 }
 
-impl<Range: RangeBounds<u64>> AbstractBuffer<Range> {
-    pub fn new(data: Box<dyn ReadWriteSeek>, readable_range: Range) -> Self {
+impl AbstractBuffer {
+    pub fn new<Range>(data: Box<dyn ReadWriteSeek>, readable_range: Range) -> Self
+        where Range: RangeBounds<u64> {
         Self {
-            readable_range,
+            range_start: readable_range.start_bound().cloned(),
+            range_end: readable_range.end_bound().cloned(),
             data,
             current_seek: 0,
         }
     }
 
     fn readable_range_begin(&self, buffer_end: u64) -> u64 {
-        match self.readable_range.start_bound() {
-            Bound::Included(value) => min(*value, buffer_end),
+        match self.range_start {
+            Bound::Included(value) => min(value, buffer_end),
             Bound::Unbounded => 0,
             _ => unreachable!()
         }
     }
 
     fn readable_range_end(&self, buffer_end: u64) -> u64 {
-        let readable_range = match self.readable_range.end_bound() {
-            Bound::Included(value) => *value,
-            Bound::Excluded(value) => *value - 1,
+        let readable_range = match self.range_end {
+            Bound::Included(value) => value,
+            Bound::Excluded(value) => value - 1,
             Bound::Unbounded => buffer_end
         };
 
@@ -72,15 +74,21 @@ impl<Range: RangeBounds<u64>> AbstractBuffer<Range> {
 
 }
 
-impl<Range: RangeBounds<u64>> Read for AbstractBuffer<Range> {
+impl Read for AbstractBuffer {
     fn read(&mut self, buf: &mut [u8]) -> FsResult<usize> {
-        self.data.read(buf)
+        let read_amount = self.data.read(buf)?;
+        self.current_seek += read_amount as u64;
+
+        Ok(read_amount)
     }
 }
 
-impl<Range: RangeBounds<u64>> Write for AbstractBuffer<Range> {
+impl Write for AbstractBuffer {
     fn write(&mut self, buf: &mut [u8]) -> FsResult<usize> {
-        self.data.write(buf)
+        let write_amount = self.data.write(buf)?;
+        self.current_seek += write_amount as u64;
+
+        Ok(write_amount)
     }
 
     fn flush(&mut self) -> FsResult<()> {
@@ -88,7 +96,7 @@ impl<Range: RangeBounds<u64>> Write for AbstractBuffer<Range> {
     }
 }
 
-impl<Range: RangeBounds<u64>> Seek for AbstractBuffer<Range> {
+impl Seek for AbstractBuffer {
     fn seek(&mut self, pos: SeekFrom) -> FsResult<u64> {
         let buffer_size = self.data.stream_len()?;
         let abs_pos = match pos {
@@ -125,6 +133,15 @@ impl<Range: RangeBounds<u64>> Seek for AbstractBuffer<Range> {
         Ok(self.readable_range_size(buffer_size))
     }
 }
+
+pub struct TempAbstractBuffer<'a> {
+    range_start: Bound<u64>,
+    range_end: Bound<u64>,
+    data: &'a mut Box<dyn ReadWriteSeek>,
+    current_seek: u64,
+}
+
+
 
 #[cfg(test)]
 mod test {

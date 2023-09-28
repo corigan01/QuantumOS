@@ -23,33 +23,126 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use qk_alloc::vec::Vec;
 use crate::error::{FsError, FsErrorKind};
-use crate::filesystems::dosfs::structures::{MAX_SECTORS_FOR_FAT16, MAX_SECTORS_FOR_FAT32};
+use crate::filesystems::dosfs::structures::{FatType, MAX_CLUSTERS_FOR_FAT12, MAX_CLUSTERS_FOR_FAT16, MAX_CLUSTERS_FOR_FAT32};
 use crate::FsResult;
+use crate::io::{ReadWriteSeek, SeekFrom};
+
+
+pub enum FatEntry {
+    Free,
+    NextCluster(usize),
+    Reserved,
+    Defective,
+    ReservedEndOfFile,
+    EndOfFile,
+}
+
+impl FatEntry {
+    const FAT_12_FREE_CLUSTER: usize = 0x000;
+    const FAT_12_ALLOCATED_LOW: usize = 0x000;
+    const FAT_12_ALLOCATED_HIGH: usize = MAX_CLUSTERS_FOR_FAT12;
+    const FAT_12_RESERVED_LOW: usize = MAX_CLUSTERS_FOR_FAT12 + 1;
+    const FAT_12_RESERVED_HIGH: usize = 0xFF6;
+    const FAT_12_DEFECTIVE_CLUSTER: usize = 0xFF7;
+    const FAT_12_RESERVED_EOF_LOW: usize = 0xFF8;
+    const FAT_12_RESERVED_EOF_HIGH: usize = 0xFFE;
+    const FAT_12_END_OF_FILE_CLUSTER: usize = 0xFFF;
+
+    const FAT_16_FREE_CLUSTER: usize = 0x0000;
+    const FAT_16_ALLOCATED_LOW: usize = 0x0000;
+    const FAT_16_ALLOCATED_HIGH: usize = MAX_CLUSTERS_FOR_FAT16;
+    const FAT_16_RESERVED_LOW: usize = MAX_CLUSTERS_FOR_FAT16 + 1;
+    const FAT_16_RESERVED_HIGH: usize = 0xFFF6;
+    const FAT_16_DEFECTIVE_CLUSTER: usize = 0xFFF7;
+    const FAT_16_RESERVED_EOF_LOW: usize = 0xFFF8;
+    const FAT_16_RESERVED_EOF_HIGH: usize = 0xFFFE;
+    const FAT_16_END_OF_FILE_CLUSTER: usize = 0xFFFF;
+
+    const FAT_32_FREE_CLUSTER: usize = 0x0000;
+    const FAT_32_ALLOCATED_LOW: usize = 0x0000;
+    const FAT_32_ALLOCATED_HIGH: usize = MAX_CLUSTERS_FOR_FAT32;
+    const FAT_32_RESERVED_LOW: usize = MAX_CLUSTERS_FOR_FAT32 + 1;
+    const FAT_32_RESERVED_HIGH: usize = 0xFFFFFF6;
+    const FAT_32_DEFECTIVE_CLUSTER: usize = 0xFFFFFF7;
+    const FAT_32_RESERVED_EOF_LOW: usize = 0xFFFFFF8;
+    const FAT_32_RESERVED_EOF_HIGH: usize = 0xFFFFFFE;
+    const FAT_32_END_OF_FILE_CLUSTER: usize = 0xFFFFFFFF;
+
+    fn from_fat12(value: usize) -> Self {
+        match value {
+            Self::FAT_12_FREE_CLUSTER => Self::Free,
+            Self::FAT_12_ALLOCATED_LOW..=Self::FAT_12_ALLOCATED_HIGH => Self::NextCluster(value),
+            Self::FAT_12_RESERVED_LOW..=Self::FAT_12_RESERVED_HIGH => Self::Reserved,
+            Self::FAT_12_DEFECTIVE_CLUSTER => Self::Defective,
+            Self::FAT_12_RESERVED_EOF_LOW..=Self::FAT_12_RESERVED_EOF_HIGH => Self::ReservedEndOfFile,
+            Self::FAT_12_END_OF_FILE_CLUSTER => Self::EndOfFile,
+            _ => unreachable!("Value Out Of Range for Fat12")
+        }
+    }
+
+    fn from_fat16(value: usize) -> Self {
+        match value {
+            Self::FAT_16_FREE_CLUSTER => Self::Free,
+            Self::FAT_16_ALLOCATED_LOW..=Self::FAT_16_ALLOCATED_HIGH => Self::NextCluster(value),
+            Self::FAT_16_RESERVED_LOW..=Self::FAT_16_RESERVED_HIGH => Self::Reserved,
+            Self::FAT_16_DEFECTIVE_CLUSTER => Self::Defective,
+            Self::FAT_16_RESERVED_EOF_LOW..=Self::FAT_16_RESERVED_EOF_HIGH => Self::ReservedEndOfFile,
+            Self::FAT_16_END_OF_FILE_CLUSTER => Self::EndOfFile,
+            _ => unreachable!("Value Out Of Range for Fat16")
+        }
+    }
+
+    fn from_fat32(value: usize) -> Self {
+        match value {
+            Self::FAT_32_FREE_CLUSTER => Self::Free,
+            Self::FAT_32_ALLOCATED_LOW..=Self::FAT_32_ALLOCATED_HIGH => Self::NextCluster(value),
+            Self::FAT_32_RESERVED_LOW..=Self::FAT_32_RESERVED_HIGH => Self::Reserved,
+            Self::FAT_32_DEFECTIVE_CLUSTER => Self::Defective,
+            Self::FAT_32_RESERVED_EOF_LOW..=Self::FAT_32_RESERVED_EOF_HIGH => Self::ReservedEndOfFile,
+            Self::FAT_32_END_OF_FILE_CLUSTER => Self::EndOfFile,
+            _ => unreachable!("Value Out Of Range for Fat32")
+        }
+    }
+}
+
 
 pub struct FileAllocationTable {
-    data: Vec<u8>
+    fat_type: FatType
 }
 
 impl FileAllocationTable {
-    pub fn read_fat12_entry(&self, index: usize) -> FsResult<usize> {
+    pub fn new(fat_type: FatType) -> Self {
+        Self {
+            fat_type
+        }
+    }
+
+    fn read_fat12_entry<Reader>(&self, index: usize, reader: &mut Reader) -> FsResult<FatEntry>
+        where Reader: ReadWriteSeek {
         todo!("FAT12 fat entry")
     }
 
-    pub fn read_fat16_entry(&self, index: usize) -> FsResult<usize> {
-        if index >= MAX_SECTORS_FOR_FAT16 {
+    fn read_fat16_entry<Reader>(&self, index: usize, reader: &mut Reader) -> FsResult<FatEntry>
+        where Reader: ReadWriteSeek {
+        if index >= MAX_CLUSTERS_FOR_FAT16 {
             return Err(FsError::new(FsErrorKind::InvalidInput,
                                     "Cannot address more then 65525 clusters in fat16"));
         }
 
         let byte_offset = index * 2;
+        let mut byte_slice = [0; 2];
+        reader.seek(SeekFrom::Start(byte_offset as u64))?;
+        reader.read(&mut byte_slice)?;
 
-        Ok(((self.data[byte_offset] as u16) << 8 | (self.data[byte_offset + 1] as u16)) as usize)
+        let large_value = u16::from_le_bytes(byte_slice) as usize;
+
+        Ok(FatEntry::from_fat16(large_value))
     }
 
-    pub fn read_fat32_entry(&self, index: usize) -> FsResult<usize> {
-        if index >= MAX_SECTORS_FOR_FAT32 {
+    fn read_fat32_entry<Reader>(&self, index: usize, reader: &mut Reader) -> FsResult<FatEntry>
+        where Reader: ReadWriteSeek {
+        if index >= MAX_CLUSTERS_FOR_FAT32 {
             return Err(FsError::new(FsErrorKind::InvalidInput,
                                     "Cannot address more then 268435447 clusters in fat32"));
         }
@@ -57,17 +150,20 @@ impl FileAllocationTable {
         let byte_offset = index * 4;
 
         let mut byte_slice = [0; 4];
-        byte_slice.copy_from_slice(&self.data.as_slice()[byte_offset..byte_offset + 4]);
-        let large_value = u32::from_le_bytes(byte_slice);
+        reader.seek(SeekFrom::Start(byte_offset as u64))?;
+        reader.read(&mut byte_slice)?;
 
-        Ok(large_value as usize)
+        let large_value = u32::from_le_bytes(byte_slice) as usize;
+
+        Ok(FatEntry::from_fat32(large_value))
     }
-}
 
-impl From<&[u8]> for FileAllocationTable {
-    fn from(value: &[u8]) -> Self {
-        FileAllocationTable {
-            data: value.into()
+    pub fn read_entry<Reader>(&self, index: usize, reader: &mut Reader) -> FsResult<FatEntry>
+        where Reader: ReadWriteSeek {
+        match self.fat_type {
+            FatType::Fat12 => self.read_fat12_entry(index, reader),
+            FatType::Fat16 => self.read_fat16_entry(index, reader),
+            FatType::Fat32 => self.read_fat32_entry(index, reader),
         }
     }
 }

@@ -25,7 +25,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 use core::ptr;
 use crate::error::{FsError, FsErrorKind};
-use crate::filesystems::dosfs::structures::{Byte, DoubleWord, ExtendedBiosBlock, FatType, MAX_SECTORS_FOR_FAT12, MAX_SECTORS_FOR_FAT32, Word};
+use crate::filesystems::dosfs::structures::{Byte, DoubleWord, ExtendedBiosBlock, FatType, MAX_CLUSTERS_FOR_FAT12, MAX_CLUSTERS_FOR_FAT32, Word};
 use crate::filesystems::dosfs::structures::bpb16::ExtendedBPB16;
 use crate::filesystems::dosfs::structures::bpb32::ExtendedBPB32;
 
@@ -96,19 +96,19 @@ impl BiosParameterBlock {
     }
 
     pub fn data_clusters(&self) -> usize {
-        self.data_clusters() / (self.sectors_per_cluster as usize)
+        self.data_sectors() / (self.sectors_per_cluster as usize)
     }
 
-    pub fn get_fat_type(&self) -> FatType {
+    pub fn fat_type(&self) -> FatType {
         match self.data_clusters() {
-            0..MAX_SECTORS_FOR_FAT12 => FatType::Fat12,
-            MAX_SECTORS_FOR_FAT12..MAX_SECTORS_FOR_FAT32 => FatType::Fat16,
+            0..MAX_CLUSTERS_FOR_FAT12 => FatType::Fat12,
+            MAX_CLUSTERS_FOR_FAT12..MAX_CLUSTERS_FOR_FAT32 => FatType::Fat16,
             _ => FatType::Fat32
         }
     }
 
-    pub fn sectors_occupied_by_fat16(&self) -> usize {
-        self.fat_sectors_16 as usize
+    pub fn fat_begin(&self) -> usize {
+        self.reserved_sector_count as usize
     }
 }
 
@@ -128,7 +128,7 @@ impl TryFrom<&[u8]> for BiosParameterBlock {
                                     "Attempted BiosParameterBlock does not contain valid data. Not dosfs!"));
         }
 
-        match raw_bpb.get_fat_type() {
+        match raw_bpb.fat_type() {
             FatType::Fat12 | FatType::Fat16 => unsafe {
                 if !raw_bpb.extended.fat16.verify() {
                     return Err(FsError::new(FsErrorKind::InvalidData,
