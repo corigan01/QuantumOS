@@ -23,57 +23,52 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use core::ptr;
 use core::mem::size_of;
-use crate::error::{FsError, FsErrorKind};
-use crate::filesystems::dosfs::structures::{Byte, DoubleWord, ExtendedBiosBlock, Word};
+use core::ptr;
+use crate::error::FsError;
+use crate::filesystems::dosfs::structures::DoubleWord;
 
-#[derive(Copy, Clone)]
 #[repr(C, packed)]
-pub struct ExtendedBPB32 {
-    pub(crate) fat_sectors_32: DoubleWord,
-    pub(crate) extended_flags: Word,
-    pub(crate) filesystem_version: Word,
-    pub(crate) root_cluster_number: DoubleWord,
-    pub(crate) fs_info_sector: Word,
-    pub(crate) backup_boot_record: Word,
-    pub(crate) reserved_1: [u8; 12],
-    pub(crate) drive_number: Byte,
-    pub(crate) reserved_2: Byte,
-    pub(crate) boot_signature: Byte,
-    pub(crate) volume_serial_number: DoubleWord,
-    pub(crate) volume_label: [u8; 11],
-    pub(crate) filesystem_type: [u8; 8]
+pub struct FsInfo {
+    leading_signature: DoubleWord,
+    // todo: remove this from the structure and update loading to expect but not load its value
+    reserved1: [u8; 480],
+    structure_signature: DoubleWord,
+    free_count: DoubleWord,
+    next_free: DoubleWord,
+    reserved2: [u8; 12],
+    trail_signature: DoubleWord
 }
 
-impl ExtendedBiosBlock for ExtendedBPB32 {
-    fn verify(&self) -> bool {
-        self.boot_signature == 0x29 &&
-            (self.volume_serial_number != 0 || self.volume_label[0] != 0)
+impl FsInfo {
+    const LEADING_SIGNATURE: DoubleWord = 0x41615252;
+    const STRUCTURE_SIGNATURE: DoubleWord = 0x61417272;
+    const TRAIL_SIGNATURE: DoubleWord = 0xAA550000;
+
+    pub fn is_structure_valid(&self) -> bool {
+        self.leading_signature == Self::LEADING_SIGNATURE &&
+            self.structure_signature == Self::STRUCTURE_SIGNATURE &&
+            self.trail_signature == Self::TRAIL_SIGNATURE
     }
 
-    fn volume_serial_number(&self) -> u32 {
-        self.volume_serial_number
+    pub fn free_clusters(&self) -> Option<usize> {
+        if self.free_count == 0xFFFFFFFF {
+            return None;
+        }
+
+        Some(self.free_count as usize)
     }
 
-    fn volume_label(&self) -> &str {
-        unsafe { core::str::from_utf8_unchecked(&self.volume_label) }
-    }
+    pub fn next_free(&self) -> Option<usize> {
+        if self.next_free == 0xFFFFFFFF {
+            return None;
+        }
 
-    fn filesystem_string(&self) -> Option<&str> {
-        Some(unsafe { core::str::from_utf8_unchecked(&self.volume_label) })
-    }
-
-    fn fat_sectors(&self) -> Option<usize> {
-        Some(self.fat_sectors_32 as usize)
-    }
-
-    fn fs_info_sector(&self) -> Option<usize> {
-        Some(self.fs_info_sector as usize)
+        Some(self.next_free as usize)
     }
 }
 
-impl TryFrom<&[u8]> for ExtendedBPB32 {
+impl TryFrom<&[u8]> for FsInfo {
     type Error = FsError;
 
     fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
@@ -81,6 +76,7 @@ impl TryFrom<&[u8]> for ExtendedBPB32 {
             return Err(FsError::try_from_array_error::<Self>(value));
         }
 
-        Ok( unsafe { ptr::read(value.as_ptr() as *const Self) } )
+        Ok(unsafe { ptr::read(value.as_ptr() as *const Self) })
     }
 }
+

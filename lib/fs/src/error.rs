@@ -24,6 +24,8 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 use core::fmt::{Debug, Display, Formatter};
+use core::mem::size_of;
+use qk_alloc::format;
 use qk_alloc::string::String;
 
 #[non_exhaustive]
@@ -265,6 +267,20 @@ impl FsError {
         Self {
             error: String::from(error),
             kind
+        }
+    }
+
+    pub fn try_from_array_error<Type>(array: &[u8]) -> FsError {
+        let error = format!(
+            concat!("Cannot construct ", stringify!(Type), " with improperly sized array!\n",
+                    "\tArray only has {} bytes, but expected {} bytes!"),
+            array.len(),
+            size_of::<Type>()
+        );
+
+        Self {
+            error,
+            kind: FsErrorKind::InvalidInput
         }
     }
 

@@ -71,10 +71,7 @@ impl TryFrom<&[u8]> for ExtendedBPB16 {
 
     fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
         if value.len() < size_of::<Self>() {
-            return Err(FsError::new(
-                FsErrorKind::InvalidInput,
-                "Can not construct ExtendedBPB16 from improperly sized array"
-            ));
+            return Err(FsError::try_from_array_error::<Self>(value));
         }
 
         Ok( unsafe { ptr::read(value.as_ptr() as *const Self) } )

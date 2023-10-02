@@ -117,8 +117,7 @@ impl TryFrom<&[u8]> for BiosParameterBlock {
 
     fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
         if value.len() < 512 {
-            return Err(FsError::new(FsErrorKind::InvalidInput,
-            "Can not construct BiosParameterBlock from improperly sized array"));
+            return Err(FsError::try_from_array_error::<Self>(value));
         }
 
         let raw_bpb = unsafe { ptr::read_unaligned(value.as_ptr() as *const Self) };

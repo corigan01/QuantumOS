@@ -25,7 +25,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 use crate::abstract_buffer::AbstractBuffer;
 use crate::error::{FsError, FsErrorKind};
-use crate::filesystems::dosfs::structures::{FatType, MAX_CLUSTERS_FOR_FAT12, MAX_CLUSTERS_FOR_FAT16, MAX_CLUSTERS_FOR_FAT32};
+use crate::filesystems::dosfs::structures::{ClusterID, FatType, MAX_CLUSTERS_FOR_FAT12, MAX_CLUSTERS_FOR_FAT16, MAX_CLUSTERS_FOR_FAT32};
 use crate::FsResult;
 use crate::io::{ReadWriteSeek, SeekFrom};
 
@@ -163,7 +163,7 @@ impl FileAllocationTable {
         Ok(FatEntry::from_fat32(large_value))
     }
 
-    pub fn read_entry(&self, index: usize, reader: &mut AbstractBuffer) -> FsResult<FatEntry> {
+    pub fn read_entry(&self, index: ClusterID, reader: &mut AbstractBuffer) -> FsResult<FatEntry> {
         let new_range = self.fat_begin..=(self.fat_size + self.fat_begin);
 
         reader.temporary_shrink(new_range, |reader| {

@@ -37,6 +37,16 @@ impl String {
         Self { data: Vec::new() }
     }
 
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self {
+            data: Vec::with_capacity(capacity)
+        }
+    }
+
+    pub unsafe fn push_raw_byte(&mut self, byte: u8) {
+        self.data.push(byte);
+    }
+
     pub fn push(&mut self, c: char) {
         let mut tmp_buffer: [u8; 4] = [0; 4];
 
