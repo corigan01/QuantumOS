@@ -450,6 +450,16 @@ impl<Type> Default for Vec<Type> {
     }
 }
 
+pub fn from_elem<Type: Clone>(element: Type, size: usize) -> Vec<Type> {
+    let mut vector = Vec::with_capacity(size);
+
+    for _ in 0..size {
+        vector.push(element.clone());
+    }
+
+    vector
+}
+
 #[cfg(test)]
 mod test {
     use super::*;

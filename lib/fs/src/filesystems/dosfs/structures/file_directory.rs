@@ -23,6 +23,7 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use core::fmt::{Debug, Formatter};
 use core::mem::size_of;
 use core::ptr;
 use qk_alloc::string::String;
@@ -30,7 +31,7 @@ use crate::error::{FsError};
 use crate::filesystems::dosfs::structures::{Byte, ClusterID, DoubleWord, FatTime, Word};
 
 #[derive(Clone, Copy, PartialEq, Debug)]
-pub enum DirectoryEntryAttributes {
+pub enum AttributeTypes {
     Unknown, // 0x00
     ReadOnly, // 0x01
     Hidden, // 0x02
@@ -41,7 +42,87 @@ pub enum DirectoryEntryAttributes {
     LongName // or all of the above
 }
 
-impl From<Byte> for DirectoryEntryAttributes {
+impl AttributeTypes {
+    pub const ALL_KINDS: [AttributeTypes; 8] = [
+        Self::Unknown,
+        Self::ReadOnly,
+        Self::Hidden,
+        Self::System,
+        Self::VolumeID,
+        Self::Directory,
+        Self::Archive,
+        Self::LongName
+    ];
+}
+
+#[derive(Clone, Copy)]
+#[repr(C)]
+pub struct Attributes(u8);
+
+impl From<Byte> for Attributes {
+    fn from(value: Byte) -> Self {
+        Self(value)
+    }
+}
+
+impl Into<Byte> for Attributes {
+    fn into(self) -> Byte {
+        self.0
+    }
+}
+
+impl Attributes {
+    pub fn new() -> Self {
+        Self(0)
+    }
+
+    pub fn add_type(&mut self, kind: AttributeTypes) {
+        let kind_value: Byte = kind.into();
+
+        self.0 |= kind_value;
+    }
+
+    pub fn remove_type(&mut self, kind: AttributeTypes) {
+        let kind_value: Byte = kind.into();
+
+        self.0 &= !kind_value;
+    }
+
+    pub fn contains_attribute(&self, kind: AttributeTypes) -> bool {
+        let kind_value: Byte = kind.into();
+
+        self.0 & kind_value > 0
+    }
+
+    pub fn is_file(&self) -> bool {
+        !self.contains_attribute(AttributeTypes::Directory) &&
+            !self.contains_attribute(AttributeTypes::LongName) &&
+            !self.contains_attribute(AttributeTypes::VolumeID)
+    }
+
+    pub fn is_directory(&self) -> bool {
+        self.contains_attribute(AttributeTypes::Directory)
+    }
+
+    pub fn is_long_name(&self) -> bool {
+        self.contains_attribute(AttributeTypes::LongName)
+    }
+}
+
+impl Debug for Attributes {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        f.write_str("EntryAttributes(")?;
+        f.debug_list()
+            .entries(
+                AttributeTypes::ALL_KINDS
+                    .iter()
+                    .filter(|kind| self.contains_attribute(**kind)))
+            .finish()?;
+        f.write_str(")")
+    }
+}
+
+impl From<Byte> for AttributeTypes {
     fn from(value: Byte) -> Self {
         match value {
             0x01 => Self::ReadOnly,
@@ -57,7 +138,7 @@ impl From<Byte> for DirectoryEntryAttributes {
     }
 }
 
-impl Into<Byte> for DirectoryEntryAttributes {
+impl Into<Byte> for AttributeTypes {
     fn into(self) -> Byte {
         match self {
             Self::Unknown => 0x00,
@@ -76,7 +157,7 @@ impl Into<Byte> for DirectoryEntryAttributes {
 #[repr(C, packed)]
 pub struct DirectoryEntry {
     name: [u8; 11],
-    attribute_types: Byte,
+    attribute_types: Attributes,
     reserved: Byte,
     creation_time_tenth: Byte,
     creation_time: Word,
@@ -102,7 +183,7 @@ impl TryFrom<&[u8]> for DirectoryEntry {
 }
 
 impl DirectoryEntry {
-    pub fn is_entry_free(&self) -> bool {
+    pub fn is_free(&self) -> bool {
         self.name[0] == 0xE5 || self.name[0] == 0
     }
 
@@ -124,7 +205,7 @@ impl DirectoryEntry {
 
     pub fn short_filename(&self) -> String {
         let first_part = &self.name[..=8];
-        let dot_part = &self.name[9..];
+        let dot_part = &self.name[8..];
 
         let mut building_string = String::with_capacity(11);
 
@@ -151,8 +232,8 @@ impl DirectoryEntry {
         building_string
     }
 
-    pub fn entry_attributes(&self) -> DirectoryEntryAttributes {
-        self.attribute_types.into()
+    pub fn entry_attributes(&self) -> Attributes {
+        self.attribute_types
     }
 
     pub fn file_size(&self) -> usize {
@@ -162,7 +243,7 @@ impl DirectoryEntry {
 
 #[cfg(test)]
 mod test {
-    use crate::filesystems::dosfs::structures::file_directory::{DirectoryEntry, DirectoryEntryAttributes};
+    use crate::filesystems::dosfs::structures::file_directory::{DirectoryEntry, AttributeTypes};
     use crate::set_example_allocator;
 
     #[test]
@@ -175,9 +256,11 @@ mod test {
 
         let file_entry = DirectoryEntry::try_from(example.as_ref()).unwrap();
 
-        assert!(false, "{:#x?}", file_entry);
-
-
-
+        assert_eq!(file_entry.short_filename(), "KERNEL.ELF");
+        assert_eq!(file_entry.entry_attributes().contains_attribute(AttributeTypes::System), false);
+        assert_eq!(file_entry.entry_attributes().is_file(), true);
+        assert_eq!(file_entry.is_free(), false);
+        assert_eq!(file_entry.file_size(), 182384);
+        assert_eq!(file_entry.first_cluster(), 44);
     }
 }

@@ -29,7 +29,7 @@ use crate::filesystems::dosfs::structures::{ClusterID, FatType, MAX_CLUSTERS_FOR
 use crate::FsResult;
 use crate::io::{ReadWriteSeek, SeekFrom};
 
-
+#[derive(Clone, Copy, Debug)]
 pub enum FatEntry {
     Free,
     NextCluster(usize),
@@ -37,6 +37,26 @@ pub enum FatEntry {
     Defective,
     ReservedEndOfFile,
     EndOfFile,
+}
+
+pub struct FatEntryIter<'a> {
+    fat: &'a FileAllocationTable,
+    buffer: &'a mut AbstractBuffer,
+    current: FatEntry
+}
+
+impl<'a> Iterator for FatEntryIter<'a> {
+    type Item = FatEntry;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self.current {
+            FatEntry::NextCluster(cluster_id) => {
+                self.current = self.fat.read_entry(cluster_id, self.buffer).ok()?;
+                Some(self.current)
+            }
+            _ => None
+        }
+    }
 }
 
 impl FatEntry {
@@ -69,6 +89,18 @@ impl FatEntry {
     const FAT_32_RESERVED_EOF_LOW: usize = 0xFFFFFF8;
     const FAT_32_RESERVED_EOF_HIGH: usize = 0xFFFFFFE;
     const FAT_32_END_OF_FILE_CLUSTER: usize = 0xFFFFFFFF;
+
+    pub fn is_last(&self) -> bool {
+        !matches!(self, Self::NextCluster(_))
+    }
+
+    pub fn create_iterator<'a>(self, fat: &'a FileAllocationTable, buffer: &'a mut AbstractBuffer) -> FatEntryIter<'a> {
+        FatEntryIter {
+            fat,
+            buffer,
+            current: self,
+        }
+    }
 
     fn from_fat12(value: usize) -> Self {
         match value {

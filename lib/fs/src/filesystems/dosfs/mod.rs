@@ -23,10 +23,16 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use core::mem::size_of;
 use qk_alloc::boxed::Box;
+use qk_alloc::vec;
+use qk_alloc::vec::Vec;
 use crate::abstract_buffer::AbstractBuffer;
-use crate::filesystems::dosfs::structures::bpb::BiosParameterBlock;
-use crate::filesystems::dosfs::structures::fat::FileAllocationTable;
+use crate::error::{FsError, FsErrorKind};
+use crate::filesystems::dosfs::structures::bpb::{BiosParameterBlock, WhereIsRoot};
+use crate::filesystems::dosfs::structures::fat::{FatEntry, FileAllocationTable};
+use crate::filesystems::dosfs::structures::{ClusterID, FatType};
+use crate::filesystems::dosfs::structures::file_directory::DirectoryEntry;
 use crate::FsResult;
 use crate::io::{Read, Seek, SeekFrom};
 
@@ -50,8 +56,8 @@ impl Dosfs {
 
         let fat = FileAllocationTable::new(
             bpb.fat_type(),
-            bpb.fat_begin() as u64,
-            bpb.fat_size() as u64
+            bpb.fat_begin_bytes() as u64,
+            bpb.fat_size_bytes() as u64
         );
 
         Ok(Self {
@@ -61,10 +67,37 @@ impl Dosfs {
         })
     }
 
+    pub fn read_directory(&mut self, cluster_id: ClusterID) -> FsResult<Vec<DirectoryEntry>> {
+        todo!()
+    }
 
+    fn read_root16(&mut self, root_offset: usize) -> FsResult<Vec<DirectoryEntry>> {
+        let root_entries = self.bpb.root_entries();
+        let mut directory_entry_vec = Vec::with_capacity(root_entries);
 
+        self.buf.seek(SeekFrom::Start(root_offset as u64))?;
+        for _ in 0..root_entries {
+            let mut dir_buf = [0u8; size_of::<DirectoryEntry>()];
+            self.buf.read(&mut dir_buf)?;
 
+            let directory_entry = DirectoryEntry::try_from(dir_buf.as_ref())?;
 
+            if directory_entry.is_free() {
+                continue;
+            }
+
+            directory_entry_vec.push(directory_entry);
+        }
+
+        Ok(directory_entry_vec)
+    }
+
+    pub fn read_root(&mut self) -> FsResult<Vec<DirectoryEntry>> {
+        match self.bpb.where_is_root() {
+            WhereIsRoot::OffsetBytes(root_offset) => self.read_root16(root_offset),
+            WhereIsRoot::Cluster(cluster_id) => self.read_directory(cluster_id)
+        }
+    }
 
 
 
