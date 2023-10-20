@@ -23,20 +23,25 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use core::ptr;
 use crate::error::{FsError, FsErrorKind};
-use crate::filesystems::dosfs::structures::{Byte, ClusterID, DoubleWord, ExtendedBiosBlock, FatType, MAX_CLUSTERS_FOR_FAT12, MAX_CLUSTERS_FOR_FAT16, MAX_CLUSTERS_FOR_FAT32, Word};
 use crate::filesystems::dosfs::structures::bpb16::ExtendedBPB16;
 use crate::filesystems::dosfs::structures::bpb32::ExtendedBPB32;
+use crate::filesystems::dosfs::structures::{
+    Byte, ClusterID, DoubleWord, ExtendedBiosBlock, FatType, Word, MAX_CLUSTERS_FOR_FAT12,
+    MAX_CLUSTERS_FOR_FAT16, MAX_CLUSTERS_FOR_FAT32,
+};
+use crate::FsResult;
+
+use core::ptr;
 
 pub union ExtendedBlock {
     fat16: ExtendedBPB16,
-    fat32: ExtendedBPB32
+    fat32: ExtendedBPB32,
 }
 
 pub enum WhereIsRoot {
     Cluster(ClusterID),
-    OffsetBytes(usize)
+    OffsetBytes(usize),
 }
 
 #[repr(packed, C)]
@@ -55,13 +60,12 @@ pub struct BiosParameterBlock {
     number_of_heads: Word,
     hidden_sectors: DoubleWord,
     total_sectors_32: DoubleWord,
-    extended: ExtendedBlock
+    extended: ExtendedBlock,
 }
 
 impl BiosParameterBlock {
     pub fn verify_jmp_instruction(&self) -> bool {
-        (self.jmp_boot[0] == 0xEB && self.jmp_boot[2] == 0x90) ||
-            (self.jmp_boot[0] == 0xE9)
+        (self.jmp_boot[0] == 0xEB && self.jmp_boot[2] == 0x90) || (self.jmp_boot[0] == 0xE9)
     }
 
     pub fn oem_name(&self) -> &str {
@@ -71,19 +75,15 @@ impl BiosParameterBlock {
     pub fn volume_label(&self) -> &str {
         unsafe {
             match self.fat_type() {
-                FatType::Fat12 | FatType::Fat16 => {
-                    self.extended.fat16.volume_label()
-                }
-                FatType::Fat32 => {
-                    self.extended.fat32.volume_label()
-                }
+                FatType::Fat12 | FatType::Fat16 => self.extended.fat16.volume_label(),
+                FatType::Fat32 => self.extended.fat32.volume_label(),
             }
         }
     }
 
     pub fn verify_sector_count_correctness(&self) -> bool {
-        (self.total_sectors_16 == 0 && self.total_sectors_32 > 0) &&
-            (self.total_sectors_32 == 0 && self.total_sectors_16 > 0)
+        (self.total_sectors_16 == 0 && self.total_sectors_32 > 0)
+            && (self.total_sectors_32 == 0 && self.total_sectors_16 > 0)
     }
 
     pub fn total_sectors(&self) -> usize {
@@ -153,7 +153,8 @@ impl BiosParameterBlock {
 
     pub fn data_sectors(&self) -> usize {
         let total_fat_sectors = self.number_of_fats() * self.fat_size_sectors();
-        let sectors_used_by_dosfs = self.reserved_sectors() + total_fat_sectors + self.root_directory_sectors();
+        let sectors_used_by_dosfs =
+            self.reserved_sectors() + total_fat_sectors + self.root_directory_sectors();
 
         self.total_sectors() - sectors_used_by_dosfs
     }
@@ -168,7 +169,7 @@ impl BiosParameterBlock {
             ..MAX_CLUSTERS_FOR_FAT16 => FatType::Fat16,
             ..MAX_CLUSTERS_FOR_FAT32 => FatType::Fat32,
 
-            _ => unreachable!("Cannot have more then Fat32 clusters in dosfs")
+            _ => unreachable!("Cannot have more then Fat32 clusters in dosfs"),
         }
     }
 
@@ -178,11 +179,32 @@ impl BiosParameterBlock {
 
     pub fn where_is_root(&self) -> WhereIsRoot {
         match self.fat_type() {
-            FatType::Fat12 | FatType::Fat16 => WhereIsRoot::OffsetBytes(self.root_offset_bytes_for_fat_12_16()),
+            FatType::Fat12 | FatType::Fat16 => {
+                WhereIsRoot::OffsetBytes(self.root_offset_bytes_for_fat_12_16())
+            }
             FatType::Fat32 => unsafe {
                 WhereIsRoot::Cluster(self.extended.fat32.root_cluster_number as usize)
-            }
+            },
         }
+    }
+
+    pub fn preform_cluster_offset(&self, cluster_offset: ClusterID) -> FsResult<u64> {
+        if cluster_offset <= 2 {
+            return Err(FsError::new(
+                FsErrorKind::InvalidInput,
+                "Cannot access a cluster that is under 2, as it is reserved!",
+            ));
+        }
+
+        // Not sure if this logic makes sense, so could be a problem later :*(
+
+        let fat_offset = self.fat_size_bytes() * self.number_of_fats();
+        let reserved_offset = self.reserved_sectors() * self.bytes_per_sector();
+        let offset = fat_offset + reserved_offset;
+
+        let inner_cluster_offest = cluster_offset * self.bytes_per_cluster();
+
+        Ok((offset + inner_cluster_offest) as u64)
     }
 }
 
@@ -197,25 +219,32 @@ impl TryFrom<&[u8]> for BiosParameterBlock {
         let raw_bpb = unsafe { ptr::read_unaligned(value.as_ptr() as *const Self) };
 
         if !raw_bpb.verify_jmp_instruction() || !raw_bpb.verify_sector_count_correctness() {
-            return Err(FsError::new(FsErrorKind::InvalidData,
-                                    "Attempted BiosParameterBlock does not contain valid data. Not dosfs!"));
+            return Err(FsError::new(
+                FsErrorKind::InvalidData,
+                "Attempted BiosParameterBlock does not contain valid data. Not dosfs!",
+            ));
         }
 
         match raw_bpb.fat_type() {
             FatType::Fat12 | FatType::Fat16 => unsafe {
                 if !raw_bpb.extended.fat16.verify() {
-                    return Err(FsError::new(FsErrorKind::InvalidData,
-                                            "Attempted Extended Fat12/Fat16 does not contain valid data. Not dosfs!"));
+                    return Err(FsError::new(
+                        FsErrorKind::InvalidData,
+                        "Attempted Extended Fat12/Fat16 does not contain valid data. Not dosfs!",
+                    ));
                 }
-            }
+            },
             FatType::Fat32 => unsafe {
                 if !raw_bpb.extended.fat32.verify() {
-                    return Err(FsError::new(FsErrorKind::InvalidData,
-                                            "Attempted Extended Fat32 does not contain valid data. Not dosfs!"));
+                    return Err(FsError::new(
+                        FsErrorKind::InvalidData,
+                        "Attempted Extended Fat32 does not contain valid data. Not dosfs!",
+                    ));
                 }
-            }
+            },
         }
 
         Ok(raw_bpb)
     }
 }
+

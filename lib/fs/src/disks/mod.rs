@@ -24,3 +24,16 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 pub mod ata;
+
+pub struct Quarried {}
+pub struct Malformed {}
+pub struct UnQuarried {}
+
+pub struct AtaDisk {}
+
+impl AtaDisk {
+    pub fn new() -> Self {
+        Self {}
+    }
+}
+
