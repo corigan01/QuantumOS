@@ -23,11 +23,11 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use crate::io::{Read, ReadWriteSeek, Seek, SeekFrom, Write};
+use crate::FsResult;
 use core::cmp::min;
 use core::ops::{Bound, RangeBounds};
 use qk_alloc::boxed::Box;
-use crate::FsResult;
-use crate::io::{Read, ReadWriteSeek, Seek, SeekFrom, Write};
 
 pub struct AbstractBuffer {
     range_start: Bound<u64>,
@@ -38,7 +38,9 @@ pub struct AbstractBuffer {
 
 impl AbstractBuffer {
     pub fn new<Range>(data: Box<dyn ReadWriteSeek>, readable_range: Range) -> Self
-        where Range: RangeBounds<u64> {
+    where
+        Range: RangeBounds<u64>,
+    {
         Self {
             range_start: readable_range.start_bound().cloned(),
             range_end: readable_range.end_bound().cloned(),
@@ -51,7 +53,7 @@ impl AbstractBuffer {
         match bound {
             Bound::Included(val) => val,
             Bound::Excluded(val) => val - 1,
-            Bound::Unbounded => unbounded
+            Bound::Unbounded => unbounded,
         }
     }
 
@@ -76,54 +78,54 @@ impl AbstractBuffer {
     }
 
     #[inline]
-    fn shrink_range<RangeOrig, RangeNew>(original: RangeOrig, new: RangeNew, buffer_end: u64) -> (Bound<u64>, Bound<u64>)
-        where RangeOrig: RangeBounds<u64>,
-              RangeNew: RangeBounds<u64> {
+    fn shrink_range<RangeOrig, RangeNew>(
+        original: RangeOrig,
+        new: RangeNew,
+        buffer_end: u64,
+    ) -> (Bound<u64>, Bound<u64>)
+    where
+        RangeOrig: RangeBounds<u64>,
+        RangeNew: RangeBounds<u64>,
+    {
+        let original_bound_begin = Self::decode_bound(original.start_bound().cloned(), 0);
 
-        let original_bound_begin = Self::decode_bound(
-            original.start_bound().cloned(),
-            0
-        );
-
-        let new_bound_begin = Self::decode_bound(
-            new.start_bound().cloned(),
-            0
-        );
+        let new_bound_begin = Self::decode_bound(new.start_bound().cloned(), 0);
 
         let bound_added = original_bound_begin + new_bound_begin;
         let return_bound_begin = match bound_added {
             0 => {
-                if matches!(original.start_bound(), Bound::Unbounded) && matches!(new.start_bound(), Bound::Unbounded) {
+                if matches!(original.start_bound(), Bound::Unbounded)
+                    && matches!(new.start_bound(), Bound::Unbounded)
+                {
                     Bound::Unbounded
                 } else {
                     Bound::Included(0)
                 }
-            },
-            val => Bound::Included(val)
+            }
+            val => Bound::Included(val),
         };
 
-        let original_bound_end = Self::decode_bound(
-            original.end_bound().cloned(),
-            buffer_end
-        );
+        let original_bound_end = Self::decode_bound(original.end_bound().cloned(), buffer_end);
 
-        let new_bound_end = Self::decode_bound(
-            new.end_bound().cloned(),
-            buffer_end
-        );
+        let new_bound_end = Self::decode_bound(new.end_bound().cloned(), buffer_end);
 
         let return_bound_end = match new_bound_end {
             v if v == buffer_end => original.end_bound().cloned(),
-            val => Bound::Included(min(val + new_bound_begin, original_bound_end))
+            val => Bound::Included(min(val + new_bound_begin, original_bound_end)),
         };
 
         (return_bound_begin, return_bound_end)
     }
 
-    pub fn temporary_shrink<Func, Range, AnyOut>(&mut self, tmp_range: Range, mut func: Func) -> AnyOut
-        where Func: FnMut(&mut Self) -> AnyOut,
-              Range: RangeBounds<u64> {
-
+    pub fn temporary_shrink<Func, Range, AnyOut>(
+        &mut self,
+        tmp_range: Range,
+        mut func: Func,
+    ) -> AnyOut
+    where
+        Func: FnMut(&mut Self) -> AnyOut,
+        Range: RangeBounds<u64>,
+    {
         let current_begin = self.range_start;
         let current_end = self.range_end;
         let current_self_seek = self.current_seek;
@@ -131,7 +133,7 @@ impl AbstractBuffer {
         (self.range_start, self.range_end) = Self::shrink_range(
             (self.range_start, self.range_end),
             tmp_range,
-            self.data.stream_len().unwrap()
+            self.data.stream_len().unwrap(),
         );
 
         let return_result = func(self);
@@ -142,7 +144,6 @@ impl AbstractBuffer {
 
         return_result
     }
-
 }
 
 impl Read for AbstractBuffer {
@@ -171,15 +172,9 @@ impl Seek for AbstractBuffer {
     fn seek(&mut self, pos: SeekFrom) -> FsResult<u64> {
         let buffer_size = self.data.stream_len()?;
         let abs_pos = match pos {
-            SeekFrom::Start(value) => {
-                self.readable_range_begin(buffer_size) + value
-            }
-            SeekFrom::Current(value) => {
-                (self.current_seek as i64 + value) as u64
-            }
-            SeekFrom::End(value) => {
-                (self.readable_range_size(buffer_size) as i64 + value) as u64
-            }
+            SeekFrom::Start(value) => self.readable_range_begin(buffer_size) + value,
+            SeekFrom::Current(value) => (self.current_seek as i64 + value) as u64,
+            SeekFrom::End(value) => (self.readable_range_size(buffer_size) as i64 + value) as u64,
         };
 
         self.data.seek(SeekFrom::Start(abs_pos))?;
@@ -207,23 +202,19 @@ impl Seek for AbstractBuffer {
 
 #[cfg(test)]
 mod test {
-    use core::ops::Bound;
-    use qk_alloc::boxed::Box;
     use crate::abstract_buffer::AbstractBuffer;
     use crate::io::{Read, Seek, SeekFrom, Write};
-    use crate::{FsResult, set_example_allocator};
-
-
+    use crate::{set_example_allocator, FsResult};
+    use core::ops::Bound;
+    use qk_alloc::boxed::Box;
 
     struct TestBuffer<const SIZE: usize> {
-        seek_pos: u64
+        seek_pos: u64,
     }
 
     impl<const SIZE: usize> TestBuffer<SIZE> {
         pub fn new() -> Self {
-            Self {
-                seek_pos: 0
-            }
+            Self { seek_pos: 0 }
         }
     }
 
@@ -263,20 +254,32 @@ mod test {
 
     #[test]
     fn test_shrink_bounds() {
-        assert_eq!(AbstractBuffer::shrink_range(0..=10, 0..=5, 10), (Bound::Included(0), Bound::Included(5)));
-        assert_eq!(AbstractBuffer::shrink_range(..5, ..3, 5), (Bound::Unbounded, Bound::Included(2)));
-        assert_eq!(AbstractBuffer::shrink_range(..5, ..=3, 5), (Bound::Unbounded, Bound::Included(3)));
-        assert_eq!(AbstractBuffer::shrink_range(0..5, ..3, 5), (Bound::Included(0), Bound::Included(2)));
-        assert_eq!(AbstractBuffer::shrink_range(0.., 2.., 5), (Bound::Included(2), Bound::Unbounded));
+        assert_eq!(
+            AbstractBuffer::shrink_range(0..=10, 0..=5, 10),
+            (Bound::Included(0), Bound::Included(5))
+        );
+        assert_eq!(
+            AbstractBuffer::shrink_range(..5, ..3, 5),
+            (Bound::Unbounded, Bound::Included(2))
+        );
+        assert_eq!(
+            AbstractBuffer::shrink_range(..5, ..=3, 5),
+            (Bound::Unbounded, Bound::Included(3))
+        );
+        assert_eq!(
+            AbstractBuffer::shrink_range(0..5, ..3, 5),
+            (Bound::Included(0), Bound::Included(2))
+        );
+        assert_eq!(
+            AbstractBuffer::shrink_range(0.., 2.., 5),
+            (Bound::Included(2), Bound::Unbounded)
+        );
     }
 
     #[test]
     fn test_seek_no_bounds() {
         set_example_allocator(4096);
-        let mut buffer = AbstractBuffer::new(
-            Box::new(TestBuffer::<10>::new()),
-            ..
-        );
+        let mut buffer = AbstractBuffer::new(Box::new(TestBuffer::<10>::new()), ..);
 
         assert_eq!(buffer.seek(SeekFrom::Start(0)), Ok(0));
         assert_eq!(buffer.seek(SeekFrom::End(0)), Ok(10));
@@ -286,10 +289,7 @@ mod test {
     #[test]
     fn test_seek_no_start_bound() {
         set_example_allocator(4096);
-        let mut buffer = AbstractBuffer::new(
-            Box::new(TestBuffer::<10>::new()),
-            ..5
-        );
+        let mut buffer = AbstractBuffer::new(Box::new(TestBuffer::<10>::new()), ..5);
 
         assert_eq!(buffer.seek(SeekFrom::Start(0)), Ok(0));
         assert_eq!(buffer.seek(SeekFrom::End(0)), Ok(4));
@@ -299,14 +299,11 @@ mod test {
     #[test]
     fn test_seek_double_bounds() {
         set_example_allocator(4096);
-        let mut buffer = AbstractBuffer::new(
-            Box::new(TestBuffer::<10>::new()),
-            2..=7
-        );
+        let mut buffer = AbstractBuffer::new(Box::new(TestBuffer::<10>::new()), 2..=7);
 
         assert_eq!(buffer.seek(SeekFrom::Start(0)), Ok(0));
         assert_eq!(buffer.seek(SeekFrom::End(0)), Ok(5));
         assert_eq!(buffer.seek(SeekFrom::Current(-1)), Ok(4));
     }
-
 }
+

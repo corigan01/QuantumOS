@@ -31,9 +31,18 @@ pub struct UnQuarried {}
 
 pub struct AtaDisk {}
 
+#[repr(u16)]
+pub enum DiskID {
+    PrimaryFirst = 0x00,
+    PrimarySecond = 0x01,
+    SecondaryFirst = 0x02,
+    SecondarySecond = 0x03,
+}
+
+impl DiskID {}
+
 impl AtaDisk {
-    pub fn new() -> Self {
+    pub fn new(disk: DiskID) -> Self {
         Self {}
     }
 }
-
