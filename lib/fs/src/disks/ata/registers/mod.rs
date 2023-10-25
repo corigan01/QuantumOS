@@ -97,6 +97,46 @@ pub const DRIVE_ADDRESS_REGISTER_OFFSET_FROM_CONTROL_BASE: IOPortOffset = 1;
 /// helpful when having to do IOPort address calculation.
 pub type IOPortOffset = usize;
 
+// TODO: Implement these traits in a better way so we don't need two for
+// both the bus register, and the control bus register.
+
+/// # Read Register Bus
+/// Implements a read operation for a register on the bus.
+pub unsafe trait ReadRegisterBus<const BUS_OFFSET: IOPortOffset>:
+    ResolveIOPortBusOffset<BUS_OFFSET>
+{
+    /// # Read
+    /// Reads the raw value at the register.
+    ///
+    /// # Maybe Unsafe?
+    /// Reading is always supposed to be safe in
+    /// this context, however it could cause undefined behaviour on the bus for edge cases.
+    fn read(disk_id: DiskID) -> u8 {
+        unsafe { Self::bus_io(disk_id).read_u8() }
+    }
+}
+
+/// # Write Register Bus
+/// Implements a write operation for a register on the bus.
+pub unsafe trait WriteRegisterBus<const BUS_OFFSET: IOPortOffset>:
+    ResolveIOPortBusOffset<BUS_OFFSET>
+{
+    /// # Write
+    /// Writes a raw value to the register.
+    ///
+    /// # Unsafe
+    /// This is unsafe because any operation that modifies the cpu bus is considered undefined if
+    /// done incorrectly. It is up to the programmer to correctly abstract `write` in a way that
+    /// makes it safe.
+    ///
+    /// If extra saftey was required, the programmer can reimplement this trait and add checks
+    /// to ensure the values always fall into the programmers defined area. However, this
+    /// Implementation does no such thing. No checks are done to ensure the value is correct.
+    unsafe fn write(disk_id: DiskID, value: u8) {
+        Self::bus_io(disk_id).write_u8(value)
+    }
+}
+
 /// # Resolve IO Port Bus Offset
 /// Returns the IOPort object that this type will use to interface
 /// with its hardware.
