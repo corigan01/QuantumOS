@@ -23,10 +23,10 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use core::ptr;
-use core::mem::size_of;
-use crate::error::{FsError, FsErrorKind};
+use crate::error::FsError;
 use crate::filesystems::dosfs::structures::{Byte, DoubleWord, ExtendedBiosBlock, Word};
+use core::mem::size_of;
+use core::ptr;
 
 #[derive(Copy, Clone)]
 #[repr(C, packed)]
@@ -43,13 +43,12 @@ pub struct ExtendedBPB32 {
     pub(crate) boot_signature: Byte,
     pub(crate) volume_serial_number: DoubleWord,
     pub(crate) volume_label: [u8; 11],
-    pub(crate) filesystem_type: [u8; 8]
+    pub(crate) filesystem_type: [u8; 8],
 }
 
 impl ExtendedBiosBlock for ExtendedBPB32 {
     fn verify(&self) -> bool {
-        self.boot_signature == 0x29 &&
-            (self.volume_serial_number != 0 || self.volume_label[0] != 0)
+        self.boot_signature == 0x29 && (self.volume_serial_number != 0 || self.volume_label[0] != 0)
     }
 
     fn volume_serial_number(&self) -> u32 {
@@ -81,6 +80,7 @@ impl TryFrom<&[u8]> for ExtendedBPB32 {
             return Err(FsError::try_from_array_error::<Self>(value));
         }
 
-        Ok( unsafe { ptr::read(value.as_ptr() as *const Self) } )
+        Ok(unsafe { ptr::read(value.as_ptr() as *const Self) })
     }
 }
+
