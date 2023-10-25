@@ -23,3 +23,47 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use super::{DiskID, ResolveIOPortOffset, COMMAND_OFFSET_FROM_IO_BASE};
+
+#[non_exhaustive]
+pub enum Commands {
+    Identify,
+    ReadSectorsPIO,
+    WriteSectorsPIO,
+    CacheFlush,
+}
+
+pub struct CommandRegister {}
+impl ResolveIOPortOffset<COMMAND_OFFSET_FROM_IO_BASE> for CommandRegister {}
+
+impl CommandRegister {
+    const ATA_CMD_READ_PIO: u8 = 0x20;
+    const ATA_CMD_READ_PIO_EXT: u8 = 0x24;
+    const ATA_CMD_READ_DMA: u8 = 0xC8;
+    const ATA_CMD_READ_DMA_EXT: u8 = 0x25;
+    const ATA_CMD_WRITE_PIO: u8 = 0x30;
+    const ATA_CMD_WRITE_PIO_EXT: u8 = 0x34;
+    const ATA_CMD_WRITE_DMA: u8 = 0xCA;
+    const ATA_CMD_WRITE_DMA_EXT: u8 = 0x35;
+    const ATA_CMD_CACHE_FLUSH: u8 = 0xE7;
+    const ATA_CMD_CACHE_FLUSH_EXT: u8 = 0xEA;
+    const ATA_CMD_PACKET: u8 = 0xA0;
+    const ATA_IDENTIFY_PACKET: u8 = 0xA1;
+    const ATA_IDENTIFY: u8 = 0xEC;
+
+    pub fn resolve_command(command: Commands) -> u8 {
+        #[allow(unreachable_patterns)]
+        match command {
+            Commands::Identify => Self::ATA_IDENTIFY,
+            Commands::ReadSectorsPIO => Self::ATA_CMD_READ_PIO,
+            Commands::WriteSectorsPIO => Self::ATA_CMD_WRITE_PIO,
+            Commands::CacheFlush => Self::ATA_CMD_CACHE_FLUSH,
+
+            _ => unimplemented!("ATA-DISK PIO: Command Not Implemented!"),
+        }
+    }
+
+    pub fn send_command(device: DiskID) {
+        let my_io = Self::bus_io(device);
+    }
+}

@@ -23,5 +23,20 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use crate::disks::ata::registers::DiskID;
+
 pub mod registers;
 
+pub struct Quarried {}
+pub struct Malformed {}
+pub struct UnQuarried {}
+
+pub struct AtaDisk {}
+
+impl DiskID {}
+
+impl AtaDisk {
+    pub fn new(disk: DiskID) -> Self {
+        Self {}
+    }
+}
