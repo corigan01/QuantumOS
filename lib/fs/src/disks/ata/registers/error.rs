@@ -23,7 +23,7 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use super::{DiskID, ResolveIOPortBusOffset, ERROR_REGISTER_OFFSET_FROM_IO_BASE};
+use super::{DiskID, ReadRegisterBus, ResolveIOPortBusOffset, ERROR_REGISTER_OFFSET_FROM_IO_BASE};
 use core::{fmt::Debug, slice::Iter};
 
 /// # Error Flags
@@ -119,14 +119,9 @@ impl Debug for ErrorFieldFlags {
 /// Drive error register. Disk errors and other fault states are stored here.
 pub struct ErrorRegister {}
 impl ResolveIOPortBusOffset<ERROR_REGISTER_OFFSET_FROM_IO_BASE> for ErrorRegister {}
+unsafe impl ReadRegisterBus<ERROR_REGISTER_OFFSET_FROM_IO_BASE> for ErrorRegister {}
 
 impl ErrorRegister {
-    /// # Read
-    /// Reads the raw value in the register
-    pub fn read(disk_id: DiskID) -> u8 {
-        unsafe { Self::bus_io(disk_id).read_u8() }
-    }
-
     /// # Get Errors
     /// Returns an ErrorFieldFlags with all errors detected in the register. Use
     /// ErrorFieldFlags to check error state.

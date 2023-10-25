@@ -114,6 +114,15 @@ pub unsafe trait ReadRegisterBus<const BUS_OFFSET: IOPortOffset>:
     fn read(disk_id: DiskID) -> u8 {
         unsafe { Self::bus_io(disk_id).read_u8() }
     }
+
+    /// # Read u16
+    /// Reads a 16-bit value from the register.
+    ///
+    /// # Maybe Unsafe
+    /// Same rules apply as `read`.
+    fn read_u16(disk_id: DiskID) -> u16 {
+        unsafe { Self::bus_io(disk_id).read_u16() }
+    }
 }
 
 /// # Write Register Bus
@@ -134,6 +143,15 @@ pub unsafe trait WriteRegisterBus<const BUS_OFFSET: IOPortOffset>:
     /// Implementation does no such thing. No checks are done to ensure the value is correct.
     unsafe fn write(disk_id: DiskID, value: u8) {
         Self::bus_io(disk_id).write_u8(value)
+    }
+
+    /// # Write u16
+    /// Writes a raw u16 value into the register.
+    ///
+    /// # Unsafe
+    /// Same rules apply as `write`.
+    unsafe fn write_u16(disk_id: DiskID, value: u16) {
+        Self::bus_io(disk_id).write_u16(value)
     }
 }
 

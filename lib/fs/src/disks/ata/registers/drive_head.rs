@@ -23,7 +23,10 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use super::{DiskID, ResolveIOPortBusOffset, DRIVE_HEAD_OFFSET_FROM_IO_BASE};
+use super::{
+    DiskID, ReadRegisterBus, ResolveIOPortBusOffset, WriteRegisterBus,
+    DRIVE_HEAD_OFFSET_FROM_IO_BASE,
+};
 use quantum_lib::bitset::BitSet;
 
 /// # Last Disk
@@ -37,22 +40,12 @@ static mut LAST_DISK: Option<DiskID> = None;
 /// selects/stores with access method the disk is using (LBA or CHS).
 pub struct DriveHeadRegister {}
 impl ResolveIOPortBusOffset<DRIVE_HEAD_OFFSET_FROM_IO_BASE> for DriveHeadRegister {}
+unsafe impl ReadRegisterBus<DRIVE_HEAD_OFFSET_FROM_IO_BASE> for DriveHeadRegister {}
+unsafe impl WriteRegisterBus<DRIVE_HEAD_OFFSET_FROM_IO_BASE> for DriveHeadRegister {}
 
 impl DriveHeadRegister {
     const ATA_DRV: u8 = 4;
     const ATA_LBA: u8 = 6;
-
-    /// # Read
-    /// Reads the raw value found in the register.
-    pub fn read(device: DiskID) -> u8 {
-        unsafe { Self::bus_io(device).read_u8() }
-    }
-
-    /// # Write
-    /// Writes `value` into the raw register.
-    pub unsafe fn write(device: DiskID, value: u8) {
-        Self::bus_io(device).write_u8(value)
-    }
 
     /// # Is using CHS?
     /// Checks if the disk selected is using CHS addressing
