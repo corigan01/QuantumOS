@@ -23,7 +23,7 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use super::{DiskID, ResolveIOPortOffset, COMMAND_OFFSET_FROM_IO_BASE};
+use super::{DiskID, ResolveIOPortBusOffset, COMMAND_OFFSET_FROM_IO_BASE};
 
 /// # Commands
 /// ATA disk commands to send to the disk.
@@ -38,7 +38,7 @@ pub enum Commands {
 /// # Command Register
 /// ATA PIO Register for sending comands to the disk drive.
 pub struct CommandRegister {}
-impl ResolveIOPortOffset<COMMAND_OFFSET_FROM_IO_BASE> for CommandRegister {}
+impl ResolveIOPortBusOffset<COMMAND_OFFSET_FROM_IO_BASE> for CommandRegister {}
 
 impl CommandRegister {
     const ATA_CMD_READ_PIO: u8 = 0x20;
