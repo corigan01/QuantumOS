@@ -44,20 +44,20 @@ impl DriveHeadRegister {
 
     /// # Read
     /// Reads the raw value found in the register.
-    pub unsafe fn read(device: DiskID) -> u8 {
+    pub fn read(device: DiskID) -> u8 {
         unsafe { Self::bus_io(device).read_u8() }
     }
 
     /// # Write
     /// Writes `value` into the raw register.
     pub unsafe fn write(device: DiskID, value: u8) {
-        unsafe { Self::bus_io(device).write_u8(value) }
+        Self::bus_io(device).write_u8(value)
     }
 
     /// # Is using CHS?
     /// Checks if the disk selected is using CHS addressing
     pub fn is_using_chs(device: DiskID) -> bool {
-        (unsafe { Self::read(device) } & (1 << Self::ATA_LBA)) == 0
+        (Self::read(device) & (1 << Self::ATA_LBA)) == 0
     }
 
     /// # Lba Bits 24 to 27
@@ -73,7 +73,7 @@ impl DriveHeadRegister {
             "Should not be sending more then 3 bits to DriveHeadRegister"
         );
 
-        let read_reg = unsafe { Self::read(device) };
+        let read_reg = Self::read(device);
         unsafe { Self::write(device, (read_reg & !0b111) | lba_bits) }
     }
 
