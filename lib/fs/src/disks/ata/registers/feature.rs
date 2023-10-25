@@ -23,3 +23,25 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use super::{DiskID, ResolveIOPortBusOffset, FEATURES_REGISTER_OFFSET_FROM_IO_BASE};
+
+/// # Feature Register
+/// Use to control command specific interface features.
+pub struct FeatureRegister {}
+impl ResolveIOPortBusOffset<FEATURES_REGISTER_OFFSET_FROM_IO_BASE> for FeatureRegister {}
+
+impl FeatureRegister {
+    /// # Write
+    /// Write the raw value to the register.
+    pub unsafe fn write(disk: DiskID, value: u8) {
+        Self::bus_io(disk).write_u8(value)
+    }
+
+    /// # Reset Register
+    /// Used to reset the register to zero, since this is a write only register only write
+    /// operations are valid operations. Mostly used with init, the drive feature register will be
+    /// reset.
+    pub fn reset_register(disk: DiskID) {
+        unsafe { Self::write(disk, 0) }
+    }
+}
