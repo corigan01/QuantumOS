@@ -97,17 +97,22 @@ pub const DRIVE_ADDRESS_REGISTER_OFFSET_FROM_CONTROL_BASE: IOPortOffset = 1;
 /// helpful when having to do IOPort address calculation.
 pub type IOPortOffset = usize;
 
-/// # Resolve IO Port Offset
+/// # Resolve IO Port Bus Offset
 /// Returns the IOPort object that this type will use to interface
 /// with its hardware.
-pub trait ResolveIOPortOffset<const OFFSET: IOPortOffset> {
+pub trait ResolveIOPortBusOffset<const BUS_OFFSET: IOPortOffset> {
     fn bus_io(disk_id: DiskID) -> IOPort {
-        let new_io = disk_id.bus_base() + OFFSET;
+        let new_io = disk_id.bus_base() + BUS_OFFSET;
         IOPort::new(new_io as u16)
     }
+}
 
+/// # Resolve IO Port Control Offset
+/// Returns the IOPort object that this type will use to interface
+/// will its hardware.
+pub trait ResolveIOPortControlOffset<const CONTROL_OFFSET: IOPortOffset> {
     fn control_io(disk_id: DiskID) -> IOPort {
-        let new_io = disk_id.control_base() + OFFSET;
+        let new_io = disk_id.control_base() + CONTROL_OFFSET;
         IOPort::new(new_io as u16)
     }
 }
