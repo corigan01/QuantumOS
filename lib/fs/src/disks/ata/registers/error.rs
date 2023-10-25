@@ -31,13 +31,21 @@ use core::{fmt::Debug, slice::Iter};
 /// register contains an error.
 #[derive(Debug, Clone, Copy)]
 pub enum ErrorFlags {
+    /// 0: (AMNF) Address mark not found.
     AddressMarkNotFound,
+    /// 1: (TKZNF) Track zero not found.
     TrackZeroNotFound,
+    /// 2: (ABRT) Aborted Command.
     AbortedCommand,
+    /// 3: (MCR) Media Change requested.
     MediaChangeRequest,
+    /// 4 (IDNF) ID Not Found.
     IDNotFound,
+    /// 5 (MC) Media Changed.
     MediaChanged,
+    /// 6 (UNC) Uncorrectable data error.
     UncorrectableDataError,
+    /// 7 (BBk) Bad Block detected.
     BadBlockDetected,
 }
 
