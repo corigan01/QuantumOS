@@ -25,6 +25,8 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 use super::{DiskID, ResolveIOPortOffset, COMMAND_OFFSET_FROM_IO_BASE};
 
+/// # Commands
+/// ATA disk commands to send to the disk.
 #[non_exhaustive]
 pub enum Commands {
     Identify,
@@ -33,6 +35,8 @@ pub enum Commands {
     CacheFlush,
 }
 
+/// # Command Register
+/// ATA PIO Register for sending comands to the disk drive.
 pub struct CommandRegister {}
 impl ResolveIOPortOffset<COMMAND_OFFSET_FROM_IO_BASE> for CommandRegister {}
 
@@ -51,7 +55,7 @@ impl CommandRegister {
     const ATA_IDENTIFY_PACKET: u8 = 0xA1;
     const ATA_IDENTIFY: u8 = 0xEC;
 
-    pub fn resolve_command(command: Commands) -> u8 {
+    fn resolve_command(command: Commands) -> u8 {
         #[allow(unreachable_patterns)]
         match command {
             Commands::Identify => Self::ATA_IDENTIFY,
@@ -63,7 +67,10 @@ impl CommandRegister {
         }
     }
 
-    pub fn send_command(device: DiskID) {
+    pub fn send_command(device: DiskID, command: Commands) {
         let my_io = Self::bus_io(device);
+        let command_number = Self::resolve_command(command);
+
+        unsafe { my_io.write_u8(command_number) }
     }
 }
