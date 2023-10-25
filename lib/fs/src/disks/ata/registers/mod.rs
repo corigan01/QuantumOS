@@ -119,6 +119,7 @@ pub trait ResolveIOPortControlOffset<const CONTROL_OFFSET: IOPortOffset> {
 
 /// # Disk ID
 /// The address if you will of the disk. Determines what PIO addresses to use.
+#[derive(Clone, Copy, Debug)]
 pub enum DiskID {
     PrimaryFirst,
     PrimarySecond,
