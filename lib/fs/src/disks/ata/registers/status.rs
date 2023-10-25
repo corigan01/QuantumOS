@@ -23,3 +23,120 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use super::{DiskID, ReadRegisterBus, ResolveIOPortBusOffset, STATUS_REGISTER_OFFSET_FROM_IO_BASE};
+use core::{fmt::Debug, slice::Iter};
+
+/// # Status Flags
+/// Possible flags that the status register could contain. Use these to check the status with
+/// StatusFieldFlags.
+#[derive(Debug, Clone, Copy)]
+pub enum StatusFlags {
+    /// Indicates an error has occurred. Send a new command to clear it (or remove it with a
+    /// software reset)
+    ErrorOccurred,
+    /// Index -- always set to zero.
+    Index,
+    /// Corrected Data -- always set to zero.
+    CorrectedData,
+    /// Set when the drive has PIO data to transfer, or when its ready to accept PIO data.
+    Ready,
+    /// Overlapping service requests.
+    TooManyServiceReqests,
+    /// Drive fault error -- does not set ErrorRegister!
+    DriveFault,
+    /// Clear when disk is spun down, also is clear after an error. It should always be set for PIO
+    /// HHDs when successfully reading and writting.
+    SpinDown,
+    /// Indicates that the drive is preparing to send/receive data. Waiting is often the best way
+    /// of handing this flag. For whatever reason, if the drive does not clear this flag on its own
+    /// i.e the disk is 'hanging', a software reset should be sent to the drive.
+    Busy,
+}
+
+impl StatusFlags {
+    /// # Status Flags
+    /// A const slice to store the values for an iterator.
+    const STATUS_FLAGS: [Self; 8] = [
+        Self::ErrorOccurred,
+        Self::Index,
+        Self::CorrectedData,
+        Self::Ready,
+        Self::TooManyServiceReqests,
+        Self::DriveFault,
+        Self::SpinDown,
+        Self::Busy,
+    ];
+
+    /// # Into Bit Mask
+    /// Creates a bit mask for each entry in the enum. Each flag is really just a bit that is set
+    /// on the status register, so we select the same bit here so we can represent it as a enum.
+    pub fn into_bit_mask(&self) -> u8 {
+        1 << match *self {
+            Self::ErrorOccurred => 0,
+            Self::Index => 1,
+            Self::CorrectedData => 2,
+            Self::Ready => 3,
+            Self::TooManyServiceReqests => 4,
+            Self::DriveFault => 5,
+            Self::SpinDown => 6,
+            Self::Busy => 7,
+        }
+    }
+
+    /// # Iter
+    /// Returns an iterator over the elements in the enum. The iterator is in the same order as the
+    /// elements appear in the enum.
+    pub fn iter() -> Iter<'static, Self> {
+        Self::STATUS_FLAGS.iter()
+    }
+}
+
+/// # Status Field Flags
+/// Value returned from StatusRegister that stores all status infomation about the disk. Use
+/// StatusFlags to check if a flag is set.
+#[derive(Clone, Copy)]
+pub struct StatusFieldFlags(u8);
+
+impl StatusFieldFlags {
+    /// # Check Flag
+    /// Checks if a flag is set/unset from StatusFlags. Returns state of the bit.
+    pub fn check_flag(&self, flag: StatusFlags) -> bool {
+        self.0 & flag.into_bit_mask() != 0
+    }
+
+    /// # Is Status?
+    /// Checks if the status register is not zero.
+    pub fn is_status(&self) -> bool {
+        self.0 > 0
+    }
+}
+
+impl Debug for StatusFieldFlags {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str("StatusFieldFlags: ")?;
+        let mut list = f.debug_list();
+
+        for flag in StatusFlags::iter() {
+            if self.check_flag(*flag) {
+                list.entry(flag);
+            }
+        }
+
+        list.finish()
+    }
+}
+
+/// # Status Register
+/// Status infomation about a disk drive.
+pub struct StatusRegister {}
+impl ResolveIOPortBusOffset<STATUS_REGISTER_OFFSET_FROM_IO_BASE> for StatusRegister {}
+unsafe impl ReadRegisterBus<STATUS_REGISTER_OFFSET_FROM_IO_BASE> for StatusRegister {}
+
+impl StatusRegister {
+    /// # Get Status
+    /// Gets the status of the register. Use StatusFlags to check if a flag is set or not in the
+    /// StatusFieldFlags value.
+    pub fn get_status(disk: DiskID) -> StatusFieldFlags {
+        StatusFieldFlags(Self::read(disk))
+    }
+}
