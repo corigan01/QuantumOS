@@ -23,3 +23,114 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use super::{DiskID, ResolveIOPortBusOffset, ERROR_REGISTER_OFFSET_FROM_IO_BASE};
+use core::{fmt::Debug, slice::Iter};
+
+/// # Error Flags
+/// The possible flags the error register could return. Use these to check if the error
+/// register contains an error.
+#[derive(Debug, Clone, Copy)]
+pub enum ErrorFlags {
+    AddressMarkNotFound,
+    TrackZeroNotFound,
+    AbortedCommand,
+    MediaChangeRequest,
+    IDNotFound,
+    MediaChanged,
+    UncorrectableDataError,
+    BadBlockDetected,
+}
+
+impl ErrorFlags {
+    /// # Error Flags
+    /// Contains a const slice of errors for use in making an iterator
+    const ERROR_FLAGS: [Self; 8] = [
+        Self::AddressMarkNotFound,
+        Self::TrackZeroNotFound,
+        Self::AbortedCommand,
+        Self::MediaChangeRequest,
+        Self::IDNotFound,
+        Self::MediaChanged,
+        Self::UncorrectableDataError,
+        Self::BadBlockDetected,
+    ];
+
+    /// # Into Bit Mask
+    /// Converts the Error Flag values into their bit mask value.
+    pub fn into_bit_mask(&self) -> u8 {
+        1 << match *self {
+            Self::AddressMarkNotFound => 0,
+            Self::TrackZeroNotFound => 1,
+            Self::AbortedCommand => 2,
+            Self::MediaChangeRequest => 3,
+            Self::IDNotFound => 4,
+            Self::MediaChanged => 5,
+            Self::UncorrectableDataError => 6,
+            Self::BadBlockDetected => 7,
+        }
+    }
+
+    /// # Iter
+    /// Returns an iterator of all the possible ErrorFlags. Iterator is in order of
+    /// how the elements appear in the enum.
+    pub fn iter() -> Iter<'static, Self> {
+        Self::ERROR_FLAGS.iter()
+    }
+}
+
+/// # Error Field Flags
+/// Contains all the possible errors that the register could be holding. Each bit
+/// represents an ErrorFlag. Simply a strongly typed u8 to store the errors.
+#[derive(Clone, Copy)]
+pub struct ErrorFieldFlags(u8);
+
+impl ErrorFieldFlags {
+    /// # Check Flag
+    /// Chekcs if a flag is present in the error register.
+    pub fn check_flag(&self, flag: ErrorFlags) -> bool {
+        let mask = flag.into_bit_mask();
+
+        self.0 & mask != 0
+    }
+
+    /// # Is Error?
+    /// Checks if any error is present.
+    pub fn is_error(&self) -> bool {
+        self.0 != 0
+    }
+}
+
+impl Debug for ErrorFieldFlags {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str("ErrorFieldFlags: ")?;
+        let mut entry_list = f.debug_list();
+
+        for flag in ErrorFlags::iter() {
+            if self.check_flag(*flag) {
+                entry_list.entry(flag);
+            }
+        }
+
+        entry_list.finish()
+    }
+}
+
+/// # Error Register
+/// Drive error register. Disk errors and other fault states are stored here.
+pub struct ErrorRegister {}
+impl ResolveIOPortBusOffset<ERROR_REGISTER_OFFSET_FROM_IO_BASE> for ErrorRegister {}
+
+impl ErrorRegister {
+    /// # Read
+    /// Reads the raw value in the register
+    pub fn read(disk_id: DiskID) -> u8 {
+        unsafe { Self::bus_io(disk_id).read_u8() }
+    }
+
+    /// # Get Errors
+    /// Returns an ErrorFieldFlags with all errors detected in the register. Use
+    /// ErrorFieldFlags to check error state.
+    pub fn get_errors(disk_id: DiskID) -> ErrorFieldFlags {
+        ErrorFieldFlags(Self::read(disk_id))
+    }
+}
