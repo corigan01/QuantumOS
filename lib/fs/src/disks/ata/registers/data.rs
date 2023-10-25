@@ -23,9 +23,36 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use super::{ResolveIOPortBusOffset, DATA_REGISTER_OFFSET_FROM_IO_BASE};
+use super::{DiskID, ResolveIOPortBusOffset, DATA_REGISTER_OFFSET_FROM_IO_BASE};
 
+/// # Data Register
+/// A register to communicate with the data in the disk. When reading or writting
+/// to the disk, the Data Register is used.
 pub struct DataRegister {}
 impl ResolveIOPortBusOffset<DATA_REGISTER_OFFSET_FROM_IO_BASE> for DataRegister {}
 
-impl DataRegister {}
+impl DataRegister {
+    /// # Read u16
+    /// Reads a u16 value from the IO-Port.
+    pub fn read_u16(disk_id: DiskID) -> u16 {
+        unsafe { Self::bus_io(disk_id).read_u16() }
+    }
+
+    /// # Read u8
+    /// Reads a u8 value from the IO-Port.
+    pub fn read_u8(disk_id: DiskID) -> u8 {
+        unsafe { Self::bus_io(disk_id).read_u8() }
+    }
+
+    /// # Write u16
+    /// Writes a u16 value into the data register.
+    pub fn write_u16(disk_id: DiskID, value: u16) {
+        unsafe { Self::bus_io(disk_id).write_u16(value) }
+    }
+
+    /// # Write u8
+    /// Writes a u8 value into the data register.
+    pub fn write_u8(disk_id: DiskID, value: u8) {
+        unsafe { Self::bus_io(disk_id).write_u8(value) }
+    }
+}
