@@ -39,6 +39,15 @@ pub struct IdentifyParser {
 }
 
 impl IdentifyParser {
+    /// # Empty
+    /// Gives a empty box with zeroed data. Useful for making a IdentifyParser before you have the
+    /// data. Mostly just a patch for AtaDisk.
+    pub unsafe fn empty() -> Self {
+        Self {
+            raw_identify: Box::new_zeroed().assume_init(),
+        }
+    }
+
     /// # User Sectors 28bit LBA
     /// Gets the sectors that are accessable on the disk in 28 bit lba mode.
     pub fn user_sectors_28bit_lba(&self) -> usize {
