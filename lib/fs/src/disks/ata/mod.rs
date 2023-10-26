@@ -23,11 +23,11 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use crate::{disks::ata::registers::DiskID, FsResult};
 use core::marker::PhantomData;
 
-use crate::disks::ata::registers::DiskID;
-
-pub mod registers;
+mod identify;
+mod registers;
 
 pub struct UnknownState {}
 pub struct Quarried {}
@@ -42,6 +42,14 @@ impl DiskID {}
 
 impl AtaDisk {
     pub fn new(disk: DiskID) -> Self {
+        Self {
+            disk_id: disk,
+            seek: 0,
+            phan: PhantomData,
+        }
+    }
+
+    pub fn quarry(self) -> FsResult<AtaDisk<Quarried>> {
         todo!()
     }
 }
