@@ -31,3 +31,15 @@ mod raw;
 pub struct IdentifyParser {
     raw_identify: Box<RawIdentifyStruct>,
 }
+
+impl IdentifyParser {}
+
+impl From<&[u8]> for IdentifyParser {
+    fn from(value: &[u8]) -> Self {
+        let raw_identify = RawIdentifyStruct::from(value);
+
+        Self {
+            raw_identify: Box::new(raw_identify),
+        }
+    }
+}
