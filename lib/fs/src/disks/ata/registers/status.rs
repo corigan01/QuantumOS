@@ -139,4 +139,23 @@ impl StatusRegister {
     pub fn get_status(disk: DiskID) -> StatusFieldFlags {
         StatusFieldFlags(Self::read(disk))
     }
+
+    /// # Is Bus Floating?
+    /// Checks if the bus is in a state of floating. Floating useally occurs when the bus is not
+    /// connected. The best way to detect if the bus is present is to check this. Since you know a
+    /// bus is not present you know no disks are connected on that bus and can save a lot of time.
+    pub fn is_bus_floating(disk: DiskID) -> bool {
+        Self::read(disk) == 0
+    }
+
+    /// # Preform 400ns Delay
+    /// Sleeps 400ns by reading the IOBus 16 times. The drive is really slow compared to our CPU,
+    /// so even with the IO bus being slower then the CPU, the drive still needs some time to
+    /// respond to our requests. This is often used when asking the disk to complete some task that
+    /// might take its controller a bit to process. CPU == brr -- Disk == Slllooooowwww.
+    pub fn perform_400ns_delay(disk: DiskID) {
+        for _ in 0..16 {
+            let _ = Self::read(disk);
+        }
+    }
 }
