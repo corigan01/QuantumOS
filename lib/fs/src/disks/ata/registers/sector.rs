@@ -54,6 +54,8 @@ unsafe impl WriteRegisterBus<SECTOR_NUM_MID_OFFSET_FROM_IO_BASE> for SectorRegis
 unsafe impl WriteRegisterBus<SECTOR_NUM_HIGH_OFFSET_FROM_IO_BASE> for SectorRegister<SectorHigh> {}
 
 impl SectorRegister {
+    /// # Zero All Registers
+    /// Zeros all the sector registers. Zeroing the registers is a special value.
     pub unsafe fn zero_all_registers(disk: DiskID) {
         SectorRegister::<SectorCount>::write(disk, 0);
         SectorRegister::<SectorLow>::write(disk, 0);
@@ -61,6 +63,8 @@ impl SectorRegister {
         SectorRegister::<SectorHigh>::write(disk, 0);
     }
 
+    /// # Is Registers Zeros?
+    /// Checks if the registers are zeroed.
     pub fn is_registers_zeroed(disk: DiskID) -> bool {
         if SectorRegister::<SectorCount>::read(disk) != 0 {
             return false;
