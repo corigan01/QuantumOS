@@ -65,7 +65,7 @@ impl ErrorFlags {
 
     /// # Into Bit Mask
     /// Converts the Error Flag values into their bit mask value.
-    pub fn into_bit_mask(&self) -> u8 {
+    pub const fn into_bit_mask(&self) -> u8 {
         1 << match *self {
             Self::AddressMarkNotFound => 0,
             Self::TrackZeroNotFound => 1,
