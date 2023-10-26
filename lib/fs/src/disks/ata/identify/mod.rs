@@ -23,4 +23,11 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use self::raw::RawIdentifyStruct;
+use qk_alloc::boxed::Box;
+
 mod raw;
+
+pub struct IdentifyParser {
+    raw_identify: Box<RawIdentifyStruct>,
+}

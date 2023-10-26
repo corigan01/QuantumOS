@@ -23,12 +23,18 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use core::mem;
+use core::{mem, ptr};
 
-type Word = u16;
-type DoubleWord = u32;
-type QuadWord = u64;
+pub type Word = u16;
+pub type DoubleWord = u32;
+pub type QuadWord = u64;
 
+/// # Raw Identify Struct
+/// The raw version of the Identify struct that is returned from the disk. Useful for getting
+/// information about the disk, however its hard to know what is going on here with all the
+/// compressed values, so it is recommended to use the IdentifyParser to hold and store this
+/// terriable struct.
+///
 /// Based on OpenBSD's **AT Attachment 8 - ATA/ATAPI Command Set** (see pdf for more details)
 #[repr(C, packed)]
 pub struct RawIdentifyStruct {
@@ -570,7 +576,25 @@ pub struct RawIdentifyStruct {
     pub integrity_word: Word,
 }
 
+/// # Const Assert
+/// Ensure that the data structure is 512 bytes as per spec. If any changes make it so the struct
+/// is not 512 bytes then the compiler will complain.
 const _: () = assert!(
     mem::size_of::<RawIdentifyStruct>() == 512,
     "RawIdentifyStruct should be 512 bytes!"
 );
+
+impl RawIdentifyStruct {
+    /// # New
+    /// Creates a new **Empty** RawIdentifyStruct. Use From<&[u8]> to import data into
+    /// RawIdentifyStruct.
+    pub fn new() -> Self {
+        unsafe { mem::zeroed() }
+    }
+}
+
+impl From<&[u8]> for RawIdentifyStruct {
+    fn from(value: &[u8]) -> Self {
+        unsafe { ptr::read(value.as_ptr() as *const Self) }
+    }
+}
