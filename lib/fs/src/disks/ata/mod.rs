@@ -58,6 +58,10 @@ pub struct AtaDisk<Any = UnknownState> {
 impl DiskID {}
 
 impl AtaDisk {
+    /// # New
+    /// Constructs a new empty disk. At this point the disk will know nothing about itself, and
+    /// will need to be quarried. Quarrying the disk changes its state, and more functions will
+    /// then become available.
     pub fn new(disk: DiskID) -> Self {
         Self {
             disk_id: disk,
@@ -67,6 +71,11 @@ impl AtaDisk {
         }
     }
 
+    /// # Quarry
+    /// Quarries the disk to get basic info, and to also set it up. Quarrying can fail in a number
+    /// of ways. The disk could not be found on the bus (FsErrorKind::NotFound). The disk could be
+    /// a non ATA type disk (FsErrorKind::Unsupported). The disk could timeout when trying to
+    /// quarry (FsErrorKind::TimedOut).
     pub fn quarry(self) -> FsResult<AtaDisk<Quarried>> {
         let disk = self.disk_id;
 
