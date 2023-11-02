@@ -33,31 +33,3 @@ pub trait DiskInfoProvider {
 
     fn size_bytes(&mut self) -> Option<usize>;
 }
-
-/// # Machine Status Flags
-pub enum MachineStatusFlags {
-    /// # Ask Disconnect
-    /// Sets the status that this machine interface would like to disconnect from the host.
-    AskDisconnect,
-    /// # Forced Disconnect
-    /// This device was yanked out and is now disconnected. (Not ejecting a drive would set this
-    /// status)
-    ForcedDisconnect,
-    /// # Not Responding
-    /// The machine is not responding to commands, or has a child who is not responding.
-    NotResponding,
-    /// # Ask Connect
-    /// Asks for connection.
-    AskConnect,
-    /// # Ready
-    /// This machine is ready for commands
-    Ready,
-}
-
-/// # Machine Status Field Flags
-/// The flags that machine status info can return.
-pub struct MachineStatusFieldFlags(u64);
-
-/// # Machine Status Info
-/// Gather infomation about the machine.
-pub trait MachineStatusInfo {}
