@@ -1,3 +1,6 @@
+> ### For anyone intrested in this project
+> Development is underway in one of the branches, `main` contains only working versions of the operating system. Build instructions are down below. 
+
 ![Black Blue and Neon Pink Modern Tech Electronics and Technology X-Frame Banner (1)](https://user-images.githubusercontent.com/33582457/172414092-1c3fb73c-51e2-43f0-8e68-b1de9848fd1f.png)
 
 ---
