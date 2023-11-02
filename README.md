@@ -37,8 +37,10 @@ Since the Kernel is small, its super easy to build and get running. Follow the f
 ### Compiling and Running
 
 ```bash
-# There is a cargo project dedicated to building and running QuantumOS
+# There is a cargo project dedicated to building and running QuantumOS, it is stored in the /Meta subdirectory. 
 &> cd Meta/
+
+# The build script supports many different functions (please note: Not all of these are fully implemented)
 &/Meta/> cargo run -- help
 Meta QuantumOS Compile Script
 
@@ -72,6 +74,8 @@ Options:
 
   -V, --version
           Print version
+
+# Now lets build and run the project!
 &/Meta/> cargo run -- run
 ...
 
