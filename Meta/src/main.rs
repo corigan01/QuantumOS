@@ -27,6 +27,12 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 use meta::{BootloaderOption, build, clean, CompileOptions, run, RunCommands, status_println, test};
 use clap::Parser;
 
+/// # QuantumOS Meta
+/// This is the compile script for quantum os. You can think of this project like a custom
+/// version of 'make' or 'cmake' as it serves the same purpose. This takes all of the
+/// components of quantum and combines them together into something that runs. This script
+/// is usually going to be your portal into interacting with Quantum as it will handle all
+/// of the complicated dependencies and filesystem imaging that goes with building an OS.
 fn main() {
     let args = CompileOptions::parse();
 
@@ -36,6 +42,9 @@ fn main() {
 
     status_println!("Quantum Builder");
 
+    // # Options
+    // These are the options 'Meta' supports, so we switch them here to call the actual
+    // function that handles that operation
     match args.options {
         RunCommands::Build => {
             build(&args);

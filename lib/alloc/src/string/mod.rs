@@ -25,7 +25,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 use crate::heap::{AllocatorAPI, GlobalAlloc};
 use crate::vec::Vec;
-use core::fmt::Write;
+use core::fmt::{Debug, Display, Formatter, Write};
 use core::ops::Deref;
 
 pub struct String<Alloc: AllocatorAPI = GlobalAlloc> {
@@ -35,6 +35,16 @@ pub struct String<Alloc: AllocatorAPI = GlobalAlloc> {
 impl String {
     pub const fn new() -> Self {
         Self { data: Vec::new() }
+    }
+
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self {
+            data: Vec::with_capacity(capacity)
+        }
+    }
+
+    pub unsafe fn push_raw_byte(&mut self, byte: u8) {
+        self.data.push(byte);
     }
 
     pub fn push(&mut self, c: char) {
@@ -57,6 +67,14 @@ impl String {
     pub fn as_str(&self) -> &str {
         // We know its valid utf8 because we can only push valid utf8 into the array
         unsafe { core::str::from_utf8_unchecked(self.data.as_slice()) }
+    }
+}
+
+impl Clone for String {
+    fn clone(&self) -> Self {
+        Self {
+            data: self.data.clone()
+        }
     }
 }
 
@@ -92,9 +110,15 @@ impl Write for String {
     }
 }
 
+impl Debug for String {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        f.write_fmt(format_args!("String('{}')", self.as_str()))
+    }
+}
+
 impl<T> From<T> for String
 where
-    T: core::fmt::Display,
+    T: Display,
 {
     fn from(value: T) -> Self {
         let mut tmp = String::new();

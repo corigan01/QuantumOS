@@ -33,6 +33,7 @@ Quantum OS Lib file, documentation coming soon!
 #![reexport_test_harness_main = "run_test"]
 #![feature(error_in_core)]
 #![feature(maybe_uninit_slice)]
+#![feature(int_roundings)]
 
 pub mod clock;
 pub mod qemu;
@@ -40,7 +41,6 @@ pub mod qemu;
 pub mod kernel_console;
 #[cfg(test)]
 pub mod test_handler;
-pub mod vfs;
 pub mod hex_dump;
 
 #[cfg(test)]

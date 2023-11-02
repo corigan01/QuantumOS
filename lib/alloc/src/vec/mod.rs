@@ -294,6 +294,35 @@ impl<Type, Alloc: AllocatorAPI> Vec<Type, Alloc> {
     }
 }
 
+pub struct IntoIter<Type, Alloc: AllocatorAPI> {
+    vec: Vec<Type, Alloc>
+}
+
+impl<Type, Alloc: AllocatorAPI> IntoIter<Type, Alloc> {
+    pub fn new(vec: Vec<Type, Alloc>) -> Self {
+        Self {
+            vec
+        }
+    }
+}
+
+impl<Type, Alloc: AllocatorAPI> Iterator for IntoIter<Type, Alloc> {
+    type Item = Type;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.vec.pop_front()
+    }
+}
+
+impl<Type, Alloc: AllocatorAPI> IntoIterator for Vec<Type, Alloc> {
+    type Item = Type;
+    type IntoIter = IntoIter<Type, Alloc>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        IntoIter::new(self)
+    }
+}
+
 impl<Type> From<Box<[Type]>> for Vec<Type> {
     fn from(value: Box<[Type]>) -> Self {
         let mut b = ManuallyDrop::new(value);
@@ -419,6 +448,16 @@ impl<Type> Default for Vec<Type> {
     fn default() -> Self {
         Self::new()
     }
+}
+
+pub fn from_elem<Type: Clone>(element: Type, size: usize) -> Vec<Type> {
+    let mut vector = Vec::with_capacity(size);
+
+    for _ in 0..size {
+        vector.push(element.clone());
+    }
+
+    vector
 }
 
 #[cfg(test)]

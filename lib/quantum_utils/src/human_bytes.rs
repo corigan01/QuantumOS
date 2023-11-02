@@ -51,6 +51,37 @@ impl HumanBytes {
     }
 }
 
+pub trait FromKib<Type>
+    where Type: Into<u64> {
+    fn from_kib(kib: Type) -> HumanBytes {
+        let value: u64 = kib.into();
+
+        HumanBytes(value * HumanBytes::KIB)
+    }
+}
+
+pub trait FromMib<Type>
+    where Type: Into<u64> {
+    fn from_kib(kib: Type) -> HumanBytes {
+        let value: u64 = kib.into();
+
+        HumanBytes(value * HumanBytes::MIB)
+    }
+}
+
+pub trait FromGib<Type>
+    where Type: Into<u64> {
+    fn from_kib(kib: Type) -> HumanBytes {
+        let value: u64 = kib.into();
+
+        HumanBytes(value * HumanBytes::GIB)
+    }
+}
+
+impl<T: Into<u64>> FromKib<T> for HumanBytes {}
+impl<T: Into<u64>> FromMib<T> for HumanBytes {}
+impl<T: Into<u64>> FromGib<T> for HumanBytes {}
+
 impl Display for HumanBytes {
     /// Formats the `Bytes` instance as a human-readable string.
     ///

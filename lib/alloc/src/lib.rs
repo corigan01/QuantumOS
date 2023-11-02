@@ -43,6 +43,7 @@ pub mod vec;
 pub mod borrowed_buf;
 pub mod circular_buffer;
 pub mod error;
+pub mod buffer;
 
 pub use error::*;
 
@@ -54,4 +55,18 @@ macro_rules! format {
         write!(&mut new_string, "{}", format_args!($($arg)*)).unwrap();
         new_string
     }}
+}
+
+#[macro_export]
+macro_rules! vec {
+    () => (
+        $crate::vec::Vec::new()
+    );
+    ($elem:expr; $n:expr) => (
+        $crate::vec::from_elem($elem, $n)
+    );
+    ($($x:expr),*) => (
+        $crate::slice::into_vec($crate::boxed::Box::new([$($x),*]))
+    );
+    ($($x:expr,)*) => (vec![$($x),*])
 }

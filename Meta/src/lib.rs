@@ -107,6 +107,8 @@ pub struct CompileOptions {
     pub debug_compile: bool
 }
 
+/// # Status Print
+/// Debug print element that will style the output to how Cargo's output generally looks.
 #[macro_export]
 macro_rules! status_print {
     ($($arg:tt)*) => {
@@ -114,6 +116,10 @@ macro_rules! status_print {
     };
 }
 
+/// # Status Println
+/// Same as `status_print!`, but with a '\n'!
+///
+/// This macro functions exactly like `println!` with extra style.
 #[macro_export]
 macro_rules! status_println {
     () => ($crate::status_print!("\n"));
@@ -123,7 +129,10 @@ macro_rules! status_println {
     }
 }
 
-
+/// # Build
+/// Main build function. This function handles all of the options of building and will
+/// call the corresponding functions to construct a fully working Quantum image.
+///
 pub fn build(options: &CompileOptions) {
     status_println!("Building QuantumOS");
 
@@ -137,6 +146,10 @@ pub fn build(options: &CompileOptions) {
     }
 }
 
+/// # Run
+/// Main run function. This function handles all of the steps required to launch, or 'run'
+/// the Quantum project. Run should never build any part of the system, and should be limited
+/// to just taking the existing images and running them.
 pub fn run(options: &CompileOptions) {
     status_println!("Running QuantumOS");
 
@@ -148,6 +161,12 @@ pub fn run(options: &CompileOptions) {
     }
 }
 
+/// # Test
+/// Main test function. This function handles all of the testing that cargo and this project
+/// can accomplish. Test **should always** build the project in test mode, and it should be the job
+/// of test to let cargo know that it needs to be testing. Test should be able to test the project
+/// live, meaning that it will need to test components by compiling them normally and launching
+/// qemu.
 pub fn test(options: &CompileOptions) {
     match options.options {
         RunCommands::Test(test_options) => {
@@ -166,12 +185,20 @@ pub fn test(options: &CompileOptions) {
     }
 }
 
+/// # Test Kernel
+/// Sub-test function. This function should handle the testing of the kernel and its components.
 pub fn test_kernel() {
     status_println!("Testing Kernel");
+    todo!("Test Kernel")
 }
 
+/// # Test Libs
+/// Sub-test function. This function should handle the testing of all of the libraries that Quantum
+/// or its kernel uses. These libs should all be able to be tested in userspace, and should not
+/// need to spawn qemu regardless if testing in userspace is difficult (like `qk_alloc`).
 pub fn test_libs() {
     status_println!("Testing Libs");
+    todo!("Test Libs")
 }
 
 pub fn clean() {
