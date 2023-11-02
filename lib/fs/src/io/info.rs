@@ -24,6 +24,8 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 *
 */
 
+use qk_alloc::string::String;
+
 /// # Disk Info Provider
 /// Info about a disk, including the size, name, and machine name. Used by fs to show properties
 /// about disks.
