@@ -23,6 +23,8 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use core::fmt::{Arguments, self};
+
 use qk_alloc::string::String;
 use qk_alloc::vec::{self, Vec};
 
@@ -138,7 +140,50 @@ pub trait Read {
 
 pub trait Write {
     fn write(&mut self, buf: &mut [u8]) -> FsResult<usize>;
+
     fn flush(&mut self) -> FsResult<()>;
+
+    fn write_vectored(&mut self, bufs: &[&[u8]]) -> Result<usize> {
+        todo!("Write Vectored")
+    }
+
+    fn is_write_vectored(&self) -> bool {
+        false
+    }
+
+    fn write_all(&mut self, buf: &[u8]) -> Result<()> {
+        let mut total_written = 0;
+        loop {
+            if total_written == buf.len() {
+                break;
+            }
+
+            match self.write(buf[total_written..]) {
+                Ok(0) => {
+                    return Err(
+                        FsError::new(
+                            FsErrorKind::UnexpectedEof, 
+                            "Writting all bytes reached the end of the stream, and was not able to write anymore bytes.")) 
+                }
+                Ok(bytes) => total_written += bytes,
+                Err(kind) if kind.kind() == FsErrorKind::Interrupted => continue,
+                Err(err) => return Err(err)
+            }
+        }
+
+        Ok(())
+    }
+
+    fn write_fmt(&mut self, fmt: Arguments<'_>) -> Result<()> {
+        todo!()
+    }
+
+    fn by_ref(&mut self) -> &mut Self
+    where
+        Self: Sized,
+    {
+        self
+    }
 }
 
 /// # Seek
