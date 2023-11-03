@@ -38,7 +38,7 @@ impl<T: Read + Write + Seek> ReadWriteSeek for T {}
 /// to the rust std lib). Read should advance the read cursor.
 pub trait Read {
     /// # Read
-    /// implementation of read for readers to be able to read from a stream.
+    /// implementation of read to be able to read from a stream.
     fn read(&mut self, buf: &mut [u8]) -> FsResult<usize>;
 
     /// # Read Vectored
