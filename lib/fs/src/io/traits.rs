@@ -23,23 +23,99 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use crate::FsResult;
-use crate::io::SeekFrom;
+use qk_alloc::string::String;
+use qk_alloc::vec::{self, Vec};
 
-pub trait ReadWriteSeek: Read + Write + Seek { }
-impl<T: Read + Write + Seek> ReadWriteSeek for T { }
+use crate::error::{FsError, FsErrorKind};
+use crate::io::SeekFrom;
+use crate::FsResult;
+
+pub trait ReadWriteSeek: Read + Write + Seek {}
+impl<T: Read + Write + Seek> ReadWriteSeek for T {}
 
 pub trait Read {
     fn read(&mut self, buf: &mut [u8]) -> FsResult<usize>;
 
-    // # Provided
-    //fn read_vectored(&mut self, bufs: &mut [])
+    fn read_vectored(&mut self, buf: &mut [&mut [u8]]) -> Result<usize> {
+        let mut total_read = 0;
+        for buf_piece in buf.iter_mut() {
+            total_read += self.read_exact(buf_piece)?;
+        }
+
+        Ok(total_read)
+    }
+
+    fn is_read_vectored(&self) -> bool {
+        false
+    }
+
+    fn read_to_end(&mut self, buf: &mut Vec<u8>) -> Result<usize> {
+        let mut readable_slice = [0_u8; 512];
+        let mut total_read = 0;
+
+        loop {
+            match self.read(&mut readable_slice) {
+                Ok(0) => break,
+                OK(read_amount) => {
+                    buf.push(readable_slice[..read_amount]);
+                    readable_slice.iter_mut().for_each(|value| value = 0);
+                    total_read += read_amount;
+                }
+                Err(kind) if kind.kind == FsErrorKind::Interrupted => continue,
+                Err(other) => return Err(other),
+            }
+        }
+
+        Ok(total_read)
+    }
+
+    fn read_to_string(&mut self, buf: &mut String) -> Result<usize> {
+        let mut new_vec = Vec::new();
+        let total_read = self.read_to_end(&mut new_vec);
+
+        let raw_str = core::str::from_utf8(new_vec.as_slice()).map_err(|_| {
+            FsError::new(
+                FsErrorKind::InvalidData,
+                "read_to_string read invalid utf-8 char in buffer stream",
+            )
+        })?;
+
+        buf.push_str(raw_str);
+        Ok(total_read)
+    }
+
+    fn read_exact(&mut self, buf: &mut [u8]) -> Result<()> {
+        let mut total_read = 0;
+        loop {
+            if total_read == buf.len() {
+                break;
+            }
+
+            match self.read(&mut buf[total_read..]) {
+                Ok(0) => Err(FsError::new(
+                    FsErrorKind::UnexpectedEof,
+                    "Reached EOF, but more bytes where to be read",
+                )),
+                Ok(bytes) => total_read += bytes,
+                Err(kind) if kind.kind() == FsErrorKind::Interrupted => continue,
+                Err(error) => return Err(error),
+            }
+        }
+
+        Ok(())
+    }
+
+    fn by_ref(&mut self) -> &mut Self
+    where
+        Self: Sized,
+    {
+        self
+    }
 }
 
 pub trait Write {
     fn write(&mut self, buf: &mut [u8]) -> FsResult<usize>;
     fn flush(&mut self) -> FsResult<()>;
-
 }
 
 /// # Seek
@@ -138,7 +214,6 @@ pub trait Seek {
         Ok(())
     }
 
-
     /// # Stream Length
     /// Gets the length of the stream by seeking to the end of the stream, then to prevent the
     /// loss of stream position, it seeks back to the original position. This function uses
@@ -183,3 +258,4 @@ pub trait Seek {
         self.seek(SeekFrom::Current(0))
     }
 }
+
