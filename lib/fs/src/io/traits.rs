@@ -33,9 +33,17 @@ use crate::FsResult;
 pub trait ReadWriteSeek: Read + Write + Seek {}
 impl<T: Read + Write + Seek> ReadWriteSeek for T {}
 
+/// # Read
+/// Able to read bytes from a stream. Structs that implement `read` are called 'readers' (according
+/// to the rust std lib). Read should advance the read cursor.
 pub trait Read {
+    /// # Read
+    /// implementation of read for readers to be able to read from a stream.
     fn read(&mut self, buf: &mut [u8]) -> FsResult<usize>;
 
+    /// # Read Vectored
+    /// Accelerated reading of buffers-of-buffers. Should be identical to sending one read call to
+    /// one large buffer.
     fn read_vectored(&mut self, buf: &mut [&mut [u8]]) -> Result<usize> {
         let mut total_read = 0;
         for buf_piece in buf.iter_mut() {
@@ -45,10 +53,16 @@ pub trait Read {
         Ok(total_read)
     }
 
+    /// # Is Read Vectored?
+    /// Checks if reading from the stream has implemented `read_vectored`. If this stream does not
+    /// contain support for reading vectored, its recommened that one should not use
+    /// `read_vectored` as it might be really slow for some cases.
     fn is_read_vectored(&self) -> bool {
         false
     }
 
+    /// # Read to End
+    /// Reads to the end of the stream populating your `buf` element with each byte.
     fn read_to_end(&mut self, buf: &mut Vec<u8>) -> Result<usize> {
         let mut readable_slice = [0_u8; 512];
         let mut total_read = 0;
@@ -69,6 +83,9 @@ pub trait Read {
         Ok(total_read)
     }
 
+    /// # Read to String
+    /// Reads to the end of the stream populating your `buf` element with each char. If the string
+    /// is invalid, an error type `InvalidData` will be returned and `buf` will be unchanged.
     fn read_to_string(&mut self, buf: &mut String) -> Result<usize> {
         let mut new_vec = Vec::new();
         let total_read = self.read_to_end(&mut new_vec);
@@ -84,6 +101,10 @@ pub trait Read {
         Ok(total_read)
     }
 
+    /// # Read Exact
+    /// Attempts to read an exact amount of bytes from the stream. If the stream is smaller then
+    /// the amount of bytes in buf `UnexpectedEof` will be returned. Any errors while reading will
+    /// return that error, and `buf` could be clobbered.
     fn read_exact(&mut self, buf: &mut [u8]) -> Result<()> {
         let mut total_read = 0;
         loop {
@@ -105,6 +126,8 @@ pub trait Read {
         Ok(())
     }
 
+    /// # By Ref
+    /// Gets a mutable refrence to the underling type.
     fn by_ref(&mut self) -> &mut Self
     where
         Self: Sized,
