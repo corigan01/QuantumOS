@@ -46,13 +46,8 @@ pub trait Read {
     /// # Read Vectored
     /// Accelerated reading of buffers-of-buffers. Should be identical to sending one read call to
     /// one large buffer.
-    fn read_vectored(&mut self, buf: &mut [&mut [u8]]) -> Result<usize> {
-        let mut total_read = 0;
-        for buf_piece in buf.iter_mut() {
-            total_read += self.read_exact(buf_piece)?;
-        }
-
-        Ok(total_read)
+    fn read_vectored(&mut self, buf: &mut [&mut [u8]]) -> FsResult<usize> {
+        todo!("Not Implemented read_vectored");
     }
 
     /// # Is Read Vectored?
@@ -65,19 +60,19 @@ pub trait Read {
 
     /// # Read to End
     /// Reads to the end of the stream populating your `buf` element with each byte.
-    fn read_to_end(&mut self, buf: &mut Vec<u8>) -> Result<usize> {
+    fn read_to_end(&mut self, buf: &mut Vec<u8>) -> FsResult<usize> {
         let mut readable_slice = [0_u8; 512];
         let mut total_read = 0;
 
         loop {
             match self.read(&mut readable_slice) {
                 Ok(0) => break,
-                OK(read_amount) => {
-                    buf.push(readable_slice[..read_amount]);
-                    readable_slice.iter_mut().for_each(|value| value = 0);
+                Ok(read_amount) => {
+                    buf.extend_from_slice(&readable_slice[..read_amount]);
+                    readable_slice.iter_mut().for_each(|value| *value = 0);
                     total_read += read_amount;
                 }
-                Err(kind) if kind.kind == FsErrorKind::Interrupted => continue,
+                Err(kind) if kind.kind() == FsErrorKind::Interrupted => continue,
                 Err(other) => return Err(other),
             }
         }
@@ -88,9 +83,9 @@ pub trait Read {
     /// # Read to String
     /// Reads to the end of the stream populating your `buf` element with each char. If the string
     /// is invalid, an error type `InvalidData` will be returned and `buf` will be unchanged.
-    fn read_to_string(&mut self, buf: &mut String) -> Result<usize> {
+    fn read_to_string(&mut self, buf: &mut String) -> FsResult<usize> {
         let mut new_vec = Vec::new();
-        let total_read = self.read_to_end(&mut new_vec);
+        let total_read = self.read_to_end(&mut new_vec)?;
 
         let raw_str = core::str::from_utf8(new_vec.as_slice()).map_err(|_| {
             FsError::new(
@@ -107,7 +102,7 @@ pub trait Read {
     /// Attempts to read an exact amount of bytes from the stream. If the stream is smaller then
     /// the amount of bytes in buf `UnexpectedEof` will be returned. Any errors while reading will
     /// return that error, and `buf` could be clobbered.
-    fn read_exact(&mut self, buf: &mut [u8]) -> Result<()> {
+    fn read_exact(&mut self, buf: &mut [u8]) -> FsResult<()> {
         let mut total_read = 0;
         loop {
             if total_read == buf.len() {
@@ -115,7 +110,7 @@ pub trait Read {
             }
 
             match self.read(&mut buf[total_read..]) {
-                Ok(0) => Err(FsError::new(
+                Ok(0) => return Err(FsError::new(
                     FsErrorKind::UnexpectedEof,
                     "Reached EOF, but more bytes where to be read",
                 )),
@@ -139,11 +134,11 @@ pub trait Read {
 }
 
 pub trait Write {
-    fn write(&mut self, buf: &mut [u8]) -> FsResult<usize>;
+    fn write(&mut self, buf: &[u8]) -> FsResult<usize>;
 
     fn flush(&mut self) -> FsResult<()>;
 
-    fn write_vectored(&mut self, bufs: &[&[u8]]) -> Result<usize> {
+    fn write_vectored(&mut self, bufs: &[&[u8]]) -> FsResult<usize> {
         todo!("Write Vectored")
     }
 
@@ -151,14 +146,14 @@ pub trait Write {
         false
     }
 
-    fn write_all(&mut self, buf: &[u8]) -> Result<()> {
+    fn write_all(&mut self, buf: &[u8]) -> FsResult<()> {
         let mut total_written = 0;
         loop {
             if total_written == buf.len() {
                 break;
             }
 
-            match self.write(buf[total_written..]) {
+            match self.write(&buf[total_written..]) {
                 Ok(0) => {
                     return Err(
                         FsError::new(
@@ -174,7 +169,7 @@ pub trait Write {
         Ok(())
     }
 
-    fn write_fmt(&mut self, fmt: Arguments<'_>) -> Result<()> {
+    fn write_fmt(&mut self, fmt: Arguments<'_>) -> FsResult<()> {
         todo!()
     }
 
