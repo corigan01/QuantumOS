@@ -23,10 +23,10 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use core::fmt::{Arguments, self};
+use core::fmt::Arguments;
 
 use qk_alloc::string::String;
-use qk_alloc::vec::{self, Vec};
+use qk_alloc::vec::Vec;
 
 use crate::error::{FsError, FsErrorKind};
 use crate::io::SeekFrom;
@@ -134,8 +134,12 @@ pub trait Read {
 }
 
 pub trait Write {
+    /// # Write
+    /// Writes bytes to a stream. Writting, just like reading should add to the Seek pos. 
     fn write(&mut self, buf: &[u8]) -> FsResult<usize>;
 
+    /// # Flush
+    /// Flushs the bytes from any buffers to the final destination. 
     fn flush(&mut self) -> FsResult<()>;
 
     fn write_vectored(&mut self, bufs: &[&[u8]]) -> FsResult<usize> {
