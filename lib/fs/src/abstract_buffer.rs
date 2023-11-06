@@ -156,7 +156,7 @@ impl Read for AbstractBuffer {
 }
 
 impl Write for AbstractBuffer {
-    fn write(&mut self, buf: &mut [u8]) -> FsResult<usize> {
+    fn write(&mut self, buf: &[u8]) -> FsResult<usize> {
         let write_amount = self.data.write(buf)?;
         self.current_seek += write_amount as u64;
 
@@ -306,4 +306,3 @@ mod test {
         assert_eq!(buffer.seek(SeekFrom::Current(-1)), Ok(4));
     }
 }
-
