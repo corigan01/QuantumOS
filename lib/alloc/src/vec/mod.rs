@@ -54,6 +54,15 @@ impl<Type> Vec<Type, GlobalAlloc> {
             len,
         }
     }
+
+    pub fn extend_from_slice(&mut self, slice: &[Type])
+    where
+        Type: Clone,
+    {
+        for val in slice {
+            self.push(val.clone());
+        }
+    }
 }
 
 impl<Type, Alloc: AllocatorAPI> Vec<Type, Alloc> {
@@ -295,14 +304,12 @@ impl<Type, Alloc: AllocatorAPI> Vec<Type, Alloc> {
 }
 
 pub struct IntoIter<Type, Alloc: AllocatorAPI> {
-    vec: Vec<Type, Alloc>
+    vec: Vec<Type, Alloc>,
 }
 
 impl<Type, Alloc: AllocatorAPI> IntoIter<Type, Alloc> {
     pub fn new(vec: Vec<Type, Alloc>) -> Self {
-        Self {
-            vec
-        }
+        Self { vec }
     }
 }
 
