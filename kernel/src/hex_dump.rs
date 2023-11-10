@@ -23,56 +23,50 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use core::fmt::{Display, Formatter};
+use core::fmt::{Display, Formatter, Write};
 
 const ROWS_TO_PRINT: usize = 10;
 const BYTES_PER_ROW: usize = 2;
 
 pub struct HexPrinter<'a> {
-    data: &'a [u8]
+    data: &'a [u8],
+}
+
+impl<'a> HexPrinter<'a> {
+    const INBUILT_BUFFER_ARRAY: [u8; ROWS_TO_PRINT] = [0; ROWS_TO_PRINT];
 }
 
 impl<'a> Display for HexPrinter<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
-        f.write_fmt(format_args!("\nDumping Array of size {}!\n| ", self.data.len()))?;
-        let mut line_string = [0u8; ROWS_TO_PRINT];
+        f.write_char('\n')?;
+        self.data.chunks(ROWS_TO_PRINT).try_for_each(|chunk_print| {
+            f.write_str(" | ")?;
+            chunk_print.chunks(BYTES_PER_ROW).try_for_each(|value| {
+                value
+                    .iter()
+                    .try_for_each(|byte| f.write_fmt(format_args!("{:02x}", byte)))?;
+                f.write_str(" ")
+            })?;
 
-        for index in 0..self.data.len().checked_next_multiple_of(ROWS_TO_PRINT).unwrap_or(0) {
-            let byte = self.data.get(index).unwrap_or(&0);
+            Self::INBUILT_BUFFER_ARRAY[..(ROWS_TO_PRINT - chunk_print.len())]
+                .chunks(BYTES_PER_ROW)
+                .try_for_each(|_| f.write_str("     "))?;
 
-            if index > self.data.len() {
-                f.write_fmt(format_args!("--"))?;
-            } else {
-                f.write_fmt(format_args!("{:02X}", byte))?;
-            }
+            f.write_str(" | ")?;
+            chunk_print.iter().try_for_each(|val| {
+                f.write_char(match val {
+                    0 => '.',
+                    v if v.is_ascii_alphanumeric() => *v as char,
+                    _ => '_',
+                })
+            })?;
 
-            line_string[index % ROWS_TO_PRINT] = *byte;
+            Self::INBUILT_BUFFER_ARRAY[..(ROWS_TO_PRINT - chunk_print.len())]
+                .iter()
+                .try_for_each(|_| f.write_char(' '))?;
 
-            if (index + 1) % 2 == 0 {
-                f.write_fmt(format_args!(" "))?;
-            }
-            if (index + 1) % (ROWS_TO_PRINT * BYTES_PER_ROW) == 0 {
-                f.write_fmt(format_args!("| "))?;
-
-                for char_byte in line_string.iter() {
-                    if char_byte.is_ascii_alphanumeric() || char_byte.is_ascii_alphabetic() {
-                        f.write_fmt(format_args!("{}", *char_byte as char))?;
-                    } else {
-                        f.write_fmt(format_args!("."))?;
-                    }
-                }
-
-                f.write_fmt(format_args!("\n"))?;
-
-                if index < self.data.len() - 1 {
-                    f.write_fmt(format_args!("| "))?;
-                } else {
-                    f.write_fmt(format_args!("\n"))?;
-                }
-            }
-        }
-
-        Ok(())
+            f.write_str(" |\n")
+        })
     }
 }
 
@@ -82,16 +76,13 @@ pub trait HexPrint {
 
 impl HexPrint for &[u8] {
     fn hex_print(&self) -> HexPrinter {
-        HexPrinter {
-            data: self
-        }
+        HexPrinter { data: self }
     }
 }
 
 impl<const SIZE: usize> HexPrint for [u8; SIZE] {
     fn hex_print(&self) -> HexPrinter {
-        HexPrinter {
-            data: self
-        }
+        HexPrinter { data: self }
     }
 }
+
