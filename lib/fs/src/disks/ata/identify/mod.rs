@@ -39,6 +39,15 @@ pub struct IdentifyParser {
 }
 
 impl IdentifyParser {
+    /// # Logical Sector Size
+    /// Gets the sector size of a logical sector on the disk.
+    pub fn logical_sector_size(&self) -> usize {
+        match self.raw_identify.logical_sector_size as usize {
+            0 => 512,
+            n => n,
+        }
+    }
+
     /// # Empty
     /// Gives a empty box with zeroed data. Useful for making a IdentifyParser before you have the
     /// data. Mostly just a patch for AtaDisk.
