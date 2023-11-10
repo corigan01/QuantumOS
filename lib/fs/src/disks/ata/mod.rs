@@ -23,12 +23,16 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use qk_alloc::vec::Vec;
+use qk_alloc::{format, vec::Vec};
+use quantum_lib::bitset::BitSet;
 
 use crate::{
     disks::ata::{
         identify::IdentifyParser,
-        registers::{data::DataRegister, DiskID, ReadRegisterBus},
+        registers::{
+            data::DataRegister, error::ErrorRegister, feature::FeatureRegister, DiskID,
+            ReadRegisterBus,
+        },
     },
     error::{FsError, FsErrorKind},
     FsResult,
@@ -156,5 +160,56 @@ impl AtaDisk {
             identify: identify_parser,
             phan: PhantomData,
         })
+    }
+}
+
+impl AtaDisk<Quarried> {
+    /// # Wait for Disk
+    /// Pulls until the disk is ready for the next command. This is quite slow, and should use DMA
+    /// as soon as possible.
+    fn wait_for_disk(&self) -> FsResult<()> {
+        // Waits 400ns for the IDE bus to propagate changes
+        StatusRegister::perform_400ns_delay(self.disk_id);
+        loop {
+            let status = StatusRegister::get_status(self.disk_id);
+
+            // Check if the disk is in an error state
+            if status.check_flag(StatusFlags::ErrorOccurred) {
+                return Err(FsError::from_string(
+                    FsErrorKind::Other,
+                    format!(
+                        "Drive Error Occurred: {:#?}",
+                        ErrorRegister::get_errors(self.disk_id)
+                    ),
+                ));
+            }
+
+            // Check if there was a fualt
+            if status.check_flag(StatusFlags::DriveFault) {
+                return Err(FsError::new(FsErrorKind::Other, "Drive Fault Occured"));
+            }
+
+            // Pull until not busy
+            if !status.check_flag(StatusFlags::Busy) || status.check_flag(StatusFlags::Ready) {
+                break;
+            }
+        }
+
+        Ok(())
+    }
+
+    /// # Seek Sector
+    /// Sets the sector for the disk to read/write.
+    fn seek_sector(&self, sector: usize) {
+        let small_bits = sector.get_bits(24..28) as u8;
+        DriveHeadRegister::lba_bits_24_27(self.disk_id, small_bits);
+        FeatureRegister::reset_register(self.disk_id);
+        SectorRegister::lba_bits_0_24(self.disk_id, small_bits & 0xFFFFFF);
+    }
+
+    /// # Select Sector Count
+    /// Sets the amount of sectors the next operation is going to use.
+    fn select_sector_count(&self, count: usize) {
+        SectorRegister::set_sectors_per_operation(self.disk_id, count);
     }
 }
