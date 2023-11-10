@@ -47,6 +47,8 @@ use quantum_utils::human_bytes::HumanBytes;
 
 use quantum_os::clock::rtc::update_and_get_time;
 
+use fs;
+
 use owo_colors::OwoColorize;
 use qk_alloc::string::String;
 use quantum_lib::address_utils::region_map::RegionMap;
@@ -164,6 +166,11 @@ fn main(boot_info: &KernelBootInformation) {
     framebuffer.draw_rect(rect!(0, 15 ; 150, 2), Pixel::WHITE);
     debug_println!("{}", "OK".bright_green().bold());
 
+    let disk = fs::disks::ata::AtaDisk::new(fs::disks::ata::DiskID::PrimaryFirst)
+        .quarry()
+        .unwrap();
+
+    debug_println!("Words Per Sector on disk: {}", disk.words_per_sector());
 
     debug_println!("\n\n{}", get_global_alloc());
 
