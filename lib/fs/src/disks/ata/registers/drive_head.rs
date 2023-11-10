@@ -62,7 +62,7 @@ impl DriveHeadRegister {
     /// this function will panic.
     pub fn lba_bits_24_27(device: DiskID, lba_bits: u8) {
         assert!(
-            lba_bits & 0b11111000 > 0,
+            lba_bits & 0b11111000 == lba_bits,
             "Should not be sending more then 3 bits to DriveHeadRegister"
         );
 
