@@ -150,7 +150,7 @@ pub enum FsErrorKind {
     OutOfMemory,
     /// # Other
     /// The error is not known.
-    Other
+    Other,
 }
 
 impl FsErrorKind {
@@ -266,28 +266,36 @@ impl FsError {
     pub fn new(kind: FsErrorKind, error: &str) -> FsError {
         Self {
             error: String::from(error),
-            kind
+            kind,
         }
+    }
+
+    pub fn from_string(kind: FsErrorKind, error: String) -> FsError {
+        Self { error, kind }
     }
 
     pub fn try_from_array_error<Type>(array: &[u8]) -> FsError {
         let error = format!(
-            concat!("Cannot construct ", stringify!(Type), " with improperly sized array!\n",
-                    "\tArray only has {} bytes, but expected {} bytes!"),
+            concat!(
+                "Cannot construct ",
+                stringify!(Type),
+                " with improperly sized array!\n",
+                "\tArray only has {} bytes, but expected {} bytes!"
+            ),
             array.len(),
             size_of::<Type>()
         );
 
         Self {
             error,
-            kind: FsErrorKind::InvalidInput
+            kind: FsErrorKind::InvalidInput,
         }
     }
 
     pub fn other(error: &str) -> FsError {
         Self {
             error: String::from(error),
-            kind: FsErrorKind::Other
+            kind: FsErrorKind::Other,
         }
     }
 
@@ -304,7 +312,7 @@ impl From<FsErrorKind> for FsError {
     fn from(value: FsErrorKind) -> Self {
         Self {
             error: String::new(),
-            kind: value
+            kind: value,
         }
     }
 }
