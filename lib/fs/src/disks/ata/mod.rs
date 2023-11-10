@@ -30,8 +30,7 @@ use crate::{
     disks::ata::{
         identify::IdentifyParser,
         registers::{
-            data::DataRegister, error::ErrorRegister, feature::FeatureRegister, DiskID,
-            ReadRegisterBus,
+            data::DataRegister, error::ErrorRegister, feature::FeatureRegister, ReadRegisterBus,
         },
     },
     error::{FsError, FsErrorKind},
@@ -44,7 +43,10 @@ use self::registers::{
     drive_head::DriveHeadRegister,
     sector::SectorRegister,
     status::{StatusFlags, StatusRegister},
+    WriteRegisterBus,
 };
+
+pub use crate::disks::ata::registers::DiskID;
 
 mod identify;
 mod registers;
@@ -204,12 +206,82 @@ impl AtaDisk<Quarried> {
         let small_bits = sector.get_bits(24..28) as u8;
         DriveHeadRegister::lba_bits_24_27(self.disk_id, small_bits);
         FeatureRegister::reset_register(self.disk_id);
-        SectorRegister::lba_bits_0_24(self.disk_id, small_bits & 0xFFFFFF);
+        SectorRegister::lba_bits_0_24(self.disk_id, sector & 0xFFFFFF);
     }
 
     /// # Select Sector Count
     /// Sets the amount of sectors the next operation is going to use.
-    fn select_sector_count(&self, count: usize) {
+    fn select_sector_count(&self, count: u8) {
         SectorRegister::set_sectors_per_operation(self.disk_id, count);
+    }
+
+    /// # Gets the words per sector on the disk
+    pub fn words_per_sector(&self) -> usize {
+        self.identify.logical_sector_size() / 2
+    }
+
+    /// # Read Raw Sectors
+    /// Reads sectors off the disk very rawly.
+    unsafe fn read_raw_sectors(
+        &mut self,
+        sector: usize,
+        sector_count: u8,
+        buffer: &mut [u8],
+    ) -> FsResult<usize> {
+        self.select_sector_count(sector_count);
+        self.seek_sector(sector);
+
+        CommandRegister::send_command(self.disk_id, Commands::ReadSectorsPIO);
+        self.wait_for_disk()?;
+
+        let mut amount_read = 0;
+        let buffer_u16 = buffer.as_ptr() as *mut u16;
+
+        for _ in 0..sector_count {
+            for _ in 0..self.words_per_sector() {
+                buffer_u16
+                    .add(amount_read)
+                    .write_unaligned(DataRegister::read_u16(self.disk_id));
+
+                amount_read += 1;
+            }
+
+            // Need to wait for the disk to seek to the next sector
+            self.wait_for_disk()?;
+        }
+
+        Ok(amount_read * 2)
+    }
+
+    /// # Write Raw Sectors
+    /// Writes sectors to the disk very rawly.
+    unsafe fn write_raw_sectors(
+        &mut self,
+        sector: usize,
+        sector_count: u8,
+        buffer: &[u8],
+    ) -> FsResult<usize> {
+        self.select_sector_count(sector_count);
+        self.seek_sector(sector);
+
+        CommandRegister::send_command(self.disk_id, Commands::WriteSectorsPIO);
+        self.wait_for_disk()?;
+
+        let mut amount_written = 0;
+        let buffer_u16 = buffer.as_ptr() as *mut u16;
+
+        for _ in 0..sector_count {
+            for _ in 0..self.words_per_sector() {
+                let value = buffer_u16.add(amount_written).read_unaligned();
+
+                DataRegister::write_u16(self.disk_id, value);
+                amount_written += 1;
+            }
+
+            // Need to wait for the disk to seek to the next sector
+            self.wait_for_disk()?;
+        }
+
+        Ok(amount_written * 2)
     }
 }
