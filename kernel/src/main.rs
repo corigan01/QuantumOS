@@ -173,7 +173,7 @@ fn main(boot_info: &KernelBootInformation) {
 
     let mut buffer = [0_u8; 512];
     unsafe {
-        disk.read_raw_sectors(0, 1, buffer.as_mut());
+        disk.read_raw_sectors(0, 1, buffer.as_mut()).unwrap();
     }
     debug_println!("Disk: {}", buffer.hex_print());
 
