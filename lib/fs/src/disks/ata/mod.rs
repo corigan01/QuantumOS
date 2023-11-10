@@ -222,7 +222,7 @@ impl AtaDisk<Quarried> {
 
     /// # Read Raw Sectors
     /// Reads sectors off the disk very rawly.
-    unsafe fn read_raw_sectors(
+    pub unsafe fn read_raw_sectors(
         &mut self,
         sector: usize,
         sector_count: u8,

@@ -55,6 +55,7 @@ use quantum_lib::address_utils::region_map::RegionMap;
 use quantum_lib::address_utils::virtual_address::VirtAddress;
 use quantum_lib::panic_utils::CRASH_MESSAGES;
 
+use quantum_os::hex_dump::HexPrint;
 use quantum_os::qemu::{exit_qemu, QemuExitCode};
 
 static mut SERIAL_CONNECTION: PossiblyUninit<SerialDevice> = PossiblyUninit::new_lazy(|| {
@@ -166,9 +167,15 @@ fn main(boot_info: &KernelBootInformation) {
     framebuffer.draw_rect(rect!(0, 15 ; 150, 2), Pixel::WHITE);
     debug_println!("{}", "OK".bright_green().bold());
 
-    let disk = fs::disks::ata::AtaDisk::new(fs::disks::ata::DiskID::PrimaryFirst)
+    let mut disk = fs::disks::ata::AtaDisk::new(fs::disks::ata::DiskID::PrimaryFirst)
         .quarry()
         .unwrap();
+
+    let mut buffer = [0_u8; 512];
+    unsafe {
+        disk.read_raw_sectors(0, 1, buffer.as_mut());
+    }
+    debug_println!("Disk: {}", buffer.hex_print());
 
     debug_println!("Words Per Sector on disk: {}", disk.words_per_sector());
 
