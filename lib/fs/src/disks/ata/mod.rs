@@ -186,7 +186,7 @@ impl AtaDisk<Quarried> {
                 ));
             }
 
-            // Check if there was a fualt
+            // Check if there was a fault
             if status.check_flag(StatusFlags::DriveFault) {
                 return Err(FsError::new(FsErrorKind::Other, "Drive Fault Occured"));
             }
