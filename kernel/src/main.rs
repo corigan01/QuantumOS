@@ -29,6 +29,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #![allow(dead_code)]
 
 use core::panic::PanicInfo;
+use fs::disks::ata::{AtaDisk, DiskID};
 use qk_alloc::heap::alloc::KernelHeap;
 use qk_alloc::heap::{get_global_alloc, get_global_alloc_debug, set_global_alloc};
 use qk_alloc::usable_region::UsableRegion;
@@ -167,9 +168,7 @@ fn main(boot_info: &KernelBootInformation) {
     framebuffer.draw_rect(rect!(0, 15 ; 150, 2), Pixel::WHITE);
     debug_println!("{}", "OK".bright_green().bold());
 
-    let mut disk = fs::disks::ata::AtaDisk::new(fs::disks::ata::DiskID::PrimaryFirst)
-        .quarry()
-        .unwrap();
+    let mut disk = AtaDisk::new(DiskID::PrimaryFirst).quarry().unwrap();
 
     let mut buffer = [0_u8; 512];
     unsafe {
