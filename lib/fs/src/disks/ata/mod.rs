@@ -34,6 +34,7 @@ use crate::{
         },
     },
     error::{FsError, FsErrorKind},
+    io::{Read, Write},
     FsResult,
 };
 use core::marker::PhantomData;
@@ -283,5 +284,21 @@ impl AtaDisk<Quarried> {
         }
 
         Ok(amount_written * 2)
+    }
+}
+
+impl Read for AtaDisk<Quarried> {
+    fn read(&mut self, buf: &mut [u8]) -> FsResult<usize> {
+        todo!()
+    }
+}
+
+impl Write for AtaDisk<Quarried> {
+    fn write(&mut self, buf: &[u8]) -> FsResult<usize> {
+        todo!()
+    }
+
+    fn flush(&mut self) -> FsResult<()> {
+        todo!()
     }
 }
