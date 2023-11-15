@@ -23,7 +23,11 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use qk_alloc::{format, vec::ToVec, vec::Vec};
+use qk_alloc::{
+    format,
+    vec::Vec,
+    vec::{self, ToVec},
+};
 use quantum_lib::bitset::BitSet;
 
 use crate::{
@@ -54,38 +58,6 @@ mod registers;
 
 pub struct UnknownState {}
 pub struct Quarried {}
-
-struct DiskCache {
-    data: Vec<(usize, Vec<u8>)>,
-}
-
-impl Default for DiskCache {
-    fn default() -> Self {
-        Self { data: Vec::new() }
-    }
-}
-
-impl DiskCache {
-    const CACHE_SIZE: usize = 10;
-
-    fn add_entry(&mut self, sector: usize, data: &[u8]) {
-        if self.data.len() > Self::CACHE_SIZE {
-            self.data.pop_front();
-        }
-
-        self.data.push((sector, data.to_vec()));
-    }
-
-    fn get_entry<'a>(&'a mut self, sector: usize) -> Option<&'a [u8]> {
-        // TODO: Maybe make this a binary search feature, so we don't have to search for long
-        // periods of time.
-        // NOTE: Reversing the array should make it faster to search because the elements are
-        // stored in reverse order.
-        let (_, data) = self.data.iter().rev().find(|(id, _)| sector == *id)?;
-
-        Some(data.as_ref())
-    }
-}
 
 pub struct AtaDisk<Any = UnknownState> {
     disk_id: DiskID,
@@ -353,6 +325,13 @@ impl AtaDisk<Quarried> {
 impl Read for AtaDisk<Quarried> {
     fn read(&mut self, buf: &mut [u8]) -> FsResult<usize> {
         let (sector, sector_offset) = self.calculate_seek_sector_offset();
+        let amount_to_read = buf.len();
+        let mut amount_writen = 0;
+
+        while amount_writen < amount_to_read {
+            let
+        }
+
 
         todo!();
         Ok(buf.len())
