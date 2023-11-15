@@ -467,6 +467,25 @@ pub fn from_elem<Type: Clone>(element: Type, size: usize) -> Vec<Type> {
     vector
 }
 
+pub trait ToVec<Type> {
+    fn to_vec(self) -> Vec<Type>;
+}
+
+impl<Type> ToVec<Type> for &[Type]
+where
+    Type: Clone,
+{
+    fn to_vec(self) -> Vec<Type> {
+        self.iter().collect()
+    }
+}
+
+impl<Type, const SIZE: usize> ToVec<Type> for [Type; SIZE] {
+    fn to_vec(self) -> Vec<Type> {
+        self.into_iter().collect()
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
