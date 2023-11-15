@@ -23,7 +23,7 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use qk_alloc::{format, vec::Vec};
+use qk_alloc::{format, vec::ToVec, vec::Vec};
 use quantum_lib::bitset::BitSet;
 
 use crate::{
@@ -55,8 +55,41 @@ mod registers;
 pub struct UnknownState {}
 pub struct Quarried {}
 
+struct DiskCache {
+    data: Vec<(usize, Vec<u8>)>,
+}
+
+impl Default for DiskCache {
+    fn default() -> Self {
+        Self { data: Vec::new() }
+    }
+}
+
+impl DiskCache {
+    const CACHE_SIZE: usize = 10;
+
+    fn add_entry(&mut self, sector: usize, data: &[u8]) {
+        if self.data.len() > Self::CACHE_SIZE {
+            self.data.pop_front();
+        }
+
+        self.data.push((sector, data.to_vec()));
+    }
+
+    fn get_entry<'a>(&'a mut self, sector: usize) -> Option<&'a [u8]> {
+        // TODO: Maybe make this a binary search feature, so we don't have to search for long
+        // periods of time.
+        // NOTE: Reversing the array should make it faster to search because the elements are
+        // stored in reverse order.
+        let (_, data) = self.data.iter().rev().find(|(id, _)| sector == *id)?;
+
+        Some(data.as_ref())
+    }
+}
+
 pub struct AtaDisk<Any = UnknownState> {
     disk_id: DiskID,
+    cache: DiskCache,
     seek: u64,
     identify: IdentifyParser,
     phan: PhantomData<Any>,
@@ -72,6 +105,7 @@ impl AtaDisk {
     pub fn new(disk: DiskID) -> Self {
         Self {
             disk_id: disk,
+            cache: DiskCache::default(),
             seek: 0,
             identify: unsafe { IdentifyParser::empty() },
             phan: PhantomData,
@@ -159,6 +193,7 @@ impl AtaDisk {
 
         Ok(AtaDisk {
             disk_id: disk,
+            cache: self.cache,
             seek: 0,
             identify: identify_parser,
             phan: PhantomData,
@@ -212,8 +247,8 @@ impl AtaDisk<Quarried> {
 
     /// # Select Sector Count
     /// Sets the amount of sectors the next operation is going to use.
-    fn select_sector_count(&self, count: u8) {
-        SectorRegister::set_sectors_per_operation(self.disk_id, count);
+    fn select_sector_count(&self, count: usize) {
+        SectorRegister::set_sectors_per_operation(self.disk_id, count as u8);
     }
 
     /// # Gets the words per sector on the disk
@@ -226,9 +261,18 @@ impl AtaDisk<Quarried> {
     pub unsafe fn read_raw_sectors(
         &mut self,
         sector: usize,
-        sector_count: u8,
+        sector_count: usize,
         buffer: &mut [u8],
     ) -> FsResult<usize> {
+        let words_per_sector = self.words_per_sector();
+
+        if buffer.len() < sector * (words_per_sector * 2) {
+            return Err(FsError::new(
+                FsErrorKind::InvalidInput,
+                "Cannot write to a buffer with a size that is less then the requested sector size",
+            ));
+        }
+
         self.select_sector_count(sector_count);
         self.seek_sector(sector);
 
@@ -239,7 +283,7 @@ impl AtaDisk<Quarried> {
         let buffer_u16 = buffer.as_ptr() as *mut u16;
 
         for _ in 0..sector_count {
-            for _ in 0..self.words_per_sector() {
+            for _ in 0..words_per_sector {
                 buffer_u16
                     .add(amount_read)
                     .write_unaligned(DataRegister::read_u16(self.disk_id));
@@ -259,9 +303,18 @@ impl AtaDisk<Quarried> {
     unsafe fn write_raw_sectors(
         &mut self,
         sector: usize,
-        sector_count: u8,
+        sector_count: usize,
         buffer: &[u8],
     ) -> FsResult<usize> {
+        let words_per_sector = self.words_per_sector();
+
+        if buffer.len() < sector * (words_per_sector * 2) {
+            return Err(FsError::new(
+                FsErrorKind::InvalidInput,
+                "Cannot read from a buffer with a size that is less then the requested sector size",
+            ));
+        }
+
         self.select_sector_count(sector_count);
         self.seek_sector(sector);
 
@@ -272,7 +325,7 @@ impl AtaDisk<Quarried> {
         let buffer_u16 = buffer.as_ptr() as *mut u16;
 
         for _ in 0..sector_count {
-            for _ in 0..self.words_per_sector() {
+            for _ in 0..words_per_sector {
                 let value = buffer_u16.add(amount_written).read_unaligned();
 
                 DataRegister::write_u16(self.disk_id, value);
@@ -285,11 +338,24 @@ impl AtaDisk<Quarried> {
 
         Ok(amount_written * 2)
     }
+
+    /// # Calculate the current sector positon.
+    /// Proves the sector pos from the current seek position.
+    fn calculate_seek_sector_offset(&self) -> (usize, usize) {
+        let bytes_per_sector = self.words_per_sector() * 2;
+        let sector_offset = self.seek as usize / bytes_per_sector;
+        let within_sector_offset = self.seek as usize / bytes_per_sector;
+
+        (sector_offset, within_sector_offset)
+    }
 }
 
 impl Read for AtaDisk<Quarried> {
     fn read(&mut self, buf: &mut [u8]) -> FsResult<usize> {
-        todo!()
+        let (sector, sector_offset) = self.calculate_seek_sector_offset();
+
+        todo!();
+        Ok(buf.len())
     }
 }
 
