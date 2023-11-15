@@ -24,9 +24,12 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 use core::fmt::{Display, Formatter, Write};
+use quantum_utils::human_bytes::HumanBytes;
 
-const ROWS_TO_PRINT: usize = 10;
+const ROWS_TO_PRINT: usize = 16;
 const BYTES_PER_ROW: usize = 2;
+
+const INCLUDE_HEADER_AND_FOOTER: bool = true;
 
 pub struct HexPrinter<'a> {
     data: &'a [u8],
@@ -39,34 +42,71 @@ impl<'a> HexPrinter<'a> {
 impl<'a> Display for HexPrinter<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         f.write_char('\n')?;
-        self.data.chunks(ROWS_TO_PRINT).try_for_each(|chunk_print| {
-            f.write_str(" | ")?;
-            chunk_print.chunks(BYTES_PER_ROW).try_for_each(|value| {
-                value
+
+        if INCLUDE_HEADER_AND_FOOTER {
+            f.write_fmt(format_args!(
+                " + {:09} +",
+                HumanBytes::from(self.data.len())
+            ))?;
+
+            for _ in 0..(ROWS_TO_PRINT / BYTES_PER_ROW) * 5 + 1 {
+                f.write_char('-')?;
+            }
+            f.write_char('+')?;
+            for _ in 0..ROWS_TO_PRINT + 2 {
+                f.write_char('-')?;
+            }
+
+            f.write_str("+\n")?;
+        }
+
+        self.data
+            .chunks(ROWS_TO_PRINT)
+            .enumerate()
+            .try_for_each(|(enumerate, chunk_print)| {
+                f.write_fmt(format_args!(" | {enumerate:09x} | "))?;
+                chunk_print.chunks(BYTES_PER_ROW).try_for_each(|value| {
+                    value
+                        .iter()
+                        .try_for_each(|byte| f.write_fmt(format_args!("{:02x}", byte)))?;
+                    f.write_str(" ")
+                })?;
+
+                Self::INBUILT_BUFFER_ARRAY[..(ROWS_TO_PRINT - chunk_print.len())]
+                    .chunks(BYTES_PER_ROW)
+                    .try_for_each(|_| f.write_str("     "))?;
+
+                f.write_str("| ")?;
+                chunk_print.iter().try_for_each(|val| {
+                    f.write_char(match val {
+                        0 => '.',
+                        v if v.is_ascii_alphanumeric() => *v as char,
+                        _ => '_',
+                    })
+                })?;
+
+                Self::INBUILT_BUFFER_ARRAY[..(ROWS_TO_PRINT - chunk_print.len())]
                     .iter()
-                    .try_for_each(|byte| f.write_fmt(format_args!("{:02x}", byte)))?;
-                f.write_str(" ")
+                    .try_for_each(|_| f.write_char(' '))?;
+
+                f.write_str(" |\n")
             })?;
 
-            Self::INBUILT_BUFFER_ARRAY[..(ROWS_TO_PRINT - chunk_print.len())]
-                .chunks(BYTES_PER_ROW)
-                .try_for_each(|_| f.write_str("     "))?;
+        if INCLUDE_HEADER_AND_FOOTER {
+            f.write_str(" +-----------+")?;
 
-            f.write_str(" | ")?;
-            chunk_print.iter().try_for_each(|val| {
-                f.write_char(match val {
-                    0 => '.',
-                    v if v.is_ascii_alphanumeric() => *v as char,
-                    _ => '_',
-                })
-            })?;
+            for _ in 0..(ROWS_TO_PRINT / BYTES_PER_ROW) * 5 + 1 {
+                f.write_char('-')?;
+            }
+            f.write_char('+')?;
+            for _ in 0..ROWS_TO_PRINT + 2 {
+                f.write_char('-')?;
+            }
 
-            Self::INBUILT_BUFFER_ARRAY[..(ROWS_TO_PRINT - chunk_print.len())]
-                .iter()
-                .try_for_each(|_| f.write_char(' '))?;
+            f.write_str("+\n")?;
+        }
 
-            f.write_str(" |\n")
-        })
+        Ok(())
     }
 }
 
@@ -85,4 +125,3 @@ impl<const SIZE: usize> HexPrint for [u8; SIZE] {
         HexPrinter { data: self }
     }
 }
-
