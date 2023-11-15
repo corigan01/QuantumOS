@@ -237,7 +237,7 @@ mod test {
     }
 
     impl<const SIZE: usize> Write for TestBuffer<SIZE> {
-        fn write(&mut self, buf: &mut [u8]) -> FsResult<usize> {
+        fn write(&mut self, buf: &[u8]) -> FsResult<usize> {
             Ok(buf.len())
         }
 
