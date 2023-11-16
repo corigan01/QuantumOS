@@ -21,9 +21,27 @@ NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPO
 NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
 DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-*
 */
 
-pub struct Vfs {}
+use crate::io::{Read, Seek, Write};
+use qk_alloc::vec::Vec;
+mod entry;
 
-impl Vfs {}
+pub trait FakeFsProvider: Write + Read + Seek {
+    fn un_mount(&mut self) -> bool {
+        false
+    }
+}
+
+pub struct FakeFs {
+    // FIXME: Make Hashmap in the future
+    providers: Vec<entry::Entry>,
+}
+
+impl FakeFs {
+    pub fn new() -> Self {
+        Self {
+            providers: Vec::new(),
+        }
+    }
+}
