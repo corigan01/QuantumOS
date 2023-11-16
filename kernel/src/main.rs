@@ -30,6 +30,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 use core::panic::PanicInfo;
 use fs::disks::ata::{AtaDisk, DiskID};
+use fs::io::{Read, Seek, SeekFrom};
 use qk_alloc::heap::alloc::KernelHeap;
 use qk_alloc::heap::{get_global_alloc, get_global_alloc_debug, set_global_alloc};
 use qk_alloc::usable_region::UsableRegion;
@@ -170,10 +171,11 @@ fn main(boot_info: &KernelBootInformation) {
 
     let mut disk = AtaDisk::new(DiskID::PrimaryFirst).quarry().unwrap();
 
+    disk.seek(SeekFrom::Start(10)).unwrap();
+
     let mut buffer = [0_u8; 512];
-    unsafe {
-        disk.read_raw_sectors(0, 1, buffer.as_mut()).unwrap();
-    }
+    disk.read(&mut buffer).unwrap();
+
     debug_println!("Disk: {}", buffer.hex_print());
 
     debug_println!("Words Per Sector on disk: {}", disk.words_per_sector());
