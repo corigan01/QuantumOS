@@ -172,11 +172,11 @@ fn main(boot_info: &KernelBootInformation) {
     let buffer = [0xDE_u8; 16];
     let mut disk = AtaDisk::new(DiskID::PrimaryFirst).quarry().unwrap();
 
-    disk.seek(SeekFrom::Start(16)).unwrap();
+    disk.seek(SeekFrom::Start(500)).unwrap();
     disk.write(&buffer).unwrap();
     disk.flush().unwrap();
 
-    let mut buffer = [0; 512];
+    let mut buffer = [0; 1024];
     disk.seek(SeekFrom::Start(0)).unwrap();
     disk.read(&mut buffer).unwrap();
 
