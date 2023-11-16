@@ -233,7 +233,7 @@ impl AtaDisk<Quarried> {
     ) -> FsResult<usize> {
         let words_per_sector = self.words_per_sector();
 
-        if buffer.len() < sector * (words_per_sector * 2) {
+        if buffer.len() < sector_count * (words_per_sector * 2) {
             return Err(FsError::new(
                 FsErrorKind::InvalidInput,
                 "Cannot write to a buffer with a size that is less then the requested sector size",
@@ -275,7 +275,7 @@ impl AtaDisk<Quarried> {
     ) -> FsResult<usize> {
         let words_per_sector = self.words_per_sector();
 
-        if buffer.len() < sector * (words_per_sector * 2) {
+        if buffer.len() < sector_count * (words_per_sector * 2) {
             return Err(FsError::new(
                 FsErrorKind::InvalidInput,
                 "Cannot read from a buffer with a size that is less then the requested sector size",
