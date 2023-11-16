@@ -404,22 +404,20 @@ impl Write for AtaDisk<Quarried> {
 
         let mut scratchpad_buffer = vec![0_u8; bytes_per_sector];
 
-        if sector_offset != 0 {
-            let mut previous_buffer = ToVec::to_vec(match self.cache.get_entry(sector) {
-                Some(data) => data,
-                None => unsafe {
-                    self.read_raw_sectors(sector, 1, scratchpad_buffer.as_mut())?;
-                    scratchpad_buffer.as_slice()
-                },
-            });
+        let mut previous_buffer = ToVec::to_vec(match self.cache.get_entry(sector) {
+            Some(data) => data,
+            None => unsafe {
+                self.read_raw_sectors(sector, 1, scratchpad_buffer.as_mut())?;
+                scratchpad_buffer.as_slice()
+            },
+        });
 
-            previous_buffer.as_mut()
-                [sector_offset..min(next_full_sector, amount_to_write + sector_offset)]
-                .copy_from_slice(&buf[..min(next_full_sector, amount_to_write)]);
+        previous_buffer.as_mut()
+            [sector_offset..min(next_full_sector, amount_to_write + sector_offset)]
+            .copy_from_slice(&buf[..min(next_full_sector, amount_to_write)]);
 
-            self.cache
-                .insert(CacheState::RequiresFlush, sector, previous_buffer.as_ref());
-        }
+        self.cache
+            .insert(CacheState::RequiresFlush, sector, previous_buffer.as_ref());
 
         let mut sectors_written = 1;
         buf[next_full_sector..]

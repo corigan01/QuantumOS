@@ -173,6 +173,10 @@ fn main(boot_info: &KernelBootInformation) {
     let mut disk = AtaDisk::new(DiskID::PrimaryFirst).quarry().unwrap();
 
     disk.write(&buffer).unwrap();
+    disk.flush().unwrap();
+
+    disk.seek(SeekFrom::Start(0)).unwrap();
+    disk.read(&mut buffer).unwrap();
 
     debug_println!("Disk: {}", buffer.hex_print());
 

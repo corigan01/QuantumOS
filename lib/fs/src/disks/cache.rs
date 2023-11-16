@@ -24,6 +24,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 use qk_alloc::vec::{ToVec, Vec};
+use quantum_lib::debug_println;
 
 use crate::FsResult;
 
@@ -145,6 +146,9 @@ impl DiskCache {
         })
     }
 
+    /// # Flush Required
+    /// Gets a refrence to the bytes for all of the flushed required entries in the cache. Then
+    /// prunes the cache to remove old allocations.
     pub fn flush_required<Function>(&mut self, mut f: Function) -> FsResult<()>
     where
         Function: FnMut(usize, &[u8]) -> FsResult<()>,
