@@ -415,7 +415,7 @@ impl Write for AtaDisk<Quarried> {
         });
 
         previous_buffer.as_mut()
-            [sector_offset..min(next_full_sector, amount_to_write + sector_offset)]
+            [sector_offset..min(bytes_per_sector, amount_to_write + sector_offset)]
             .copy_from_slice(&buf[..min(next_full_sector, amount_to_write)]);
 
         self.cache
