@@ -24,7 +24,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 use qk_alloc::{format, vec, vec::Vec};
-use quantum_lib::{bitset::BitSet, debug_println};
+use quantum_lib::bitset::BitSet;
 
 use self::registers::{
     command::{CommandRegister, Commands},
