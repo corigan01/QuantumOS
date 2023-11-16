@@ -33,7 +33,7 @@ use self::registers::{
     status::{StatusFlags, StatusRegister},
     WriteRegisterBus,
 };
-use super::cache::DiskCache;
+use super::cache::{CacheState, DiskCache};
 pub use crate::disks::ata::registers::DiskID;
 use crate::{
     disks::ata::{
@@ -372,6 +372,12 @@ impl Read for AtaDisk<Quarried> {
                                 scratchpad_buffer.as_mut(),
                             )
                         }?;
+
+                        self.cache.insert(
+                            CacheState::DiskBacked,
+                            sector + sectors_written,
+                            scratchpad_buffer.as_slice(),
+                        );
 
                         scratchpad_buffer.as_slice()
                     }
