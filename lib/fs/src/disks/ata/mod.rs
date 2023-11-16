@@ -347,6 +347,8 @@ impl Read for AtaDisk<Quarried> {
             Some(data) => data,
             None => unsafe {
                 self.read_raw_sectors(sector, 1, scratchpad_buffer.as_mut())?;
+                self.cache
+                    .insert(CacheState::DiskBacked, sector, scratchpad_buffer.as_slice());
                 scratchpad_buffer.as_slice()
             },
         };
