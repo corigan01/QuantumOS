@@ -359,36 +359,38 @@ impl Read for AtaDisk<Quarried> {
         );
 
         let mut sectors_written = 1;
-        buf[bytes_per_sector - sector_offset..]
-            .chunks_mut(bytes_per_sector)
-            .try_for_each(|buffer_chunk| -> FsResult<()> {
-                let maybe_cached = self.cache.get_entry(sector + sectors_written);
+        if amount_to_read > bytes_per_sector - sectors_written {
+            buf[bytes_per_sector - sector_offset..]
+                .chunks_mut(bytes_per_sector)
+                .try_for_each(|buffer_chunk| -> FsResult<()> {
+                    let maybe_cached = self.cache.get_entry(sector + sectors_written);
 
-                let read_bytes = match maybe_cached {
-                    Some(bytes) => bytes,
-                    None => {
-                        unsafe {
-                            self.read_raw_sectors(
+                    let read_bytes = match maybe_cached {
+                        Some(bytes) => bytes,
+                        None => {
+                            unsafe {
+                                self.read_raw_sectors(
+                                    sector + sectors_written,
+                                    1,
+                                    scratchpad_buffer.as_mut(),
+                                )
+                            }?;
+
+                            self.cache.insert(
+                                CacheState::DiskBacked,
                                 sector + sectors_written,
-                                1,
-                                scratchpad_buffer.as_mut(),
-                            )
-                        }?;
+                                scratchpad_buffer.as_slice(),
+                            );
 
-                        self.cache.insert(
-                            CacheState::DiskBacked,
-                            sector + sectors_written,
-                            scratchpad_buffer.as_slice(),
-                        );
+                            scratchpad_buffer.as_slice()
+                        }
+                    };
 
-                        scratchpad_buffer.as_slice()
-                    }
-                };
-
-                buffer_chunk.copy_from_slice(&read_bytes[..buffer_chunk.len()]);
-                sectors_written += 1;
-                Ok(())
-            })?;
+                    buffer_chunk.copy_from_slice(&read_bytes[..buffer_chunk.len()]);
+                    sectors_written += 1;
+                    Ok(())
+                })?;
+        }
 
         self.seek += buf.len() as u64;
         Ok(buf.len())
@@ -420,43 +422,45 @@ impl Write for AtaDisk<Quarried> {
             .insert(CacheState::RequiresFlush, sector, previous_buffer.as_ref());
 
         let mut sectors_written = 1;
-        buf[next_full_sector..]
-            .chunks(bytes_per_sector)
-            .try_for_each(|buffer_chunk| -> FsResult<()> {
-                if buffer_chunk.len() == bytes_per_sector {
+        if amount_to_write > next_full_sector {
+            buf[next_full_sector..]
+                .chunks(bytes_per_sector)
+                .try_for_each(|buffer_chunk| -> FsResult<()> {
+                    if buffer_chunk.len() == bytes_per_sector {
+                        self.cache.insert(
+                            CacheState::RequiresFlush,
+                            sector + sectors_written,
+                            buffer_chunk,
+                        );
+                        sectors_written += 1;
+                        return Ok(());
+                    }
+
+                    let mut previous_buffer =
+                        ToVec::to_vec(match self.cache.get_entry(sector + sectors_written) {
+                            Some(data) => data,
+                            None => unsafe {
+                                self.read_raw_sectors(
+                                    sector + sectors_written,
+                                    1,
+                                    scratchpad_buffer.as_mut(),
+                                )?;
+                                scratchpad_buffer.as_ref()
+                            },
+                        });
+
+                    previous_buffer.as_mut()[..buffer_chunk.len()].copy_from_slice(buffer_chunk);
+
                     self.cache.insert(
                         CacheState::RequiresFlush,
                         sector + sectors_written,
-                        buffer_chunk,
+                        previous_buffer.as_ref(),
                     );
                     sectors_written += 1;
-                    return Ok(());
-                }
 
-                let mut previous_buffer =
-                    ToVec::to_vec(match self.cache.get_entry(sector + sectors_written) {
-                        Some(data) => data,
-                        None => unsafe {
-                            self.read_raw_sectors(
-                                sector + sectors_written,
-                                1,
-                                scratchpad_buffer.as_mut(),
-                            )?;
-                            scratchpad_buffer.as_ref()
-                        },
-                    });
-
-                previous_buffer.as_mut()[..buffer_chunk.len()].copy_from_slice(buffer_chunk);
-
-                self.cache.insert(
-                    CacheState::RequiresFlush,
-                    sector + sectors_written,
-                    previous_buffer.as_ref(),
-                );
-                sectors_written += 1;
-
-                Ok(())
-            })?;
+                    Ok(())
+                })?;
+        }
 
         self.seek += buf.len() as u64;
         Ok(buf.len())
