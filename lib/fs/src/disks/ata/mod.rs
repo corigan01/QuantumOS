@@ -356,9 +356,9 @@ impl Read for AtaDisk<Quarried> {
                 [sector_offset..min(bytes_per_sector, amount_to_read + sector_offset)],
         );
 
-        if bytes_per_sector > amount_to_read {
-            return Ok(buf.len());
-        }
+        //if bytes_per_sector > amount_to_read {
+        //    return Ok(buf.len());
+        //}
 
         let mut sectors_written = 1;
         buf[bytes_per_sector - sector_offset..]
