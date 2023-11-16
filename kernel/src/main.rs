@@ -169,12 +169,14 @@ fn main(boot_info: &KernelBootInformation) {
     framebuffer.draw_rect(rect!(0, 15 ; 150, 2), Pixel::WHITE);
     debug_println!("{}", "OK".bright_green().bold());
 
-    let mut buffer = [0xDE_u8; 16];
+    let buffer = [0xDE_u8; 16];
     let mut disk = AtaDisk::new(DiskID::PrimaryFirst).quarry().unwrap();
 
+    disk.seek(SeekFrom::Start(16)).unwrap();
     disk.write(&buffer).unwrap();
     disk.flush().unwrap();
 
+    let mut buffer = [0; 512];
     disk.seek(SeekFrom::Start(0)).unwrap();
     disk.read(&mut buffer).unwrap();
 
