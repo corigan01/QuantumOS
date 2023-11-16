@@ -24,6 +24,4 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 *
 */
 
-pub struct Vfs {}
-
-impl Vfs {}
+pub struct FileDescriptor {}

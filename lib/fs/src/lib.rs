@@ -41,6 +41,9 @@ mod node;
 mod fs;
 pub use crate::fs::*;
 
+mod file;
+pub use crate::file::*;
+
 pub type FsResult<T> = Result<T, FsError>;
 
 #[cfg(test)]
