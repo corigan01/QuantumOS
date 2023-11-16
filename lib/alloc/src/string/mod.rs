@@ -26,7 +26,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 use crate::heap::{AllocatorAPI, GlobalAlloc};
 use crate::vec::Vec;
 use core::fmt::{Debug, Display, Formatter, Write};
-use core::ops::Deref;
+use core::ops::{Add, Deref};
 
 pub struct String<Alloc: AllocatorAPI = GlobalAlloc> {
     data: Vec<u8, Alloc>,
@@ -39,7 +39,7 @@ impl String {
 
     pub fn with_capacity(capacity: usize) -> Self {
         Self {
-            data: Vec::with_capacity(capacity)
+            data: Vec::with_capacity(capacity),
         }
     }
 
@@ -73,7 +73,7 @@ impl String {
 impl Clone for String {
     fn clone(&self) -> Self {
         Self {
-            data: self.data.clone()
+            data: self.data.clone(),
         }
     }
 }
@@ -87,6 +87,38 @@ impl PartialEq<&str> for String {
 impl PartialEq<String> for String {
     fn eq(&self, other: &String) -> bool {
         self.as_str() == other.as_str()
+    }
+}
+
+impl PartialEq<String> for &str {
+    fn eq(&self, other: &String) -> bool {
+        self == other
+    }
+}
+
+impl PartialEq<str> for String {
+    fn eq(&self, other: &str) -> bool {
+        self == other
+    }
+}
+
+impl PartialEq<String> for str {
+    fn eq(&self, other: &String) -> bool {
+        self == other
+    }
+}
+
+impl<Str> Add<Str> for String
+where
+    Str: Deref<Target = str>,
+{
+    type Output = String;
+    fn add(self, rhs: Str) -> Self::Output {
+        let mut new_string = String::with_capacity(self.len() + rhs.len());
+        new_string.push_str(self.as_str());
+        new_string.push_str(&rhs);
+
+        new_string
     }
 }
 
