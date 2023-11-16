@@ -23,7 +23,7 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use qk_alloc::{format, vec, vec::Vec};
+use qk_alloc::{format, vec, vec::ToVec, vec::Vec};
 use quantum_lib::bitset::BitSet;
 
 use self::registers::{
@@ -390,16 +390,88 @@ impl Read for AtaDisk<Quarried> {
                 Ok(())
             })?;
 
+        self.seek += buf.len() as u64;
         Ok(buf.len())
     }
 }
 
 impl Write for AtaDisk<Quarried> {
     fn write(&mut self, buf: &[u8]) -> FsResult<usize> {
-        todo!()
+        let (sector, sector_offset) = self.calculate_seek_sector_offset();
+        let amount_to_write = buf.len();
+        let bytes_per_sector = self.words_per_sector() * 2;
+        let next_full_sector = bytes_per_sector - sector_offset;
+
+        let mut scratchpad_buffer = vec![0_u8; bytes_per_sector];
+
+        if sector_offset != 0 {
+            let mut previous_buffer = ToVec::to_vec(match self.cache.get_entry(sector) {
+                Some(data) => data,
+                None => unsafe {
+                    self.read_raw_sectors(sector, 1, scratchpad_buffer.as_mut())?;
+                    scratchpad_buffer.as_slice()
+                },
+            });
+
+            previous_buffer.as_mut()
+                [sector_offset..min(next_full_sector, amount_to_write + sector_offset)]
+                .copy_from_slice(&buf[..min(next_full_sector, amount_to_write)]);
+
+            self.cache
+                .insert(CacheState::RequiresFlush, sector, previous_buffer.as_ref());
+        }
+
+        let mut sectors_written = 1;
+        buf[next_full_sector..]
+            .chunks(bytes_per_sector)
+            .try_for_each(|buffer_chunk| -> FsResult<()> {
+                if buffer_chunk.len() == bytes_per_sector {
+                    self.cache.insert(
+                        CacheState::RequiresFlush,
+                        sector + sectors_written,
+                        buffer_chunk,
+                    );
+                    sectors_written += 1;
+                    return Ok(());
+                }
+
+                let mut previous_buffer =
+                    ToVec::to_vec(match self.cache.get_entry(sector + sectors_written) {
+                        Some(data) => data,
+                        None => unsafe {
+                            self.read_raw_sectors(
+                                sector + sectors_written,
+                                1,
+                                scratchpad_buffer.as_mut(),
+                            )?;
+                            scratchpad_buffer.as_ref()
+                        },
+                    });
+
+                previous_buffer.as_mut()[..buffer_chunk.len()].copy_from_slice(buffer_chunk);
+
+                self.cache.insert(
+                    CacheState::RequiresFlush,
+                    sector + sectors_written,
+                    previous_buffer.as_ref(),
+                );
+                sectors_written += 1;
+
+                Ok(())
+            })?;
+
+        self.seek += buf.len() as u64;
+        Ok(buf.len())
     }
 
     fn flush(&mut self) -> FsResult<()> {
-        todo!()
+        let unc = (&mut self.cache) as *mut DiskCache;
+
+        let state = unsafe { unc.as_mut().unwrap() }.flush_required(|sector, data| unsafe {
+            self.write_raw_sectors(sector, 1, data)?;
+            Ok(())
+        });
+
+        state
     }
 }

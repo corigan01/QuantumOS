@@ -25,6 +25,8 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 use qk_alloc::vec::{ToVec, Vec};
 
+use crate::FsResult;
+
 /// # Cache State
 /// The state of the bytes just inserted into the cache. Informs the cache if it can delete this
 /// entry or if it needs to be flushed first.
@@ -141,5 +143,27 @@ impl DiskCache {
                 None
             }
         })
+    }
+
+    pub fn flush_required<Function>(&mut self, mut f: Function) -> FsResult<()>
+    where
+        Function: FnMut(usize, &[u8]) -> FsResult<()>,
+    {
+        self.cache
+            .iter_mut()
+            .try_for_each(|entry| -> FsResult<()> {
+                if entry.state == CacheState::DiskBacked {
+                    return Ok(());
+                }
+
+                f(entry.sector, entry.data.as_slice())?;
+                entry.state = CacheState::DiskBacked;
+
+                Ok(())
+            })?;
+
+        self.purge_unneeded();
+
+        Ok(())
     }
 }
