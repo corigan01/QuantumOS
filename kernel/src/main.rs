@@ -169,11 +169,11 @@ fn main(boot_info: &KernelBootInformation) {
     framebuffer.draw_rect(rect!(0, 15 ; 150, 2), Pixel::WHITE);
     debug_println!("{}", "OK".bright_green().bold());
 
-    let buffer = [0xDE_u8; 16];
+    let buffer = "I AM A TURBO CUM";
     let mut disk = AtaDisk::new(DiskID::PrimaryFirst).quarry().unwrap();
 
     disk.seek(SeekFrom::Start(500)).unwrap();
-    disk.write(&buffer).unwrap();
+    disk.write(buffer.as_bytes()).unwrap();
     disk.flush().unwrap();
 
     let mut buffer = [0; 1024];
