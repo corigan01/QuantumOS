@@ -27,6 +27,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 use qk_alloc::string::String;
 use qk_alloc::vec::Vec;
 
+#[derive(Clone, Debug)]
 pub struct Path(String);
 
 impl From<&str> for Path {
@@ -38,6 +39,12 @@ impl From<&str> for Path {
 impl From<String> for Path {
     fn from(value: String) -> Self {
         Path(value)
+    }
+}
+
+impl PartialEq<&str> for Path {
+    fn eq(&self, other: &&str) -> bool {
+        self.0.as_str() == *other
     }
 }
 
@@ -134,4 +141,23 @@ pub struct Vfs {}
 impl Vfs {}
 
 #[cfg(test)]
-mod test {}
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_path_from() {
+        assert_eq!(
+            Path::from("/home/cringe/some_file"),
+            "/home/cringe/some_file"
+        );
+
+        assert_eq!(Path::from("/test/test/test/test"), "/test/test/test/test");
+
+        assert_eq!(Path::from("/something/"), "/something/");
+    }
+
+    #[test]
+    fn test_truncate() {
+        assert_eq!(Path::from("./").truncate_path(), "./");
+    }
+}
