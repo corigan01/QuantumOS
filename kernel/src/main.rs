@@ -173,7 +173,7 @@ fn main(boot_info: &KernelBootInformation) {
 
     disk.seek(SeekFrom::Start(500)).unwrap();
 
-    let mut buffer = [0_u8; 12];
+    let mut buffer = [0_u8; 1000];
     disk.read(&mut buffer).unwrap();
 
     debug_println!("Disk: {}", buffer.hex_print());
