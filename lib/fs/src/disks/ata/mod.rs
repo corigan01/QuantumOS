@@ -23,25 +23,8 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use qk_alloc::{
-    format,
-    vec::Vec,
-    vec::{self, ToVec},
-};
-use quantum_lib::bitset::BitSet;
-
-use crate::{
-    disks::ata::{
-        identify::IdentifyParser,
-        registers::{
-            data::DataRegister, error::ErrorRegister, feature::FeatureRegister, ReadRegisterBus,
-        },
-    },
-    error::{FsError, FsErrorKind},
-    io::{Read, Write},
-    FsResult,
-};
-use core::marker::PhantomData;
+use qk_alloc::{format, vec, vec::Vec};
+use quantum_lib::{bitset::BitSet, debug_println};
 
 use self::registers::{
     command::{CommandRegister, Commands},
@@ -50,8 +33,20 @@ use self::registers::{
     status::{StatusFlags, StatusRegister},
     WriteRegisterBus,
 };
-
+use super::cache::DiskCache;
 pub use crate::disks::ata::registers::DiskID;
+use crate::{
+    disks::ata::{
+        identify::IdentifyParser,
+        registers::{
+            data::DataRegister, error::ErrorRegister, feature::FeatureRegister, ReadRegisterBus,
+        },
+    },
+    error::{FsError, FsErrorKind},
+    io::{Read, Seek, SeekFrom, Write},
+    FsResult,
+};
+use core::{cmp::min, i64, marker::PhantomData, u64};
 
 mod identify;
 mod registers;
@@ -77,7 +72,7 @@ impl AtaDisk {
     pub fn new(disk: DiskID) -> Self {
         Self {
             disk_id: disk,
-            cache: DiskCache::default(),
+            cache: DiskCache::new(20),
             seek: 0,
             identify: unsafe { IdentifyParser::empty() },
             phan: PhantomData,
@@ -316,9 +311,28 @@ impl AtaDisk<Quarried> {
     fn calculate_seek_sector_offset(&self) -> (usize, usize) {
         let bytes_per_sector = self.words_per_sector() * 2;
         let sector_offset = self.seek as usize / bytes_per_sector;
-        let within_sector_offset = self.seek as usize / bytes_per_sector;
+        let within_sector_offset = self.seek as usize % bytes_per_sector;
 
         (sector_offset, within_sector_offset)
+    }
+}
+
+impl Seek for AtaDisk<Quarried> {
+    fn seek(&mut self, pos: crate::io::SeekFrom) -> FsResult<u64> {
+        match pos {
+            SeekFrom::Start(start) => self.seek = start as u64,
+            SeekFrom::End(end) => {
+                let end_of_disk =
+                    self.identify.user_sectors_28bit_lba() * self.words_per_sector() * 2;
+                let end = (-end) as usize;
+
+                self.seek = (end_of_disk - end) as u64;
+            }
+            SeekFrom::Current(current) => {
+                self.seek = ((self.seek as i64) + current) as u64;
+            }
+        };
+        Ok(self.seek)
     }
 }
 
@@ -326,14 +340,47 @@ impl Read for AtaDisk<Quarried> {
     fn read(&mut self, buf: &mut [u8]) -> FsResult<usize> {
         let (sector, sector_offset) = self.calculate_seek_sector_offset();
         let amount_to_read = buf.len();
-        let mut amount_writen = 0;
+        let bytes_per_sector = self.words_per_sector() * 2;
 
-        while amount_writen < amount_to_read {
-            let
-        }
+        let mut scratchpad_buffer = vec![0_u8; bytes_per_sector];
+        let first_sector_values = match self.cache.get_entry(sector) {
+            Some(data) => data,
+            None => unsafe {
+                self.read_raw_sectors(sector, 1, scratchpad_buffer.as_mut())?;
+                scratchpad_buffer.as_slice()
+            },
+        };
 
+        buf[..bytes_per_sector - sector_offset].copy_from_slice(
+            &first_sector_values[sector_offset..min(bytes_per_sector, amount_to_read)],
+        );
 
-        todo!();
+        let mut sectors_written = 1;
+        buf[bytes_per_sector - sector_offset..]
+            .chunks_mut(bytes_per_sector)
+            .try_for_each(|buffer_chunk| -> FsResult<()> {
+                let maybe_cached = self.cache.get_entry(sector + sectors_written);
+
+                let read_bytes = match maybe_cached {
+                    Some(bytes) => bytes,
+                    None => {
+                        unsafe {
+                            self.read_raw_sectors(
+                                sector + sectors_written,
+                                1,
+                                scratchpad_buffer.as_mut(),
+                            )
+                        }?;
+
+                        scratchpad_buffer.as_slice()
+                    }
+                };
+
+                buffer_chunk.copy_from_slice(&read_bytes[..buffer_chunk.len()]);
+                sectors_written += 1;
+                Ok(())
+            })?;
+
         Ok(buf.len())
     }
 }

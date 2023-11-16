@@ -53,7 +53,6 @@ struct CacheEntry {
 /// sectors for reading and writing. Retains state about the allocations, and will automaticlly
 /// prune ones that are too old when buffer size is reached.
 pub struct DiskCache {
-    chunk_size: usize,
     expected_max_chunks: usize,
     cache: Vec<CacheEntry>,
 }
@@ -61,9 +60,8 @@ pub struct DiskCache {
 impl DiskCache {
     /// # New
     /// Creates a new DiskCache with the provided infomation.
-    pub fn new(chunk_size: usize, max_chunks: usize) -> Self {
+    pub fn new(max_chunks: usize) -> Self {
         Self {
-            chunk_size,
             expected_max_chunks: max_chunks,
             cache: Vec::new(),
         }
