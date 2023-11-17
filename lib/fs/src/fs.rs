@@ -74,29 +74,29 @@ impl Path {
             .children()
             .into_iter()
             // Remove all '.'
-            .filter(|child| !child.contains('.'))
+            .filter(|child| child != &".")
+            .chain(["", "", ""])
             .collect::<Vec<&str>>()
             // Remove all "/path/../path/"
             .windows(3)
-            .filter(|children| {
-                let mut child_iter = children.iter();
+            .scan(0_usize, |val, init| {
+                if *val > 0 {
+                    return Some("");
+                }
 
-                let fist = child_iter.next();
-                let secd = child_iter.next();
-                let last = child_iter.next();
+                let first = &init[0];
+                let second = &init[1];
+                let last = &init[2];
 
-                !fist
-                    .and_then(|first| {
-                        Some(
-                            secd.and_then(|second| Some(second == &".."))?
-                                && last.and_then(|last| Some(first == last))?,
-                        )
-                    })
-                    .unwrap_or(false)
+                if (first == last && second == &"..") && first != &".." {
+                    *val = 2;
+                    Some(first)
+                } else {
+                    *val = val.checked_sub(1).unwrap_or(0);
+                    Some(first)
+                }
             })
-            // Since its windows, we only care about the first element
-            .take(1)
-            .flatten()
+            .filter(|val| val.len() != 0)
             // Add the '/' back for each of the children
             .fold(
                 self.0
@@ -111,17 +111,16 @@ impl Path {
                 },
             );
 
-        if self.0.starts_with("/") {
-            // FIXME: string should have a insert method!
-            final_string = String::from("/") + final_string;
+        if self.0.starts_with(".") && !final_string.starts_with(".") {
+            final_string = String::from(".") + final_string;
         }
 
-        if self.0.ends_with("/") && !self.0.ends_with("//") {
-            final_string.push('/');
+        if self.0.ends_with("/") && !final_string.ends_with("/") {
+            final_string.push_str("/");
         }
 
-        if self.0.ends_with(".") {
-            final_string.push_str(".")
+        if !(self.0.ends_with("/") || self.0.ends_with(".")) && final_string.ends_with("/") {
+            final_string.pop();
         }
 
         Path(final_string)
@@ -131,7 +130,7 @@ impl Path {
         self.0
             .as_str()
             .split('/')
-            .filter(|child| !child.contains('/'))
+            .filter(|child| !(*child == "/"))
             .collect()
     }
 }
@@ -159,5 +158,22 @@ mod test {
     #[test]
     fn test_truncate() {
         assert_eq!(Path::from("./").truncate_path(), "./");
+
+        assert_eq!(Path::from("./../../../.").truncate_path(), "../../../");
+        assert_eq!(
+            Path::from("someone/../someone/").truncate_path(),
+            "someone/"
+        );
+        assert_eq!(Path::from(".//.///././///././.").truncate_path(), ".");
+        assert_eq!(Path::from("/.//././//././//").truncate_path(), "/");
+        assert_eq!(
+            Path::from("/.//././//././//testdir").truncate_path(),
+            "/testdir"
+        );
+
+        assert_eq!(
+            Path::from("/.//././//././//test/").truncate_path(),
+            "/test/"
+        );
     }
 }
