@@ -43,6 +43,10 @@ impl String {
         }
     }
 
+    pub fn pop(&mut self) {
+        self.data.pop();
+    }
+
     pub unsafe fn push_raw_byte(&mut self, byte: u8) {
         self.data.push(byte);
     }
