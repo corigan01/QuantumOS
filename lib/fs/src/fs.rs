@@ -78,7 +78,7 @@ impl Path {
             .chain(["", "", ""])
             .collect::<Vec<&str>>()
             // Remove all "/path/../path/"
-            .windows(3)
+            .windows(2)
             .scan(0_usize, |val, init| {
                 if *val > 0 {
                     return Some("");
@@ -86,9 +86,8 @@ impl Path {
 
                 let first = &init[0];
                 let second = &init[1];
-                let last = &init[2];
 
-                if (first == last && second == &"..") && first != &".." {
+                if second == &".." && first != &".." {
                     *val = 2;
                     Some(first)
                 } else {
