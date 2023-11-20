@@ -8,4 +8,4 @@ edition = "2021"
 [dependencies]
 quantum_lib = { path = "../lowlevel_lib" }
 quantum_utils = { path = "../quantum_utils" }
-qk_alloc = { path = "../alloc" }
+qk_alloc = { path = "../qk_alloc" }

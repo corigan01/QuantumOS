@@ -23,12 +23,10 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-mod fd;
+pub mod fd;
 
 use crate::file::fd::FileDescriptor;
-use qk_alloc::string::String;
 
 pub struct File {
     fd: FileDescriptor,
-    location: String,
 }

@@ -37,6 +37,7 @@ pub mod error;
 pub mod filesystems;
 pub mod io;
 mod node;
+pub mod path;
 
 mod fs;
 pub use crate::fs::*;
