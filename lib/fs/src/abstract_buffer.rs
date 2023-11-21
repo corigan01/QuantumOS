@@ -278,7 +278,7 @@ mod test {
 
     #[test]
     fn test_seek_no_bounds() {
-        set_example_allocator(4096);
+        set_example_allocator();
         let mut buffer = AbstractBuffer::new(Box::new(TestBuffer::<10>::new()), ..);
 
         assert_eq!(buffer.seek(SeekFrom::Start(0)), Ok(0));
@@ -288,7 +288,7 @@ mod test {
 
     #[test]
     fn test_seek_no_start_bound() {
-        set_example_allocator(4096);
+        set_example_allocator();
         let mut buffer = AbstractBuffer::new(Box::new(TestBuffer::<10>::new()), ..5);
 
         assert_eq!(buffer.seek(SeekFrom::Start(0)), Ok(0));
@@ -298,7 +298,7 @@ mod test {
 
     #[test]
     fn test_seek_double_bounds() {
-        set_example_allocator(4096);
+        set_example_allocator();
         let mut buffer = AbstractBuffer::new(Box::new(TestBuffer::<10>::new()), 2..=7);
 
         assert_eq!(buffer.seek(SeekFrom::Start(0)), Ok(0));

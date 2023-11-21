@@ -30,7 +30,10 @@ use qk_alloc::vec::Vec;
 
 use crate::error::{FsError, FsErrorKind};
 use crate::io::SeekFrom;
-use crate::FsResult;
+use crate::{FsResult, UnixTime};
+use crate::permission::Permissions;
+
+use super::EntryType;
 
 pub trait ReadWriteSeek: Read + Write + Seek {}
 impl<T: Read + Write + Seek> ReadWriteSeek for T {}
@@ -326,3 +329,40 @@ pub trait Seek {
     }
 }
 
+// TODO: Replace all usize with date info
+//
+// Move date struct into qk_utils
+
+/// Kinda like our Inode type, just fits better as a trait instead of a struct
+pub trait Metadata {
+    fn date_created(&self) -> Option<UnixTime>; 
+    fn date_modified(&self) -> Option<UnixTime>;
+    fn date_accessed(&self) -> Option<UnixTime>;
+    fn date_removed(&self) -> Option<UnixTime>;
+
+    fn permissions(&self) -> Permissions;
+    fn kind(&self) -> EntryType;
+    
+    fn can_write(&self) -> bool;
+    fn can_read(&self) -> bool;
+    fn can_seek(&self) -> bool;
+
+    fn len(&self) -> u64;
+}
+
+pub trait DirectoryProvider: Iterator<Item = crate::path::Path> + Metadata {}
+
+pub trait FileProvider: Read + Write + Seek + Metadata {
+    fn close(&mut self) -> FsResult<()>;
+}
+
+pub trait FileSystemProvider {
+    fn open_directory(&mut self, path: crate::path::Path) -> FsResult<qk_alloc::boxed::Box<dyn DirectoryProvider>>;
+    fn open_file(&mut self, path: crate::path::Path) -> FsResult<qk_alloc::boxed::Box<dyn FileProvider>>;
+    
+    fn mkdir(&mut self, path: crate::path::Path, permission: Permissions) -> FsResult<()>;
+    fn rmdir(&mut self, path: crate::path::Path) -> FsResult<()>;
+
+    fn touch(&mut self, path: crate::path::Path, permission: Permissions) -> FsResult<()>;
+    fn rm(&mut self, path: crate::path::Path) -> FsResult<()>;
+}

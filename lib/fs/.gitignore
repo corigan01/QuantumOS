@@ -1,7 +1,5 @@
 target/
-build/
-target
-build
-
+/target/
 Cargo.lock
-/Cargo.lock
+
+

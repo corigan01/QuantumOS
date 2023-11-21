@@ -48,6 +48,12 @@ impl PartialEq<&str> for Path {
     }
 }
 
+impl PartialEq<Path> for Path {
+    fn eq(&self, other: &Path) -> bool {
+        self.0.as_str() == other.0.as_str()
+    }
+}
+
 impl Path {
     /// # Truncate Path
     /// Removes all the unneeded path items in the path. For example if you have a path that goes
@@ -133,6 +139,30 @@ impl Path {
             .split('/')
             .filter(|child| !(*child == "/"))
             .collect()
+    }
+
+    pub fn is_absolute(&self) -> bool {
+        self.0.starts_with("/")
+    }
+
+    pub fn is_relative(&self) -> bool {
+        !self.is_absolute()
+    }
+
+    pub fn snip_off(self, path: Path) -> Option<Path> {
+        let path = path.truncate_path();
+
+        if !self.0.starts_with(path.as_str()) {
+            return None;
+        }
+
+        Some(Path::from(String::from(
+            &self.0.as_str()[path.as_str().len()..],
+        )))
+    }
+
+    pub fn as_str<'a>(&'a self) -> &'a str {
+        self.0.as_str()
     }
 }
 

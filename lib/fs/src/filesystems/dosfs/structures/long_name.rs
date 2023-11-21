@@ -23,11 +23,11 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use crate::error::FsError;
+use crate::filesystems::dosfs::structures::{Byte, Word};
 use core::mem::size_of;
 use core::ptr;
 use qk_alloc::string::String;
-use crate::error::FsError;
-use crate::filesystems::dosfs::structures::{Byte, Word};
 
 // Long name entries are stored in reverse order
 #[repr(C, packed)]
@@ -39,7 +39,7 @@ pub struct LongNameEntry {
     checksum: Byte,
     name2: [u16; 6],
     fst_cluster_low: Word,
-    name3: [u16; 2]
+    name3: [u16; 2],
 }
 
 impl LongNameEntry {
@@ -61,18 +61,16 @@ impl LongNameEntry {
         let read_name2 = self.name2;
         let read_name3 = self.name3;
 
-        let big_iterator =
-            read_name1.into_iter()
-                .chain(read_name2.into_iter())
-                .chain(read_name3.into_iter());
+        let big_iterator = read_name1
+            .into_iter()
+            .chain(read_name2.into_iter())
+            .chain(read_name3.into_iter());
 
         for byte in char::decode_utf16(big_iterator) {
-            let Ok(byte) = byte else {
-                continue
-            };
+            let Ok(byte) = byte else { continue };
 
             if byte as u16 == 0x00 || byte as u16 == 0xFFFF {
-                continue
+                continue;
             }
 
             builder_string.push(byte);
@@ -101,10 +99,11 @@ mod test {
 
     #[test]
     fn test_read_name_from_long_name() {
-        set_example_allocator(4096);
+        set_example_allocator();
         let example: [u8; 0x20] = [
-            0x41, 0x6B, 0x00, 0x65, 0x00, 0x72, 0x00, 0x6E, 0x00, 0x65, 0x00, 0x0F, 0x00, 0x95, 0x6C, 0x00,
-            0x2E, 0x00, 0x65, 0x00, 0x6C, 0x00, 0x66, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0xFF
+            0x41, 0x6B, 0x00, 0x65, 0x00, 0x72, 0x00, 0x6E, 0x00, 0x65, 0x00, 0x0F, 0x00, 0x95,
+            0x6C, 0x00, 0x2E, 0x00, 0x65, 0x00, 0x6C, 0x00, 0x66, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0xFF, 0xFF, 0xFF, 0xFF,
         ];
 
         let long_name = LongNameEntry::try_from(example.as_ref()).unwrap();
@@ -116,10 +115,11 @@ mod test {
 
     #[test]
     fn test_read_name_bootloader() {
-        set_example_allocator(4096);
+        set_example_allocator();
         let example: [u8; 0x20] = [
-            0x41, 0x62, 0x00, 0x6F, 0x00, 0x6F, 0x00, 0x74, 0x00, 0x6C, 0x00, 0x0F, 0x00, 0x17, 0x6F, 0x00,
-            0x61, 0x00, 0x64, 0x00, 0x65, 0x00, 0x72, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0xFF
+            0x41, 0x62, 0x00, 0x6F, 0x00, 0x6F, 0x00, 0x74, 0x00, 0x6C, 0x00, 0x0F, 0x00, 0x17,
+            0x6F, 0x00, 0x61, 0x00, 0x64, 0x00, 0x65, 0x00, 0x72, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0xFF, 0xFF, 0xFF, 0xFF,
         ];
 
         let long_name = LongNameEntry::try_from(example.as_ref()).unwrap();
@@ -129,3 +129,4 @@ mod test {
         assert_eq!(long_name.is_last_entry(), true);
     }
 }
+
