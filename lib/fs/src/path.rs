@@ -172,6 +172,7 @@ mod test {
 
     #[test]
     fn test_path_from() {
+        crate::set_example_allocator();
         assert_eq!(
             Path::from("/home/cringe/some_file"),
             "/home/cringe/some_file"
@@ -184,6 +185,7 @@ mod test {
 
     #[test]
     fn test_truncate() {
+        crate::set_example_allocator();
         assert_eq!(Path::from("./").truncate_path(), "./");
 
         assert_eq!(Path::from("./../../../.").truncate_path(), "../../../");
@@ -206,7 +208,40 @@ mod test {
 
     #[test]
     fn test_truncation_2() {
+        crate::set_example_allocator();
         assert_eq!(Path::from("somepath/test").truncate_path(), "somepath/test");
         assert_eq!(Path::from("somepath/test/..").truncate_path(), "somepath/");
+    }
+
+    #[test]
+    fn test_root() {
+        crate::set_example_allocator();
+        assert_eq!(Path::from("/"), "/");
+        assert_eq!(Path::from("/").truncate_path(), "/");
+    }
+
+    const TEST_CASE_LOTS: [(&str, &str); 10] = [
+        ("/home/test/../test", "/home/test"),
+        ("/wow/wow/wow/wow/wow/wow/", "/wow/wow/wow/wow/wow/wow/"),
+        ("", ""),
+        ("this_is_a_super_long_path_name_test/..", "/"),
+        ("/bin/bash", "/bin/bash"),
+        (
+            "some_path/wow/other/../nothing/etc/../../test",
+            "some_path/wow/test",
+        ),
+        ("//..", "/"),
+        ("/../../../../..", "/"),
+        ("/////////////", "/"),
+        ("/path/buf/buf/test/", "/path/buf/buf/test/"),
+    ];
+
+    #[test]
+    fn test_lots_paths() {
+        crate::set_example_allocator();
+
+        for (requires_truncate, test) in TEST_CASE_LOTS {
+            assert_eq!(Path::from(requires_truncate).truncate_path(), test);
+        }
     }
 }
