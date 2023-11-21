@@ -274,4 +274,24 @@ mod test {
             );
         }
     }
+
+    #[test]
+    fn test_multiple_truncate() {
+        crate::set_example_allocator();
+
+        for (requires_truncate, test) in TEST_CASE_LOTS {
+            assert_eq!(
+                Path::from(requires_truncate)
+                    .truncate_path()
+                    .truncate_path()
+                    .truncate_path()
+                    .truncate_path(),
+                Path::from(test)
+                    .truncate_path()
+                    .truncate_path()
+                    .truncate_path()
+                    .truncate_path()
+            );
+        }
+    }
 }
