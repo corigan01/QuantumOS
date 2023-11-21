@@ -35,6 +35,45 @@ struct RcBox<Type: ?Sized> {
     value: Type,
 }
 
+pub struct Weak<Type> {
+    rc_box: Option<NonNull<RcBox<Type>>>,
+}
+
+pub struct WeakInner<'a> {
+    strong_count: &'a NonNull<usize>,
+    weak_count: &'a NonNull<usize>,
+}
+
+impl<Type> Weak<Type> {
+    pub const fn new() -> Weak<Type> {
+        Self { rc_box: None }
+    }
+
+    unsafe fn inner_from_rc(&self) -> WeakInner<'_> {
+        let ref_box = self.rc_box.unwrap().as_ref();
+
+        WeakInner {
+            strong_count: &ref_box.strong_count,
+            weak_count: &ref_box.weak_count,
+        }
+    }
+
+    pub fn inner<'a>(&'a self) -> WeakInner<'a> {
+        if self.rc_box.is_some() {
+            unsafe { self.inner_from_rc() }
+        } else {
+            WeakInner::<'a> {
+                strong_count: &NonNull::from(&0),
+                weak_count: &NonNull::from(&0),
+            }
+        }
+    }
+
+    pub fn upgrade(&self) -> Option<Rc<Type>> {
+        todo!()
+    }
+}
+
 pub struct Rc<Type: ?Sized, Alloc: AllocatorAPI = GlobalAlloc> {
     val: NonNull<RcBox<Type>>,
     ph: PhantomData<Alloc>,
