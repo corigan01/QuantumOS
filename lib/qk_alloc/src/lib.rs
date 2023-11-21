@@ -37,7 +37,6 @@ pub mod usable_region;
 // std(like) libs for heap allocation
 pub mod bitfield;
 pub mod boxed;
-pub mod rc;
 pub mod string;
 pub mod vec;
 
