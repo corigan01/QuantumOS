@@ -24,4 +24,17 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 *
 */
 
-pub struct FileDescriptor {}
+#[derive(Clone, Copy, PartialEq)]
+pub struct FileDescriptor(pub usize);
+
+impl From<usize> for FileDescriptor {
+    fn from(value: usize) -> Self {
+        FileDescriptor(value)
+    }
+}
+
+impl Into<usize> for FileDescriptor {
+    fn into(self) -> usize {
+        self.0
+    }
+}

@@ -23,23 +23,23 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use crate::error::FsError;
+use crate::filesystems::dosfs::structures::{Byte, ClusterID, DoubleWord, FatTime, Word};
 use core::fmt::{Debug, Formatter};
 use core::mem::size_of;
 use core::ptr;
 use qk_alloc::string::String;
-use crate::error::{FsError};
-use crate::filesystems::dosfs::structures::{Byte, ClusterID, DoubleWord, FatTime, Word};
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum AttributeTypes {
-    Unknown, // 0x00
-    ReadOnly, // 0x01
-    Hidden, // 0x02
-    System, // 0x04
-    VolumeID, // 0x08
+    Unknown,   // 0x00
+    ReadOnly,  // 0x01
+    Hidden,    // 0x02
+    System,    // 0x04
+    VolumeID,  // 0x08
     Directory, // 0x10
-    Archive, // 0x20
-    LongName // or all of the above
+    Archive,   // 0x20
+    LongName,  // or all of the above
 }
 
 impl AttributeTypes {
@@ -51,7 +51,7 @@ impl AttributeTypes {
         Self::VolumeID,
         Self::Directory,
         Self::Archive,
-        Self::LongName
+        Self::LongName,
     ];
 }
 
@@ -95,9 +95,9 @@ impl Attributes {
     }
 
     pub fn is_file(&self) -> bool {
-        !self.contains_attribute(AttributeTypes::Directory) &&
-            !self.contains_attribute(AttributeTypes::LongName) &&
-            !self.contains_attribute(AttributeTypes::VolumeID)
+        !self.contains_attribute(AttributeTypes::Directory)
+            && !self.contains_attribute(AttributeTypes::LongName)
+            && !self.contains_attribute(AttributeTypes::VolumeID)
     }
 
     pub fn is_directory(&self) -> bool {
@@ -116,7 +116,8 @@ impl Debug for Attributes {
             .entries(
                 AttributeTypes::ALL_KINDS
                     .iter()
-                    .filter(|kind| self.contains_attribute(**kind)))
+                    .filter(|kind| self.contains_attribute(**kind)),
+            )
             .finish()?;
         f.write_str(")")
     }
@@ -167,7 +168,7 @@ pub struct DirectoryEntry {
     last_modification_time: Word,
     last_modification_date: Word,
     first_data_cluster_low: Word,
-    file_size: DoubleWord
+    file_size: DoubleWord,
 }
 
 impl TryFrom<&[u8]> for DirectoryEntry {
@@ -178,7 +179,7 @@ impl TryFrom<&[u8]> for DirectoryEntry {
             return Err(FsError::try_from_array_error::<Self>(value));
         }
 
-         Ok(unsafe { ptr::read(value.as_ptr() as *const Self) })
+        Ok(unsafe { ptr::read(value.as_ptr() as *const Self) })
     }
 }
 
@@ -200,7 +201,8 @@ impl DirectoryEntry {
     }
 
     pub fn first_cluster(&self) -> ClusterID {
-        (self.first_data_cluster_high as ClusterID) << 16 | (self.first_data_cluster_low as ClusterID)
+        (self.first_data_cluster_high as ClusterID) << 16
+            | (self.first_data_cluster_low as ClusterID)
     }
 
     pub fn short_filename(&self) -> String {
@@ -243,24 +245,31 @@ impl DirectoryEntry {
 
 #[cfg(test)]
 mod test {
-    use crate::filesystems::dosfs::structures::file_directory::{DirectoryEntry, AttributeTypes};
+    use crate::filesystems::dosfs::structures::file_directory::{AttributeTypes, DirectoryEntry};
     use crate::set_example_allocator;
 
     #[test]
     fn test_dir_from_kernel() {
-        set_example_allocator(4096);
+        set_example_allocator();
         let example: [u8; 0x20] = [
-            0x4B, 0x45, 0x52, 0x4E, 0x45, 0x4C, 0x20, 0x20, 0x45, 0x4C, 0x46, 0x00, 0x00, 0x70, 0x04, 0x91,
-            0x41, 0x57, 0x41, 0x57, 0x00, 0x00, 0x04, 0x91, 0x41, 0x57, 0x2C, 0x00, 0x70, 0xC8, 0x02, 0x00
+            0x4B, 0x45, 0x52, 0x4E, 0x45, 0x4C, 0x20, 0x20, 0x45, 0x4C, 0x46, 0x00, 0x00, 0x70,
+            0x04, 0x91, 0x41, 0x57, 0x41, 0x57, 0x00, 0x00, 0x04, 0x91, 0x41, 0x57, 0x2C, 0x00,
+            0x70, 0xC8, 0x02, 0x00,
         ];
 
         let file_entry = DirectoryEntry::try_from(example.as_ref()).unwrap();
 
         assert_eq!(file_entry.short_filename(), "KERNEL.ELF");
-        assert_eq!(file_entry.entry_attributes().contains_attribute(AttributeTypes::System), false);
+        assert_eq!(
+            file_entry
+                .entry_attributes()
+                .contains_attribute(AttributeTypes::System),
+            false
+        );
         assert_eq!(file_entry.entry_attributes().is_file(), true);
         assert_eq!(file_entry.is_free(), false);
         assert_eq!(file_entry.file_size(), 182384);
         assert_eq!(file_entry.first_cluster(), 44);
     }
 }
+

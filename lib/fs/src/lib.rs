@@ -36,8 +36,8 @@ pub mod disks;
 pub mod error;
 pub mod filesystems;
 pub mod io;
-mod node;
 pub mod path;
+pub mod permission;
 
 mod fs;
 pub use crate::fs::*;
@@ -46,20 +46,23 @@ mod file;
 pub use crate::file::*;
 
 pub type FsResult<T> = Result<T, FsError>;
+pub type UnixTime = u64;
 
 #[cfg(test)]
-pub fn set_example_allocator(size_in_bytes: usize) {
+pub fn set_example_allocator() {
     use qk_alloc::heap::alloc::KernelHeap;
     use qk_alloc::heap::{free_lock, reserve_lock, set_global_alloc, THE_GLOBAL_ALLOC};
     use qk_alloc::usable_region::UsableRegion;
+    let size_in_bytes = 10 * 1024;
+
+    reserve_lock();
 
     unsafe {
         if THE_GLOBAL_ALLOC.is_some() {
+            free_lock();
             return;
         }
     }
-
-    reserve_lock();
 
     extern crate alloc;
 
