@@ -62,73 +62,97 @@ impl Path {
     ///
     /// ### Example
     /// 1.  Path = "/./././././"
-    ///     desolved = "/."
+    ///     desolved = "/"
     ///
     /// 2.  Path = "./////././///.."
     ///     desolved = ".."
     ///
     /// 3.  Path = "/Node/../Node/../."
-    ///     desolved = "/."
+    ///     desolved = "/"
     ///
     pub fn truncate_path(self) -> Path {
-        let mut final_string: String = self
-            // Get the children of the path
-            // Example path = "/home/user/someone"
-            //  1. 'home'
-            //  2. 'user'
-            //  3. 'someone'
-            .children()
-            .into_iter()
-            // Remove all '.'
-            .filter(|child| child != &".")
-            .chain(["", "", ""])
-            .collect::<Vec<&str>>()
-            // Remove all "/path/../path/"
-            .windows(2)
-            .scan(0_usize, |val, init| {
-                if *val > 0 {
-                    *val = val.checked_sub(1).unwrap_or(0);
-                    return Some("");
-                }
+        let mut starting_path = self.0;
 
-                let first = &init[0];
-                let second = &init[1];
+        // TODO: Make this better in the future
+        // I would like to do this without memory allocation in the future. I think memory
+        // allocation is just slowing this down.
 
-                if second == &".." && first != &".." {
-                    *val = 1;
-                    Some("")
-                } else {
-                    *val = val.checked_sub(1).unwrap_or(0);
-                    Some(first)
-                }
-            })
-            .filter(|val| val.len() != 0)
-            // Add the '/' back for each of the children
-            .fold(
-                self.0
-                    .starts_with('/')
-                    .then(|| String::from("/"))
-                    .unwrap_or(String::new()),
-                |mut acc, val| {
-                    acc.push_str(val);
-                    acc.push_str("/");
+        let final_string: String = loop {
+            let mut final_string: String = Path::from(starting_path.clone())
+                // Get the children of the path
+                // Example path = "/home/user/someone"
+                //  1. 'home'
+                //  2. 'user'
+                //  3. 'someone'
+                .children()
+                .into_iter()
+                // Remove all '.'
+                .filter(|child| child != &".")
+                .chain(["", "", ""])
+                .collect::<Vec<&str>>()
+                // Remove all "/path/../path/"
+                .windows(2)
+                .scan(0_usize, |val, init| {
+                    if *val > 0 {
+                        *val = val.checked_sub(1).unwrap_or(0);
+                        return Some("");
+                    }
 
-                    acc
-                },
-            );
+                    let first = &init[0];
+                    let second = &init[1];
 
-        // Replace some remaining truncated chars
-        if self.0.starts_with(".") && !final_string.starts_with(".") {
-            final_string = String::from(".") + final_string;
-        }
+                    if second == &".." && first != &".." {
+                        *val += 1;
+                        Some("")
+                    } else {
+                        *val = val.checked_sub(1).unwrap_or(0);
+                        Some(first)
+                    }
+                })
+                .filter(|val| val.len() != 0)
+                // Add the '/' back for each of the children
+                .fold(
+                    starting_path
+                        .starts_with('/')
+                        .then(|| String::from("/"))
+                        .unwrap_or(String::new()),
+                    |mut acc, val| {
+                        acc.push_str(val);
+                        acc.push_str("/");
 
-        if self.0.ends_with("/") && !final_string.ends_with("/") {
-            final_string.push_str("/");
-        }
+                        acc
+                    },
+                );
 
-        if !(self.0.ends_with("/") || self.0.ends_with(".")) && final_string.ends_with("/") {
-            final_string.pop();
-        }
+            // Replace some remaining truncated chars
+            if starting_path.starts_with(".") && !final_string.starts_with(".") {
+                final_string = String::from(".") + final_string;
+            }
+
+            if starting_path.ends_with("/") && !final_string.ends_with("/") {
+                final_string.push_str("/");
+            }
+
+            if !(starting_path.ends_with("/") || starting_path.ends_with("."))
+                && final_string.ends_with("/")
+            {
+                final_string.pop();
+            }
+
+            if starting_path.starts_with("/") && final_string.len() == 0 {
+                final_string.push_str("/");
+            }
+
+            if final_string.len() == 0 {
+                final_string.push_str(".");
+            }
+
+            if !final_string.contains("..") || final_string.starts_with("..") {
+                break final_string;
+            }
+
+            starting_path = final_string;
+        };
 
         Path(final_string)
     }
@@ -223,8 +247,8 @@ mod test {
     const TEST_CASE_LOTS: [(&str, &str); 10] = [
         ("/home/test/../test", "/home/test"),
         ("/wow/wow/wow/wow/wow/wow/", "/wow/wow/wow/wow/wow/wow/"),
-        ("", ""),
-        ("this_is_a_super_long_path_name_test/..", "/"),
+        (".", "."),
+        ("this_is_a_super_long_path_name_test/..", "."),
         ("/bin/bash", "/bin/bash"),
         (
             "some_path/wow/other/../nothing/etc/../../test",
@@ -241,7 +265,13 @@ mod test {
         crate::set_example_allocator();
 
         for (requires_truncate, test) in TEST_CASE_LOTS {
-            assert_eq!(Path::from(requires_truncate).truncate_path(), test);
+            assert_eq!(
+                Path::from(requires_truncate).truncate_path(),
+                test,
+                "\n\tPath: '{}', Expected: '{}'",
+                requires_truncate,
+                test
+            );
         }
     }
 }
