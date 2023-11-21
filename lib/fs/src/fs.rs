@@ -90,6 +90,10 @@ impl<Type> BitQueue<Type> {
         value
     }
 
+    pub fn get_state(&self, location: usize) -> bool {
+        self.mask.get_bit(location)
+    }
+
     pub fn remove(&mut self, location: usize) -> Type {
         self.try_remove(location)
             .expect("cannot remove a location that does not exist!")
@@ -141,7 +145,7 @@ impl Vfs {
         let id = self.filesystems.first_free();
         self.filesystems.queue(OpenFs {
             id,
-            path,
+            path: path.truncate_path(),
             data: device,
         });
 
@@ -155,8 +159,36 @@ impl Vfs {
             .count()
     }
 
-    fn get_provider_for_path(&mut self, path: &Path) -> Option<FilesystemID> {
-        todo!()
+    fn get_provider_for_path(&self, path: &Path) -> Option<FilesystemID> {
+        self.filesystems.iter().find_map(|entry| {
+            let entry_path = entry.path.as_str();
+            let provider_path = path.clone().truncate_path();
+
+            if provider_path.as_str().starts_with(entry_path) {
+                Some(entry.id)
+            } else {
+                None
+            }
+        })
+    }
+
+    fn get_fs_and_rel_path(&self, path: Path) -> FsResult<(FilesystemID, Path)> {
+        let path = path.truncate_path();
+
+        let fsid = self.get_provider_for_path(&path).ok_or(FsError::new(
+            FsErrorKind::NotFound,
+            "That files does not exist!",
+        ))?;
+
+        let fs = &self.filesystems[fsid];
+        let fs_mount = fs.path.clone();
+
+        let fs_rel_path = path.clone().snip_off(fs_mount).ok_or(FsError::new(
+            FsErrorKind::InvalidData,
+            "path cannot snip to relative path for sub-filesystem",
+        ))?;
+
+        Ok((fsid, fs_rel_path))
     }
 
     pub fn umount(&mut self, path: Path) -> FsResult<Box<dyn FileSystemProvider>> {
@@ -199,20 +231,8 @@ impl Vfs {
     }
 
     pub fn open(&mut self, path: Path) -> FsResult<FileDescriptor> {
-        let path = path.truncate_path();
-
-        let fsid = self.get_provider_for_path(&path).ok_or(FsError::new(
-            FsErrorKind::NotFound,
-            "That files does not exist!",
-        ))?;
-
+        let (fsid, fs_rel_path) = self.get_fs_and_rel_path(path.clone())?;
         let fs = &mut self.filesystems[fsid];
-        let fs_mount = fs.path.clone();
-
-        let fs_rel_path = path.clone().snip_off(fs_mount).ok_or(FsError::new(
-            FsErrorKind::InvalidData,
-            "path cannot snip to relative path for sub-filesystem",
-        ))?;
 
         let file_child = fs.data.open_file(fs_rel_path)?;
         let file_id = self.open_ids.first_free().into();
@@ -227,23 +247,43 @@ impl Vfs {
     }
 
     pub fn close(&mut self, fd: FileDescriptor) -> FsResult<()> {
-        todo!()
+        if !self.open_ids.get_state(fd.0) {
+            return Err(FsError::new(
+                FsErrorKind::InvalidInput,
+                "That fd does not exist!",
+            ));
+        }
+
+        self.open_ids.remove(fd.0);
+        Ok(())
     }
 
     pub fn touch(&mut self, path: Path, perm: Permissions) -> FsResult<()> {
-        todo!()
+        let (fsid, fs_rel_path) = self.get_fs_and_rel_path(path)?;
+        let fs = &mut self.filesystems[fsid];
+
+        fs.data.touch(fs_rel_path, perm)
     }
 
     pub fn rm(&mut self, path: Path) -> FsResult<()> {
-        todo!()
+        let (fsid, fs_rel_path) = self.get_fs_and_rel_path(path)?;
+        let fs = &mut self.filesystems[fsid];
+
+        fs.data.rm(fs_rel_path)
     }
 
     pub fn mkdir(&mut self, path: Path, perm: Permissions) -> FsResult<()> {
-        todo!()
+        let (fsid, fs_rel_path) = self.get_fs_and_rel_path(path)?;
+        let fs = &mut self.filesystems[fsid];
+
+        fs.data.mkdir(fs_rel_path, perm)
     }
 
     pub fn rmdir(&mut self, path: Path) -> FsResult<()> {
-        todo!()
+        let (fsid, fs_rel_path) = self.get_fs_and_rel_path(path)?;
+        let fs = &mut self.filesystems[fsid];
+
+        fs.data.rmdir(fs_rel_path)
     }
 }
 
