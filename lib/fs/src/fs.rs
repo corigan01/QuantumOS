@@ -160,16 +160,20 @@ impl Vfs {
     }
 
     fn get_provider_for_path(&self, path: &Path) -> Option<FilesystemID> {
-        self.filesystems.iter().find_map(|entry| {
-            let entry_path = entry.path.as_str();
-            let provider_path = path.clone().truncate_path();
+        self.filesystems
+            .iter()
+            .filter_map(|entry| {
+                let entry_path = entry.path.as_str();
+                let provider_path = path.clone().truncate_path();
 
-            if provider_path.as_str().starts_with(entry_path) {
-                Some(entry.id)
-            } else {
-                None
-            }
-        })
+                if provider_path.as_str().starts_with(entry_path) {
+                    Some((entry.path.as_str().len(), entry.id))
+                } else {
+                    None
+                }
+            })
+            .max_by_key(|(len, _)| *len)
+            .map(|(_, id)| id)
     }
 
     fn get_fs_and_rel_path(&self, path: Path) -> FsResult<(FilesystemID, Path)> {
