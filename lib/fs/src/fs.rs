@@ -427,7 +427,7 @@ mod test {
             todo!()
         }
         fn rm(&mut self, path: crate::path::Path) -> FsResult<()> {
-            todo!()
+            Err(FsError::new(FsErrorKind::Other, path.as_str().into()))
         }
     }
 
@@ -485,6 +485,38 @@ mod test {
                 .expect_err("Error was OK, should be error")
                 .kind()
                 == FsErrorKind::StorageFull
+        );
+    }
+
+    #[test]
+    fn test_vfs_path_resl_correctly() {
+        crate::set_example_allocator();
+
+        let mut vfs = Vfs::new();
+        assert_eq!(
+            vfs.mount(Path::from("/"), Box::new(SuperFakeFs::new())),
+            Ok(0)
+        );
+        assert_eq!(
+            vfs.mount(Path::from("/test"), Box::new(SuperFakeFs::new())),
+            Ok(1)
+        );
+
+        assert_eq!(
+            vfs.rm("/test/fs.txt".into()).unwrap_err().into_inner(),
+            "/fs.txt"
+        );
+
+        assert_eq!(
+            vfs.rm("/fs.txt".into()).unwrap_err().into_inner(),
+            "/fs.txt"
+        );
+
+        assert_eq!(
+            vfs.rm("/still_root/fs.txt".into())
+                .unwrap_err()
+                .into_inner(),
+            "/still_root/fs.txt"
         );
     }
 }

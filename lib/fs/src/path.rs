@@ -174,7 +174,11 @@ impl Path {
     }
 
     pub fn snip_off(self, path: Path) -> Option<Path> {
-        let path = path.truncate_path();
+        let mut path = path.truncate_path();
+
+        if path.0.ends_with("/") {
+            path = Path(path.0.as_str()[..path.0.len() - 1].into())
+        }
 
         if !self.0.starts_with(path.as_str()) {
             return None;
