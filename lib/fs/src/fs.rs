@@ -129,9 +129,6 @@ pub struct Vfs {
     filesystems: BitQueue<OpenFs>,
 }
 
-#[cfg(test)]
-extern crate std;
-
 impl Vfs {
     pub fn new() -> Self {
         Self {
