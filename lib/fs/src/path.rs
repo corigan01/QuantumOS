@@ -71,7 +71,7 @@ impl Path {
     ///     desolved = "/"
     ///
     pub fn truncate_path(self) -> Path {
-        let mut starting_path = self.0;
+        let mut starting_path = self.0.clone();
 
         // TODO: Make this better in the future
         // I would like to do this without memory allocation in the future. I think memory
