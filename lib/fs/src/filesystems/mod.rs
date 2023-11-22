@@ -25,3 +25,129 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 mod dosfs;
 mod fakefs;
+
+#[macro_export]
+macro_rules! sub_fsprovider {
+    ($type:ty, $prv_sub:tt) => {
+        impl crate::io::FileProvider for $type {}
+
+        impl crate::io::Metadata for $type {
+            fn len(&self) -> u64 {
+                self.$prv_sub.len()
+            }
+
+            fn kind(&self) -> crate::io::EntryType {
+                self.$prv_sub.kind()
+            }
+
+            fn can_read(&self) -> bool {
+                self.$prv_sub.can_read()
+            }
+
+            fn can_seek(&self) -> bool {
+                self.$prv_sub.can_seek()
+            }
+
+            fn can_write(&self) -> bool {
+                self.$prv_sub.can_write()
+            }
+
+            fn permissions(&self) -> crate::permission::Permissions {
+                self.$prv_sub.permissions()
+            }
+
+            fn date_created(&self) -> Option<crate::UnixTime> {
+                self.$prv_sub.date_created()
+            }
+
+            fn date_accessed(&self) -> Option<crate::UnixTime> {
+                self.$prv_sub.date_accessed()
+            }
+
+            fn date_removed(&self) -> Option<crate::UnixTime> {
+                self.$prv_sub.date_removed()
+            }
+
+            fn date_modified(&self) -> Option<crate::UnixTime> {
+                self.$prv_sub.date_modified()
+            }
+        }
+
+        impl crate::io::Read for $type {
+            fn read(&mut self, buf: &mut [u8]) -> crate::FsResult<usize> {
+                self.$prv_sub.read(buf)
+            }
+
+            fn read_exact(&mut self, buf: &mut [u8]) -> crate::FsResult<()> {
+                self.$prv_sub.read_exact(buf)
+            }
+
+            fn read_to_end(&mut self, buf: &mut qk_alloc::vec::Vec<u8>) -> crate::FsResult<usize> {
+                self.$prv_sub.read_to_end(buf)
+            }
+
+            fn read_vectored(&mut self, buf: &mut [&mut [u8]]) -> crate::FsResult<usize> {
+                self.$prv_sub.read_vectored(buf)
+            }
+
+            fn read_to_string(
+                &mut self,
+                buf: &mut qk_alloc::string::String,
+            ) -> crate::FsResult<usize> {
+                self.$prv_sub.read_to_string(buf)
+            }
+
+            fn is_read_vectored(&self) -> bool {
+                self.$prv_sub.is_read_vectored()
+            }
+        }
+
+        impl crate::io::Write for $type {
+            fn write(&mut self, buf: &[u8]) -> crate::FsResult<usize> {
+                self.$prv_sub.write(buf)
+            }
+
+            fn flush(&mut self) -> crate::FsResult<()> {
+                self.$prv_sub.flush()
+            }
+
+            fn write_all(&mut self, buf: &[u8]) -> crate::FsResult<()> {
+                self.$prv_sub.write_all(buf)
+            }
+
+            fn write_fmt(&mut self, fmt: core::fmt::Arguments<'_>) -> crate::FsResult<()> {
+                self.$prv_sub.write_fmt(fmt)
+            }
+
+            fn write_vectored(&mut self, bufs: &[&[u8]]) -> crate::FsResult<usize> {
+                self.$prv_sub.write_vectored(bufs)
+            }
+
+            fn is_write_vectored(&self) -> bool {
+                self.$prv_sub.is_write_vectored()
+            }
+        }
+
+        impl crate::io::Seek for $type {
+            fn seek(&mut self, pos: crate::io::SeekFrom) -> crate::FsResult<u64> {
+                self.$prv_sub.seek(pos)
+            }
+
+            fn rewind(&mut self) -> crate::FsResult<()> {
+                self.$prv_sub.rewind()
+            }
+
+            fn stream_len(&mut self) -> crate::FsResult<u64> {
+                self.$prv_sub.stream_len()
+            }
+
+            fn stream_len_dirty(&mut self) -> crate::FsResult<u64> {
+                self.$prv_sub.stream_len_dirty()
+            }
+
+            fn stream_position(&mut self) -> crate::FsResult<u64> {
+                self.$prv_sub.stream_position()
+            }
+        }
+    };
+}
