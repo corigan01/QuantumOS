@@ -23,25 +23,77 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use crate::io::{Read, Seek, Write};
 use qk_alloc::vec::Vec;
+
+use crate::{
+    error::{FsError, FsErrorKind},
+    io::FileSystemProvider,
+};
+
 mod entry;
 
-pub trait FakeFsProvider: Write + Read + Seek {
-    fn un_mount(&mut self) -> bool {
-        false
-    }
-}
-
 pub struct FakeFs {
-    // FIXME: Make Hashmap in the future
-    providers: Vec<entry::Entry>,
+    nodes: Vec<entry::Entry>,
 }
 
 impl FakeFs {
     pub fn new() -> Self {
-        Self {
-            providers: Vec::new(),
-        }
+        Self { nodes: Vec::new() }
+    }
+}
+
+impl FileSystemProvider for FakeFs {
+    fn supports_permissions(&self) -> bool {
+        true
+    }
+
+    fn mkdir(
+        &mut self,
+        path: crate::path::Path,
+        permission: crate::permission::Permissions,
+    ) -> crate::FsResult<()> {
+        Err(FsError::new(
+            FsErrorKind::StorageFull,
+            "Cannot make directory on FakeFs",
+        ))
+    }
+
+    fn touch(
+        &mut self,
+        path: crate::path::Path,
+        permission: crate::permission::Permissions,
+    ) -> crate::FsResult<()> {
+        Err(FsError::new(
+            FsErrorKind::StorageFull,
+            "Cannot make file on FakeFs",
+        ))
+    }
+
+    fn rm(&mut self, path: crate::path::Path) -> crate::FsResult<()> {
+        Err(FsError::new(
+            FsErrorKind::PermissionDenied,
+            "Cannot remove files on FakeFs",
+        ))
+    }
+
+    fn rmdir(&mut self, path: crate::path::Path) -> crate::FsResult<()> {
+        Err(FsError::new(
+            FsErrorKind::PermissionDenied,
+            "Cannot remove files on FakeFs",
+        ))
+    }
+
+    fn open_file(
+        &mut self,
+        path: crate::path::Path,
+    ) -> crate::FsResult<qk_alloc::boxed::Box<dyn crate::io::FileProvider>> {
+        todo!()
+    }
+
+    fn open_directory(
+        &mut self,
+        path: crate::path::Path,
+    ) -> crate::FsResult<qk_alloc::boxed::Box<dyn crate::io::DirectoryProvider>> {
+        todo!()
     }
 }

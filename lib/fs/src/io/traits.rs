@@ -364,14 +364,6 @@ pub trait FileSystemProvider {
     fn touch(&mut self, path: crate::path::Path, permission: Permissions) -> FsResult<()>;
     fn rm(&mut self, path: crate::path::Path) -> FsResult<()>;
 
-    fn can_write(&self) -> bool {
-        false
-    }
-
-    fn can_read(&self) -> bool {
-        false
-    }
-
     fn supports_permissions(&self) -> bool {
         false
     }
