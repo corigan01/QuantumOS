@@ -142,6 +142,13 @@ impl Vfs {
         path: Path,
         device: Box<dyn FileSystemProvider>,
     ) -> FsResult<FilesystemID> {
+        if self.filesystems.iter().any(|entry| entry.path == path) {
+            return Err(FsError::new(
+                FsErrorKind::AlreadyExists,
+                "Filesystem already amounted",
+            ));
+        }
+
         let id = self.filesystems.first_free();
         self.filesystems.queue(OpenFs {
             id,
@@ -450,7 +457,16 @@ mod test {
             Ok(1)
         );
 
-        //assert_eq!(vfs.umount("/test".into()).map(|_| ()), Ok(()));
+        assert_eq!(vfs.umount("/test".into()).map(|_| ()), Ok(()));
         assert!(vfs.unmount_id(0).is_ok());
+    }
+
+    #[test]
+    fn test_vfs_fail_mount() {
+        crate::set_example_allocator();
+
+        let mut vfs = Vfs::new();
+        assert_eq!(vfs.mount("/".into(), Box::new(SuperFakeFs::new())), Ok(0));
+        assert!(vfs.mount("/".into(), Box::new(SuperFakeFs::new())).is_err());
     }
 }
