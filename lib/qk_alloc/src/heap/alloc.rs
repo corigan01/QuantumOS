@@ -23,7 +23,9 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-
+use crate::memory_layout::MemoryLayout;
+use crate::usable_region::UsableRegion;
+use crate::{AllocErr, ImproperConfigReason};
 use core::fmt::{Display, Formatter};
 use core::mem::{align_of, size_of};
 use core::ptr;
@@ -32,22 +34,19 @@ use core::slice::Iter;
 use over_stacked::raw_vec::RawVec;
 use owo_colors::OwoColorize;
 use quantum_utils::human_bytes::HumanBytes;
-use crate::{AllocErr, ImproperConfigReason};
-use crate::memory_layout::MemoryLayout;
-use crate::usable_region::UsableRegion;
 
 #[derive(Debug, Clone, Copy)]
 pub enum DebugAllocationEvent {
     Free,
     Allocate,
-    MakeNewVector
+    MakeNewVector,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[must_use = "Not referencing ptr, will leak its allocation"]
 pub struct UnsafeAllocationObject {
     pub ptr: u64,
-    pub size: usize
+    pub size: usize,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -55,12 +54,11 @@ pub enum HeapEntryType {
     Free,
     Used,
     UsedByHeap,
-    Forever
+    Forever,
 }
 
 impl Display for HeapEntryType {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
-
         let heap_entry_type_string = match self {
             HeapEntryType::Free => "Free",
             HeapEntryType::Used => "Used",
@@ -74,13 +72,13 @@ impl Display for HeapEntryType {
             match self {
                 HeapEntryType::Free => {
                     write!(f, "{}", heap_entry_type_string.green().bold())?;
-                },
+                }
                 HeapEntryType::Used => {
                     write!(f, "{}", heap_entry_type_string.red())?;
-                },
+                }
                 HeapEntryType::UsedByHeap => {
                     write!(f, "{}", heap_entry_type_string.yellow())?;
-                },
+                }
                 _ => {
                     write!(f, "{}", heap_entry_type_string.red().bold())?;
                 }
@@ -113,14 +111,14 @@ pub struct HeapEntry {
     pad: u32,
     size: u64,
     over: u64,
-    kind: HeapEntryType
+    kind: HeapEntryType,
 }
 
 #[derive(Debug)]
 pub struct KernelHeap {
     pub(crate) allocations: RawVec<HeapEntry>,
     total_allocated_bytes: usize,
-    init_ptr: u64
+    init_ptr: u64,
 }
 
 impl KernelHeap {
@@ -140,7 +138,8 @@ impl KernelHeap {
 
         let mut raw_vec: RawVec<HeapEntry> = RawVec::begin(aligned_nonnull, 10);
 
-        let adjusted_ptr = region_start_ptr.as_ptr() as u64 + init_vec_size as u64 + bytes_to_align as u64;
+        let adjusted_ptr =
+            region_start_ptr.as_ptr() as u64 + init_vec_size as u64 + bytes_to_align as u64;
         let adjusted_size = (region.size() - (init_vec_size + bytes_to_align)) as u64;
 
         let used_section = HeapEntry {
@@ -148,7 +147,7 @@ impl KernelHeap {
             pad: bytes_to_align as u32,
             size: init_vec_size as u64,
             over: 0,
-            kind: HeapEntryType::UsedByHeap
+            kind: HeapEntryType::UsedByHeap,
         };
 
         let init_alloc = HeapEntry {
@@ -156,7 +155,7 @@ impl KernelHeap {
             pad: 0,
             size: adjusted_size,
             over: 0,
-            kind: HeapEntryType::Free
+            kind: HeapEntryType::Free,
         };
 
         raw_vec.push_within_capacity(used_section).unwrap();
@@ -195,37 +194,51 @@ impl KernelHeap {
             assert!(entry.ptr >= self.init_ptr, "in {:#?}:: Buffer Health out-of-sync! Below Minimum ptr found!", caller);
         });
 
-        assert_ne!(self.allocations.iter().filter(|entry| {
-            entry.kind == HeapEntryType::UsedByHeap
-        }).count(), 0,
-            "in {:?}:: Buffer Health no-allocations-ptr found in the allocator!", caller);
+        assert_ne!(
+            self.allocations
+                .iter()
+                .filter(|entry| { entry.kind == HeapEntryType::UsedByHeap })
+                .count(),
+            0,
+            "in {:?}:: Buffer Health no-allocations-ptr found in the allocator!",
+            caller
+        );
 
-        let all_bytes: usize = self.allocations.iter().map(|entry| {
-            entry.size as usize + entry.pad as usize
-        }).sum();
+        let all_bytes: usize = self
+            .allocations
+            .iter()
+            .map(|entry| entry.size as usize + entry.pad as usize)
+            .sum();
 
         assert_eq!(all_bytes, self.total_allocated_bytes,
                    "in {:?}:: Buffer Health out-of-sync! Bytes in the buffer should equal bytes given!\nAllocations Dump: {:#?}", caller, self.allocations);
     }
 
     pub fn total_bytes_of(&self, kind: HeapEntryType) -> usize {
-        self.allocations.iter().filter_map(|entry| {
-            if entry.kind != kind {
-                None
-            } else {
-                Some(entry.size as usize)
-            }
-        }).sum()
+        self.allocations
+            .iter()
+            .filter_map(|entry| {
+                if entry.kind != kind {
+                    None
+                } else {
+                    Some(entry.size as usize)
+                }
+            })
+            .sum()
     }
 
     pub fn max_continuous_of(&self, kind: HeapEntryType) -> usize {
-        self.allocations.iter().filter_map(|entry| {
-            if entry.kind != kind {
-                None
-            } else {
-                Some(entry.size as usize)
-            }
-        }).max().unwrap_or(0)
+        self.allocations
+            .iter()
+            .filter_map(|entry| {
+                if entry.kind != kind {
+                    None
+                } else {
+                    Some(entry.size as usize)
+                }
+            })
+            .max()
+            .unwrap_or(0)
     }
 
     pub fn allocations_iter(&self) -> Iter<HeapEntry> {
@@ -233,25 +246,43 @@ impl KernelHeap {
     }
 
     pub fn reallocate_internal_vector(&mut self) -> Result<(), AllocErr> {
-        let new_entry_qty =
-            ((self.allocations.capacity() / Self::VEC_ALLOC_MIN_SIZE_INCREASE) + 1) * Self::VEC_ALLOC_MIN_SIZE_INCREASE;
+        let new_entry_qty = ((self.allocations.capacity() / Self::VEC_ALLOC_MIN_SIZE_INCREASE) + 1)
+            * Self::VEC_ALLOC_MIN_SIZE_INCREASE;
 
-        let memory_layout_for_internal_vector =
-            MemoryLayout::new(align_of::<HeapEntry>(), size_of::<HeapEntry>() * new_entry_qty);
-        let allocation =
-            unsafe { self.allocate_impl(memory_layout_for_internal_vector, true, HeapEntryType::UsedByHeap) }?;
+        let memory_layout_for_internal_vector = MemoryLayout::new(
+            align_of::<HeapEntry>(),
+            size_of::<HeapEntry>() * new_entry_qty,
+        );
+        let allocation = unsafe {
+            self.allocate_impl(
+                memory_layout_for_internal_vector,
+                true,
+                HeapEntryType::UsedByHeap,
+            )
+        }?;
 
-        let old_ptr: NonNull<HeapEntry> =
-            self.allocations.grow(NonNull::new(allocation.ptr as *mut HeapEntry).unwrap(), new_entry_qty)
-                .map_err(|_e| { AllocErr::InternalErr } )?;
+        let old_ptr: NonNull<HeapEntry> = self
+            .allocations
+            .grow(
+                NonNull::new(allocation.ptr as *mut HeapEntry).unwrap(),
+                new_entry_qty,
+            )
+            .map_err(|_e| AllocErr::InternalErr)?;
 
-        unsafe { self.free(old_ptr).expect("Free Should not fail for old Vector!") };
+        unsafe {
+            self.free(old_ptr)
+                .expect("Free Should not fail for old Vector!")
+        };
 
         Ok(())
     }
 
-    pub unsafe fn allocate_impl(&mut self, allocation_description: MemoryLayout, avoid_vec_safety_check: bool, mark_allocated_as: HeapEntryType)
-                                -> Result<UnsafeAllocationObject, AllocErr> {
+    pub unsafe fn allocate_impl(
+        &mut self,
+        allocation_description: MemoryLayout,
+        avoid_vec_safety_check: bool,
+        mark_allocated_as: HeapEntryType,
+    ) -> Result<UnsafeAllocationObject, AllocErr> {
         if self.allocations.remaining() <= 3 && !avoid_vec_safety_check {
             self.reallocate_internal_vector()?;
         }
@@ -263,21 +294,28 @@ impl KernelHeap {
             return Err(AllocErr::ImproperConfig(ImproperConfigReason::ZeroSize));
         }
         if requested_align == 0 || (requested_align != 1 && !requested_align.is_power_of_two()) {
-            return Err(AllocErr::ImproperConfig(ImproperConfigReason::AlignmentInvalid(requested_align)));
+            return Err(AllocErr::ImproperConfig(
+                ImproperConfigReason::AlignmentInvalid(requested_align),
+            ));
         }
 
-        let best_entry_info = self.allocations
+        let best_entry_info = self
+            .allocations
             .iter()
             .enumerate()
             .filter(|(_, entry)| {
                 let (_, bytes_to_align) = Self::align_ptr(entry.ptr, requested_align);
-                entry.size as usize >= (requested_bytes + bytes_to_align) && entry.kind == HeapEntryType::Free
+                entry.size as usize >= (requested_bytes + bytes_to_align)
+                    && entry.kind == HeapEntryType::Free
             })
             .min_by_key(|(_, entry)| entry.size as usize)
             .map(|(id, _)| (id, self.allocations[id]));
 
         let Some((best_entry_id, best_entry)) = best_entry_info else {
-            return Err(AllocErr::OutOfMemory(requested_bytes, self.total_bytes_of(HeapEntryType::Free)));
+            return Err(AllocErr::OutOfMemory(
+                requested_bytes,
+                self.total_bytes_of(HeapEntryType::Free),
+            ));
         };
 
         // We might have to split our entry into 3 if we have a perfect situation.
@@ -290,7 +328,8 @@ impl KernelHeap {
             Self::align_ptr(best_entry.ptr, requested_align);
 
         let pre_allocation_split = best_entry_align_bump > (size_of::<HeapEntry>() * 2);
-        let post_allocation_split = best_entry.size as usize > (requested_bytes + size_of::<HeapEntry>() * 2);
+        let post_allocation_split =
+            best_entry.size as usize > (requested_bytes + size_of::<HeapEntry>() * 2);
 
         // We need to split to save the alignment
         if pre_allocation_split {
@@ -299,7 +338,7 @@ impl KernelHeap {
                 pad: 0,
                 size: (best_entry_align_bump - 1) as u64,
                 over: 0,
-                kind: HeapEntryType::Free
+                kind: HeapEntryType::Free,
             };
 
             let modified_old_entry = HeapEntry {
@@ -307,13 +346,21 @@ impl KernelHeap {
                 pad: 0,
                 size: best_entry.size - (best_entry_align_bump as u64),
                 over: (best_entry.size - (best_entry_align_bump as u64)) - requested_bytes as u64,
-                kind: mark_allocated_as
+                kind: mark_allocated_as,
             };
 
-            if self.allocations.replace(best_entry_id, modified_old_entry).is_err() {
+            if self
+                .allocations
+                .replace(best_entry_id, modified_old_entry)
+                .is_err()
+            {
                 return Err(AllocErr::InternalErr);
             }
-            if self.allocations.insert(best_entry_id + 1, before_split_entry).is_err() {
+            if self
+                .allocations
+                .insert(best_entry_id + 1, before_split_entry)
+                .is_err()
+            {
                 return Err(AllocErr::InternalErr);
             }
         }
@@ -325,28 +372,41 @@ impl KernelHeap {
                 pad: 0,
                 size: best_entry.size - ((best_entry_align_bump + requested_bytes) as u64),
                 over: 0,
-                kind: HeapEntryType::Free
+                kind: HeapEntryType::Free,
             };
 
-            let ptr = if pre_allocation_split { best_entry_new_ptr }
-                else { best_entry.ptr };
+            let ptr = if pre_allocation_split {
+                best_entry_new_ptr
+            } else {
+                best_entry.ptr
+            };
 
-            let pad = if pre_allocation_split { 0 }
-                else { best_entry_align_bump as u32 };
+            let pad = if pre_allocation_split {
+                0
+            } else {
+                best_entry_align_bump as u32
+            };
 
             let modified_old_entry = HeapEntry {
                 ptr,
                 pad,
                 size: requested_bytes as u64,
                 over: 0,
-                kind: mark_allocated_as
+                kind: mark_allocated_as,
             };
 
-
-            if self.allocations.replace(best_entry_id, modified_old_entry).is_err() {
+            if self
+                .allocations
+                .replace(best_entry_id, modified_old_entry)
+                .is_err()
+            {
                 return Err(AllocErr::InternalErr);
             }
-            if self.allocations.insert(best_entry_id + 1, after_split_entry).is_err() {
+            if self
+                .allocations
+                .insert(best_entry_id + 1, after_split_entry)
+                .is_err()
+            {
                 return Err(AllocErr::InternalErr);
             }
         }
@@ -354,12 +414,13 @@ impl KernelHeap {
         // Change the main entry to be reserved
         if !(post_allocation_split || pre_allocation_split) {
             let best_entry_mut = self.allocations.get_mut(best_entry_id).unwrap();
-            if best_entry_mut.size < requested_bytes as u64 ||
-                best_entry_mut.kind != HeapEntryType::Free {
+            if best_entry_mut.size < requested_bytes as u64
+                || best_entry_mut.kind != HeapEntryType::Free
+            {
                 return Err(AllocErr::InternalErr);
             }
 
-                        best_entry_mut.size -= best_entry_align_bump as u64;
+            best_entry_mut.size -= best_entry_align_bump as u64;
             best_entry_mut.pad = best_entry_align_bump as u32;
             best_entry_mut.kind = mark_allocated_as;
             best_entry_mut.over = best_entry_mut.size - requested_bytes as u64;
@@ -371,60 +432,89 @@ impl KernelHeap {
         assert_ne!(best_entry_new_ptr, 0, "Somehow we allocated a null ptr!");
         assert_ne!(returning_value.size, 0, "Somehow we allocated a null size!");
 
-        self.ensure_buffer_health(
-            if avoid_vec_safety_check { DebugAllocationEvent::MakeNewVector }
-            else { DebugAllocationEvent::Allocate}
-        );
+        self.ensure_buffer_health(if avoid_vec_safety_check {
+            DebugAllocationEvent::MakeNewVector
+        } else {
+            DebugAllocationEvent::Allocate
+        });
 
         Ok(UnsafeAllocationObject {
             ptr: best_entry_new_ptr,
-            size: requested_bytes
+            size: requested_bytes,
         })
     }
 
-    pub unsafe fn allocate(&mut self, allocation_description: MemoryLayout) -> Result<UnsafeAllocationObject, AllocErr> {
+    pub unsafe fn allocate(
+        &mut self,
+        allocation_description: MemoryLayout,
+    ) -> Result<UnsafeAllocationObject, AllocErr> {
         self.allocate_impl(allocation_description, false, HeapEntryType::Used)
     }
 
-    pub unsafe fn impl_realloc<Type>(&mut self, old_ptr: NonNull<Type>, new_alloc_desc: MemoryLayout, can_skip_fill: bool, fill: u8) -> Result<UnsafeAllocationObject, AllocErr> {
+    pub unsafe fn impl_realloc<Type>(
+        &mut self,
+        old_ptr: NonNull<Type>,
+        new_alloc_desc: MemoryLayout,
+        can_skip_fill: bool,
+        fill: u8,
+    ) -> Result<UnsafeAllocationObject, AllocErr> {
         let searching_ptr = old_ptr.as_ptr() as u64;
 
         if searching_ptr < self.init_ptr {
             return Err(AllocErr::NotFound(searching_ptr as usize));
         }
 
-        let Some(old_alloc) =
-            self.allocations.iter().find(|entry| {
-                (entry.ptr + (entry.pad as u64)) == searching_ptr
-            }) else {
+        let Some(old_alloc) = self
+            .allocations
+            .iter()
+            .find(|entry| (entry.ptr + (entry.pad as u64)) == searching_ptr)
+        else {
             return Err(AllocErr::NotFound(searching_ptr as usize));
         };
         let old_alloc = *old_alloc;
         if (old_alloc.size - old_alloc.over) > new_alloc_desc.bytes() as u64 {
-            return Err(AllocErr::ImproperConfig(
-                ImproperConfigReason::Smaller(old_alloc.size as usize, new_alloc_desc.bytes()))
-            );
+            return Err(AllocErr::ImproperConfig(ImproperConfigReason::Smaller(
+                old_alloc.size as usize,
+                new_alloc_desc.bytes(),
+            )));
         }
 
         let new_alloc = self.allocate(new_alloc_desc)?;
         let new_alloc_ptr = new_alloc.ptr as *mut u8;
 
         if !can_skip_fill {
-            ptr::write_bytes(new_alloc_ptr.add(old_alloc.size as usize), fill, new_alloc.size - (old_alloc.size - old_alloc.over) as usize);
+            ptr::write_bytes(
+                new_alloc_ptr.add(old_alloc.size as usize),
+                fill,
+                new_alloc.size - (old_alloc.size - old_alloc.over) as usize,
+            );
         }
 
-        ptr::copy(searching_ptr as *const u8, new_alloc_ptr, (old_alloc.size - old_alloc.over) as usize);
+        ptr::copy(
+            searching_ptr as *const u8,
+            new_alloc_ptr,
+            (old_alloc.size - old_alloc.over) as usize,
+        );
 
         self.free(old_ptr)?;
 
         Ok(new_alloc)
     }
 
-    pub unsafe fn realloc<Type>(&mut self, old_ptr: NonNull<Type>, new_alloc_desc: MemoryLayout) -> Result<UnsafeAllocationObject, AllocErr> {
+    pub unsafe fn realloc<Type>(
+        &mut self,
+        old_ptr: NonNull<Type>,
+        new_alloc_desc: MemoryLayout,
+    ) -> Result<UnsafeAllocationObject, AllocErr> {
         self.impl_realloc(old_ptr, new_alloc_desc, true, 0)
     }
 
-    pub unsafe fn realloc_fill<Type>(&mut self, old_ptr: NonNull<Type>, new_alloc_desc: MemoryLayout, fill: u8) -> Result<UnsafeAllocationObject, AllocErr> {
+    pub unsafe fn realloc_fill<Type>(
+        &mut self,
+        old_ptr: NonNull<Type>,
+        new_alloc_desc: MemoryLayout,
+        fill: u8,
+    ) -> Result<UnsafeAllocationObject, AllocErr> {
         self.impl_realloc(old_ptr, new_alloc_desc, false, fill)
     }
 
@@ -460,10 +550,10 @@ impl KernelHeap {
     pub unsafe fn free<Type>(&mut self, ptr: NonNull<Type>) -> Result<(), AllocErr> {
         let searching_ptr = ptr.as_ptr() as u64;
 
-        let allocations_with_ptr =
-            self.allocations.mut_iter().filter(|entry| {
-                (entry.ptr + (entry.pad as u64)) == searching_ptr
-            });
+        let allocations_with_ptr = self
+            .allocations
+            .mut_iter()
+            .filter(|entry| (entry.ptr + (entry.pad as u64)) == searching_ptr);
 
         let mut did_find = false;
         for entry in allocations_with_ptr {
@@ -496,14 +586,22 @@ impl Display for KernelHeap {
         let bytes_free = self.total_bytes_of(HeapEntryType::Free);
         let percent_free = (bytes_free as f64) / (self.total_allocated_bytes as f64);
 
-        writeln!(f, "Heap: {} {} ({:.2}%)",
-                 HumanBytes::from(bytes_free).green().bold(),
-                 "Free".green().bold(),
-                 (percent_free * 100.0),
+        writeln!(
+            f,
+            "Heap: {} {} ({:.2}%)",
+            HumanBytes::from(bytes_free).green().bold(),
+            "Free".green().bold(),
+            (percent_free * 100.0),
         )?;
 
-        writeln!(f, "|       Ptr      |    Size    |    Loss    |    Type    |  Alloc % |")?;
-        writeln!(f, "+----------------+------------+------------+------------+----------+")?;
+        writeln!(
+            f,
+            "|       Ptr      |    Size    |    Loss    |    Type    |  Alloc % |"
+        )?;
+        writeln!(
+            f,
+            "+----------------+------------+------------+------------+----------+"
+        )?;
         for region in self.allocations.iter() {
             let start = region.ptr + region.pad as u64;
             let size = region.size;
@@ -511,15 +609,20 @@ impl Display for KernelHeap {
             let kind = region.kind;
             let percent = ((size + loss) as f64) / (self.total_allocated_bytes as f64);
 
-            writeln!(f, "| 0x{:012x} | {:10} | {:10} | {:#10} | {:7.4}% |",
-                     start,
-                     HumanBytes::from(size),
-                     HumanBytes::from(loss),
-                     kind,
-                     percent * 100.0
+            writeln!(
+                f,
+                "| 0x{:012x} | {:10} | {:10} | {:#10} | {:7.4}% |",
+                start,
+                HumanBytes::from(size),
+                HumanBytes::from(loss),
+                kind,
+                percent * 100.0
             )?;
         }
-        writeln!(f, "+----------------+------------+------------+------------+----------+")?;
+        writeln!(
+            f,
+            "+----------------+------------+------------+------------+----------+"
+        )?;
 
         Ok(())
     }
@@ -529,10 +632,10 @@ impl Display for KernelHeap {
 mod test {
     extern crate alloc;
 
+    use super::*;
     use alloc::alloc::{alloc, dealloc};
     use core::alloc::Layout;
     use core::mem::align_of;
-    use super::*;
 
     #[test]
     fn test_align_ptr() {
@@ -578,7 +681,7 @@ mod test {
         let nonnull = unsafe {
             let alloc = alloc(memory_layout);
 
-             NonNull::new(alloc).unwrap()
+            NonNull::new(alloc).unwrap()
         };
 
         let usable_region =
@@ -623,7 +726,11 @@ mod test {
 
         for _ in 0..5 {
             let allocation_result = unsafe { allocator.allocate(example_layout) };
-            assert!(allocation_result.is_ok(), "Allocator was not able to allocate 5 regions of 1 byte, result was {:#?}", allocation_result);
+            assert!(
+                allocation_result.is_ok(),
+                "Allocator was not able to allocate 5 regions of 1 byte, result was {:#?}",
+                allocation_result
+            );
         }
 
         free_my_example_allocator(allocator);
@@ -646,7 +753,10 @@ mod test {
         };
 
         assert_eq!(allocation.size, size_of::<TestAllocType>());
-        assert_eq!((allocation.ptr as *const ()).align_offset(test_allocation_type_alignment), 0);
+        assert_eq!(
+            (allocation.ptr as *const ()).align_offset(test_allocation_type_alignment),
+            0
+        );
         free_my_example_allocator(allocator);
     }
 
@@ -665,14 +775,13 @@ mod test {
             unreachable!();
         };
 
-
         let nonnull_ptr = NonNull::new(allocation.ptr as *mut u64).unwrap();
 
         unsafe {
             *nonnull_ptr.as_ptr() = 0xBABBEEF;
         };
 
-        assert_eq!(unsafe {*nonnull_ptr.as_ptr()}, 0xBABBEEF);
+        assert_eq!(unsafe { *nonnull_ptr.as_ptr() }, 0xBABBEEF);
 
         let free_result = unsafe { allocator.free(nonnull_ptr) };
 
@@ -697,7 +806,11 @@ mod test {
 
             let allocation = unsafe { allocator.allocate(example_layout) };
             assert!(allocation.is_ok());
-            assert_ne!(allocator.total_bytes_of(HeapEntryType::Free), 0, "We are allocating, and freeing, there should not be memory loss!");
+            assert_ne!(
+                allocator.total_bytes_of(HeapEntryType::Free),
+                0,
+                "We are allocating, and freeing, there should not be memory loss!"
+            );
 
             let Ok(allocation) = allocation else {
                 unreachable!();
@@ -709,7 +822,7 @@ mod test {
                 *nonnull_ptr.as_ptr() = 0xBABBEEF;
             };
 
-            assert_eq!(unsafe {*nonnull_ptr.as_ptr()}, 0xBABBEEF);
+            assert_eq!(unsafe { *nonnull_ptr.as_ptr() }, 0xBABBEEF);
 
             let free_result = unsafe { allocator.free(nonnull_ptr) };
 
@@ -724,7 +837,11 @@ mod test {
 
         for _ in 0..20 {
             let allocation_result = unsafe { allocator.allocate(example_layout) };
-            assert!(allocation_result.is_ok(), "Allocator was not able to allocate 20 regions of 1 byte, result was {:#?}", allocation_result);
+            assert!(
+                allocation_result.is_ok(),
+                "Allocator was not able to allocate 20 regions of 1 byte, result was {:#?}",
+                allocation_result
+            );
         }
 
         free_my_example_allocator(allocator);
@@ -750,7 +867,7 @@ mod test {
             *nonnull_ptr.as_ptr() = 0xBABBEEF;
         };
 
-        assert_eq!(unsafe {*nonnull_ptr.as_ptr()}, 0xBABBEEF);
+        assert_eq!(unsafe { *nonnull_ptr.as_ptr() }, 0xBABBEEF);
 
         let new_layout = MemoryLayout::new(example_layout.alignment(), example_layout.bytes() * 2);
 
@@ -759,12 +876,12 @@ mod test {
         let new_alloc = new_alloc.unwrap();
 
         let nonnull_ptr = NonNull::new(new_alloc.ptr as *mut u64).unwrap();
-        assert_eq!(unsafe {*nonnull_ptr.as_ptr()}, 0xBABBEEF);
+        assert_eq!(unsafe { *nonnull_ptr.as_ptr() }, 0xBABBEEF);
 
         let free_result = unsafe { allocator.free(nonnull_ptr) };
         assert_eq!(free_result, Ok(()));
 
         free_my_example_allocator(allocator);
     }
-
 }
+
