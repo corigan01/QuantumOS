@@ -352,9 +352,7 @@ pub trait Metadata {
 
 pub trait DirectoryProvider: Iterator<Item = crate::path::Path> + Metadata {}
 
-pub trait FileProvider: Read + Write + Seek + Metadata {
-    fn close(&mut self) -> FsResult<()>;
-}
+pub trait FileProvider: Read + Write + Seek + Metadata {}
 
 pub trait FileSystemProvider {
     fn open_directory(&mut self, path: crate::path::Path) -> FsResult<qk_alloc::boxed::Box<dyn DirectoryProvider>>;
