@@ -410,7 +410,10 @@ mod test {
             &mut self,
             path: crate::path::Path,
         ) -> FsResult<qk_alloc::boxed::Box<dyn FileProvider>> {
-            todo!()
+            Err(FsError::new(
+                FsErrorKind::StorageFull,
+                "Fake storage does not exist",
+            ))
         }
 
         fn mkdir(&mut self, path: crate::path::Path, permission: Permissions) -> FsResult<()> {
@@ -468,5 +471,20 @@ mod test {
         let mut vfs = Vfs::new();
         assert_eq!(vfs.mount("/".into(), Box::new(SuperFakeFs::new())), Ok(0));
         assert!(vfs.mount("/".into(), Box::new(SuperFakeFs::new())).is_err());
+    }
+
+    #[test]
+    fn test_vfs_read() {
+        crate::set_example_allocator();
+
+        let mut vfs = Vfs::new();
+        assert_eq!(vfs.mount("/".into(), Box::new(SuperFakeFs::new())), Ok(0));
+
+        assert!(
+            vfs.open("/somefile.txt".into())
+                .expect_err("Error was OK, should be error")
+                .kind()
+                == FsErrorKind::StorageFull
+        );
     }
 }
