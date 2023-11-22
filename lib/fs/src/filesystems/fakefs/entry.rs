@@ -23,11 +23,32 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use qk_alloc::{boxed::Box, string::String};
+use qk_alloc::boxed::Box;
 
-use super::FakeFsProvider;
+use crate::{io::FileProvider, path::Path, sub_fsprovider};
 
 pub struct Entry {
-    location: String,
-    provider: Box<dyn FakeFsProvider>,
+    path: Path,
+    is_open: bool,
+    provider: Box<dyn FileProvider>,
 }
+
+impl Entry {
+    pub fn new(path: Path, provider: Box<dyn FileProvider>) -> Self {
+        Self {
+            path,
+            is_open: false,
+            provider,
+        }
+    }
+
+    pub fn set_open(&mut self) {
+        self.is_open = true;
+    }
+
+    pub fn set_closed(&mut self) {
+        self.is_open = false;
+    }
+}
+
+sub_fsprovider!(Entry, provider);
