@@ -85,7 +85,7 @@ impl<Type> BitQueue<Type> {
 
         self.mask.set_bit(location, false);
         let value = unsafe { core::ptr::read(&self.vec[location] as *const Option<Type>) };
-        self.vec[location] = None;
+        unsafe { core::ptr::write((&mut self.vec[location]) as *mut Option<Type>, None) };
 
         value
     }
@@ -128,6 +128,9 @@ pub struct Vfs {
     open_ids: BitQueue<OpenItem>,
     filesystems: BitQueue<OpenFs>,
 }
+
+#[cfg(test)]
+extern crate std;
 
 impl Vfs {
     pub fn new() -> Self {
@@ -231,7 +234,8 @@ impl Vfs {
             ));
         }
 
-        Ok(self.filesystems.remove(id).data)
+        let removed = self.filesystems.remove(id);
+        Ok(removed.data)
     }
 
     pub fn open(&mut self, path: Path) -> FsResult<FileDescriptor> {
@@ -293,6 +297,8 @@ impl Vfs {
 
 #[cfg(test)]
 mod test {
+    use crate::io::DirectoryProvider;
+
     use super::*;
 
     #[test]
@@ -375,5 +381,79 @@ mod test {
 
             assert_eq!(bq.len(), 0);
         }
+    }
+
+    struct SuperFakeFs {
+        super_fake_stuff: usize,
+    }
+
+    impl SuperFakeFs {
+        fn new() -> Self {
+            Self {
+                super_fake_stuff: 0,
+            }
+        }
+    }
+
+    impl FileSystemProvider for SuperFakeFs {
+        fn open_directory(
+            &mut self,
+            path: crate::path::Path,
+        ) -> FsResult<qk_alloc::boxed::Box<dyn DirectoryProvider>> {
+            todo!()
+        }
+        fn open_file(
+            &mut self,
+            path: crate::path::Path,
+        ) -> FsResult<qk_alloc::boxed::Box<dyn FileProvider>> {
+            todo!()
+        }
+
+        fn mkdir(&mut self, path: crate::path::Path, permission: Permissions) -> FsResult<()> {
+            todo!()
+        }
+        fn rmdir(&mut self, path: crate::path::Path) -> FsResult<()> {
+            todo!()
+        }
+
+        fn touch(&mut self, path: crate::path::Path, permission: Permissions) -> FsResult<()> {
+            todo!()
+        }
+        fn rm(&mut self, path: crate::path::Path) -> FsResult<()> {
+            todo!()
+        }
+    }
+
+    #[test]
+    fn test_new_with_fake_mount_vfs() {
+        crate::set_example_allocator();
+
+        let mut vfs = Vfs::new();
+        assert_eq!(
+            vfs.mount(Path::from("/"), Box::new(SuperFakeFs::new())),
+            Ok(0)
+        );
+        assert_eq!(
+            vfs.mount(Path::from("/test"), Box::new(SuperFakeFs::new())),
+            Ok(1)
+        );
+    }
+
+    #[test]
+    fn test_vfs_with_unmount() {
+        crate::set_example_allocator();
+
+        let mut vfs = Vfs::new();
+        assert_eq!(
+            vfs.mount(Path::from("/"), Box::new(SuperFakeFs::new())),
+            Ok(0)
+        );
+        assert_eq!(
+            vfs.mount(Path::from("/test"), Box::new(SuperFakeFs::new())),
+            Ok(1)
+        );
+
+        //assert_eq!(vfs.umount("/test".into()).map(|_| ()), Ok(()));
+        assert!(vfs.unmount_id(0).is_ok());
     }
 }
