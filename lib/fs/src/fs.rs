@@ -243,6 +243,18 @@ impl Vfs {
     }
 
     pub fn open(&mut self, path: Path) -> FsResult<FileDescriptor> {
+        let path = path.truncate_path();
+        if self
+            .open_ids
+            .iter()
+            .any(|entry| entry.path == path.as_str())
+        {
+            return Err(FsError::new(
+                FsErrorKind::AddrInUse,
+                "That file is already open!",
+            ));
+        }
+
         let (fsid, fs_rel_path) = self.get_fs_and_rel_path(path.clone())?;
         let fs = &mut self.filesystems[fsid];
 
