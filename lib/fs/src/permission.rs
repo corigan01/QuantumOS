@@ -24,9 +24,11 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 *
 */
 
+#[derive(Clone, Copy, Debug, PartialEq)]
 #[repr(transparent)]
 pub struct GroupId(usize);
 
+#[derive(Clone, Copy, Debug, PartialEq)]
 #[repr(transparent)]
 pub struct UserId(usize);
 
@@ -104,6 +106,7 @@ pub const fn permission_from_octal(val: u16) -> u16 {
     pc
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Permissions {
     pub permission: u16,
     pub uid: UserId,
