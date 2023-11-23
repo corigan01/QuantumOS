@@ -25,6 +25,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 mod dosfs;
 mod fakefs;
+mod tmpfs;
 
 #[macro_export]
 macro_rules! sub_fsprovider {
