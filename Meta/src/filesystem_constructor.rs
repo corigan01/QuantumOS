@@ -30,7 +30,7 @@ use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::Path;
 use std::process::Command;
 use anyhow::{anyhow, Context};
-use ext2::Ext2;
+//use ext2::Ext2;
 use fatfs::FatType::Fat16;
 use fatfs::FormatVolumeOptions;
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
@@ -265,8 +265,8 @@ pub fn make_fat_fs(file_size: usize) -> anyhow::Result<String> {
     Ok(fat_target_file)
 }
 
-pub fn write_directory_into_ext2_img(dir_path: &String, ext2_img: &String) -> anyhow::Result<()> {
-    let ext2_img_open = OpenOptions::new()
+pub fn write_directory_into_ext2_img(_dir_path: &String, _ext2_img: &String) -> anyhow::Result<()> {
+    /*let ext2_img_open = OpenOptions::new()
         .read(true)
         .write(true)
         .open(ext2_img)?;
@@ -299,7 +299,7 @@ pub fn write_directory_into_ext2_img(dir_path: &String, ext2_img: &String) -> an
         let mut system_file_contents = Vec::new();
         system_file.read_to_end(&mut system_file_contents)?;
         ext2_path.write_all(&system_file_contents)?;
-    }
+    }*/
 
     Ok(())
 }
