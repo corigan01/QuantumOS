@@ -28,6 +28,55 @@ mod traits;
 pub use info::*;
 pub use traits::*;
 
+/// # Implement Seek
+/// Implmentes the seek type for something you might want. You must have
+/// `self.seek_current() -> u64`, `self.seek_max() -> u64`, and
+/// `self.set_seek(u64)` for this to work.
+#[macro_export]
+macro_rules! impl_seek {
+    ($type:ty) => {
+        impl crate::io::Seek for $type {
+            fn seek(&mut self, pos: crate::io::SeekFrom) -> crate::FsResult<u64> {
+                let max = self.seek_max() as u64;
+                let current_seek = self.seek_current() as u64;
+                let error_type = Err(crate::error::FsError::new(
+                    crate::error::FsErrorKind::InvalidInput,
+                    "That pos is outside the seek range!",
+                ));
+
+                let new_seek: u64 = match pos {
+                    crate::io::SeekFrom::Start(start) => {
+                        if start > max {
+                            return error_type;
+                        }
+
+                        start
+                    }
+                    crate::io::SeekFrom::End(end) => {
+                        if end > 0 || (-end) > max as i64 {
+                            return error_type;
+                        }
+
+                        (end + max as i64) as u64
+                    }
+                    crate::io::SeekFrom::Current(current) => {
+                        let new_seek = current + (current_seek as i64);
+
+                        if new_seek < 0 || new_seek > max as i64 {
+                            return error_type;
+                        }
+
+                        new_seek as u64
+                    }
+                };
+
+                self.set_seek(new_seek);
+                Ok(new_seek)
+            }
+        }
+    };
+}
+
 /// # Entry Type
 /// The type of filesystem entry this type is. Determines if its a file, directory, or other kind
 /// of entry.

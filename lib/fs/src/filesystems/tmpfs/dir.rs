@@ -78,6 +78,6 @@ impl Metadata for TmpDirectory {
     }
 
     fn len(&self) -> u64 {
-        self.entries.len()
+        self.entries.len() as u64
     }
 }
