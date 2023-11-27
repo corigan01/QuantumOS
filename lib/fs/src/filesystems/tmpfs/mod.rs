@@ -23,77 +23,24 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use core::ptr::NonNull;
+use self::{dir::TmpDirectory, file::TmpFile};
+use crate::{error::FsError, io::FileSystemProvider};
 use qk_alloc::{boxed::Box, vec::Vec};
 
-use crate::{
-    io::{DirectoryProvider, FileSystemProvider, Metadata},
-    path::Path,
-    permission::Permissions,
-};
-
-struct TmpFile {
-    exists: bool,
-    open_count: usize,
-    path: Path,
-    data: Vec<u8>,
-    perm: Permissions,
-}
-
-struct TmpAbDir {
-    path: Path,
-    sub_paths: Vec<Path>,
-    perm: Permissions,
-}
-
-impl DirectoryProvider for TmpAbDir {}
-
-impl Iterator for TmpAbDir {
-    type Item = Path;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.sub_paths.pop_front()
-    }
-}
-
-impl Metadata for TmpAbDir {
-    fn len(&self) -> u64 {
-        0
-    }
-
-    fn kind(&self) -> crate::io::EntryType {
-        crate::io::EntryType::Directory
-    }
-
-    fn permissions(&self) -> Permissions {
-        self.perm.clone()
-    }
-
-    fn can_read(&self) -> bool {
-        true
-    }
-
-    fn can_seek(&self) -> bool {
-        false
-    }
-
-    fn can_write(&self) -> bool {
-        true
-    }
-}
-
-struct TmpAbFile {
-    path: Path,
-    data: NonNull<TmpFile>,
-}
+mod dir;
+mod file;
 
 pub struct TmpFs {
     files: Vec<Box<TmpFile>>,
+    dires: Vec<Box<TmpDirectory>>,
 }
 
 impl TmpFs {
     pub fn new() -> Self {
-        Self { files: Vec::new() }
+        Self {
+            files: Vec::new(),
+            dires: Vec::new(),
+        }
     }
 }
 
@@ -125,7 +72,17 @@ impl FileSystemProvider for TmpFs {
         path: crate::path::Path,
         permission: crate::permission::Permissions,
     ) -> crate::FsResult<()> {
-        todo!()
+        if self.dires.iter().any(|entry| entry.path == path) {
+            return Err(FsError::new(
+                crate::error::FsErrorKind::AlreadyExists,
+                "The directory already exists at that path!",
+            ));
+        }
+
+        let new_dir = TmpDirectory::new(path, permission);
+        self.dires.push(Box::new(new_dir));
+
+        Ok(())
     }
 
     fn touch(
@@ -138,5 +95,24 @@ impl FileSystemProvider for TmpFs {
 
     fn supports_permissions(&self) -> bool {
         true
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_tmp_dir_new() {
+        crate::set_example_allocator();
+
+        let tmpfs = TmpFs::new();
+        let mut vfs = crate::Vfs::new();
+        assert_eq!(vfs.mount("/".into(), Box::new(tmpfs)), Ok(0));
+    }
+
+    #[test]
+    fn test_tmp_dir_newfile() {
+        crate::set_example_allocator();
     }
 }

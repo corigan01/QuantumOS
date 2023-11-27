@@ -531,4 +531,16 @@ mod test {
             "/still_root/fs.txt"
         );
     }
+
+    #[test]
+    fn test_vfs_file() {
+        crate::set_example_allocator();
+
+        let mut vfs = Vfs::new();
+
+        assert_eq!(
+            vfs.mount(Path::from("/"), Box::new(SuperFakeFs::new())),
+            Ok(0)
+        );
+    }
 }
