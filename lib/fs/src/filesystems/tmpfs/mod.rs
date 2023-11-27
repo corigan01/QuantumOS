@@ -91,6 +91,12 @@ pub struct TmpFs {
     files: Vec<Box<TmpFile>>,
 }
 
+impl TmpFs {
+    pub fn new() -> Self {
+        Self { files: Vec::new() }
+    }
+}
+
 impl FileSystemProvider for TmpFs {
     fn open_directory(
         &mut self,
