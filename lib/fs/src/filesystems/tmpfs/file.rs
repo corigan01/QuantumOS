@@ -92,6 +92,6 @@ impl Metadata for TmpFile {
     }
 
     fn len(&self) -> u64 {
-        self.file_contents.len()
+        self.file_contents.len() as u64
     }
 }
