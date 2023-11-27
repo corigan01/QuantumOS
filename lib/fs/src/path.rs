@@ -192,6 +192,17 @@ impl Path {
     pub fn as_str<'a>(&'a self) -> &'a str {
         self.0.as_str()
     }
+
+    pub fn is_child_of(&self, path: &Path) -> bool {
+        if self.0.starts_with(path.0.as_str()) {
+            return true;
+        }
+
+        let truncated_self = self.clone().truncate_path();
+        let truncated_other = path.clone().truncate_path();
+
+        truncated_self.0.starts_with(truncated_other.0.as_str())
+    }
 }
 
 #[cfg(test)]
