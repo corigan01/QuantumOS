@@ -25,7 +25,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 use crate::{
     impl_seek,
-    io::{FileProvider, Metadata, Read, Seek, Write},
+    io::{FileProvider, Metadata, Read, Write},
     path::Path,
     permission::Permissions,
 };
