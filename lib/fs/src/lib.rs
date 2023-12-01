@@ -32,6 +32,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 use crate::error::FsError;
 
 mod abstract_buffer;
+pub mod dir;
 pub mod disks;
 pub mod error;
 pub mod filesystems;
