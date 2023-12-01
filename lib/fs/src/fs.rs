@@ -25,9 +25,10 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 use crate::{
+    dir::dd::DirDescriptor,
     error::{FsError, FsErrorKind},
     fd::FileDescriptor,
-    io::{FileProvider, FileSystemProvider},
+    io::{DirectoryProvider, FileProvider, FileSystemProvider},
     path::Path,
     permission::Permissions,
     FsResult,
@@ -36,11 +37,18 @@ use qk_alloc::{bitfield::Bitmap, boxed::Box, vec::Vec};
 
 pub type FilesystemID = usize;
 
-struct OpenItem {
+struct OpenFile {
     id: FileDescriptor,
     fs_id: FilesystemID,
     path: Path,
     data: Box<dyn FileProvider>,
+}
+
+struct OpenDir {
+    id: DirDescriptor,
+    fs_id: FilesystemID,
+    path: Path,
+    data: Box<dyn DirectoryProvider>,
 }
 
 struct OpenFs {
@@ -125,7 +133,8 @@ impl<Type> core::ops::IndexMut<usize> for BitQueue<Type> {
 }
 
 pub struct Vfs {
-    open_ids: BitQueue<OpenItem>,
+    open_ids: BitQueue<OpenFile>,
+    open_dds: BitQueue<OpenDir>,
     filesystems: BitQueue<OpenFs>,
 }
 
@@ -133,6 +142,7 @@ impl Vfs {
     pub fn new() -> Self {
         Self {
             open_ids: BitQueue::new(),
+            open_dds: BitQueue::new(),
             filesystems: BitQueue::new(),
         }
     }
@@ -260,7 +270,7 @@ impl Vfs {
 
         let file_child = fs.data.open_file(fs_rel_path)?;
         let file_id = self.open_ids.first_free().into();
-        self.open_ids.queue(OpenItem {
+        self.open_ids.queue(OpenFile {
             id: file_id,
             fs_id: fsid,
             path,
@@ -268,6 +278,34 @@ impl Vfs {
         });
 
         Ok(file_id)
+    }
+
+    pub fn open_dir(&mut self, path: Path) -> FsResult<DirDescriptor> {
+        let path = path.truncate_path();
+        if self
+            .open_dds
+            .iter()
+            .any(|entry| entry.path == path.as_str())
+        {
+            return Err(FsError::new(
+                FsErrorKind::AddrInUse,
+                "That Directory is already open!",
+            ));
+        }
+
+        let (fsid, fs_rel_path) = self.get_fs_and_rel_path(path.clone())?;
+        let fs = &mut self.filesystems[fsid];
+
+        let dir_child = fs.data.open_directory(fs_rel_path)?;
+        let dir_id = self.open_dds.first_free().into();
+        self.open_dds.queue(OpenDir {
+            id: dir_id,
+            fs_id: fsid,
+            path,
+            data: dir_child,
+        });
+
+        Ok(dir_id)
     }
 
     pub fn close(&mut self, fd: FileDescriptor) -> FsResult<()> {
@@ -279,6 +317,18 @@ impl Vfs {
         }
 
         self.open_ids.remove(fd.0);
+        Ok(())
+    }
+
+    pub fn close_dir(&mut self, dd: DirDescriptor) -> FsResult<()> {
+        if !self.open_dds.get_state(dd.0) {
+            return Err(FsError::new(
+                FsErrorKind::InvalidInput,
+                "That dd does not exist!",
+            ));
+        }
+
+        self.open_dds.remove(dd.0);
         Ok(())
     }
 
