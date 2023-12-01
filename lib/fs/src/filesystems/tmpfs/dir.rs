@@ -47,16 +47,36 @@ impl TmpDirectory {
     }
 }
 
-impl DirectoryProvider for TmpDirectory {}
-impl Iterator for TmpDirectory {
-    type Item = Path;
+// TODO: Maybe there is a more efficient way of doing this in
+// the future, but for right now this works! :)
+pub struct TmpOpenDirectory {
+    pub(crate) path: Path,
+    pub(crate) perm: Permissions,
+    pub(crate) total_entries: usize,
+    pub(crate) entries: Vec<Path>,
+}
 
-    fn next(&mut self) -> Option<Self::Item> {
-        todo!()
+impl From<&TmpDirectory> for TmpOpenDirectory {
+    fn from(value: &TmpDirectory) -> Self {
+        Self {
+            path: value.path.clone(),
+            perm: value.perm,
+            total_entries: value.entries.len(),
+            entries: value.entries.clone(),
+        }
     }
 }
 
-impl Metadata for TmpDirectory {
+impl DirectoryProvider for TmpOpenDirectory {}
+impl Iterator for TmpOpenDirectory {
+    type Item = Path;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.entries.pop_front()
+    }
+}
+
+impl Metadata for TmpOpenDirectory {
     fn kind(&self) -> crate::io::EntryType {
         crate::io::EntryType::Directory
     }
@@ -78,6 +98,6 @@ impl Metadata for TmpDirectory {
     }
 
     fn len(&self) -> u64 {
-        self.entries.len() as u64
+        self.total_entries as u64
     }
 }
