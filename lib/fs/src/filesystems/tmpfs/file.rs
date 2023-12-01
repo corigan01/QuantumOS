@@ -23,15 +23,18 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use core::ptr::NonNull;
+
 use crate::{
     impl_seek,
-    io::{FileProvider, Metadata, Read, Write},
+    io::{FileProvider, Metadata, Read, Seek, Write},
     path::Path,
     permission::Permissions,
 };
-use qk_alloc::vec::Vec;
+use qk_alloc::{boxed::Box, vec::Vec};
 
 pub struct TmpFile {
+    pub(crate) count_open: usize,
     pub(crate) path: Path,
     pub(crate) perm: Permissions,
     pub(crate) file_contents: Vec<u8>,
@@ -41,6 +44,7 @@ pub struct TmpFile {
 impl TmpFile {
     pub fn new(path: Path, perm: Permissions) -> Self {
         Self {
+            count_open: 0,
             path,
             perm,
             file_contents: Vec::new(),
@@ -64,7 +68,6 @@ impl TmpFile {
     }
 }
 
-impl FileProvider for TmpFile {}
 impl Read for TmpFile {
     fn read(&mut self, buf: &mut [u8]) -> crate::FsResult<usize> {
         let max_buffer_top =
@@ -72,7 +75,7 @@ impl Read for TmpFile {
         let reading_size = max_buffer_top - self.seek as usize;
         let slice_of_self = &self.file_contents.as_slice()[self.seek as usize..max_buffer_top];
 
-        buf.copy_from_slice(&slice_of_self);
+        buf[..(max_buffer_top - self.seek as usize)].copy_from_slice(&slice_of_self);
         self.seek += reading_size as u64;
 
         Ok(reading_size)
@@ -80,15 +83,12 @@ impl Read for TmpFile {
 }
 impl Write for TmpFile {
     fn write(&mut self, buf: &[u8]) -> crate::FsResult<usize> {
-        let max_buffer_top = core::cmp::min(self.file_contents.len(), buf.len());
-        let writting_size = max_buffer_top - self.seek as usize;
-        let slice_of_self =
-            &mut self.file_contents.as_mut_slice()[self.seek as usize..max_buffer_top];
+        for byte in buf {
+            self.file_contents.push(*byte);
+        }
+        self.seek += buf.len() as u64;
 
-        slice_of_self.copy_from_slice(&buf[..writting_size]);
-        self.seek += writting_size as u64;
-
-        Ok(writting_size)
+        Ok(buf.len())
     }
 
     fn flush(&mut self) -> crate::FsResult<()> {
@@ -98,9 +98,70 @@ impl Write for TmpFile {
 
 impl_seek!(TmpFile);
 
-impl Metadata for TmpFile {
+pub struct TmpOpenFile {
+    pub(crate) file: NonNull<TmpFile>,
+}
+
+impl TmpOpenFile {
+    pub fn get_ref(&self) -> &TmpFile {
+        let inner = unsafe { self.file.as_ref() };
+
+        assert_ne!(
+            inner.count_open, 0,
+            "Cannot have a file with an open_count of zero because we are holding an entry!"
+        );
+        inner
+    }
+
+    pub fn get_mut(&mut self) -> &mut TmpFile {
+        let inner = unsafe { self.file.as_mut() };
+
+        assert_ne!(
+            inner.count_open, 0,
+            "Cannot have a file with an open_count of zero because we are holding an entry!"
+        );
+        inner
+    }
+}
+
+impl From<&mut Box<TmpFile>> for TmpOpenFile {
+    fn from(value: &mut Box<TmpFile>) -> Self {
+        value.count_open += 1;
+
+        let Some(ptr) = NonNull::new(value.as_ptr()) else {
+            unreachable!("Cannot have a box with a null ptr!");
+        };
+
+        Self { file: ptr }
+    }
+}
+
+impl FileProvider for TmpOpenFile {}
+impl Read for TmpOpenFile {
+    fn read(&mut self, buf: &mut [u8]) -> crate::FsResult<usize> {
+        self.get_mut().read(buf)
+    }
+}
+
+impl Write for TmpOpenFile {
+    fn write(&mut self, buf: &[u8]) -> crate::FsResult<usize> {
+        self.get_mut().write(buf)
+    }
+
+    fn flush(&mut self) -> crate::FsResult<()> {
+        Ok(())
+    }
+}
+
+impl Seek for TmpOpenFile {
+    fn seek(&mut self, pos: crate::io::SeekFrom) -> crate::FsResult<u64> {
+        self.get_mut().seek(pos)
+    }
+}
+
+impl Metadata for TmpOpenFile {
     fn permissions(&self) -> Permissions {
-        self.perm
+        self.get_ref().perm
     }
 
     fn can_write(&self) -> bool {
@@ -120,6 +181,6 @@ impl Metadata for TmpFile {
     }
 
     fn len(&self) -> u64 {
-        self.file_contents.len() as u64
+        self.get_ref().file_contents.len() as u64
     }
 }
