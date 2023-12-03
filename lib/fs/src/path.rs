@@ -71,10 +71,58 @@ impl Path {
     ///     desolved = "/"
     ///
     pub fn truncate_path(&self) -> Path {
-        todo!()
+        let mut rebuilding_string = String::new();
+        let mut state = 0;
+        let iterator = self
+            .children()
+            .filter(|member| member != &".")
+            .rev()
+            .map(|member| {
+                if member == ".." {
+                    state += 1;
+                    return "";
+                }
+
+                if state > 0 {
+                    state -= 1;
+                    return "";
+                }
+
+                member
+            })
+            .filter(|member| member.len() != 0);
+        let collection: Vec<&str> = iterator.collect();
+        if !self.0.starts_with("/") {
+            for _ in 0..state {
+                rebuilding_string.push_str("../");
+            }
+        }
+
+        for child in collection.iter().rev() {
+            rebuilding_string.push_str("/");
+            rebuilding_string.push_str(child);
+        }
+
+        if self.0.ends_with("/") && !rebuilding_string.ends_with("/") {
+            rebuilding_string.push_str("/");
+        }
+
+        if self.0.starts_with(".") && !rebuilding_string.as_str().starts_with(".") {
+            rebuilding_string.prepend(".");
+        }
+
+        if self.0.starts_with("/") && !rebuilding_string.as_str().starts_with("/") {
+            rebuilding_string.prepend("/");
+        }
+
+        if rebuilding_string.len() == 0 {
+            rebuilding_string.push_str(".");
+        }
+
+        Path::from(rebuilding_string)
     }
 
-    pub fn children<'a>(&'a self) -> impl Iterator<Item = &'a str> {
+    pub fn children<'a>(&'a self) -> impl DoubleEndedIterator<Item = &'a str> {
         self.0
             .as_str()
             .split('/')
@@ -218,13 +266,16 @@ mod test {
         let path = Path::from("/1/2/3/4/5/6/7/8");
         let children = path.children();
         assert_eq!(
-            children.as_slice(),
+            children.collect::<Vec<&str>>().as_slice(),
             &["1", "2", "3", "4", "5", "6", "7", "8"]
         );
 
         let path = Path::from("///1/2/3/4/5/../6");
         let children = path.children();
-        assert_eq!(children.as_slice(), &["1", "2", "3", "4", "6"])
+        assert_eq!(
+            children.collect::<Vec<&str>>().as_slice(),
+            &["1", "2", "3", "4", "5", "..", "6"]
+        );
     }
 
     #[test]
