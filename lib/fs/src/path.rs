@@ -150,10 +150,7 @@ impl Path {
                 final_string.push_str(".");
             }
 
-            if !final_string.contains("..")
-                || final_string.starts_with("..")
-                || final_string.starts_with("/..")
-            {
+            if !final_string.contains("..") || final_string.starts_with("..") {
                 break final_string;
             }
 
@@ -351,7 +348,11 @@ mod test {
         assert_eq!(
             children.as_slice(),
             &["1", "2", "3", "4", "5", "6", "7", "8"]
-        )
+        );
+
+        let path = Path::from("///1/2/3/4/5/../6");
+        let children = path.children();
+        assert_eq!(children.as_slice(), &["1", "2", "3", "4", "6"])
     }
 
     #[test]
