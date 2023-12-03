@@ -204,10 +204,14 @@ impl Vfs {
         let fs = &self.filesystems[fsid];
         let fs_mount = fs.path.clone();
 
-        let fs_rel_path = path.clone().snip_off(fs_mount).ok_or(FsError::new(
+        let mut fs_rel_path = path.remove_parent(&fs_mount).ok_or(FsError::new(
             FsErrorKind::InvalidData,
             "path cannot snip to relative path for sub-filesystem",
         ))?;
+
+        if !fs_rel_path.as_str().starts_with("/") {
+            fs_rel_path.prepend("/");
+        }
 
         Ok((fsid, fs_rel_path))
     }
@@ -542,11 +546,11 @@ mod test {
         let mut vfs = Vfs::new();
         assert_eq!(vfs.mount("/".into(), Box::new(SuperFakeFs::new())), Ok(0));
 
-        assert!(
+        assert_eq!(
             vfs.open("/somefile.txt".into())
                 .expect_err("Error was OK, should be error")
-                .kind()
-                == FsErrorKind::StorageFull
+                .kind(),
+            FsErrorKind::StorageFull
         );
     }
 
