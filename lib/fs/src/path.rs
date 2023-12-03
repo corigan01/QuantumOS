@@ -78,17 +78,21 @@ impl Path {
         // allocation is just slowing this down.
 
         let final_string: String = loop {
-            let mut final_string: String = Path::from(starting_path.clone())
-                // Get the children of the path
-                // Example path = "/home/user/someone"
-                //  1. 'home'
-                //  2. 'user'
-                //  3. 'someone'
-                .children()
-                .into_iter()
-                // Remove all '.'
-                .filter(|child| child != &".")
-                .chain(["", "", ""])
+            let before_buffer = [""].iter().map(|entry| *entry);
+            let mut final_string: String = before_buffer
+                .chain(
+                    Path::from(starting_path.clone())
+                        // Get the children of the path
+                        // Example path = "/home/user/someone"
+                        //  1. 'home'
+                        //  2. 'user'
+                        //  3. 'someone'
+                        .children()
+                        .into_iter()
+                        // Remove all '.'
+                        .filter(|child| child != &".")
+                        .chain(["", "", ""]),
+                )
                 .collect::<Vec<&str>>()
                 // Remove all "/path/../path/"
                 .windows(2)
