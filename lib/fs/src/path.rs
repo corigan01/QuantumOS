@@ -70,7 +70,7 @@ impl Path {
     /// 3.  Path = "/Node/../Node/../."
     ///     desolved = "/"
     ///
-    pub fn truncate_path(self) -> Path {
+    pub fn truncate_path(&self) -> Path {
         let mut starting_path = self.0.clone();
 
         // TODO: Make this better in the future
@@ -97,7 +97,6 @@ impl Path {
                         *val = val.checked_sub(1).unwrap_or(0);
                         return Some("");
                     }
-
                     let first = &init[0];
                     let second = &init[1];
 
@@ -147,7 +146,10 @@ impl Path {
                 final_string.push_str(".");
             }
 
-            if !final_string.contains("..") || final_string.starts_with("..") {
+            if !final_string.contains("..")
+                || final_string.starts_with("..")
+                || final_string.starts_with("/..")
+            {
                 break final_string;
             }
 
@@ -161,7 +163,7 @@ impl Path {
         self.0
             .as_str()
             .split('/')
-            .filter(|child| !(*child == "/"))
+            .filter(|child| !(*child == "/") && !(*child == ""))
             .collect()
     }
 
@@ -202,6 +204,32 @@ impl Path {
         let truncated_other = path.clone().truncate_path();
 
         truncated_self.0.starts_with(truncated_other.0.as_str())
+    }
+
+    pub fn parent_path(&self) -> Path {
+        let parent_truncated = self.clone().truncate_path();
+        let mut children = parent_truncated.children();
+        children.pop();
+
+        if self.0.ends_with("/") && self.0.len() > 1 {
+            children.pop();
+        }
+
+        let mut rebuilt = String::new();
+        for child in children {
+            rebuilt.push_str(child);
+            rebuilt.push('/');
+        }
+
+        if !self.0.ends_with("/") {
+            rebuilt.pop();
+        }
+
+        if rebuilt.is_empty() {
+            rebuilt.push_str("/");
+        }
+
+        Path::from(rebuilt)
     }
 }
 
@@ -308,5 +336,56 @@ mod test {
                     .truncate_path()
             );
         }
+    }
+
+    #[test]
+    fn test_child_path() {
+        crate::set_example_allocator();
+
+        let path = Path::from("/1/2/3/4/5/6/7/8");
+        let children = path.children();
+        assert_eq!(
+            children.as_slice(),
+            &["1", "2", "3", "4", "5", "6", "7", "8"]
+        )
+    }
+
+    #[test]
+    fn test_parent_path() {
+        crate::set_example_allocator();
+
+        assert_eq!(
+            Path::from("/something/neat.txt").parent_path(),
+            Path::from("/something")
+        );
+
+        assert_eq!(
+            Path::from("/something/neat/").parent_path(),
+            Path::from("/something/")
+        );
+
+        assert_eq!(
+            Path::from("/something/otherthing/super").parent_path(),
+            Path::from("/something/otherthing")
+        );
+
+        assert_eq!(Path::from("/test").parent_path(), Path::from("/"));
+        assert_eq!(Path::from("/").parent_path(), Path::from("/"));
+    }
+
+    #[test]
+    fn test_parent_path_second() {
+        crate::set_example_allocator();
+
+        assert_eq!(
+            Path::from("/this/this/").parent_path(),
+            Path::from("/this/")
+        );
+
+        assert_eq!(Path::from("//////////").parent_path(), Path::from("/"));
+        assert_eq!(
+            Path::from("this is a test/ path or something//nicepath/or something").parent_path(),
+            Path::from("this is a test/ path or something/nicepath")
+        );
     }
 }
