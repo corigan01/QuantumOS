@@ -148,16 +148,24 @@ impl Path {
         !self.is_absolute()
     }
 
+    pub fn is_root(&self) -> bool {
+        self.0.as_str() == "/"
+    }
+
     /// # Snip Off
     /// Takes the current path and trims it to the part past the path provided.
     pub fn remove_parent(&self, path: &Path) -> Option<Path> {
-        if !path.is_child_of(&self) {
+        if !self.is_child_of(&path) {
             return None;
         }
 
         Some(Path::from(
-            &self.0.as_str()[path.0.trim_end_matches("/").len()..],
+            self.0.as_str()[path.0.trim_end_matches("/").len()..].trim_start_matches("/"),
         ))
+    }
+
+    pub fn prepend(&mut self, value: &str) {
+        self.0.prepend(value)
     }
 
     pub fn as_str<'a>(&'a self) -> &'a str {
@@ -165,12 +173,12 @@ impl Path {
     }
 
     pub fn is_child_of(&self, path: &Path) -> bool {
-        if self.children().count() > path.children().count() {
+        if self.children().count() < path.children().count() {
             return false;
         }
 
-        for (idx, child) in self.children().enumerate() {
-            if child != path.children().nth(idx).unwrap_or("") {
+        for (idx, child) in path.children().enumerate() {
+            if child != self.children().nth(idx).unwrap_or("") {
                 return false;
             }
         }
@@ -345,6 +353,19 @@ mod test {
 
         assert_eq!(Path::from("/test").parent_path(), Path::from("/"));
         assert_eq!(Path::from("/").parent_path(), Path::from("/"));
+        assert_eq!(Path::from("/../").parent_path(), Path::from("/"));
+        assert_eq!(
+            Path::from("/dir/test.txt").parent_path(),
+            Path::from("/dir")
+        );
+    }
+
+    #[test]
+    fn test_child_of() {
+        crate::set_example_allocator();
+
+        assert!(Path::from("/test/test.txt").is_child_of(&"/test/".into()));
+        assert!(Path::from("/test/test.txt").is_child_of(&"/test".into()));
     }
 
     #[test]
@@ -361,5 +382,15 @@ mod test {
             Path::from("this is a test/ path or something//nicepath/or something").parent_path(),
             Path::from("this is a test/ path or something/nicepath")
         );
+    }
+
+    #[test]
+    fn test_remove_parent() {
+        crate::set_example_allocator();
+
+        assert_eq!(
+            Path::from("/somepath/test.txt").remove_parent(&Path::from("/somepath")),
+            Some(Path::from("test.txt"))
+        )
     }
 }
