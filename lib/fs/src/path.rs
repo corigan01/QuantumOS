@@ -91,8 +91,11 @@ impl Path {
                 member
             })
             .filter(|member| member.len() != 0);
+
+        let self_0 = self.0.trim();
+
         let collection: Vec<&str> = iterator.collect();
-        if !self.0.starts_with("/") {
+        if !self_0.starts_with("/") {
             for _ in 0..state {
                 rebuilding_string.push_str("../");
             }
@@ -103,16 +106,24 @@ impl Path {
             rebuilding_string.push_str(child);
         }
 
-        if self.0.ends_with("/") && !rebuilding_string.ends_with("/") {
+        if !self_0.ends_with("/") {
+            rebuilding_string = String::from(rebuilding_string.trim_start_matches("/"));
+        }
+
+        if (self_0.ends_with("/") || self_0.ends_with("/..")) && !rebuilding_string.ends_with("/") {
             rebuilding_string.push_str("/");
         }
 
-        if self.0.starts_with(".") && !rebuilding_string.as_str().starts_with(".") {
+        if self_0.starts_with(".") && !rebuilding_string.starts_with(".") {
             rebuilding_string.prepend(".");
         }
 
-        if self.0.starts_with("/") && !rebuilding_string.as_str().starts_with("/") {
+        if self_0.starts_with("/") && !rebuilding_string.starts_with("/") {
             rebuilding_string.prepend("/");
+        }
+
+        if !self_0.starts_with("/") && rebuilding_string.starts_with("/") {
+            rebuilding_string = String::from(&rebuilding_string.as_str()[1..]);
         }
 
         if rebuilding_string.len() == 0 {
@@ -126,7 +137,7 @@ impl Path {
         self.0
             .as_str()
             .split('/')
-            .filter(|member| member.len() != 0)
+            .filter(|member| member.len() != 0 && member != &"/")
     }
 
     pub fn is_absolute(&self) -> bool {
@@ -137,8 +148,16 @@ impl Path {
         !self.is_absolute()
     }
 
-    pub fn snip_off(self, path: Path) -> Option<Path> {
-        todo!()
+    /// # Snip Off
+    /// Takes the current path and trims it to the part past the path provided.
+    pub fn remove_parent(&self, path: &Path) -> Option<Path> {
+        if !path.is_child_of(&self) {
+            return None;
+        }
+
+        Some(Path::from(
+            &self.0.as_str()[path.0.trim_end_matches("/").len()..],
+        ))
     }
 
     pub fn as_str<'a>(&'a self) -> &'a str {
@@ -146,11 +165,38 @@ impl Path {
     }
 
     pub fn is_child_of(&self, path: &Path) -> bool {
-        todo!()
+        if self.children().count() > path.children().count() {
+            return false;
+        }
+
+        for (idx, child) in self.children().enumerate() {
+            if child != path.children().nth(idx).unwrap_or("") {
+                return false;
+            }
+        }
+
+        true
     }
 
     pub fn parent_path(&self) -> Path {
-        todo!()
+        let mut new_path_string = String::from(self.0.as_str());
+        new_path_string.push_str("/..");
+
+        if self.0.ends_with("/") {
+            new_path_string.push_str("/");
+        }
+
+        new_path_string = Path::from(new_path_string).truncate_path().0;
+
+        if new_path_string.ends_with("/") && !self.0.ends_with("/") {
+            new_path_string.pop();
+        }
+
+        if !new_path_string.starts_with("/") && self.0.starts_with("/") {
+            new_path_string.prepend("/");
+        }
+
+        Path::from(new_path_string)
     }
 }
 
