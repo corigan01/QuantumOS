@@ -53,11 +53,13 @@ impl TmpFs {
         }
     }
 
-    fn get_dir_index_for_path(&mut self, path: Path) -> FsResult<usize> {
+    fn get_dir_index_for_path(&mut self, path: &Path) -> FsResult<usize> {
         self.dires
             .iter()
             .enumerate()
-            .find(|(_, entry)| entry.path == path)
+            .find(|(_, entry)| {
+                entry.path.as_str().trim_end_matches("/") == path.as_str().trim_end_matches("/")
+            })
             .map(|(index, _)| index)
             .ok_or(FsError::new(
                 crate::error::FsErrorKind::NotFound,
@@ -65,11 +67,11 @@ impl TmpFs {
             ))
     }
 
-    fn get_file_index_for_path(&mut self, path: Path) -> FsResult<usize> {
+    fn get_file_index_for_path(&mut self, path: &Path) -> FsResult<usize> {
         self.files
             .iter()
             .enumerate()
-            .find(|(_, entry)| entry.path == path)
+            .find(|(_, entry)| &entry.path == path)
             .map(|(index, _)| index)
             .ok_or(FsError::new(
                 crate::error::FsErrorKind::NotFound,
@@ -77,8 +79,30 @@ impl TmpFs {
             ))
     }
 
-    fn does_parent_exist(&self, path: Path) -> bool {
-        self.dires.iter().any(|entry| path.is_child_of(&entry.path))
+    fn does_parent_exist(&self, path: &Path) -> bool {
+        self.dires.iter().any(|entry| path.is_child_of(&entry.path)) || path.parent_path().is_root()
+    }
+
+    fn get_directory_parent(&mut self, path: &Path) -> &mut TmpDirectory {
+        let path = path.parent_path();
+        self.dires
+            .iter_mut()
+            .find(|entry| {
+                path.as_str().trim_end_matches("/") == entry.path.as_str().trim_end_matches("/")
+            })
+            .expect("It should not be possible to fail when we just checked if we have a parent!")
+    }
+
+    fn remove_directory_entry(&mut self, path: &Path) {
+        self.get_directory_parent(&path)
+            .entries
+            .retain(|entry| entry.as_str() != path.as_str());
+    }
+
+    fn add_directory_entry(&mut self, path: &Path) {
+        self.get_directory_parent(&path)
+            .entries
+            .push(path.truncate_path());
     }
 }
 
@@ -87,7 +111,7 @@ impl FileSystemProvider for TmpFs {
         &mut self,
         path: crate::path::Path,
     ) -> crate::FsResult<qk_alloc::boxed::Box<dyn crate::io::DirectoryProvider>> {
-        let dir_index = self.get_dir_index_for_path(path)?;
+        let dir_index = self.get_dir_index_for_path(&path)?;
         let tmp_open = TmpOpenDirectory::from(self.dires[dir_index].as_ref());
 
         Ok(Box::new(tmp_open))
@@ -97,21 +121,20 @@ impl FileSystemProvider for TmpFs {
         &mut self,
         path: crate::path::Path,
     ) -> crate::FsResult<qk_alloc::boxed::Box<dyn crate::io::FileProvider>> {
-        let file_index = self.get_file_index_for_path(path)?;
+        let file_index = self.get_file_index_for_path(&path)?;
         let tmp_file = TmpOpenFile::from(&mut self.files[file_index]);
 
         Ok(Box::new(tmp_file))
     }
 
     fn rmdir(&mut self, path: crate::path::Path) -> crate::FsResult<()> {
-        let dir_index = self.get_dir_index_for_path(path)?;
+        let dir_index = self.get_dir_index_for_path(&path)?;
 
         // The scope of this refrence will no longer be valid when we move the entry
         // thats why we enclose it in this block so the refrence is dropped before our
         // value is deleted.
         {
             let dir_ref = &self.dires[dir_index];
-
             if dir_ref.entries.len() > 0 {
                 return Err(FsError::new(
                 crate::error::FsErrorKind::PermissionDenied,
@@ -120,12 +143,15 @@ impl FileSystemProvider for TmpFs {
             }
         }
 
+        self.remove_directory_entry(&path);
         self.dires.remove(dir_index);
         Ok(())
     }
 
     fn rm(&mut self, path: crate::path::Path) -> crate::FsResult<()> {
-        let file_index = self.get_file_index_for_path(path)?;
+        let file_index = self.get_file_index_for_path(&path)?;
+
+        self.remove_directory_entry(&path);
         self.files.remove(file_index);
         Ok(())
     }
@@ -135,19 +161,21 @@ impl FileSystemProvider for TmpFs {
         path: crate::path::Path,
         permission: crate::permission::Permissions,
     ) -> crate::FsResult<()> {
-        if self.get_dir_index_for_path(path.clone()).is_ok() {
+        if self.get_dir_index_for_path(&path).is_ok() {
             return Err(FsError::new(
                 crate::error::FsErrorKind::AlreadyExists,
                 "The directory already exists at that path!",
             ));
         }
 
-        if !self.does_parent_exist(path.clone()) {
+        if !self.does_parent_exist(&path) {
             return Err(FsError::new(
                 crate::error::FsErrorKind::InvalidInput,
                 "The parent for this directory does not exist!",
             ));
         }
+
+        self.add_directory_entry(&path);
 
         let new_dir = TmpDirectory::new(path, permission);
         self.dires.push(Box::new(new_dir));
@@ -160,19 +188,21 @@ impl FileSystemProvider for TmpFs {
         path: crate::path::Path,
         permission: crate::permission::Permissions,
     ) -> crate::FsResult<()> {
-        if self.get_file_index_for_path(path.clone()).is_ok() {
+        if self.get_file_index_for_path(&path).is_ok() {
             return Err(FsError::new(
                 crate::error::FsErrorKind::AlreadyExists,
                 "The file already exists at that path!",
             ));
         }
 
-        if !self.does_parent_exist(path.clone()) {
+        if !self.does_parent_exist(&path) {
             return Err(FsError::new(
                 crate::error::FsErrorKind::InvalidInput,
                 "The parent for this file does not exist!",
             ));
         }
+
+        self.add_directory_entry(&path);
 
         let new_file = TmpFile::new(path.clone(), permission);
         self.files.push(Box::new(new_file));
@@ -238,5 +268,60 @@ mod test {
         file.read(&mut read_buff).unwrap();
 
         assert_eq!(&read_buff, b"Hello World!");
+    }
+
+    #[test]
+    fn test_tmp_dir_create_dir_and_file() {
+        crate::set_example_allocator();
+        let mut tmpfs = TmpFs::new(Permissions::all());
+
+        tmpfs.mkdir("/dir".into(), Permissions::all()).unwrap();
+        tmpfs
+            .touch("/dir/test.txt".into(), Permissions::all())
+            .unwrap();
+    }
+
+    #[test]
+    fn test_tmp_dir_create_dir_and_del() {
+        crate::set_example_allocator();
+        let mut tmpfs = TmpFs::new(Permissions::all());
+
+        tmpfs.mkdir("/mydir".into(), Permissions::all()).unwrap();
+        tmpfs
+            .touch("/mydir/test.txt".into(), Permissions::all())
+            .unwrap();
+
+        assert!(
+            tmpfs.rmdir("/mydir".into()).is_err(),
+            "It should not be possible to remove dirs with children"
+        );
+        tmpfs.rm("/mydir/test.txt".into()).unwrap();
+        assert!(
+            tmpfs.rmdir("/mydir".into()).is_ok(),
+            "It should be possible to remove a dir with no children"
+        );
+    }
+
+    #[test]
+    fn test_tmp_dir_create_dir_dir_del() {
+        crate::set_example_allocator();
+        let mut tmpfs = TmpFs::new(Permissions::all());
+
+        tmpfs.mkdir("/test/".into(), Permissions::all()).unwrap();
+        tmpfs
+            .mkdir("/test/test/".into(), Permissions::all())
+            .unwrap();
+        tmpfs
+            .mkdir("/test/test/testfinal".into(), Permissions::all())
+            .unwrap();
+
+        assert!(
+            tmpfs.rmdir("/test".into()).is_err(),
+            "It should not be possible to remove a dir with children"
+        );
+
+        tmpfs.rmdir("/test/test/testfinal".into()).unwrap();
+        tmpfs.rmdir("/test/test/".into()).unwrap();
+        tmpfs.rmdir("/test".into()).unwrap();
     }
 }
