@@ -54,7 +54,7 @@ pub fn set_example_allocator() {
     use qk_alloc::heap::alloc::KernelHeap;
     use qk_alloc::heap::{free_lock, reserve_lock, set_global_alloc, THE_GLOBAL_ALLOC};
     use qk_alloc::usable_region::UsableRegion;
-    let size_in_bytes = 10 * 1024;
+    let size_in_bytes = 100 * 1024;
 
     reserve_lock();
 
