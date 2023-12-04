@@ -33,8 +33,8 @@ use crate::{
 };
 use qk_alloc::{boxed::Box, vec::Vec};
 
-mod dir;
-mod file;
+pub mod dir;
+pub mod file;
 
 pub struct TmpFs {
     files: Vec<Box<TmpFile>>,

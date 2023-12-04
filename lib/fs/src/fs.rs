@@ -23,12 +23,11 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 *
 */
-
 use crate::{
     dir::dd::DirDescriptor,
     error::{FsError, FsErrorKind},
     fd::FileDescriptor,
-    io::{DirectoryProvider, FileProvider, FileSystemProvider},
+    io::{DirectoryProvider, FileProvider, FileSystemProvider, SeekFrom},
     path::Path,
     permission::Permissions,
     FsResult,
@@ -37,18 +36,18 @@ use qk_alloc::{bitfield::Bitmap, boxed::Box, vec::Vec};
 
 pub type FilesystemID = usize;
 
-struct OpenFile {
-    id: FileDescriptor,
-    fs_id: FilesystemID,
-    path: Path,
-    data: Box<dyn FileProvider>,
+pub(crate) struct OpenFile {
+    pub id: FileDescriptor,
+    pub fs_id: FilesystemID,
+    pub path: Path,
+    pub data: Box<dyn FileProvider>,
 }
 
-struct OpenDir {
-    id: DirDescriptor,
-    fs_id: FilesystemID,
-    path: Path,
-    data: Box<dyn DirectoryProvider>,
+pub(crate) struct OpenDir {
+    pub id: DirDescriptor,
+    pub fs_id: FilesystemID,
+    pub path: Path,
+    pub data: Box<dyn DirectoryProvider>,
 }
 
 struct OpenFs {
@@ -363,11 +362,44 @@ impl Vfs {
 
         fs.data.rmdir(fs_rel_path)
     }
+
+    pub(crate) fn fd_ref(&self, fd: FileDescriptor) -> FsResult<&OpenFile> {
+        if self.open_ids.len() < fd.0 {
+            return Err(FsError::new(
+                FsErrorKind::NotFound,
+                "That file descriptor was not found!",
+            ));
+        }
+
+        Ok(&self.open_ids[fd.0])
+    }
+
+    pub(crate) fn fd_mut(&mut self, fd: FileDescriptor) -> FsResult<&mut OpenFile> {
+        if self.open_ids.len() < fd.0 {
+            return Err(FsError::new(
+                FsErrorKind::NotFound,
+                "That file descriptor was not found!",
+            ));
+        }
+
+        Ok(&mut self.open_ids[fd.0])
+    }
+
+    pub fn fread(&mut self, fd: FileDescriptor, buf: &mut [u8]) -> FsResult<usize> {
+        self.fd_mut(fd)?.data.read(buf)
+    }
+
+    pub fn fseek(&mut self, fd: FileDescriptor, seek: SeekFrom) -> FsResult<u64> {
+        self.fd_mut(fd)?.data.seek(seek)
+    }
 }
 
 #[cfg(test)]
 mod test {
-    use crate::io::DirectoryProvider;
+    use crate::{
+        filesystems::tmpfs::TmpFs,
+        io::{DirectoryProvider, Write},
+    };
 
     use super::*;
 
@@ -596,5 +628,36 @@ mod test {
             vfs.mount(Path::from("/"), Box::new(SuperFakeFs::new())),
             Ok(0)
         );
+    }
+
+    #[test]
+    fn test_vfs_with_tmpfs() {
+        crate::set_example_allocator();
+        use crate::io::{Read, Seek};
+
+        let mut vfs = Vfs::new();
+
+        assert_eq!(
+            vfs.mount(Path::from("/"), Box::new(TmpFs::new(Permissions::all()))),
+            Ok(0)
+        );
+
+        vfs.touch("/myfile.txt".into(), Permissions::all()).unwrap();
+        {
+            let mut file = vfs.open("/myfile.txt".into()).unwrap().link_vfs(&mut vfs);
+
+            assert_eq!(file.write(b"123456789"), Ok(9));
+            let mut read_buf = [0u8; 9];
+            file.rewind().unwrap();
+            assert_eq!(file.read(&mut read_buf), Ok(9));
+            assert_eq!(&read_buf, b"123456789");
+            file.close().unwrap();
+        }
+
+        assert_eq!(vfs.open_ids.len(), 0);
+        assert_eq!(vfs.open_dds.len(), 0);
+
+        vfs.rm("/myfile.txt".into()).unwrap();
+        assert!(matches!(vfs.open("/myfile.txt".into()), Err(_)));
     }
 }

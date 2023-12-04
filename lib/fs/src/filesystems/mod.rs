@@ -23,9 +23,9 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-mod dosfs;
-mod fakefs;
-mod tmpfs;
+pub mod dosfs;
+pub mod fakefs;
+pub mod tmpfs;
 
 #[macro_export]
 macro_rules! sub_fsprovider {
