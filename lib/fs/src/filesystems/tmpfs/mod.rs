@@ -265,7 +265,7 @@ mod test {
 
         file.seek(crate::io::SeekFrom::Start(0)).unwrap();
         let mut read_buff = [0_u8; 12];
-        file.read(&mut read_buff).unwrap();
+        assert_eq!(file.read(&mut read_buff), Ok(12));
 
         assert_eq!(&read_buff, b"Hello World!");
     }
@@ -323,5 +323,37 @@ mod test {
         tmpfs.rmdir("/test/test/testfinal".into()).unwrap();
         tmpfs.rmdir("/test/test/".into()).unwrap();
         tmpfs.rmdir("/test".into()).unwrap();
+    }
+
+    #[test]
+    fn test_tmp_dir_crate_dir_files() {
+        crate::set_example_allocator();
+        let mut tmpfs = TmpFs::new(Permissions::all());
+
+        tmpfs.mkdir("/myfiles".into(), Permissions::all()).unwrap();
+        tmpfs
+            .mkdir("/myfiles/1".into(), Permissions::all())
+            .unwrap();
+        tmpfs
+            .touch("/myfiles/test.txt".into(), Permissions::all())
+            .unwrap();
+        {
+            let mut file = tmpfs.open_file("/myfiles/test.txt".into()).unwrap();
+            file.write(b"Hello World").unwrap();
+            assert_eq!(file.stream_len(), Ok(11));
+        }
+
+        tmpfs.rmdir("/myfiles/1".into()).unwrap();
+
+        {
+            let mut file = tmpfs.open_file("/myfiles/test.txt".into()).unwrap();
+            assert_eq!(file.stream_len(), Ok(11));
+            let mut string = [0u8; 11];
+            assert_eq!(file.read(&mut string), Ok(11));
+            assert_eq!(&string, b"Hello World");
+        }
+
+        tmpfs.rm("/myfiles/test.txt".into()).unwrap();
+        tmpfs.rmdir("/myfiles".into()).unwrap();
     }
 }

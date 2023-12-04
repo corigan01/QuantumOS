@@ -75,7 +75,7 @@ impl Read for TmpFile {
         let reading_size = max_buffer_top - self.seek as usize;
         let slice_of_self = &self.file_contents.as_slice()[self.seek as usize..max_buffer_top];
 
-        buf[..(max_buffer_top - self.seek as usize)].copy_from_slice(&slice_of_self);
+        buf[..reading_size].copy_from_slice(&slice_of_self);
         self.seek += reading_size as u64;
 
         Ok(reading_size)
@@ -100,6 +100,7 @@ impl_seek!(TmpFile);
 
 pub struct TmpOpenFile {
     pub(crate) file: NonNull<TmpFile>,
+    pub(crate) seek: u64,
 }
 
 impl TmpOpenFile {
@@ -122,30 +123,54 @@ impl TmpOpenFile {
         );
         inner
     }
+
+    // For seek impl
+    fn seek_current(&self) -> u64 {
+        self.seek
+    }
+
+    // For seek impl
+    fn seek_max(&self) -> u64 {
+        self.get_ref().file_contents.len() as u64
+    }
+
+    // For seek impl
+    fn set_seek(&mut self, seek: u64) {
+        self.seek = seek;
+    }
 }
 
 impl From<&mut Box<TmpFile>> for TmpOpenFile {
     fn from(value: &mut Box<TmpFile>) -> Self {
         value.count_open += 1;
+        value.seek = 0;
 
         let Some(ptr) = NonNull::new(value.as_ptr()) else {
             unreachable!("Cannot have a box with a null ptr!");
         };
 
-        Self { file: ptr }
+        Self { file: ptr, seek: 0 }
     }
 }
 
 impl FileProvider for TmpOpenFile {}
 impl Read for TmpOpenFile {
     fn read(&mut self, buf: &mut [u8]) -> crate::FsResult<usize> {
-        self.get_mut().read(buf)
+        let seek = self.seek;
+        self.get_mut().seek(crate::io::SeekFrom::Start(seek))?;
+        let read_len = self.get_mut().read(buf)?;
+        self.seek += read_len as u64;
+        Ok(read_len)
     }
 }
 
 impl Write for TmpOpenFile {
     fn write(&mut self, buf: &[u8]) -> crate::FsResult<usize> {
-        self.get_mut().write(buf)
+        let seek = self.seek;
+        self.get_mut().seek(crate::io::SeekFrom::Start(seek))?;
+        let write_len = self.get_mut().write(buf)?;
+        self.seek += write_len as u64;
+        Ok(write_len)
     }
 
     fn flush(&mut self) -> crate::FsResult<()> {
@@ -153,11 +178,7 @@ impl Write for TmpOpenFile {
     }
 }
 
-impl Seek for TmpOpenFile {
-    fn seek(&mut self, pos: crate::io::SeekFrom) -> crate::FsResult<u64> {
-        self.get_mut().seek(pos)
-    }
-}
+impl_seek!(TmpOpenFile);
 
 impl Metadata for TmpOpenFile {
     fn permissions(&self) -> Permissions {
