@@ -384,6 +384,27 @@ impl Vfs {
 
         Ok(&mut self.open_ids[fd.0])
     }
+    pub(crate) fn dd_ref(&self, dd: DirDescriptor) -> FsResult<&OpenDir> {
+        if self.open_dds.len() < dd.0 {
+            return Err(FsError::new(
+                FsErrorKind::NotFound,
+                "That file descriptor was not found!",
+            ));
+        }
+
+        Ok(&self.open_dds[dd.0])
+    }
+
+    pub(crate) fn dd_mut(&mut self, dd: DirDescriptor) -> FsResult<&mut OpenDir> {
+        if self.open_dds.len() < dd.0 {
+            return Err(FsError::new(
+                FsErrorKind::NotFound,
+                "That file descriptor was not found!",
+            ));
+        }
+
+        Ok(&mut self.open_dds[dd.0])
+    }
 
     pub fn fread(&mut self, fd: FileDescriptor, buf: &mut [u8]) -> FsResult<usize> {
         self.fd_mut(fd)?.data.read(buf)
@@ -631,7 +652,7 @@ mod test {
     }
 
     #[test]
-    fn test_vfs_with_tmpfs() {
+    fn test_vfs_with_tmpfs_file() {
         crate::set_example_allocator();
         use crate::io::{Read, Seek};
 
@@ -659,5 +680,71 @@ mod test {
 
         vfs.rm("/myfile.txt".into()).unwrap();
         assert!(matches!(vfs.open("/myfile.txt".into()), Err(_)));
+    }
+
+    #[test]
+    fn test_vfs_with_tmpfs_dir() {
+        crate::set_example_allocator();
+        use crate::io::Read;
+
+        let mut vfs = Vfs::new();
+
+        assert_eq!(
+            vfs.mount("/".into(), Box::new(TmpFs::new(Permissions::all()))),
+            Ok(0)
+        );
+
+        vfs.mkdir("/test/".into(), Permissions::all()).unwrap();
+        vfs.touch("/test/myfile.txt".into(), Permissions::all())
+            .unwrap();
+        vfs.touch("/myfile.txt".into(), Permissions::all()).unwrap();
+
+        {
+            let mut dir = vfs.open_dir("/test/".into()).unwrap().link_vfs(&mut vfs);
+            assert_eq!(dir.next(), Some("/test/myfile.txt".into()));
+            assert_eq!(dir.next(), None);
+            dir.close().unwrap();
+        }
+
+        {
+            let mut inner = vfs
+                .open("/test/myfile.txt".into())
+                .unwrap()
+                .link_vfs(&mut vfs);
+
+            assert_eq!(inner.write(b"Hello"), Ok(5));
+            inner.flush().unwrap();
+            inner.close().unwrap();
+        }
+
+        {
+            let mut outer = vfs.open("/myfile.txt".into()).unwrap().link_vfs(&mut vfs);
+
+            assert_eq!(outer.write(b"World"), Ok(5));
+            outer.flush().unwrap();
+            outer.close().unwrap();
+        }
+
+        let mut reading_buf = [0u8; 5];
+        {
+            let mut inner_check = vfs
+                .open("/test/myfile.txt".into())
+                .unwrap()
+                .link_vfs(&mut vfs);
+            assert_eq!(inner_check.read(&mut reading_buf), Ok(5));
+            assert_eq!(&reading_buf, b"Hello");
+            inner_check.close().unwrap();
+        }
+
+        {
+            let mut outer_check = vfs.open("/myfile.txt".into()).unwrap().link_vfs(&mut vfs);
+            assert_eq!(outer_check.read(&mut reading_buf), Ok(5));
+            assert_eq!(&reading_buf, b"World");
+            outer_check.close().unwrap();
+        }
+
+        vfs.rm("/test/myfile.txt".into()).unwrap();
+        vfs.rmdir("/test/".into()).unwrap();
+        vfs.rm("/myfile.txt".into()).unwrap();
     }
 }
