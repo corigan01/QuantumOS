@@ -28,7 +28,7 @@ use crate::filesystems::dosfs::structures::bpb::{BiosParameterBlock, WhereIsRoot
 use crate::filesystems::dosfs::structures::fat::{FatEntry, FileAllocationTable};
 use crate::filesystems::dosfs::structures::file_directory::DirectoryEntry;
 use crate::filesystems::dosfs::structures::ClusterID;
-use crate::io::{Read, Seek, SeekFrom};
+use crate::io::{FileSystemProvider, Read, Seek, SeekFrom};
 use crate::FsResult;
 use core::mem::size_of;
 use qk_alloc::boxed::Box;
@@ -37,13 +37,13 @@ use qk_alloc::vec::Vec;
 
 mod structures;
 
-pub struct Dosfs {
+pub struct DosFs {
     fat: FileAllocationTable,
     bpb: Box<BiosParameterBlock>,
     buf: AbstractBuffer,
 }
 
-impl Dosfs {
+impl DosFs {
     pub fn new(mut buf: AbstractBuffer) -> FsResult<Self> {
         let mut bpb = [0_u8; 512];
         buf.seek(SeekFrom::Start(0))?;
@@ -110,5 +110,51 @@ impl Dosfs {
             WhereIsRoot::OffsetBytes(root_offset) => self.read_root16(root_offset),
             WhereIsRoot::Cluster(cluster_id) => self.read_directory(cluster_id),
         }
+    }
+}
+
+struct DosDirectoryOpen {}
+
+impl FileSystemProvider for DosFs {
+    fn open_directory(
+        &mut self,
+        path: crate::path::Path,
+    ) -> FsResult<qk_alloc::boxed::Box<dyn crate::io::DirectoryProvider>> {
+        todo!()
+    }
+
+    fn open_file(
+        &mut self,
+        path: crate::path::Path,
+    ) -> FsResult<qk_alloc::boxed::Box<dyn crate::io::FileProvider>> {
+        todo!()
+    }
+
+    fn mkdir(
+        &mut self,
+        path: crate::path::Path,
+        permission: crate::permission::Permissions,
+    ) -> FsResult<()> {
+        todo!()
+    }
+
+    fn rmdir(&mut self, path: crate::path::Path) -> FsResult<()> {
+        todo!()
+    }
+
+    fn touch(
+        &mut self,
+        path: crate::path::Path,
+        permission: crate::permission::Permissions,
+    ) -> FsResult<()> {
+        todo!()
+    }
+
+    fn rm(&mut self, path: crate::path::Path) -> FsResult<()> {
+        todo!()
+    }
+
+    fn supports_permissions(&self) -> bool {
+        false
     }
 }

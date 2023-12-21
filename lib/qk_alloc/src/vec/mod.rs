@@ -603,7 +603,7 @@ mod test {
         let vec = Vec::from([0, 1, 2, 3, 4]);
 
         for i in 0..5 {
-            assert!(vec[i], i);
+            assert_eq!(vec[i], i);
         }
     }
 }

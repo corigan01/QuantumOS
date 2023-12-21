@@ -24,23 +24,27 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 */
 
-use std::process::exit;
-use clap::{Args, Parser, Subcommand, ValueEnum};
-use crate::artifacts::{build_bios_bootloader_items, build_kernel, get_target_directory, remove_target_root};
+use crate::artifacts::{
+    build_bios_bootloader_items, build_kernel, get_cargo_path, get_project_root,
+    get_target_directory, remove_target_root,
+};
 use crate::emulator_spawner::spawn_qemu;
 use crate::filesystem_constructor::make_and_construct_bios_image;
+use clap::{Args, Parser, Subcommand, ValueEnum};
+use std::path::Path;
+use std::process::{exit, Command};
 
 mod artifacts;
-mod filesystem_constructor;
 mod config_generator;
 mod emulator_spawner;
+mod filesystem_constructor;
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum, Debug)]
 pub enum BootloaderOption {
     /// Use bios booting
     Bios,
     /// use uefi booting
-    Uefi
+    Uefi,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Subcommand, Debug)]
@@ -52,14 +56,14 @@ pub enum RunCommands {
     /// Test QuantumOS
     Test(TestOptions),
     /// Delete Build artifacts
-    Clean
+    Clean,
 }
 
 impl RunCommands {
     pub fn get_run_options(&self) -> Option<RunOptions> {
         match self {
-            Self::Run(options) => { Some(*options) },
-            _ => { None }
+            Self::Run(options) => Some(*options),
+            _ => None,
         }
     }
 }
@@ -104,7 +108,7 @@ pub struct CompileOptions {
 
     /// Debug Compile Mode
     #[arg(short, long)]
-    pub debug_compile: bool
+    pub debug_compile: bool,
 }
 
 /// # Status Print
@@ -181,7 +185,9 @@ pub fn test(options: &CompileOptions) {
                 status_println!("Nothing to do!");
             }
         }
-        _ => { unreachable!("Should not be possible to reach"); }
+        _ => {
+            unreachable!("Should not be possible to reach");
+        }
     }
 }
 
@@ -198,7 +204,37 @@ pub fn test_kernel() {
 /// need to spawn qemu regardless if testing in userspace is difficult (like `qk_alloc`).
 pub fn test_libs() {
     status_println!("Testing Libs");
-    todo!("Test Libs")
+    let project_root = get_project_root().unwrap();
+    let lib_root = format!("{project_root}/lib");
+
+    let cargo = get_cargo_path().unwrap();
+
+    for dir in Path::new(&lib_root)
+        .read_dir()
+        .expect("Could not read lib dir")
+    {
+        let dir = dir.unwrap();
+
+        if !dir.file_type().unwrap().is_dir() {
+            continue;
+        }
+
+        let child_name = dir.file_name().into_string().unwrap();
+        let child_path = format!("{lib_root}/{child_name}/");
+
+        let lib = Command::new(&cargo)
+            .current_dir(child_path)
+            .arg("test")
+            .arg("--")
+            .arg("--test-threads=1")
+            .status()
+            .unwrap();
+
+        if !lib.success() {
+            status_println!("Test Failed!");
+            panic!("Crate testing failed!");
+        }
+    }
 }
 
 pub fn clean() {
