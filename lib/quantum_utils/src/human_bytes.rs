@@ -52,7 +52,9 @@ impl HumanBytes {
 }
 
 pub trait FromKib<Type>
-    where Type: Into<u64> {
+where
+    Type: Into<u64>,
+{
     fn from_kib(kib: Type) -> HumanBytes {
         let value: u64 = kib.into();
 
@@ -61,7 +63,9 @@ pub trait FromKib<Type>
 }
 
 pub trait FromMib<Type>
-    where Type: Into<u64> {
+where
+    Type: Into<u64>,
+{
     fn from_kib(kib: Type) -> HumanBytes {
         let value: u64 = kib.into();
 
@@ -70,7 +74,9 @@ pub trait FromMib<Type>
 }
 
 pub trait FromGib<Type>
-    where Type: Into<u64> {
+where
+    Type: Into<u64>,
+{
     fn from_kib(kib: Type) -> HumanBytes {
         let value: u64 = kib.into();
 
