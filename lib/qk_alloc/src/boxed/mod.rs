@@ -30,7 +30,7 @@ use core::fmt::{Debug, Display, Formatter};
 use core::marker::Unsize;
 use core::mem::MaybeUninit;
 use core::ops::{CoerceUnsized, Deref, DerefMut, DispatchFromDyn, Receiver};
-use core::ptr::NonNull;
+use core::ptr::{self, NonNull};
 use core::{borrow, mem};
 
 pub struct Box<Type: ?Sized, Alloc: AllocatorAPI = GlobalAlloc>(NonNull<Type>, Alloc);
@@ -231,6 +231,7 @@ impl<Type: ?Sized, Alloc: AllocatorAPI> DerefMut for Box<Type, Alloc> {
 
 impl<Type: ?Sized, Alloc: AllocatorAPI> Drop for Box<Type, Alloc> {
     fn drop(&mut self) {
+        unsafe { ptr::drop_in_place(self.0.as_ptr()) }
         unsafe { Alloc::free(NonNull::<u8>::new(self.0.as_ptr() as *mut u8).unwrap()) }
             .expect("Could not free Box");
     }

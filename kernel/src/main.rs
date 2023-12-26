@@ -174,8 +174,6 @@ fn main(boot_info: &KernelBootInformation) {
 
     {
         let mut disk = AtaDisk::new(DiskID::PrimaryFirst).quarry().unwrap();
-        let mut disk_read = vec![0; 10240];
-        disk.read(&mut disk_read).unwrap();
         let mut vfs = Vfs::new();
 
         vfs.mount(
@@ -184,10 +182,10 @@ fn main(boot_info: &KernelBootInformation) {
         )
         .unwrap();
 
-        //let disk = vfs.open_custom("/dev/hda".into(), Box::new(disk)).unwrap();
-        //let mut disk_read = vec![0; 10024];
-        //disk.link_vfs(&mut vfs).read(&mut disk_read).unwrap();
-        //disk.link_vfs(&mut vfs).close().unwrap();
+        let disk = vfs.open_custom("/dev/hda".into(), Box::new(disk)).unwrap();
+        let mut disk_read = vec![0; 10240];
+        disk.link_vfs(&mut vfs).read(&mut disk_read).unwrap();
+        disk.link_vfs(&mut vfs).close().unwrap();
     }
 
     debug_println!("\n\n{}", get_global_alloc());
