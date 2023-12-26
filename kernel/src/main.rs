@@ -191,6 +191,10 @@ fn main(boot_info: &KernelBootInformation) {
         disk.link_vfs(&mut vfs).close().unwrap();
     }
 
+    {
+        let mut vec = vec![vec![10_u8; 16]; 16];
+    }
+
     debug_println!("\n\n{}", get_global_alloc());
     debug_println!("\n\nDone!");
     debug_print!("{}", "Shutting Down QuantumOS ...".red().bold());
