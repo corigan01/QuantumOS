@@ -51,12 +51,6 @@ struct CacheEntry {
     state: CacheState,
 }
 
-impl Drop for CacheEntry {
-    fn drop(&mut self) {
-        todo!("Attempted to drop Cache Entry")
-    }
-}
-
 /// # Disk Cache
 /// Cached disk sectors or infomation that is otherwise expensive to read. Used mainly to store
 /// sectors for reading and writing. Retains state about the allocations, and will automaticlly
