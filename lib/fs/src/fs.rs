@@ -1,3 +1,5 @@
+use core::borrow::BorrowMut;
+
 /*
   ____                 __               __   _ __
  / __ \__ _____ ____  / /___ ____ _    / /  (_) /
@@ -33,8 +35,27 @@ use crate::{
     FsResult,
 };
 use qk_alloc::{bitfield::Bitmap, boxed::Box, vec::Vec};
+use spin::Mutex;
 
 pub type FilesystemID = usize;
+
+static mut THE_VFS: Mutex<Option<Vfs>> = Mutex::new(None);
+
+pub fn the_vfs<Function, Return>(func: Function) -> Return
+where
+    Function: FnOnce(&mut Vfs) -> Return,
+{
+    let mut vfs = unsafe { THE_VFS.lock() };
+    func(vfs.as_mut().expect("The global VFS was never set!"))
+}
+
+pub fn set_the_vfs(vfs: Vfs) {
+    unsafe { *THE_VFS.lock() = Some(vfs) };
+}
+
+pub fn drop_the_vfs() {
+    unsafe { *THE_VFS.lock() = None };
+}
 
 pub(crate) struct OpenFile {
     pub id: FileDescriptor,

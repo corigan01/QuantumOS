@@ -52,7 +52,7 @@ use quantum_utils::human_bytes::HumanBytes;
 
 use quantum_os::clock::rtc::update_and_get_time;
 
-use fs::{self, Vfs};
+use fs::{self, drop_the_vfs, set_the_vfs, the_vfs, Vfs};
 
 use owo_colors::OwoColorize;
 use qk_alloc::string::String;
@@ -172,21 +172,27 @@ fn main(boot_info: &KernelBootInformation) {
     framebuffer.draw_rect(rect!(0, 15 ; 150, 2), Pixel::WHITE);
     debug_println!("{}", "OK".bright_green().bold());
 
-    {
-        let mut disk = AtaDisk::new(DiskID::PrimaryFirst).quarry().unwrap();
-        let mut vfs = Vfs::new();
+    set_the_vfs(Vfs::new());
 
+    let mut disk = the_vfs(|vfs| {
         vfs.mount(
             "/dev".into(),
             Box::new(TmpFs::new(fs::permission::Permissions::root_rwx())),
         )
         .unwrap();
 
-        let disk = vfs.open_custom("/dev/hda".into(), Box::new(disk)).unwrap();
-        let mut disk_read = vec![0; 10240];
-        disk.link_vfs(&mut vfs).read(&mut disk_read).unwrap();
-        disk.link_vfs(&mut vfs).close().unwrap();
-    }
+        vfs.open_custom(
+            "/dev/hda".into(),
+            Box::new(AtaDisk::new(DiskID::PrimaryFirst).quarry().unwrap()),
+        )
+        .unwrap()
+    });
+
+    let mut disk_read = vec![0; 1024];
+    disk.read(&mut disk_read).unwrap();
+    disk.close().unwrap();
+
+    drop_the_vfs();
 
     debug_println!("\n\n{}", get_global_alloc());
     debug_println!("\n\nDone!");

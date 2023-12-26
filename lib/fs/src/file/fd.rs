@@ -26,7 +26,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 use crate::{
     io::{FileProvider, Metadata, Read, Seek, Write},
-    FsResult, Vfs,
+    the_vfs, FsResult, Vfs,
 };
 
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -44,9 +44,77 @@ impl Into<usize> for FileDescriptor {
     }
 }
 
+impl Read for FileDescriptor {
+    fn read(&mut self, buf: &mut [u8]) -> FsResult<usize> {
+        the_vfs(|vfs| self.link_vfs(vfs).read(buf))
+    }
+}
+
+impl Write for FileDescriptor {
+    fn write(&mut self, buf: &[u8]) -> FsResult<usize> {
+        the_vfs(|vfs| self.link_vfs(vfs).write(buf))
+    }
+
+    fn flush(&mut self) -> FsResult<()> {
+        the_vfs(|vfs| self.link_vfs(vfs).flush())
+    }
+}
+
+impl Seek for FileDescriptor {
+    fn seek(&mut self, pos: crate::io::SeekFrom) -> FsResult<u64> {
+        the_vfs(|vfs| self.link_vfs(vfs).seek(pos))
+    }
+}
+
+impl Metadata for FileDescriptor {
+    fn date_created(&self) -> Option<crate::UnixTime> {
+        the_vfs(|vfs| self.link_vfs(vfs).date_created())
+    }
+
+    fn date_modified(&self) -> Option<crate::UnixTime> {
+        the_vfs(|vfs| self.link_vfs(vfs).date_modified())
+    }
+
+    fn date_accessed(&self) -> Option<crate::UnixTime> {
+        the_vfs(|vfs| self.link_vfs(vfs).date_accessed())
+    }
+
+    fn date_removed(&self) -> Option<crate::UnixTime> {
+        the_vfs(|vfs| self.link_vfs(vfs).date_removed())
+    }
+
+    fn permissions(&self) -> crate::permission::Permissions {
+        the_vfs(|vfs| self.link_vfs(vfs).permissions())
+    }
+
+    fn kind(&self) -> crate::io::EntryType {
+        the_vfs(|vfs| self.link_vfs(vfs).kind())
+    }
+
+    fn can_write(&self) -> bool {
+        the_vfs(|vfs| self.link_vfs(vfs).can_write())
+    }
+
+    fn can_read(&self) -> bool {
+        the_vfs(|vfs| self.link_vfs(vfs).can_read())
+    }
+
+    fn can_seek(&self) -> bool {
+        the_vfs(|vfs| self.link_vfs(vfs).can_seek())
+    }
+
+    fn len(&self) -> u64 {
+        the_vfs(|vfs| self.link_vfs(vfs).len())
+    }
+}
+
 impl FileDescriptor {
     pub fn link_vfs<'a>(self, vfs: &'a mut Vfs) -> VfsLinkedFD<'a> {
         VfsLinkedFD { fd: self, vfs }
+    }
+
+    pub fn close(self) -> FsResult<()> {
+        the_vfs(|vfs| self.link_vfs(vfs).close())
     }
 }
 
