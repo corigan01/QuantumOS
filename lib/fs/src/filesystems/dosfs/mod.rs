@@ -60,7 +60,7 @@ impl DosFs {
         Ok(Self { fat, bpb, buf })
     }
 
-    pub fn read_directory(&mut self, cluster_id: ClusterID) -> FsResult<Vec<DirectoryEntry>> {
+    fn read_directory(&mut self, cluster_id: ClusterID) -> FsResult<Vec<DirectoryEntry>> {
         let mut dir_entries = Vec::new();
         let mut next_cluster = FatEntry::NextCluster(cluster_id);
         while !next_cluster.is_last() {
@@ -105,7 +105,7 @@ impl DosFs {
         Ok(directory_entry_vec)
     }
 
-    pub fn read_root(&mut self) -> FsResult<Vec<DirectoryEntry>> {
+    fn read_root(&mut self) -> FsResult<Vec<DirectoryEntry>> {
         match self.bpb.where_is_root() {
             WhereIsRoot::OffsetBytes(root_offset) => self.read_root16(root_offset),
             WhereIsRoot::Cluster(cluster_id) => self.read_directory(cluster_id),

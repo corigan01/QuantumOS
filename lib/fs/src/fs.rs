@@ -38,8 +38,9 @@ pub type FilesystemID = usize;
 
 pub(crate) struct OpenFile {
     pub id: FileDescriptor,
-    pub fs_id: FilesystemID,
+    pub fs_id: Option<FilesystemID>,
     pub path: Path,
+    pub open_count: usize,
     pub data: Box<dyn FileProvider>,
 }
 
@@ -47,6 +48,7 @@ pub(crate) struct OpenDir {
     pub id: DirDescriptor,
     pub fs_id: FilesystemID,
     pub path: Path,
+    pub open_count: usize,
     pub data: Box<dyn DirectoryProvider>,
 }
 
@@ -171,7 +173,7 @@ impl Vfs {
     fn files_open_with_fsid(&mut self, fsid: FilesystemID) -> usize {
         self.open_ids
             .iter()
-            .filter(|entry| entry.fs_id == fsid)
+            .filter(|entry| entry.fs_id == Some(fsid))
             .count()
     }
 
@@ -255,19 +257,27 @@ impl Vfs {
         Ok(removed.data)
     }
 
+    pub fn open_custom(
+        &mut self,
+        path: Path,
+        custom: Box<dyn FileProvider>,
+    ) -> FsResult<FileDescriptor> {
+        let path = path.truncate_path();
+
+        let file_id = self.open_ids.first_free().into();
+        self.open_ids.queue(OpenFile {
+            id: file_id,
+            fs_id: None,
+            path,
+            open_count: 1,
+            data: custom,
+        });
+
+        Ok(file_id)
+    }
+
     pub fn open(&mut self, path: Path) -> FsResult<FileDescriptor> {
         let path = path.truncate_path();
-        if self
-            .open_ids
-            .iter()
-            .any(|entry| entry.path == path.as_str())
-        {
-            return Err(FsError::new(
-                FsErrorKind::AddrInUse,
-                "That file is already open!",
-            ));
-        }
-
         let (fsid, fs_rel_path) = self.get_fs_and_rel_path(path.clone())?;
         let fs = &mut self.filesystems[fsid];
 
@@ -275,8 +285,9 @@ impl Vfs {
         let file_id = self.open_ids.first_free().into();
         self.open_ids.queue(OpenFile {
             id: file_id,
-            fs_id: fsid,
+            fs_id: Some(fsid),
             path,
+            open_count: 1,
             data: file_child,
         });
 
@@ -285,16 +296,6 @@ impl Vfs {
 
     pub fn open_dir(&mut self, path: Path) -> FsResult<DirDescriptor> {
         let path = path.truncate_path();
-        if self
-            .open_dds
-            .iter()
-            .any(|entry| entry.path == path.as_str())
-        {
-            return Err(FsError::new(
-                FsErrorKind::AddrInUse,
-                "That Directory is already open!",
-            ));
-        }
 
         let (fsid, fs_rel_path) = self.get_fs_and_rel_path(path.clone())?;
         let fs = &mut self.filesystems[fsid];
@@ -305,6 +306,7 @@ impl Vfs {
             id: dir_id,
             fs_id: fsid,
             path,
+            open_count: 1,
             data: dir_child,
         });
 
@@ -319,6 +321,12 @@ impl Vfs {
             ));
         }
 
+        // If we have more then 1 of these open, we just decrease the ref count
+        if self.open_ids[fd.0].open_count > 1 {
+            self.open_ids[fd.0].open_count -= 1;
+            return Ok(());
+        }
+
         self.open_ids.remove(fd.0);
         Ok(())
     }
@@ -329,6 +337,12 @@ impl Vfs {
                 FsErrorKind::InvalidInput,
                 "That dd does not exist!",
             ));
+        }
+
+        // If we have more then 1 of these open, we just decrease the ref count
+        if self.open_dds[dd.0].open_count > 1 {
+            self.open_dds[dd.0].open_count -= 1;
+            return Ok(());
         }
 
         self.open_dds.remove(dd.0);

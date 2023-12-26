@@ -43,7 +43,7 @@ pub enum CacheState {
 /// # Cache Entry
 /// One entry in the disk cache. Used to store infomation about the data, along with the data
 /// itself.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct CacheEntry {
     age: usize,
     sector: usize,
@@ -51,11 +51,17 @@ struct CacheEntry {
     state: CacheState,
 }
 
+impl Drop for CacheEntry {
+    fn drop(&mut self) {
+        todo!("Attempted to drop Cache Entry")
+    }
+}
+
 /// # Disk Cache
 /// Cached disk sectors or infomation that is otherwise expensive to read. Used mainly to store
 /// sectors for reading and writing. Retains state about the allocations, and will automaticlly
 /// prune ones that are too old when buffer size is reached.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct DiskCache {
     expected_max_chunks: usize,
     cache: Vec<CacheEntry>,

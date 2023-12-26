@@ -30,11 +30,14 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 use core::panic::PanicInfo;
 use fs::disks::ata::{AtaDisk, DiskID};
+use fs::filesystems::tmpfs::TmpFs;
 use fs::io::{Read, Seek, SeekFrom, Write};
+use qk_alloc::boxed::Box;
 use qk_alloc::heap::alloc::KernelHeap;
 use qk_alloc::heap::{get_global_alloc, get_global_alloc_debug, set_global_alloc};
 use qk_alloc::usable_region::UsableRegion;
 
+use qk_alloc::vec;
 use quantum_lib::address_utils::physical_address::PhyAddress;
 use quantum_lib::address_utils::region::{MemoryRegion, MemoryRegionType};
 use quantum_lib::address_utils::PAGE_SIZE;
@@ -49,7 +52,7 @@ use quantum_utils::human_bytes::HumanBytes;
 
 use quantum_os::clock::rtc::update_and_get_time;
 
-use fs;
+use fs::{self, Vfs};
 
 use owo_colors::OwoColorize;
 use qk_alloc::string::String;
@@ -169,23 +172,26 @@ fn main(boot_info: &KernelBootInformation) {
     framebuffer.draw_rect(rect!(0, 15 ; 150, 2), Pixel::WHITE);
     debug_println!("{}", "OK".bright_green().bold());
 
-    let buffer = "I AM A TURBO CUM";
-    let mut disk = AtaDisk::new(DiskID::PrimaryFirst).quarry().unwrap();
+    {
+        let mut disk = AtaDisk::new(DiskID::PrimaryFirst).quarry().unwrap();
+        let mut vfs = Vfs::new();
 
-    disk.seek(SeekFrom::Start(500)).unwrap();
-    disk.write(buffer.as_bytes()).unwrap();
-    disk.flush().unwrap();
+        vfs.mount(
+            "/dev".into(),
+            Box::new(TmpFs::new(fs::permission::Permissions::root_rwx())),
+        )
+        .unwrap();
 
-    let mut buffer = [0; 1024];
-    disk.seek(SeekFrom::Start(0)).unwrap();
-    disk.read(&mut buffer).unwrap();
+        let disk = vfs.open_custom("/dev/hda".into(), Box::new(disk)).unwrap();
+        let mut disk_read = vec![0; 10024];
 
-    debug_println!("Disk: {}", buffer.hex_print());
+        disk.link_vfs(&mut vfs).read(&mut disk_read).unwrap();
+        debug_println!("Disk fd: {}", disk_read.as_slice().hex_print());
 
-    debug_println!("Words Per Sector on disk: {}", disk.words_per_sector());
+        disk.link_vfs(&mut vfs).close().unwrap();
+    }
 
     debug_println!("\n\n{}", get_global_alloc());
-
     debug_println!("\n\nDone!");
     debug_print!("{}", "Shutting Down QuantumOS ...".red().bold());
     exit_qemu(QemuExitCode::Success);
