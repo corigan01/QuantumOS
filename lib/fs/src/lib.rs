@@ -37,6 +37,7 @@ pub mod disks;
 pub mod error;
 pub mod filesystems;
 pub mod io;
+pub mod partition;
 pub mod path;
 pub mod permission;
 

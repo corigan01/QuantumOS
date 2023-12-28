@@ -31,37 +31,31 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 use core::panic::PanicInfo;
 use fs::disks::ata::{AtaDisk, DiskID};
 use fs::filesystems::tmpfs::TmpFs;
-use fs::io::{Read, Seek, SeekFrom, Write};
+use fs::io::Read;
+use fs::{self, drop_the_vfs, set_the_vfs, the_vfs, Vfs};
+use owo_colors::OwoColorize;
 use qk_alloc::boxed::Box;
 use qk_alloc::heap::alloc::KernelHeap;
 use qk_alloc::heap::{get_global_alloc, get_global_alloc_debug, set_global_alloc};
+use qk_alloc::string::String;
 use qk_alloc::usable_region::UsableRegion;
-
 use qk_alloc::vec;
 use quantum_lib::address_utils::physical_address::PhyAddress;
 use quantum_lib::address_utils::region::{MemoryRegion, MemoryRegionType};
+use quantum_lib::address_utils::region_map::RegionMap;
+use quantum_lib::address_utils::virtual_address::VirtAddress;
 use quantum_lib::address_utils::PAGE_SIZE;
 use quantum_lib::boot::boot_info::KernelBootInformation;
 use quantum_lib::com::serial::{SerialBaud, SerialDevice, SerialPort};
 use quantum_lib::debug::stream_connection::StreamConnectionBuilder;
 use quantum_lib::debug::{add_connection_to_global_stream, set_panic};
 use quantum_lib::gfx::{rectangle::Rect, Pixel, PixelLocation};
+use quantum_lib::panic_utils::CRASH_MESSAGES;
 use quantum_lib::possibly_uninit::PossiblyUninit;
 use quantum_lib::{debug_print, debug_println, kernel_entry, rect};
-use quantum_utils::human_bytes::HumanBytes;
-
 use quantum_os::clock::rtc::update_and_get_time;
-
-use fs::{self, drop_the_vfs, set_the_vfs, the_vfs, Vfs};
-
-use owo_colors::OwoColorize;
-use qk_alloc::string::String;
-use quantum_lib::address_utils::region_map::RegionMap;
-use quantum_lib::address_utils::virtual_address::VirtAddress;
-use quantum_lib::panic_utils::CRASH_MESSAGES;
-
-use quantum_os::hex_dump::HexPrint;
 use quantum_os::qemu::{exit_qemu, QemuExitCode};
+use quantum_utils::human_bytes::HumanBytes;
 
 static mut SERIAL_CONNECTION: PossiblyUninit<SerialDevice> = PossiblyUninit::new_lazy(|| {
     SerialDevice::new(SerialPort::Com1, SerialBaud::Baud115200).unwrap()
