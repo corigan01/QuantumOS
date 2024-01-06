@@ -24,10 +24,10 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 */
 
-use std::process::Command;
-use anyhow::{anyhow, Context};
 use crate::artifacts::get_program_path;
 use crate::CompileOptions;
+use anyhow::{anyhow, Context};
+use std::process::Command;
 
 pub fn spawn_qemu(disk_target_path: &String, options: &CompileOptions) -> anyhow::Result<i32> {
     let qemu_exe = get_program_path("qemu-system-x86_64")?;
@@ -54,8 +54,8 @@ pub fn spawn_qemu(disk_target_path: &String, options: &CompileOptions) -> anyhow
         .arg("-device")
         .arg("isa-debug-exit,iobase=0xf4,iosize=0x04")
         .arg("-d")
-        .arg("cpu_reset")
-        .arg("--no-shutdown")
+        .arg("int")
+        .arg("--no-reboot")
         .arg("-m")
         .arg("256M")
         .arg("-k")
@@ -65,8 +65,8 @@ pub fn spawn_qemu(disk_target_path: &String, options: &CompileOptions) -> anyhow
         .arg("-drive")
         .arg(format!("format=raw,file={}", disk_target_path))
         .stdout(std::process::Stdio::inherit())
-        .status().context(anyhow!("Could not start qemu-system-x86_64!"))?;
+        .status()
+        .context(anyhow!("Could not start qemu-system-x86_64!"))?;
 
     Ok(qemu.code().ok_or(anyhow!("Could not get qemu exit code"))?)
 }
-

@@ -27,6 +27,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #![no_std] // don't link the Rust standard library
 #![no_main] // disable all Rust-level entry points
 #![allow(dead_code)]
+#![feature(abi_x86_interrupt)]
 
 use core::panic::PanicInfo;
 use fs::disks::ata::{AtaDisk, DiskID};
@@ -52,7 +53,9 @@ use quantum_lib::debug::{add_connection_to_global_stream, set_panic};
 use quantum_lib::gfx::{rectangle::Rect, Pixel, PixelLocation};
 use quantum_lib::panic_utils::CRASH_MESSAGES;
 use quantum_lib::possibly_uninit::PossiblyUninit;
-use quantum_lib::{debug_print, debug_println, kernel_entry, rect};
+use quantum_lib::x86_64::interrupts::Interrupts;
+use quantum_lib::x86_64::tables::idt::{self, debug_interrupt, Idt, InterruptFrame};
+use quantum_lib::{attach_interrupt, debug_print, debug_println, kernel_entry, rect};
 use quantum_os::clock::rtc::update_and_get_time;
 use quantum_os::qemu::{exit_qemu, QemuExitCode};
 use quantum_utils::human_bytes::HumanBytes;
@@ -144,6 +147,61 @@ fn setup_memory(
     (physical_memory_map, virtual_memory_map)
 }
 
+fn interrupt(frame: InterruptFrame, interrupt_id: u8, error: Option<u64>) {
+    debug_println!("Dingus interrupt was called!");
+}
+
+static mut GLOBAL_IDT: PossiblyUninit<Idt> = PossiblyUninit::new_lazy(|| Idt::new());
+
+use core::{arch::asm, mem::size_of};
+
+static mut LONG_MODE_GDT: GdtLongMode = GdtLongMode::new();
+
+#[repr(C)]
+pub struct GdtLongMode {
+    zero: u64,
+    code: u64,
+    data: u64,
+}
+
+impl GdtLongMode {
+    const fn new() -> Self {
+        let common_flags = {
+            (1 << 44) // user segment
+                | (1 << 47) // present
+                | (1 << 41) // writable
+                | (1 << 40) // accessed (to avoid changes by the CPU)
+        };
+        Self {
+            zero: 0,
+            code: common_flags | (1 << 43) | (1 << 53), // executable and long mode
+            data: common_flags,
+        }
+    }
+
+    pub fn load(&'static self) {
+        let pointer = GdtPointer {
+            limit: (3 * size_of::<u64>() - 1) as u16,
+            base: self,
+        };
+
+        unsafe {
+            asm!("lgdt [{}]", in(reg) &pointer);
+        }
+    }
+}
+
+#[repr(C, packed(2))]
+pub struct GdtPointer {
+    /// Size of the DT.
+    pub limit: u16,
+    /// Pointer to the memory region containing the DT.
+    pub base: *const GdtLongMode,
+}
+
+unsafe impl Send for GdtPointer {}
+unsafe impl Sync for GdtPointer {}
+
 fn main(boot_info: &KernelBootInformation) {
     setup_serial_debug();
 
@@ -185,8 +243,23 @@ fn main(boot_info: &KernelBootInformation) {
     let mut disk_read = vec![0; 1024];
     disk.read(&mut disk_read).unwrap();
     disk.close().unwrap();
-
     drop_the_vfs();
+
+    debug_print!("Enabling GDT ");
+    unsafe {
+        Interrupts::disable();
+        LONG_MODE_GDT = GdtLongMode::new();
+        LONG_MODE_GDT.load();
+    };
+    debug_println!("OK");
+    {
+        let idt = unsafe { GLOBAL_IDT.get_mut_ref().unwrap() };
+        attach_interrupt!(idt, interrupt, 0..=255);
+        idt.submit_entries().unwrap().load();
+
+        debug_println!("Testing Interrupts: {idt:#x?}");
+        debug_interrupt();
+    }
 
     debug_println!("\n\n{}", get_global_alloc());
     debug_println!("\n\nDone!");

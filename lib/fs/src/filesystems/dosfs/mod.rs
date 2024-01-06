@@ -113,8 +113,6 @@ impl DosFs {
     }
 }
 
-struct DosDirectoryOpen {}
-
 impl FileSystemProvider for DosFs {
     fn open_directory(
         &mut self,
