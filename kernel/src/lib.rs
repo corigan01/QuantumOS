@@ -36,12 +36,13 @@ Quantum OS Lib file, documentation coming soon!
 #![feature(int_roundings)]
 
 pub mod clock;
+pub mod idt;
 pub mod qemu;
 
+pub mod hex_dump;
 pub mod kernel_console;
 #[cfg(test)]
 pub mod test_handler;
-pub mod hex_dump;
 
 #[cfg(test)]
 pub fn test_main() {

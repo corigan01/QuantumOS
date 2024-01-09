@@ -5,7 +5,7 @@
 \___\_\_,_/\_,_/_//_/\__/\_,_/_/_/_/ /____/_/_.__/
   Part of the Quantum OS Project
 
-Copyright 2023 Gavin Kellam
+Copyright 2024 Gavin Kellam
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
 associated documentation files (the "Software"), to deal in the Software without restriction,
@@ -520,6 +520,7 @@ impl EntryOptions {
 /// |   31   |         RESERVED         |    RSV     |
 /// |--------|--------------------------|------------|
 /// ```
+#[derive(Debug, Clone, Copy)]
 pub struct ExtraHandlerInfo {
     /// *This type of interrupt should not return and will cause a panic if returned*
     pub should_handler_diverge: bool,

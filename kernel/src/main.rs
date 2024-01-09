@@ -5,7 +5,7 @@
 \___\_\_,_/\_,_/_//_/\__/\_,_/_/_/_/ /_/|_|\__/_/ /_//_/\__/_/
   Part of the Quantum OS Kernel
 
-Copyright 2022 Gavin Kellam
+Copyright 2024 Gavin Kellam
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
 associated documentation files (the "Software"), to deal in the Software without restriction,
@@ -21,7 +21,6 @@ NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPO
 NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
 DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
 */
 
 #![no_std] // don't link the Rust standard library
@@ -54,7 +53,7 @@ use quantum_lib::gfx::{rectangle::Rect, Pixel, PixelLocation};
 use quantum_lib::panic_utils::CRASH_MESSAGES;
 use quantum_lib::possibly_uninit::PossiblyUninit;
 use quantum_lib::x86_64::interrupts::Interrupts;
-use quantum_lib::x86_64::tables::idt::{self, debug_interrupt, Idt, InterruptFrame};
+use quantum_lib::x86_64::tables::idt::{debug_interrupt, ExtraHandlerInfo, Idt, InterruptFrame};
 use quantum_lib::{attach_interrupt, debug_print, debug_println, kernel_entry, rect};
 use quantum_os::clock::rtc::update_and_get_time;
 use quantum_os::qemu::{exit_qemu, QemuExitCode};
@@ -148,7 +147,13 @@ fn setup_memory(
 }
 
 fn interrupt(frame: InterruptFrame, interrupt_id: u8, error: Option<u64>) {
-    debug_println!("Dingus interrupt was called!");
+    let info = ExtraHandlerInfo::new(interrupt_id);
+    debug_println!(
+        "Dingus interrupt was called! \n{:#?}\n{:#?}\n{:#?}",
+        frame,
+        info,
+        error
+    );
 }
 
 static mut GLOBAL_IDT: PossiblyUninit<Idt> = PossiblyUninit::new_lazy(|| Idt::new());
@@ -257,7 +262,6 @@ fn main(boot_info: &KernelBootInformation) {
         attach_interrupt!(idt, interrupt, 0..=255);
         idt.submit_entries().unwrap().load();
 
-        debug_println!("Testing Interrupts: {idt:#x?}");
         debug_interrupt();
     }
 
