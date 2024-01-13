@@ -36,7 +36,6 @@ Quantum OS Lib file, documentation coming soon!
 #![feature(int_roundings)]
 
 pub mod clock;
-pub mod idt;
 pub mod qemu;
 
 pub mod hex_dump;
