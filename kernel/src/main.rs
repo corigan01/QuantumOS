@@ -53,9 +53,12 @@ use quantum_lib::gfx::{rectangle::Rect, Pixel, PixelLocation};
 use quantum_lib::panic_utils::CRASH_MESSAGES;
 use quantum_lib::possibly_uninit::PossiblyUninit;
 use quantum_lib::x86_64::interrupts::Interrupts;
-use quantum_lib::x86_64::tables::idt::{debug_interrupt, ExtraHandlerInfo, Idt, InterruptFrame};
+use quantum_lib::x86_64::tables::idt::{
+    debug_interrupt, set_quiet_interrupt, ExtraHandlerInfo, Idt, InterruptFrame,
+};
 use quantum_lib::{attach_interrupt, debug_print, debug_println, kernel_entry, rect};
 use quantum_os::clock::rtc::update_and_get_time;
+use quantum_os::pic::{pic_eoi, pic_init};
 use quantum_os::qemu::{exit_qemu, QemuExitCode};
 use quantum_utils::human_bytes::HumanBytes;
 
@@ -148,12 +151,23 @@ fn setup_memory(
 
 fn interrupt(frame: InterruptFrame, interrupt_id: u8, error: Option<u64>) {
     let info = ExtraHandlerInfo::new(interrupt_id);
+
+    if info.quiet_interrupt {
+        return;
+    }
+
     debug_println!(
         "Dingus interrupt was called! \n{:#?}\n{:#?}\n{:#?}",
         frame,
         info,
         error
     );
+}
+
+fn dummy_irq(frame: InterruptFrame, interrupt_id: u8, error: Option<u64>) {
+    let info = ExtraHandlerInfo::new(interrupt_id);
+    debug_println!("Dummy IRQ interrupt was called! {}", interrupt_id);
+    unsafe { pic_eoi(interrupt_id - 32) };
 }
 
 static mut GLOBAL_IDT: PossiblyUninit<Idt> = PossiblyUninit::new_lazy(|| Idt::new());
@@ -256,14 +270,28 @@ fn main(boot_info: &KernelBootInformation) {
         LONG_MODE_GDT = GdtLongMode::new();
         LONG_MODE_GDT.load();
     };
-    debug_println!("OK");
+    debug_println!("{}", "OK".green().bold());
+    debug_print!("Enabling IDT ");
     {
         let idt = unsafe { GLOBAL_IDT.get_mut_ref().unwrap() };
-        attach_interrupt!(idt, interrupt, 0..=255);
+        attach_interrupt!(idt, interrupt, 0..32);
         idt.submit_entries().unwrap().load();
+        set_quiet_interrupt(1, true);
 
         debug_interrupt();
+    };
+    debug_println!("{}", "OK".green().bold());
+    debug_print!("Enabling PIC ");
+    unsafe {
+        let idt = unsafe { GLOBAL_IDT.get_mut_ref().unwrap() };
+        attach_interrupt!(idt, dummy_irq, 32..=48);
+        idt.submit_entries().unwrap().load();
+        pic_init(32);
+        Interrupts::enable();
     }
+    debug_println!("{}", "OK".green().bold());
+
+    loop {}
 
     debug_println!("\n\n{}", get_global_alloc());
     debug_println!("\n\nDone!");
