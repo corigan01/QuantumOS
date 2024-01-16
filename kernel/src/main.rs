@@ -58,7 +58,6 @@ use quantum_lib::x86_64::tables::idt::{
 };
 use quantum_lib::{attach_interrupt, debug_print, debug_println, kernel_entry, rect};
 use quantum_os::clock::rtc::update_and_get_time;
-use quantum_os::keyboard::Keyboard;
 use quantum_os::pic::{pic_eoi, pic_init};
 use quantum_os::qemu::{exit_qemu, QemuExitCode};
 use quantum_utils::human_bytes::HumanBytes;
@@ -167,7 +166,11 @@ fn interrupt(frame: InterruptFrame, interrupt_id: u8, error: Option<u64>) {
 
 fn dummy_irq(frame: InterruptFrame, interrupt_id: u8, error: Option<u64>) {
     let info = ExtraHandlerInfo::new(interrupt_id);
-    debug_println!("Dummy IRQ interrupt was called! {}", interrupt_id);
+
+    if !info.quiet_interrupt {
+        debug_println!("Dummy IRQ interrupt was called! {}", interrupt_id);
+    }
+
     unsafe { pic_eoi(interrupt_id - 32) };
 }
 
@@ -260,14 +263,6 @@ fn main(boot_info: &KernelBootInformation) {
         .unwrap()
     });
 
-    // TEST: Test the keyboard
-    let keyboard = Keyboard {
-        state: 0b000101010000000000000010010001,
-        once_lock: 0,
-    };
-
-    debug_println!("KEYBOARD\n{}", keyboard);
-
     let mut disk_read = vec![0; 1024];
     disk.read(&mut disk_read).unwrap();
     disk.close().unwrap();
@@ -283,7 +278,7 @@ fn main(boot_info: &KernelBootInformation) {
     debug_print!("Enabling IDT ");
     {
         let idt = unsafe { GLOBAL_IDT.get_mut_ref().unwrap() };
-        //        attach_interrupt!(idt, interrupt, 0..32);
+        attach_interrupt!(idt, interrupt, 0..32);
         idt.submit_entries().unwrap().load();
         set_quiet_interrupt(1, true);
 
@@ -293,8 +288,9 @@ fn main(boot_info: &KernelBootInformation) {
     debug_print!("Enabling PIC ");
     unsafe {
         let idt = unsafe { GLOBAL_IDT.get_mut_ref().unwrap() };
-        //      attach_interrupt!(idt, dummy_irq, 32..=48);
+        attach_interrupt!(idt, dummy_irq, 32..=48);
         idt.submit_entries().unwrap().load();
+        set_quiet_interrupt(32, true);
         pic_init(32);
         Interrupts::enable();
     }
