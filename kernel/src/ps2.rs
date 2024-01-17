@@ -24,12 +24,40 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 use crate::pic::pic_eoi;
-use quantum_lib::x86_64::io::port::{IOPort, ReadOnlyPort, WriteOnlyPort};
+use quantum_lib::x86_64::{io::port::IOPort, tables::idt::InterruptFrame};
 
 const PS2_CONTROLLER_DATA_PORT: IOPort = IOPort::new(0x60);
-const PS2_CONTROLLER_STATUS_PORT: IOPort<ReadOnlyPort> = IOPort::new(0x64);
-const PS2_CONTROLLER_COMMAND_PORT: IOPort<WriteOnlyPort> = IOPort::new(0x64);
+const PS2_CONTROLLER_STATUS_PORT: IOPort = IOPort::new(0x64);
+const PS2_CONTROLLER_COMMAND_PORT: IOPort = IOPort::new(0x64);
 
+// FIXME: We should probebly do something where we have a proc_macro or something,
+//        handle this? It should be not up to the kernel programmer to remember
+//        that this is here and needs to be attached.
 pub fn ps2_interrupt_attachment(_frame: InterruptFrame, interrupt_id: u8, _error: Option<u64>) {
     unsafe { pic_eoi(interrupt_id) }
+}
+
+pub struct StatusFlags {
+    pub output_buffer_status: bool,
+    pub input_buffer_status: bool,
+    pub system_flag: bool,
+    pub command_or_data: bool,
+    pub timeout_error: bool,
+    pub parity_error: bool,
+}
+
+impl StatusFlags {
+    pub fn read() -> Self {
+        let port = PS2_CONTROLLER_STATUS_PORT;
+        let value = unsafe { port.read_u8() };
+
+        StatusFlags {
+            output_buffer_status: value & (1 << 0) != 0,
+            input_buffer_status: value & (1 << 1) != 0,
+            system_flag: value & (1 << 2) != 0,
+            command_or_data: value & (1 << 3) != 0,
+            timeout_error: value & (1 << 6) != 0,
+            parity_error: value & (1 << 7) != 0,
+        }
+    }
 }

@@ -27,28 +27,28 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #![no_std] // don't link the Rust standard library
 #![no_main] // disable all Rust-level entry points
 
+use bootloader::boot_info::BootInfo;
 use core::arch::asm;
 use core::panic::PanicInfo;
 use core::ptr;
-use bootloader::boot_info::BootInfo;
 
-use quantum_lib::debug::{add_connection_to_global_stream, set_panic};
-use quantum_lib::debug::stream_connection::StreamConnectionBuilder;
-use quantum_lib::{debug_print, debug_println};
 use quantum_lib::address_utils::physical_address::PhyAddress;
 use quantum_lib::address_utils::region::{MemoryRegion, MemoryRegionType};
 use quantum_lib::address_utils::region_map::RegionMap;
 use quantum_lib::address_utils::virtual_address::VirtAddress;
 use quantum_lib::boot::boot_info::KernelBootInformation;
 use quantum_lib::com::serial::{SerialBaud, SerialDevice, SerialPort};
-use quantum_lib::elf::{ElfHeader, ElfArch, ElfBits, ElfSegmentType};
-use quantum_lib::x86_64::PrivlLevel;
-use quantum_lib::x86_64::registers::{Segment, SegmentRegs};
-use quantum_utils::human_bytes::HumanBytes;
+use quantum_lib::debug::stream_connection::StreamConnectionBuilder;
+use quantum_lib::debug::{add_connection_to_global_stream, set_panic};
+use quantum_lib::elf::{ElfArch, ElfBits, ElfHeader, ElfSegmentType};
 use quantum_lib::gfx::frame_info::FrameInfo;
-use quantum_lib::gfx::FramebufferPixelLayout;
 use quantum_lib::gfx::linear_framebuffer::LinearFramebuffer;
+use quantum_lib::gfx::FramebufferPixelLayout;
 use quantum_lib::possibly_uninit::PossiblyUninit;
+use quantum_lib::x86_64::registers::{Segment, SegmentRegs};
+use quantum_lib::x86_64::PrivlLevel;
+use quantum_lib::{debug_print, debug_println};
+use quantum_utils::human_bytes::HumanBytes;
 
 use stage_3::debug::{clear_framebuffer, display_string, setup_framebuffer};
 
@@ -61,7 +61,9 @@ static mut SERIAL_CONNECTION: PossiblyUninit<SerialDevice> = PossiblyUninit::new
 pub extern "C" fn _start(boot_info: u64) -> ! {
     let boot_info_ref = BootInfo::from_ptr(boot_info as usize);
 
-    unsafe { SegmentRegs::set_data_segments(Segment::new(2, PrivlLevel::Ring0)); }
+    unsafe {
+        SegmentRegs::set_data_segments(Segment::new(2, PrivlLevel::Ring0));
+    }
 
     let video_info = boot_info_ref.get_video_information();
 
@@ -87,15 +89,15 @@ pub extern "C" fn _start(boot_info: u64) -> ! {
         .does_support_scrolling(true)
         .build();
 
-    let serial = unsafe { &mut SERIAL_CONNECTION };
-
-    let connection = StreamConnectionBuilder::new()
-        .console_connection()
-        .add_connection_name("Serial")
-        .add_who_using("Stage3")
-        .does_support_scrolling(true)
-        .add_outlet(serial.get_mut_ref().unwrap())
-        .build();
+    let connection = unsafe {
+        StreamConnectionBuilder::new()
+            .console_connection()
+            .add_connection_name("Serial")
+            .add_who_using("Stage3")
+            .does_support_scrolling(true)
+            .add_outlet(SERIAL_CONNECTION.get_mut_ref().unwrap())
+            .build()
+    };
 
     add_connection_to_global_stream(stream_connection).unwrap();
     add_connection_to_global_stream(connection).unwrap();
@@ -135,7 +137,6 @@ fn parse_kernel_elf(kernel_elf: &ElfHeader) -> Option<(u32, MemoryRegion<PhyAddr
         entry_point
     );
 
-
     // TODO: This is a super simple ELF loader and should be improved
     for i in 0..header_amount {
         let header_idx = i as usize;
@@ -160,13 +161,17 @@ fn parse_kernel_elf(kernel_elf: &ElfHeader) -> Option<(u32, MemoryRegion<PhyAddr
         let kernel_raw_data = kernel_elf.get_raw_data_slice();
 
         if matches!(header_type, ElfSegmentType::Load) {
-            lower_kernel_end =
-                if lower_kernel_end > expected_address
-                { expected_address } else { lower_kernel_end };
+            lower_kernel_end = if lower_kernel_end > expected_address {
+                expected_address
+            } else {
+                lower_kernel_end
+            };
 
-            higher_kernel_end =
-                if higher_kernel_end < end_of_expected_address
-                { end_of_expected_address } else { higher_kernel_end };
+            higher_kernel_end = if higher_kernel_end < end_of_expected_address {
+                end_of_expected_address
+            } else {
+                higher_kernel_end
+            };
 
             let loader_ptr = expected_address as *mut u8;
 
@@ -182,7 +187,6 @@ fn parse_kernel_elf(kernel_elf: &ElfHeader) -> Option<(u32, MemoryRegion<PhyAddr
             }
 
             debug_println!("      \tLOADED");
-
         } else {
             debug_println!("       \tSKIP");
         }
@@ -191,21 +195,25 @@ fn parse_kernel_elf(kernel_elf: &ElfHeader) -> Option<(u32, MemoryRegion<PhyAddr
     let region = MemoryRegion::new(
         PhyAddress::new(lower_kernel_end).unwrap(),
         PhyAddress::new(higher_kernel_end).unwrap(),
-        MemoryRegionType::KernelCode
+        MemoryRegionType::KernelCode,
     );
 
     Some((entry_point, region))
 }
 
-static mut PHS_REGION_MAP: PossiblyUninit<RegionMap<PhyAddress>> = PossiblyUninit::new_lazy(|| RegionMap::new());
-static mut VRT_REGION_MAP: PossiblyUninit<RegionMap<VirtAddress>> = PossiblyUninit::new_lazy(|| RegionMap::new());
+static mut PHS_REGION_MAP: PossiblyUninit<RegionMap<PhyAddress>> =
+    PossiblyUninit::new_lazy(|| RegionMap::new());
+static mut VRT_REGION_MAP: PossiblyUninit<RegionMap<VirtAddress>> =
+    PossiblyUninit::new_lazy(|| RegionMap::new());
 static mut KRNL_BOOT_INFO: PossiblyUninit<KernelBootInformation> = PossiblyUninit::new();
 
 fn main(boot_info: &BootInfo) {
     debug_println!("Starting to parse kernel ELF...");
 
     let kernel_info = boot_info.get_kernel_entry();
-    let kernel_slice = unsafe { core::slice::from_raw_parts_mut(kernel_info.ptr as *mut u8, kernel_info.size as usize) };
+    let kernel_slice = unsafe {
+        core::slice::from_raw_parts_mut(kernel_info.ptr as *mut u8, kernel_info.size as usize)
+    };
 
     let kernel_elf = ElfHeader::from_bytes(kernel_slice).unwrap();
 
@@ -215,25 +223,26 @@ fn main(boot_info: &BootInfo) {
     debug_println!("Zero-ing Kernel Stack region");
     let stack_ptr = 15 * HumanBytes::MIB;
     for ptr in (stack_ptr - (2 * HumanBytes::MIB))..stack_ptr {
-        unsafe { ptr::write(ptr as *mut u8, 0_u8); }
+        unsafe {
+            ptr::write(ptr as *mut u8, 0_u8);
+        }
     }
 
     debug_print!("Rebuilding Regions... ");
     let region_map = unsafe { PHS_REGION_MAP.get_mut_ref().unwrap() };
     for e820_entry in unsafe { boot_info.get_memory_map() } {
-
         let region_type = match e820_entry.entry_type {
             1 => MemoryRegionType::Usable,
             2 => MemoryRegionType::Reserved,
             3 | 4 => MemoryRegionType::Uefi,
             5 => MemoryRegionType::UnavailableMemory,
-            _ => MemoryRegionType::Unknown
+            _ => MemoryRegionType::Unknown,
         };
 
         let start_address = PhyAddress::new(e820_entry.address).unwrap();
         let size_bytes = HumanBytes::from(e820_entry.len);
 
-        let region= MemoryRegion::from_distance(start_address, size_bytes, region_type);
+        let region = MemoryRegion::from_distance(start_address, size_bytes, region_type);
 
         region_map.add_new_region(region).unwrap();
     }
@@ -242,7 +251,7 @@ fn main(boot_info: &BootInfo) {
     let stack_region = MemoryRegion::new(
         PhyAddress::new(stack_ptr - HumanBytes::MIB).unwrap(),
         PhyAddress::new(stack_ptr).unwrap(),
-        MemoryRegionType::KernelStack
+        MemoryRegionType::KernelStack,
     );
 
     region_map.add_new_region(stack_region).unwrap();
@@ -252,7 +261,7 @@ fn main(boot_info: &BootInfo) {
     let virtual_region = MemoryRegion::<VirtAddress>::new(
         VirtAddress::new(0).unwrap(),
         VirtAddress::new(5 * HumanBytes::GIB).unwrap(),
-        MemoryRegionType::Unknown
+        MemoryRegionType::Unknown,
     );
 
     virtual_region_map.add_new_region(virtual_region).unwrap();
@@ -270,7 +279,7 @@ fn main(boot_info: &BootInfo) {
         old_framebuffer.depth as usize,
         stride as usize,
         total_bytes as usize,
-        FramebufferPixelLayout::BGR
+        FramebufferPixelLayout::BGR,
     );
 
     let video = LinearFramebuffer::new(old_framebuffer.framebuffer as *mut u8, frame_info);
@@ -279,12 +288,11 @@ fn main(boot_info: &BootInfo) {
         KRNL_BOOT_INFO.set(KernelBootInformation::new(
             region_map.clone(),
             virtual_region_map.clone(),
-            video
+            video,
         ));
     }
 
     let kernel_info = unsafe { KRNL_BOOT_INFO.get_ref().unwrap().send_as_u64() };
-
 
     debug_println!("Kernel Entry Point 0x{:x}", entry_point);
 
@@ -299,8 +307,17 @@ fn main(boot_info: &BootInfo) {
     debug_println!("the needed information to draw to this framebuffer.");
     debug_println!("Find more info here: https://github.com/corigan01/QuantumOS");
 
-    debug_println!("\nKernel [entry: 0x{:x}, stack: 0x{:x}, size: {}]", entry_point, stack_ptr, kernel_region.bytes());
-    debug_println!("Cpu: x86_64 64-bit | Kern: {:?} {:?}", kernel_elf.elf_arch().unwrap(), kernel_elf.elf_bits().unwrap());
+    debug_println!(
+        "\nKernel [entry: 0x{:x}, stack: 0x{:x}, size: {}]",
+        entry_point,
+        stack_ptr,
+        kernel_region.bytes()
+    );
+    debug_println!(
+        "Cpu: x86_64 64-bit | Kern: {:?} {:?}",
+        kernel_elf.elf_arch().unwrap(),
+        kernel_elf.elf_bits().unwrap()
+    );
 
     debug_println!("\nCalling '_start' in elf at 0x{:x}", entry_point);
 

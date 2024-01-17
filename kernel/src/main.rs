@@ -69,15 +69,15 @@ static mut SERIAL_CONNECTION: PossiblyUninit<SerialDevice> = PossiblyUninit::new
 kernel_entry!(main);
 
 fn setup_serial_debug() {
-    let serial = unsafe { &mut SERIAL_CONNECTION };
-
-    let connection = StreamConnectionBuilder::new()
-        .console_connection()
-        .add_connection_name("Serial")
-        .add_who_using("Kernel")
-        .does_support_scrolling(true)
-        .add_outlet(serial.get_mut_ref().unwrap())
-        .build();
+    let connection = unsafe {
+        StreamConnectionBuilder::new()
+            .console_connection()
+            .add_connection_name("Serial")
+            .add_who_using("Kernel")
+            .does_support_scrolling(true)
+            .add_outlet(SERIAL_CONNECTION.get_mut_ref().unwrap())
+            .build()
+    };
 
     add_connection_to_global_stream(connection).unwrap();
 
