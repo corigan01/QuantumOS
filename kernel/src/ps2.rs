@@ -24,11 +24,11 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 use crate::pic::pic_eoi;
-use quantum_lib::x86_64::io::port::{self, IOPort, ReadOnlyPort};
+use quantum_lib::x86_64::io::port::{IOPort, ReadOnlyPort, WriteOnlyPort};
 
 const PS2_CONTROLLER_DATA_PORT: IOPort = IOPort::new(0x60);
 const PS2_CONTROLLER_STATUS_PORT: IOPort<ReadOnlyPort> = IOPort::new(0x64);
-const PS2_CONTROLLER_COMMAND_PORT: u16 = 0x60;
+const PS2_CONTROLLER_COMMAND_PORT: IOPort<WriteOnlyPort> = IOPort::new(0x64);
 
 pub fn ps2_interrupt_attachment(_frame: InterruptFrame, interrupt_id: u8, _error: Option<u64>) {
     unsafe { pic_eoi(interrupt_id) }
