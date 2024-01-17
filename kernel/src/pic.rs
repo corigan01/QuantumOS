@@ -73,7 +73,7 @@ pub fn wait_bus() {
 
 pub unsafe fn pic_init(idt_offset: u8) {
     assert!(
-        idt_offset + 8 <= 255,
+        idt_offset <= (255 - 8),
         "IDT offest must fit 16 interrupt vectors into the 256 range"
     );
 

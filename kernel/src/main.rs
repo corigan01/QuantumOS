@@ -287,7 +287,7 @@ fn main(boot_info: &KernelBootInformation) {
     debug_println!("{}", "OK".green().bold());
     debug_print!("Enabling PIC ");
     unsafe {
-        let idt = unsafe { GLOBAL_IDT.get_mut_ref().unwrap() };
+        let idt = GLOBAL_IDT.get_mut_ref().unwrap();
         attach_interrupt!(idt, dummy_irq, 32..=48);
         idt.submit_entries().unwrap().load();
         set_quiet_interrupt(32, true);
