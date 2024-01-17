@@ -5,7 +5,7 @@
 \___\_\_,_/\_,_/_//_/\__/\_,_/_/_/_/ /_/|_|\__/_/ /_//_/\__/_/
   Part of the Quantum OS Kernel
 
-Copyright 2022 Gavin Kellam
+Copyright 2024 Gavin Kellam
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
 associated documentation files (the "Software"), to deal in the Software without restriction,
@@ -35,13 +35,17 @@ Quantum OS Lib file, documentation coming soon!
 #![feature(maybe_uninit_slice)]
 #![feature(int_roundings)]
 
+pub mod apic;
 pub mod clock;
+pub mod keyboard;
+pub mod pic;
+pub mod ps2;
 pub mod qemu;
 
+pub mod hex_dump;
 pub mod kernel_console;
 #[cfg(test)]
 pub mod test_handler;
-pub mod hex_dump;
 
 #[cfg(test)]
 pub fn test_main() {

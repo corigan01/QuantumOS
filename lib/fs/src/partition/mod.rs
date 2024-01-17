@@ -23,5 +23,24 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-pub mod content_cell;
-pub mod table;
+use qk_alloc::{boxed::Box, vec::Vec};
+mod mbr;
+
+pub enum PartitionKind {
+    Mbr,
+    Guid,
+}
+
+trait ValidPartition {
+    fn partitions(&self) -> Vec<Partition>;
+}
+
+pub struct Partition {
+    bootable: bool,
+    lba_start: usize,
+    lba_end: usize,
+}
+
+pub struct PartitionTable {
+    table: Box<dyn ValidPartition>,
+}

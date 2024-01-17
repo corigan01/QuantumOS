@@ -447,7 +447,7 @@ where
 
 impl<Type, Alloc: AllocatorAPI> Drop for Vec<Type, Alloc> {
     fn drop(&mut self) {
-        while let Some(_) = self.pop() {}
+        self.remove_all();
     }
 }
 
@@ -603,7 +603,7 @@ mod test {
         let vec = Vec::from([0, 1, 2, 3, 4]);
 
         for i in 0..5 {
-            assert!(vec[i], i);
+            assert_eq!(vec[i], i);
         }
     }
 }

@@ -5,7 +5,7 @@
 \___\_\_,_/\_,_/_//_/\__/\_,_/_/_/_/ /_/|_|\__/_/ /_//_/\__/_/
   Part of the Quantum OS Kernel
 
-Copyright 2022 Gavin Kellam
+Copyright 2024 Gavin Kellam
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
 associated documentation files (the "Software"), to deal in the Software without restriction,
@@ -21,44 +21,46 @@ NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPO
 NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
 DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
 */
 
 #![no_std] // don't link the Rust standard library
 #![no_main] // disable all Rust-level entry points
 #![allow(dead_code)]
+#![feature(abi_x86_interrupt)]
 
 use core::panic::PanicInfo;
 use fs::disks::ata::{AtaDisk, DiskID};
-use fs::io::{Read, Seek, SeekFrom, Write};
+use fs::filesystems::tmpfs::TmpFs;
+use fs::io::Read;
+use fs::{self, drop_the_vfs, set_the_vfs, the_vfs, Vfs};
+use owo_colors::OwoColorize;
+use qk_alloc::boxed::Box;
 use qk_alloc::heap::alloc::KernelHeap;
 use qk_alloc::heap::{get_global_alloc, get_global_alloc_debug, set_global_alloc};
+use qk_alloc::string::String;
 use qk_alloc::usable_region::UsableRegion;
-
+use qk_alloc::vec;
 use quantum_lib::address_utils::physical_address::PhyAddress;
 use quantum_lib::address_utils::region::{MemoryRegion, MemoryRegionType};
+use quantum_lib::address_utils::region_map::RegionMap;
+use quantum_lib::address_utils::virtual_address::VirtAddress;
 use quantum_lib::address_utils::PAGE_SIZE;
 use quantum_lib::boot::boot_info::KernelBootInformation;
 use quantum_lib::com::serial::{SerialBaud, SerialDevice, SerialPort};
 use quantum_lib::debug::stream_connection::StreamConnectionBuilder;
 use quantum_lib::debug::{add_connection_to_global_stream, set_panic};
 use quantum_lib::gfx::{rectangle::Rect, Pixel, PixelLocation};
-use quantum_lib::possibly_uninit::PossiblyUninit;
-use quantum_lib::{debug_print, debug_println, kernel_entry, rect};
-use quantum_utils::human_bytes::HumanBytes;
-
-use quantum_os::clock::rtc::update_and_get_time;
-
-use fs;
-
-use owo_colors::OwoColorize;
-use qk_alloc::string::String;
-use quantum_lib::address_utils::region_map::RegionMap;
-use quantum_lib::address_utils::virtual_address::VirtAddress;
 use quantum_lib::panic_utils::CRASH_MESSAGES;
-
-use quantum_os::hex_dump::HexPrint;
+use quantum_lib::possibly_uninit::PossiblyUninit;
+use quantum_lib::x86_64::interrupts::Interrupts;
+use quantum_lib::x86_64::tables::idt::{
+    debug_interrupt, set_quiet_interrupt, ExtraHandlerInfo, Idt, InterruptFrame,
+};
+use quantum_lib::{attach_interrupt, debug_print, debug_println, kernel_entry, rect};
+use quantum_os::clock::rtc::update_and_get_time;
+use quantum_os::pic::{pic_eoi, pic_init};
 use quantum_os::qemu::{exit_qemu, QemuExitCode};
+use quantum_utils::human_bytes::HumanBytes;
 
 static mut SERIAL_CONNECTION: PossiblyUninit<SerialDevice> = PossiblyUninit::new_lazy(|| {
     SerialDevice::new(SerialPort::Com1, SerialBaud::Baud115200).unwrap()
@@ -147,6 +149,82 @@ fn setup_memory(
     (physical_memory_map, virtual_memory_map)
 }
 
+fn interrupt(frame: InterruptFrame, interrupt_id: u8, error: Option<u64>) {
+    let info = ExtraHandlerInfo::new(interrupt_id);
+
+    if info.quiet_interrupt {
+        return;
+    }
+
+    debug_println!(
+        "Dingus interrupt was called! \n{:#?}\n{:#?}\n{:#?}",
+        frame,
+        info,
+        error
+    );
+}
+
+fn dummy_irq(frame: InterruptFrame, interrupt_id: u8, error: Option<u64>) {
+    let info = ExtraHandlerInfo::new(interrupt_id);
+
+    if !info.quiet_interrupt {
+        debug_println!("Dummy IRQ interrupt was called! {}", interrupt_id);
+    }
+
+    unsafe { pic_eoi(interrupt_id - 32) };
+}
+
+static mut GLOBAL_IDT: PossiblyUninit<Idt> = PossiblyUninit::new_lazy(|| Idt::new());
+
+use core::{arch::asm, mem::size_of};
+
+static mut LONG_MODE_GDT: GdtLongMode = GdtLongMode::new();
+
+#[repr(C)]
+pub struct GdtLongMode {
+    zero: u64,
+    code: u64,
+    data: u64,
+}
+
+impl GdtLongMode {
+    const fn new() -> Self {
+        let common_flags = {
+            (1 << 44) // user segment
+                | (1 << 47) // present
+                | (1 << 41) // writable
+                | (1 << 40) // accessed (to avoid changes by the CPU)
+        };
+        Self {
+            zero: 0,
+            code: common_flags | (1 << 43) | (1 << 53), // executable and long mode
+            data: common_flags,
+        }
+    }
+
+    pub fn load(&'static self) {
+        let pointer = GdtPointer {
+            limit: (3 * size_of::<u64>() - 1) as u16,
+            base: self,
+        };
+
+        unsafe {
+            asm!("lgdt [{}]", in(reg) &pointer);
+        }
+    }
+}
+
+#[repr(C, packed(2))]
+pub struct GdtPointer {
+    /// Size of the DT.
+    pub limit: u16,
+    /// Pointer to the memory region containing the DT.
+    pub base: *const GdtLongMode,
+}
+
+unsafe impl Send for GdtPointer {}
+unsafe impl Sync for GdtPointer {}
+
 fn main(boot_info: &KernelBootInformation) {
     setup_serial_debug();
 
@@ -169,23 +247,58 @@ fn main(boot_info: &KernelBootInformation) {
     framebuffer.draw_rect(rect!(0, 15 ; 150, 2), Pixel::WHITE);
     debug_println!("{}", "OK".bright_green().bold());
 
-    let buffer = "I AM A TURBO CUM";
-    let mut disk = AtaDisk::new(DiskID::PrimaryFirst).quarry().unwrap();
+    set_the_vfs(Vfs::new());
 
-    disk.seek(SeekFrom::Start(500)).unwrap();
-    disk.write(buffer.as_bytes()).unwrap();
-    disk.flush().unwrap();
+    let mut disk = the_vfs(|vfs| {
+        vfs.mount(
+            "/dev".into(),
+            Box::new(TmpFs::new(fs::permission::Permissions::root_rwx())),
+        )
+        .unwrap();
 
-    let mut buffer = [0; 1024];
-    disk.seek(SeekFrom::Start(0)).unwrap();
-    disk.read(&mut buffer).unwrap();
+        vfs.open_custom(
+            "/dev/hda".into(),
+            Box::new(AtaDisk::new(DiskID::PrimaryFirst).quarry().unwrap()),
+        )
+        .unwrap()
+    });
 
-    debug_println!("Disk: {}", buffer.hex_print());
+    let mut disk_read = vec![0; 1024];
+    disk.read(&mut disk_read).unwrap();
+    disk.close().unwrap();
+    drop_the_vfs();
 
-    debug_println!("Words Per Sector on disk: {}", disk.words_per_sector());
+    debug_print!("Enabling GDT ");
+    unsafe {
+        Interrupts::disable();
+        LONG_MODE_GDT = GdtLongMode::new();
+        LONG_MODE_GDT.load();
+    };
+    debug_println!("{}", "OK".green().bold());
+    debug_print!("Enabling IDT ");
+    {
+        let idt = unsafe { GLOBAL_IDT.get_mut_ref().unwrap() };
+        attach_interrupt!(idt, interrupt, 0..32);
+        idt.submit_entries().unwrap().load();
+        set_quiet_interrupt(1, true);
+
+        debug_interrupt();
+    };
+    debug_println!("{}", "OK".green().bold());
+    debug_print!("Enabling PIC ");
+    unsafe {
+        let idt = unsafe { GLOBAL_IDT.get_mut_ref().unwrap() };
+        attach_interrupt!(idt, dummy_irq, 32..=48);
+        idt.submit_entries().unwrap().load();
+        set_quiet_interrupt(32, true);
+        pic_init(32);
+        Interrupts::enable();
+    }
+    debug_println!("{}", "OK".green().bold());
+
+    loop {}
 
     debug_println!("\n\n{}", get_global_alloc());
-
     debug_println!("\n\nDone!");
     debug_print!("{}", "Shutting Down QuantumOS ...".red().bold());
     exit_qemu(QemuExitCode::Success);

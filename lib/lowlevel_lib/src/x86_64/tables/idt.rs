@@ -5,7 +5,7 @@
 \___\_\_,_/\_,_/_//_/\__/\_,_/_/_/_/ /____/_/_.__/
   Part of the Quantum OS Project
 
-Copyright 2023 Gavin Kellam
+Copyright 2024 Gavin Kellam
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
 associated documentation files (the "Software"), to deal in the Software without restriction,
@@ -27,7 +27,8 @@ use crate::bitset::BitSet;
 
 use crate::address_utils::virtual_address::VirtAddress;
 use crate::debug_println;
-use crate::x86_64::registers::{Segment, SegmentRegs};
+use crate::x86_64::registers::Segment;
+use crate::x86_64::registers::SegmentRegs;
 use crate::x86_64::PrivlLevel;
 use core::arch::asm;
 use core::mem::size_of;
@@ -36,18 +37,10 @@ use lazy_static::lazy_static;
 use spin::Mutex;
 
 type RawHandlerFuncNe /* No Error             */ = extern "x86-interrupt" fn(InterruptFrame);
-#[cfg(target_pointer_width = "64")]
 type RawHandlerFuncE /* With Error           */ = extern "x86-interrupt" fn(InterruptFrame, u64);
 type RawHandlerFuncDne /* Diverging No Error   */ = extern "x86-interrupt" fn(InterruptFrame) -> !;
-#[cfg(target_pointer_width = "64")]
 type RawHandlerFuncDe /* Diverging With Error */ =
     extern "x86-interrupt" fn(InterruptFrame, u64) -> !;
-
-#[cfg(not(target_pointer_width = "64"))]
-type RawHandlerFuncE /* With Error           */ = extern "x86-interrupt" fn(InterruptFrame, u32);
-#[cfg(not(target_pointer_width = "64"))]
-type RawHandlerFuncDe /* Diverging With Error */ =
-    extern "x86-interrupt" fn(InterruptFrame, u32) -> !;
 
 /// # General Handler Function type
 /// This is the function you will use when a interrupt gets called, the idt should abstract the
@@ -63,6 +56,8 @@ pub type GeneralHandlerFunc = fn(InterruptFrame, u8, Option<u64>);
 /// including 'System Calls'. System calls can be used to ask the kernel to perform privileged
 /// operations like talking to I/O in a safe way, as to not allow the sand boxed application to
 /// have privileges to things it shouldn't be.
+#[derive(Debug)]
+#[repr(align(16))]
 pub struct Idt([Entry; 256]);
 
 /// # Entry
@@ -100,7 +95,6 @@ pub struct Idt([Entry; 256]);
 /// reason, when you submit the IDT it checks if these bits are zero in every entry and will Err if
 /// there is even a single bit set.
 ///
-#[cfg(target_pointer_width = "64")]
 #[derive(Debug, Clone, Copy)]
 #[repr(C, packed)]
 pub struct Entry {
@@ -112,51 +106,15 @@ pub struct Entry {
     reserved: u32,
 }
 
-/// # Entry
-/// This is the most basic form of the IDT. Each entry is made up of a few parts that the cpu needs
-/// in a very specific order to understand. This order is as follows
-/// ```text
-///  pointer_low: u16
-///  gdt_selector: Segment
-///  options: EntryOptions
-///  pointer_middle: u16
-///  pointer_high: u32
-///  reserved: u32
-/// ```
-/// The first 2-bytes of the structure are the low bytes of the pointer. This is not the entire
-/// pointer, but only the first 16 bits of it. Since X86 is a weird architecture, it has odd
-/// backwards compatibility, because of this we have the pointer split-up.
+/// # Const Assert
+/// Ensure that the data structure is 16 bytes as per spec. If any changes make it so the struct
+/// is not 16 bytes then the compiler will complain.
 ///
-/// The `gdt_selector` is simple little structure that gives a GDT reference to every entry. This
-/// mostly does not matter in 64-bit mode, but in older versions it was how privileges where controlled.
-///
-/// The `options` is how the cpu knows who, and when can an interrupt be called. For example, a
-/// userspace application is not allowed to call `Double Fault` directly because then any program
-/// can just cause the CPU to panic and the operating system would not be able to shut the program
-/// down. For this reason userspace applications are only allowed to call the interrupts that the
-/// kernel agrees is necessary. These are usually system calls that are allowed to be called. This
-/// is because the operating system has full control on what the interrupts do and dont do.
-///
-/// The next two fields in our Entry struct is the second half of the pointer as mentioned before.
-/// This is just the higher 48-bits of the pointer and the rest are discarded and must be 0.
-///
-/// `reserved` is probably the most odd thing in here. These bits **MUST** be zero. Sometimes
-/// emulators will store information in them, and on real hardware it can cause a Protection Fault
-/// if any of these bits are set. In special cases, these bits can also make the system super
-/// unpredictable. Weird memory or untraceable errors can happen if these bits are set. For that
-/// reason, when you submit the IDT it checks if these bits are zero in every entry and will Err if
-/// there is even a single bit set.
-///
-#[cfg(not(target_pointer_width = "64"))]
-#[derive(Debug, Clone, Copy)]
-#[repr(C, packed)]
-pub struct Entry {
-    pointer_low: u16,
-    gdt_selector: Segment,
-    reserved: u8,
-    options: EntryOptions,
-    pointer_middle: u16,
-}
+/// Intel Ref: Page 3215/3216
+const _: () = assert!(
+    core::mem::size_of::<Entry>() == 16,
+    "Entry should be 16 bytes!"
+);
 
 /// # Interrupt Frame
 /// This is probably the struct most people will need to learn. This struct is very important as it
@@ -170,39 +128,25 @@ pub struct Entry {
 /// This can be one of the most important things for debugging, so please learn exactly how this
 /// structure can be used. It will save so much time knowing exactly what happened instead of looking
 /// for what could have caused this issue in the first place.
-#[cfg(target_pointer_width = "64")]
 #[derive(Debug, Clone, Copy)]
-#[repr(C)]
+#[repr(C, packed)]
 pub struct InterruptFrame {
     pub eip: u64,
     pub code_seg: u64,
     pub flags: u64,
     pub stack_pointer: u64,
-    pub stack_segment: u64,
+    pub stack_segment: u16,
 }
 
-/// # Interrupt Frame
-/// This is probably the struct most people will need to learn. This struct is very important as it
-/// represents a snapshot of the interrupt that was called. It will tell you things as simple as where
-/// the cpu was executing, this can be very important for debugging. I would suggest printing out
-/// the EIP on almost every fault because it will tell you exactly the instruction that caused the
-/// CPU to fault. As we move on to the flags, these can be kinda specific to the interrupt. I would
-/// suggest looking at the OSdev wiki for more information on the flags for your specific interrupt.
+/// # Const Assert
+/// Ensure that the data structure is 40 bytes as per spec. If any changes make it so the struct
+/// is not 40 bytes then the compiler will complain.
 ///
-/// # Notes
-/// This can be one of the most important things for debugging, so please learn exactly how this
-/// structure can be used. It will save so much time knowing exactly what happened instead of looking
-/// for what could have caused this issue in the first place.
-#[cfg(not(target_pointer_width = "64"))]
-#[derive(Debug, Clone, Copy)]
-#[repr(C)]
-pub struct InterruptFrame {
-    pub eip: u32,
-    pub code_seg: u32,
-    pub flags: u32,
-    pub stack_pointer: u32,
-    pub stack_segment: u32,
-}
+/// Intel Ref: Page 3218
+const _: () = assert!(
+    core::mem::size_of::<InterruptFrame>() == 34,
+    "InterruptFrame should be 34 bytes!"
+);
 
 /// # Fall Back Missing handler
 /// This handler is attached when the IDT is created, but the missing_handler should be attached
@@ -264,7 +208,6 @@ impl Entry {
         blank
     }
 
-    #[cfg(target_pointer_width = "64")]
     pub fn new_blank(gdt_select: Segment) -> Self {
         Entry {
             gdt_selector: gdt_select,
@@ -276,32 +219,12 @@ impl Entry {
         }
     }
 
-    #[cfg(not(target_pointer_width = "64"))]
-    pub fn new_blank(gdt_select: Segment) -> Self {
-        Entry {
-            gdt_selector: gdt_select,
-            pointer_low: 0,
-            pointer_middle: 0,
-            options: EntryOptions::new(),
-            reserved: 0,
-        }
-    }
-
-    #[cfg(target_pointer_width = "64")]
     pub fn set_handler(&mut self, handler: VirtAddress) {
         let pointer = handler.as_u64();
 
         self.pointer_low = pointer as u16;
         self.pointer_middle = (pointer >> 16) as u16;
         self.pointer_high = (pointer >> 32) as u32;
-    }
-
-    #[cfg(not(target_pointer_width = "64"))]
-    pub fn set_handler(&mut self, handler: VirtAddress) {
-        let pointer = handler.as_u64() as u32;
-
-        self.pointer_low = pointer as u16;
-        self.pointer_middle = (pointer >> 16) as u16;
     }
 
     pub fn missing() -> Self {
@@ -321,7 +244,6 @@ impl Entry {
         }
     }
 
-    #[cfg(target_pointer_width = "64")]
     pub fn is_fallback_missing(&self) -> bool {
         let missing_ref = Self::missing();
 
@@ -330,22 +252,8 @@ impl Entry {
             && self.pointer_high == missing_ref.pointer_high
     }
 
-    #[cfg(not(target_pointer_width = "64"))]
-    pub fn is_fallback_missing(&self) -> bool {
-        let missing_ref = Self::missing();
-
-        self.pointer_low == missing_ref.pointer_low
-            && self.pointer_middle == missing_ref.pointer_middle
-    }
-
-    #[cfg(target_pointer_width = "64")]
     pub fn is_null(&self) -> bool {
         self.pointer_low == 0 && self.pointer_middle == 0 && self.pointer_high == 0
-    }
-
-    #[cfg(not(target_pointer_width = "64"))]
-    pub fn is_null(&self) -> bool {
-        self.pointer_low == 0 && self.pointer_middle == 0
     }
 }
 
@@ -356,7 +264,7 @@ impl Idt {
         // Attach the nicer missing_handler to the idt this
         // one will be correctly formatted for each interrupt!
         let mut idt = Idt([Entry::missing(); 256]);
-        attach_interrupt!(idt, missing_handler, 0..255);
+        attach_interrupt!(idt, missing_handler, 0..=255);
 
         idt
     }
@@ -410,10 +318,7 @@ impl Idt {
         }
 
         Ok(IdtTablePointer {
-            #[cfg(target_pointer_width = "64")]
             base: self as *const _ as u64,
-            #[cfg(not(target_pointer_width = "64"))]
-            base: self as *const _ as u32,
             limit: (size_of::<Self>() - 1) as u16,
         })
     }
@@ -429,10 +334,7 @@ impl Idt {
 
             // Do as the master said, and submit anyway!
             IdtTablePointer {
-                #[cfg(target_pointer_width = "64")]
                 base: self as *const _ as u64,
-                #[cfg(not(target_pointer_width = "64"))]
-                base: self as *const _ as u32,
                 limit: (size_of::<Self>() - 1) as u16,
             }
         }
@@ -470,13 +372,10 @@ impl Idt {
 /// This is why it is very important that this is made correctly, and for that reason is can only be
 /// made through the IDT.
 #[derive(Copy, Clone, Debug)]
-#[repr(C, packed(2))]
+#[repr(C, packed)]
 pub struct IdtTablePointer {
     limit: u16,
-    #[cfg(target_pointer_width = "64")]
     base: u64,
-    #[cfg(not(target_pointer_width = "64"))]
-    base: u32,
 }
 
 lazy_static! {
@@ -504,13 +403,9 @@ impl IdtTablePointer {
     }
 }
 
-#[cfg(target_pointer_width = "64")]
 #[derive(Copy, Clone, Debug)]
+#[repr(C, packed)]
 pub struct EntryOptions(u16);
-
-#[cfg(target_pointer_width = "32")]
-#[derive(Copy, Clone, Debug)]
-pub struct EntryOptions(u8);
 
 impl EntryOptions {
     /// # Warning
@@ -520,14 +415,8 @@ impl EntryOptions {
         EntryOptions(0)
     }
 
-    #[cfg(target_pointer_width = "64")]
     pub fn new_minimal() -> Self {
         EntryOptions(0.set_bits(9..12, 0b111))
-    }
-
-    #[cfg(not(target_pointer_width = "64"))]
-    pub fn new_minimal() -> Self {
-        EntryOptions(0b10001110)
     }
 
     pub fn new() -> Self {
@@ -539,32 +428,24 @@ impl EntryOptions {
         new_s
     }
 
-    #[cfg(target_pointer_width = "64")]
     pub fn set_present_flag(&mut self, present: bool) -> &mut Self {
-        self.0.set_bit(15, present);
+        let mut value = self.0;
+        value.set_bit(15, present);
+        self.0 = value;
         self
     }
 
-    #[cfg(not(target_pointer_width = "64"))]
-    pub fn set_present_flag(&mut self, present: bool) -> &mut Self {
-        self.0.set_bit(8, present);
-        self
-    }
-
-    #[cfg(target_pointer_width = "64")]
     pub fn set_cpu_prv(&mut self, cpl: PrivlLevel) -> &mut Self {
-        self.0.set_bits(13..15, cpl.to_usize() as u64);
-        self
-    }
-
-    #[cfg(not(target_pointer_width = "64"))]
-    pub fn set_cpu_prv(&mut self, cpl: PrivlLevel) -> &mut Self {
-        self.0.set_bits(5..7, cpl.to_usize() as u64);
+        let mut value = self.0;
+        value.set_bits(13..15, cpl.to_usize() as u64);
+        self.0 = value;
         self
     }
 
     pub fn set_stack_index(&mut self, index: u16) -> &mut Self {
-        self.0.set_bits(0..3, index as u64);
+        let mut value = self.0;
+        value.set_bits(0..3, index as u64);
+        self.0 = value;
         self
     }
 }
@@ -639,6 +520,7 @@ impl EntryOptions {
 /// |   31   |         RESERVED         |    RSV     |
 /// |--------|--------------------------|------------|
 /// ```
+#[derive(Debug, Clone, Copy)]
 pub struct ExtraHandlerInfo {
     /// *This type of interrupt should not return and will cause a panic if returned*
     pub should_handler_diverge: bool,
@@ -788,7 +670,6 @@ pub fn set_quiet_interrupt_range(interrupt_id: Range<u8>, quiet: bool) {
 /// # Interrupt Tester
 /// This will simply just call a basic interrupt to test your IDT. This interrupt will call
 /// interrupt 1 - or simply known as 'Debug'.
-#[inline]
 pub fn debug_interrupt() {
     unsafe {
         asm!("int $0x01");
@@ -829,18 +710,10 @@ macro_rules! general_function_to_interrupt_ne {
 #[macro_export]
 macro_rules! general_function_to_interrupt_e {
     ($name: ident, $int_num: expr) => {{
-        #[cfg(target_pointer_width = "64")]
         extern "x86-interrupt" fn wrapper(i_frame: InterruptFrame, error_code: u64) {
             let function = $name as $crate::x86_64::tables::idt::GeneralHandlerFunc;
 
             function(i_frame, $int_num, Some(error_code));
-        }
-
-        #[cfg(not(target_pointer_width = "64"))]
-        extern "x86-interrupt" fn wrapper(i_frame: InterruptFrame, error_code: u32) {
-            let function = $name as $crate::x86_64::tables::idt::GeneralHandlerFunc;
-
-            function(i_frame, $int_num, Some(error_code as u64));
         }
 
         wrapper
@@ -883,20 +756,10 @@ macro_rules! general_function_to_interrupt_dne {
 #[macro_export]
 macro_rules! general_function_to_interrupt_de {
     ($name: ident, $int_num: expr) => {{
-        #[cfg(target_pointer_width = "64")]
         extern "x86-interrupt" fn wrapper(i_frame: InterruptFrame, error_code: u64) -> ! {
             let function = $name as $crate::x86_64::tables::idt::GeneralHandlerFunc;
 
             function(i_frame, $int_num, Some(error_code));
-
-            panic!("Diverging Interrupt Function should not return!");
-        }
-
-        #[cfg(not(target_pointer_width = "64"))]
-        extern "x86-interrupt" fn wrapper(i_frame: InterruptFrame, error_code: u32) -> ! {
-            let function = $name as $crate::x86_64::tables::idt::GeneralHandlerFunc;
-
-            function(i_frame, $int_num, Some(error_code as u64));
 
             panic!("Diverging Interrupt Function should not return!");
         }

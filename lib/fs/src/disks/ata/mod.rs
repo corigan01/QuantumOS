@@ -43,7 +43,8 @@ use crate::{
         },
     },
     error::{FsError, FsErrorKind},
-    io::{Read, Seek, SeekFrom, Write},
+    io::{FileProvider, Metadata, Read, Seek, SeekFrom, Write},
+    permission::Permissions,
     FsResult,
 };
 use core::{cmp::min, i64, marker::PhantomData, u64};
@@ -160,7 +161,7 @@ impl AtaDisk {
 
         Ok(AtaDisk {
             disk_id: disk,
-            cache: self.cache,
+            cache: self.cache.clone(),
             seek: 0,
             identify: identify_parser,
             phan: PhantomData,
@@ -477,3 +478,47 @@ impl Write for AtaDisk<Quarried> {
         state
     }
 }
+
+impl Metadata for AtaDisk<Quarried> {
+    fn date_created(&self) -> Option<crate::UnixTime> {
+        None
+    }
+
+    fn date_modified(&self) -> Option<crate::UnixTime> {
+        None
+    }
+
+    fn date_accessed(&self) -> Option<crate::UnixTime> {
+        None
+    }
+
+    fn date_removed(&self) -> Option<crate::UnixTime> {
+        None
+    }
+
+    fn permissions(&self) -> crate::permission::Permissions {
+        Permissions::root_rwx()
+    }
+
+    fn kind(&self) -> crate::io::EntryType {
+        crate::io::EntryType::BlockDevice
+    }
+
+    fn can_write(&self) -> bool {
+        true
+    }
+
+    fn can_read(&self) -> bool {
+        true
+    }
+
+    fn can_seek(&self) -> bool {
+        true
+    }
+
+    fn len(&self) -> u64 {
+        (self.identify.user_sectors_28bit_lba() * self.words_per_sector() * 2) as u64
+    }
+}
+
+impl FileProvider for AtaDisk<Quarried> {}

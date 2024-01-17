@@ -335,12 +335,26 @@ pub trait Seek {
 
 /// Kinda like our Inode type, just fits better as a trait instead of a struct
 pub trait Metadata {
-    fn date_created(&self) -> Option<UnixTime>; 
-    fn date_modified(&self) -> Option<UnixTime>;
-    fn date_accessed(&self) -> Option<UnixTime>;
-    fn date_removed(&self) -> Option<UnixTime>;
+    fn date_created(&self) -> Option<UnixTime> {
+        None
+    }
 
-    fn permissions(&self) -> Permissions;
+    fn date_modified(&self) -> Option<UnixTime> {
+        None
+    }
+
+    fn date_accessed(&self) -> Option<UnixTime> {
+        None
+    }
+
+    fn date_removed(&self) -> Option<UnixTime> {
+        None
+    }
+
+    fn permissions(&self) -> Permissions {
+        Permissions::none()
+    }
+
     fn kind(&self) -> EntryType;
     
     fn can_write(&self) -> bool;
@@ -351,7 +365,6 @@ pub trait Metadata {
 }
 
 pub trait DirectoryProvider: Iterator<Item = crate::path::Path> + Metadata {}
-
 pub trait FileProvider: Read + Write + Seek + Metadata {}
 
 pub trait FileSystemProvider {

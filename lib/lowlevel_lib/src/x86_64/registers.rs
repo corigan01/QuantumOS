@@ -314,7 +314,7 @@ pub struct ControlRegs {
 }
 
 #[derive(Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Default, Debug)]
-#[repr(C, packed)]
+#[repr(transparent)]
 pub struct Segment(pub u16);
 
 impl Segment {
@@ -406,6 +406,7 @@ impl SegmentRegs {
         asm!(
             "mov ds, ax",
             "mov es, ax",
+            "mov ss, ax",
             "mov fs, ax",
             "mov gs, ax",
             in("ax") seg.as_u16()
@@ -474,7 +475,7 @@ impl SegmentRegs {
             )
         }
 
-        Segment::new(value, PrivlLevel::Ring0)
+        Segment(value)
     }
 }
 

@@ -70,99 +70,74 @@ impl Path {
     /// 3.  Path = "/Node/../Node/../."
     ///     desolved = "/"
     ///
-    pub fn truncate_path(self) -> Path {
-        let mut starting_path = self.0.clone();
+    pub fn truncate_path(&self) -> Path {
+        let mut rebuilding_string = String::new();
+        let mut state = 0;
+        let iterator = self
+            .children()
+            .filter(|member| member != &".")
+            .rev()
+            .map(|member| {
+                if member == ".." {
+                    state += 1;
+                    return "";
+                }
 
-        // TODO: Make this better in the future
-        // I would like to do this without memory allocation in the future. I think memory
-        // allocation is just slowing this down.
+                if state > 0 {
+                    state -= 1;
+                    return "";
+                }
 
-        let final_string: String = loop {
-            let mut final_string: String = Path::from(starting_path.clone())
-                // Get the children of the path
-                // Example path = "/home/user/someone"
-                //  1. 'home'
-                //  2. 'user'
-                //  3. 'someone'
-                .children()
-                .into_iter()
-                // Remove all '.'
-                .filter(|child| child != &".")
-                .chain(["", "", ""])
-                .collect::<Vec<&str>>()
-                // Remove all "/path/../path/"
-                .windows(2)
-                .scan(0_usize, |val, init| {
-                    if *val > 0 {
-                        *val = val.checked_sub(1).unwrap_or(0);
-                        return Some("");
-                    }
+                member
+            })
+            .filter(|member| member.len() != 0);
 
-                    let first = &init[0];
-                    let second = &init[1];
+        let self_0 = self.0.trim();
 
-                    if second == &".." && first != &".." {
-                        *val += 1;
-                        Some("")
-                    } else {
-                        *val = val.checked_sub(1).unwrap_or(0);
-                        Some(first)
-                    }
-                })
-                .filter(|val| val.len() != 0)
-                // Add the '/' back for each of the children
-                .fold(
-                    starting_path
-                        .starts_with('/')
-                        .then(|| String::from("/"))
-                        .unwrap_or(String::new()),
-                    |mut acc, val| {
-                        acc.push_str(val);
-                        acc.push_str("/");
-
-                        acc
-                    },
-                );
-
-            // Replace some remaining truncated chars
-            if starting_path.starts_with(".") && !final_string.starts_with(".") {
-                final_string = String::from(".") + final_string;
+        let collection: Vec<&str> = iterator.collect();
+        if !self_0.starts_with("/") {
+            for _ in 0..state {
+                rebuilding_string.push_str("../");
             }
+        }
 
-            if starting_path.ends_with("/") && !final_string.ends_with("/") {
-                final_string.push_str("/");
-            }
+        for child in collection.iter().rev() {
+            rebuilding_string.push_str("/");
+            rebuilding_string.push_str(child);
+        }
 
-            if !(starting_path.ends_with("/") || starting_path.ends_with("."))
-                && final_string.ends_with("/")
-            {
-                final_string.pop();
-            }
+        if !self_0.ends_with("/") {
+            rebuilding_string = String::from(rebuilding_string.trim_start_matches("/"));
+        }
 
-            if starting_path.starts_with("/") && final_string.len() == 0 {
-                final_string.push_str("/");
-            }
+        if (self_0.ends_with("/") || self_0.ends_with("/..")) && !rebuilding_string.ends_with("/") {
+            rebuilding_string.push_str("/");
+        }
 
-            if final_string.len() == 0 {
-                final_string.push_str(".");
-            }
+        if self_0.starts_with(".") && !rebuilding_string.starts_with(".") {
+            rebuilding_string.prepend(".");
+        }
 
-            if !final_string.contains("..") || final_string.starts_with("..") {
-                break final_string;
-            }
+        if self_0.starts_with("/") && !rebuilding_string.starts_with("/") {
+            rebuilding_string.prepend("/");
+        }
 
-            starting_path = final_string;
-        };
+        if !self_0.starts_with("/") && rebuilding_string.starts_with("/") {
+            rebuilding_string = String::from(&rebuilding_string.as_str()[1..]);
+        }
 
-        Path(final_string)
+        if rebuilding_string.len() == 0 {
+            rebuilding_string.push_str(".");
+        }
+
+        Path::from(rebuilding_string)
     }
 
-    pub fn children<'a>(&'a self) -> Vec<&'a str> {
+    pub fn children<'a>(&'a self) -> impl DoubleEndedIterator<Item = &'a str> {
         self.0
             .as_str()
             .split('/')
-            .filter(|child| !(*child == "/"))
-            .collect()
+            .filter(|member| member.len() != 0 && member != &"/")
     }
 
     pub fn is_absolute(&self) -> bool {
@@ -173,24 +148,63 @@ impl Path {
         !self.is_absolute()
     }
 
-    pub fn snip_off(self, path: Path) -> Option<Path> {
-        let mut path = path.truncate_path();
+    pub fn is_root(&self) -> bool {
+        self.0.as_str() == "/"
+    }
 
-        if path.0.ends_with("/") {
-            path = Path(path.0.as_str()[..path.0.len() - 1].into())
-        }
-
-        if !self.0.starts_with(path.as_str()) {
+    /// # Snip Off
+    /// Takes the current path and trims it to the part past the path provided.
+    pub fn remove_parent(&self, path: &Path) -> Option<Path> {
+        if !self.is_child_of(&path) {
             return None;
         }
 
-        Some(Path::from(String::from(
-            &self.0.as_str()[path.as_str().len()..],
-        )))
+        Some(Path::from(
+            self.0.as_str()[path.0.trim_end_matches("/").len()..].trim_start_matches("/"),
+        ))
+    }
+
+    pub fn prepend(&mut self, value: &str) {
+        self.0.prepend(value)
     }
 
     pub fn as_str<'a>(&'a self) -> &'a str {
         self.0.as_str()
+    }
+
+    pub fn is_child_of(&self, path: &Path) -> bool {
+        if self.children().count() < path.children().count() {
+            return false;
+        }
+
+        for (idx, child) in path.children().enumerate() {
+            if child != self.children().nth(idx).unwrap_or("") {
+                return false;
+            }
+        }
+
+        true
+    }
+
+    pub fn parent_path(&self) -> Path {
+        let mut new_path_string = String::from(self.0.as_str());
+        new_path_string.push_str("/..");
+
+        if self.0.ends_with("/") {
+            new_path_string.push_str("/");
+        }
+
+        new_path_string = Path::from(new_path_string).truncate_path().0;
+
+        if new_path_string.ends_with("/") && !self.0.ends_with("/") {
+            new_path_string.pop();
+        }
+
+        if !new_path_string.starts_with("/") && self.0.starts_with("/") {
+            new_path_string.prepend("/");
+        }
+
+        Path::from(new_path_string)
     }
 }
 
@@ -297,5 +311,86 @@ mod test {
                     .truncate_path()
             );
         }
+    }
+
+    #[test]
+    fn test_child_path() {
+        crate::set_example_allocator();
+
+        let path = Path::from("/1/2/3/4/5/6/7/8");
+        let children = path.children();
+        assert_eq!(
+            children.collect::<Vec<&str>>().as_slice(),
+            &["1", "2", "3", "4", "5", "6", "7", "8"]
+        );
+
+        let path = Path::from("///1/2/3/4/5/../6");
+        let children = path.children();
+        assert_eq!(
+            children.collect::<Vec<&str>>().as_slice(),
+            &["1", "2", "3", "4", "5", "..", "6"]
+        );
+    }
+
+    #[test]
+    fn test_parent_path() {
+        crate::set_example_allocator();
+
+        assert_eq!(
+            Path::from("/something/neat.txt").parent_path(),
+            Path::from("/something")
+        );
+
+        assert_eq!(
+            Path::from("/something/neat/").parent_path(),
+            Path::from("/something/")
+        );
+
+        assert_eq!(
+            Path::from("/something/otherthing/super").parent_path(),
+            Path::from("/something/otherthing")
+        );
+
+        assert_eq!(Path::from("/test").parent_path(), Path::from("/"));
+        assert_eq!(Path::from("/").parent_path(), Path::from("/"));
+        assert_eq!(Path::from("/../").parent_path(), Path::from("/"));
+        assert_eq!(
+            Path::from("/dir/test.txt").parent_path(),
+            Path::from("/dir")
+        );
+    }
+
+    #[test]
+    fn test_child_of() {
+        crate::set_example_allocator();
+
+        assert!(Path::from("/test/test.txt").is_child_of(&"/test/".into()));
+        assert!(Path::from("/test/test.txt").is_child_of(&"/test".into()));
+    }
+
+    #[test]
+    fn test_parent_path_second() {
+        crate::set_example_allocator();
+
+        assert_eq!(
+            Path::from("/this/this/").parent_path(),
+            Path::from("/this/")
+        );
+
+        assert_eq!(Path::from("//////////").parent_path(), Path::from("/"));
+        assert_eq!(
+            Path::from("this is a test/ path or something//nicepath/or something").parent_path(),
+            Path::from("this is a test/ path or something/nicepath")
+        );
+    }
+
+    #[test]
+    fn test_remove_parent() {
+        crate::set_example_allocator();
+
+        assert_eq!(
+            Path::from("/somepath/test.txt").remove_parent(&Path::from("/somepath")),
+            Some(Path::from("test.txt"))
+        )
     }
 }

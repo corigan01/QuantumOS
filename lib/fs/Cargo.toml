@@ -11,3 +11,4 @@ categories = ["Filesystem"]
 quantum_lib = {path = "../lowlevel_lib" }
 qk_alloc = { path = "../qk_alloc" }
 quantum_utils = { path = "../quantum_utils" }
+spin = "0.9.8"

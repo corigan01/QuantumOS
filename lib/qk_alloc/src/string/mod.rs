@@ -51,6 +51,12 @@ impl String {
         self.data.push(byte);
     }
 
+    pub fn prepend(&mut self, str: &str) {
+        let mut new_string = String::from(str);
+        new_string.push_str(self.as_str());
+        self.data = new_string.data;
+    }
+
     pub fn push(&mut self, c: char) {
         let mut tmp_buffer: [u8; 4] = [0; 4];
 
