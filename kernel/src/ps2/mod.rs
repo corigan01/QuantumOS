@@ -24,3 +24,28 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 mod registers;
+
+// FIXME: There are more types of Devices that we should support. For now, we only support
+//        basic mouse and keyboard from QEMU.
+pub enum DeviceType {
+    Keyboard,
+    Mouse,
+}
+
+impl TryFrom<&[u8]> for DeviceType {
+    type Error = &str;
+
+    fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
+        assert!(
+            value.len() <= 2 && value.len() > 0,
+            "Input bytes must be larger then 0, but smaller or equal to 2. Got len={} instead.",
+            value.len()
+        );
+
+        match value {
+            _ => Ok(()),
+        }
+
+        Ok(())
+    }
+}
