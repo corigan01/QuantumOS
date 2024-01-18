@@ -33,7 +33,7 @@ pub enum DeviceType {
 }
 
 impl TryFrom<&[u8]> for DeviceType {
-    type Error = &str;
+    type Error = &'static str;
 
     fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
         assert!(
@@ -43,9 +43,9 @@ impl TryFrom<&[u8]> for DeviceType {
         );
 
         match value {
-            _ => Ok(()),
+            &[0x00] | &[0x03] | &[0x04] => Ok(DeviceType::Mouse),
+            &[0xAB, 0x84] | &[0xAB, 0x85] | &[0xAB, 0x86] => Ok(DeviceType::Keyboard),
+            _ => Err("Could not detect type from input sequence."),
         }
-
-        Ok(())
     }
 }
