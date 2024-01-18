@@ -26,30 +26,58 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 use quantum_lib::x86_64::io::port::IOPort;
 use quantum_utils::bitset::BitSet;
 
+/// # Read Register
+/// Given the constant of the port, it will construct
+/// fuctions to read and read_u16 from the given port.
+///
+/// This trait is unsafe because the programmer must
+/// ensure that this port has no side effects when
+/// preforming read operations, because they are
+/// considered safe inside the trait.
 pub unsafe trait ReadRegister<const REGISTER_ID: u16> {
+    /// # Read
+    /// Read a u8 from the Register.
     fn read() -> u8 {
         unsafe { IOPort::new(REGISTER_ID).read_u8() }
     }
 
+    /// # Read u16
+    /// Read a u16 from the Register.
     fn read_u16() -> u16 {
         unsafe { IOPort::new(REGISTER_ID).read_u16() }
     }
 }
 
+/// # Write Register
+/// Given the constant of the port, it will construct
+/// functions to write and write_u16 to the given port.
+///
+/// This trait is unsafe because the programmer must
+/// ensure that this IOPort is valid for writting.
 pub unsafe trait WriteRegister<const REGISTER_ID: u16> {
+    /// # Write
+    /// Write a u8 to the Register.
     unsafe fn write(value: u8) {
         IOPort::new(REGISTER_ID).write_u8(value)
     }
 
+    /// # Write u16
+    /// Write a u16 to the Register.
     unsafe fn write_u16(value: u16) {
         IOPort::new(REGISTER_ID).write_u16(value)
     }
 }
 
+/// Data Register IO Port
 const DATA_REGISTER_PORT_OFFSET: u16 = 0x60;
+/// Status Register IO Port
 const STATUS_REGISTER_PORT_OFFSET: u16 = 0x64;
+/// Command Register IO Port
 const COMMAND_REGISTER_PORT_OFFSET: u16 = 0x64;
 
+/// # Data Register
+/// Used to control the PS2 Device and Controller to send and
+/// recv data.
 pub struct DataRegister {}
 unsafe impl ReadRegister<DATA_REGISTER_PORT_OFFSET> for DataRegister {}
 unsafe impl WriteRegister<DATA_REGISTER_PORT_OFFSET> for DataRegister {}
