@@ -145,7 +145,7 @@ impl StatusFieldFlags {
     /// programmer to avoid confusion.
     #[inline]
     pub fn check_flag(&self, flag: StatusFlags) -> bool {
-        let flags = *self.0;
+        let flags = self.0;
         match flag {
             StatusFlags::OutputBufferFull => flags.get_bit(Self::OUTPUT_BUFFER_STATUS_BIT),
             StatusFlags::OutputBufferEmpty => !flags.get_bit(Self::OUTPUT_BUFFER_STATUS_BIT),
@@ -411,5 +411,125 @@ impl CommandRegister {
         loop {
             Self::write(0xFE);
         }
+    }
+}
+
+/// # Controller Configuration
+/// The config byte of the controller used for enabling
+/// ports and interrupts. Can set and get information
+/// about the controller.
+pub struct ControllerConfiguration {}
+
+impl ControllerConfiguration {
+    // --- Bit flags of Config
+    const FIRST_PORT_INTERRUPT: u8 = 0;
+    const SECOND_PORT_INTERRUPT: u8 = 1;
+    const SYSTEM_FLAG: u8 = 2;
+    const SHOULD_BE_ZERO: u8 = 3;
+    const FIRST_PORT_CLOCK: u8 = 4;
+    const SECOND_PORT_CLOCK: u8 = 5;
+    const FIRST_PORT_TRANSLATION: u8 = 6;
+    const MUST_BE_ZERO: u8 = 7;
+
+    /// # Read
+    /// Read the ControllerConfiguration from the
+    /// CommandRegister at memory address 0.
+    pub fn read() -> u8 {
+        CommandRegister::read_controller_ram(0)
+    }
+
+    /// # Write
+    /// Write the ControllerConfiguration using the
+    /// CommandRegister.
+    pub unsafe fn write(value: u8) {
+        CommandRegister::write_controller_ram(0, value);
+    }
+
+    /// # Is First Port Interrupt Enabled?
+    /// Checks if the first port's interrupts are enabled.
+    pub fn is_first_port_interrupt_enabled() -> bool {
+        Self::read() & Self::FIRST_PORT_INTERRUPT != 0
+    }
+
+    /// # Is Second Port Interrupt Enabled?
+    /// Checks if the second port's interrupts are enabled.
+    pub fn is_second_port_interrupt_enabled() -> bool {
+        Self::read() & Self::SECOND_PORT_INTERRUPT != 0
+    }
+
+    /// # Set First Port Interrupt
+    /// Sets if the first port's interrupts are going to be enabled.
+    /// If enabled the first port uses IRQ 1 to send interrupts. This
+    /// is useally mapped to interrupt 33.
+    pub fn set_first_port_interrupt(enabled: bool) {
+        let mut value = Self::read();
+        value.set_bit(Self::FIRST_PORT_INTERRUPT, enabled);
+        unsafe { Self::write(value) };
+    }
+
+    /// # Set Second Port Interrupt
+    /// Sets if the second port's interrupts are going to be enabled.
+    /// If enabled the second port uses IRQ 12 to send interrupts. This
+    /// is useally mapped to interrupt 44.
+    pub fn set_second_port_interrupt(enabled: bool) {
+        let mut value = Self::read();
+        value.set_bit(Self::SECOND_PORT_INTERRUPT, enabled);
+        unsafe { Self::write(value) };
+    }
+
+    /// # Assert System Flag
+    /// Asserts that the system has POST-ed and ensures the bits are
+    /// set. It should be not possible to not pass this, because
+    /// how did we boot if the system did not post?
+    pub fn assert_system_flag() {
+        assert_ne!(
+            Self::read() & Self::SYSTEM_FLAG,
+            0,
+            "The system could not have passed POST, how are we alive?"
+        );
+    }
+
+    /// # Is First Port Clock Enabled?
+    /// Checks if the first port's clock is enabled.
+    pub fn is_first_port_clock_enabled() -> bool {
+        Self::read() & Self::FIRST_PORT_CLOCK != 0
+    }
+
+    /// # Is Second Port Clock Enabled?
+    /// Checks if the second port's clock is enabled.
+    pub fn is_second_port_clock_enabled() -> bool {
+        Self::read() & Self::SECOND_PORT_CLOCK != 0
+    }
+
+    /// # Set First Port Clock
+    /// Sets if the first port's clock is enabled or disabled.
+    pub fn set_first_port_clock(enabled: bool) {
+        let mut value = Self::read();
+        value.set_bit(Self::FIRST_PORT_CLOCK, enabled);
+        unsafe { Self::write(value) };
+    }
+
+    /// # Set Second Port Clock
+    /// Sets if the second port's clock is enabled or disabled. The
+    /// second port is important because it can be used to detect if
+    /// the ps2 controller only has one port.
+    pub fn set_second_port_clock(enabled: bool) {
+        let mut value = Self::read();
+        value.set_bit(Self::SECOND_PORT_CLOCK, enabled);
+        unsafe { Self::write(value) };
+    }
+
+    /// # Is First Port Translation
+    /// Checks if the first port is using translation.
+    pub fn is_first_port_translation() -> bool {
+        Self::read() & Self::FIRST_PORT_TRANSLATION != 0
+    }
+
+    /// # Set First Port Translation
+    /// Sets if the first port is using translation.
+    pub fn set_first_port_translation(enabled: bool) {
+        let mut value = Self::read();
+        value.set_bit(Self::FIRST_PORT_TRANSLATION, enabled);
+        unsafe { Self::write(value) };
     }
 }
