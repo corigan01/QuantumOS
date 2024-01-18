@@ -173,5 +173,243 @@ impl StatusRegister {
     }
 }
 
+/// # Test Status
+/// Possible Result of testing the PS2 controller or its ports.
+#[derive(Debug, Clone, Copy)]
+pub enum TestStatus {
+    /// # Test Passed
+    /// The test has passed.
+    TestPassed,
+    /// # Test Failed
+    /// This is only for the controller, as the ports will
+    /// set one of the below options instead.
+    TestFailed,
+    /// # Clock Stuck Low
+    /// The port failed its test, and detected its clock
+    /// was stuck low.
+    ClockStuckLow,
+    /// # Clock Stuck High
+    /// The port failed its test, and detected its clock
+    /// was stuck high.
+    ClockStuckHigh,
+    /// # Data Stuck Low
+    /// The port failed its test, and detected its data
+    /// line was stuck low.
+    DataStuckLow,
+    /// # Data Stuck High
+    /// The port failed its test, and detected its data
+    /// line was stuck high.
+    DataStuckHigh,
+}
+
+/// # Command Register
+/// The command register is used to send commands to the ps2 controller.
 pub struct CommandRegister {}
 unsafe impl WriteRegister<COMMAND_REGISTER_PORT_OFFSET> for CommandRegister {}
+
+impl CommandRegister {
+    // --- Command Bytes
+    const PS2_COMMAND_BYTE_READ_BEGIN: u8 = 0x20;
+    const PS2_COMMAND_BYTE_READ_END: u8 = 0x3F;
+    const PS2_COMMAND_BYTE_WRITE_BEGIN: u8 = 0x60;
+    const PS2_COMMAND_BYTE_WRITE_END: u8 = 0x7F;
+    const PS2_COMMAND_BYTE_DISABLE_SECOND: u8 = 0xA7;
+    const PS2_COMMAND_BYTE_ENABLE_SECOND: u8 = 0xA8;
+    const PS2_COMMAND_BYTE_TEST_SECOND: u8 = 0xA9;
+    const PS2_COMMAND_BYTE_TEST_CONTROLLER: u8 = 0xAA;
+    const PS2_COMMAND_BYTE_TEST_FIRST: u8 = 0xAB;
+    const PS2_COMMAND_BYTE_DISABLE_FIRST: u8 = 0xAD;
+    const PS2_COMMAND_BYTE_ENABLE_FIRST: u8 = 0xAE;
+    const PS2_COMMAND_BYTE_READ_INPUT_PORT: u8 = 0xC0;
+    const PS2_COMMAND_BYTE_READ_OUTPUT_PORT: u8 = 0xD0;
+    const PS2_COMMAND_BYTE_WRITE_OUTPUT_PORT: u8 = 0xD1;
+    const PS2_COMMAND_BYTE_WRITE_FIRST_OUTPUT: u8 = 0xD2;
+    const PS2_COMMAND_BYTE_WRITE_SECOND_OUTPUT: u8 = 0xD3;
+    const PS2_COMMAND_BYTE_WRITE_SECOND_INPUT: u8 = 0xD4;
+
+    /// # Wait Write
+    /// Waits until the StatusRegister returns that the input
+    /// buffer is empty. This is normally used to wait until
+    /// the controller is ready to write.
+    fn wait_write() {
+        loop {
+            let status = StatusRegister::get_status();
+
+            if status.check_flag(StatusFlags::InputBufferEmpty) {
+                break;
+            }
+        }
+    }
+
+    /// # Wait Read
+    /// Waits until the StatusRegister returns that the output
+    /// buffer is full. This is normally used to wait untill the
+    /// controller is ready to read.
+    fn wait_read() {
+        loop {
+            let status = StatusRegister::get_status();
+
+            if status.check_flag(StatusFlags::OutputBufferFull) {
+                break;
+            }
+        }
+    }
+
+    /// # Read Controller Ram
+    /// Read from the controller's memory. The PS2 controller stores its
+    /// Controller Configuration Byte at address 0.
+    pub fn read_controller_ram(address: u8) -> u8 {
+        assert!(
+            address < 32,
+            "Address ({address}) is out of bounds of the PS2 controller's memory. Range is only 0..32"
+        );
+
+        unsafe { Self::write(Self::PS2_COMMAND_BYTE_READ_BEGIN + address) };
+        Self::wait_read();
+        DataRegister::read()
+    }
+
+    /// # Write Controller Ram
+    /// Write to the controller's memory. The PS2 controller stores its
+    /// Controller Configuration Byte at address 0;
+    pub unsafe fn write_controller_ram(address: u8, value: u8) {
+        assert!(
+            address < 32,
+            "Address ({address}) is out of bounds of the PS2 controller's memory. Range is only 0..32"
+        );
+
+        Self::write(Self::PS2_COMMAND_BYTE_WRITE_BEGIN + address);
+        Self::wait_write();
+        DataRegister::write(value);
+    }
+
+    /// # Disable First Port
+    /// Attempt to disable the first PS2 port.
+    pub fn diable_first_port() {
+        unsafe { Self::write(Self::PS2_COMMAND_BYTE_DISABLE_FIRST) };
+    }
+
+    /// # Eanble First Port
+    /// Attempt to enable the first PS2 port.
+    pub fn enable_first_port() {
+        unsafe { Self::write(Self::PS2_COMMAND_BYTE_ENABLE_FIRST) };
+    }
+
+    /// # Disable Second Port
+    /// Attempt to disable the second port.
+    pub fn disable_second_port() {
+        unsafe { Self::write(Self::PS2_COMMAND_BYTE_DISABLE_SECOND) };
+    }
+
+    /// # Enable Second Port
+    /// Attempt to enable the second port.
+    pub fn enable_second_port() {
+        unsafe { Self::write(Self::PS2_COMMAND_BYTE_ENABLE_SECOND) };
+    }
+
+    /// # Test Second Port
+    /// Asks the second port to preform a self test, the result of the
+    /// self test is returned as a TestStatus.
+    pub fn test_second_port() -> TestStatus {
+        unsafe { Self::write(Self::PS2_COMMAND_BYTE_TEST_SECOND) };
+        Self::wait_read();
+        let value = DataRegister::read();
+
+        match value {
+            0x00 => TestStatus::TestPassed,
+            0x01 => TestStatus::ClockStuckLow,
+            0x02 => TestStatus::ClockStuckHigh,
+            0x03 => TestStatus::DataStuckLow,
+            0x04 => TestStatus::DataStuckHigh,
+
+            _ => unreachable!("PS2 Should only return 0..4 when reading back test data, the machine must be in unstable state. Data={value}")
+        }
+    }
+
+    /// # Test First Port
+    /// Asks the first port to preform a self test, the result of the
+    /// self test is returned as a TestStatus.
+    pub fn test_first_port() -> TestStatus {
+        unsafe { Self::write(Self::PS2_COMMAND_BYTE_TEST_FIRST) };
+        Self::wait_read();
+        let value = DataRegister::read();
+
+        match value {
+            0x00 => TestStatus::TestPassed,
+            0x01 => TestStatus::ClockStuckLow,
+            0x02 => TestStatus::ClockStuckHigh,
+            0x03 => TestStatus::DataStuckLow,
+            0x04 => TestStatus::DataStuckHigh,
+
+            _ => unreachable!("PS2 Should only return 0..4 when reading back test data, the machine must be in unstable state. Data={value}")
+        }
+    }
+
+    /// # Test Controller
+    /// Ask the controller to preform a self test, and the result of the
+    /// self test is returned as a TestStatus.
+    pub fn test_controller() -> TestStatus {
+        unsafe { Self::write(Self::PS2_COMMAND_BYTE_TEST_FIRST) };
+        Self::wait_read();
+        let value = DataRegister::read();
+
+        match value {
+            0x55 => TestStatus::TestPassed,
+            0xFC => TestStatus::TestFailed,
+
+            _ => unreachable!("PS2 Should only return 0..4 when reading back test data, the machine must be in unstable state. Data={value}")
+        }
+    }
+
+    /// # Read Controller Output Port
+    /// Reads from the controller's output port.
+    pub fn read_controller_output_port() -> u8 {
+        unsafe { Self::write(Self::PS2_COMMAND_BYTE_READ_OUTPUT_PORT) };
+        Self::wait_read();
+        DataRegister::read()
+    }
+
+    /// # Write Controller Output Port
+    /// Writes to the controller's output port.
+    pub unsafe fn write_controller_output_port(value: u8) {
+        Self::write(Self::PS2_COMMAND_BYTE_WRITE_OUTPUT_PORT);
+        Self::wait_write();
+        DataRegister::write(value);
+    }
+
+    /// # Write First Port's output buffer
+    /// Write to the first port's output buffer. This will appear as if the
+    /// first port sent some data.
+    pub unsafe fn write_first_port_output_buffer(value: u8) {
+        Self::write(Self::PS2_COMMAND_BYTE_WRITE_FIRST_OUTPUT);
+        Self::wait_write();
+        DataRegister::write(value);
+    }
+
+    /// # Write Second Port's output buffer
+    /// Write to the second port's output buffer. This will appear as if the
+    /// second port sent some data.
+    pub unsafe fn write_second_port_output_buffer(value: u8) {
+        Self::write(Self::PS2_COMMAND_BYTE_WRITE_SECOND_OUTPUT);
+        Self::wait_write();
+        DataRegister::write(value);
+    }
+
+    /// # Write Second Port's input buffer
+    /// Write to the second port's input buffer. This will send data to the
+    /// connected device on the port.
+    pub unsafe fn write_second_port_input_buffer(value: u8) {
+        Self::write(Self::PS2_COMMAND_BYTE_WRITE_SECOND_INPUT);
+        Self::wait_write();
+        DataRegister::write(value);
+    }
+
+    /// # System Reset
+    /// Preform a reset on the computer. This function does not return!
+    pub unsafe fn system_reset() -> ! {
+        Self::wait_write();
+        loop {
+            Self::write(0xFE);
+        }
+    }
+}
