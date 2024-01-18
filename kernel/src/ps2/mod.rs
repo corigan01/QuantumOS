@@ -24,7 +24,10 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 use crate::pic::pic_eoi;
-use quantum_lib::x86_64::{io::port::IOPort, tables::idt::InterruptFrame};
+use quantum_lib::{
+    bitset::BitSet,
+    x86_64::{io::port::IOPort, tables::idt::InterruptFrame},
+};
 
 const PS2_CONTROLLER_DATA_PORT: IOPort = IOPort::new(0x60);
 const PS2_CONTROLLER_STATUS_PORT: IOPort = IOPort::new(0x64);
@@ -136,7 +139,7 @@ unsafe fn ps2_disable_first_port() {
 }
 
 unsafe fn ps2_enable_first_port() {
-    PS2_CONTROLLER_COMMAND_PORT.write_u8(PS2_COMMAND_BYTE_ENABLE_FIRST_FIRST);
+    PS2_CONTROLLER_COMMAND_PORT.write_u8(PS2_COMMAND_BYTE_ENABLE_FIRST);
 }
 
 unsafe fn ps2_disable_second_port() {
@@ -220,4 +223,51 @@ unsafe fn ps2_write_second_input_buffer(value: u8) {
     PS2_CONTROLLER_COMMAND_PORT.write_u8(PS2_COMMAND_BYTE_WRITE_SECOND_INPUT);
     StatusFlags::wait_ready();
     PS2_CONTROLLER_DATA_PORT.write_u8(value);
+}
+
+pub struct Ps2Configuration(u8);
+
+impl Ps2Configuration {
+    const FIRST_PORT_INTERRUPT_BIT: u8 = 1 << 0;
+    const SECOND_PORT_INTERRUPT_BIT: u8 = 1 << 1;
+    const SYSTEM_FLAG_BIT: u8 = 1 << 2;
+    const FIRST_PORT_CLOCK_BIT: u8 = 1 << 4;
+    const SECOND_PORT_CLOCK_BIT: u8 = 1 << 5;
+    const FIRST_PORT_TRANSLATION_BIT: u8 = 1 << 6;
+
+    pub fn read() -> Ps2Configuration {
+        let ram0 = unsafe { ps2_read_ram(0) };
+        assert!(
+            ram0 & Self::SYSTEM_FLAG_BIT != 0,
+            "Somehow the system booted with the POST flag disabled!"
+        );
+
+        Ps2Configuration(ram0)
+    }
+
+    pub fn is_first_port_interrupts_enabled(&self) -> bool {
+        self.0 & Self::FIRST_PORT_INTERRUPT_BIT != 0
+    }
+
+    pub fn is_second_port_interrupts_enabled(&self) -> bool {
+        self.0 & Self::SECOND_PORT_INTERRUPT_BIT != 0
+    }
+
+    pub fn is_first_port_clock_enabled(&self) -> bool {
+        self.0 & Self::FIRST_PORT_CLOCK_BIT != 0
+    }
+
+    pub fn is_second_port_clock_enabled(&self) -> bool {
+        self.0 & Self::SECOND_PORT_CLOCK_BIT != 0
+    }
+
+    pub fn set_first_port_interrupt(&mut self, enabled: bool) {
+        self.0.set_bit(0, enabled);
+        unsafe { ps2_write_ram(0, self.0) };
+    }
+
+    pub fn set_second_port_interrupt(&mut self, enabled: bool) {
+        self.0.set_bit(1, enabled);
+        unsafe { ps2_write_ram(0, self.0) };
+    }
 }
