@@ -59,6 +59,7 @@ use quantum_lib::x86_64::tables::idt::{
 use quantum_lib::{attach_interrupt, debug_print, debug_println, kernel_entry, rect};
 use quantum_os::clock::rtc::update_and_get_time;
 use quantum_os::pic::{pic_eoi, pic_init};
+use quantum_os::ps2;
 use quantum_os::qemu::{exit_qemu, QemuExitCode};
 use quantum_utils::human_bytes::HumanBytes;
 
@@ -289,6 +290,8 @@ fn main(boot_info: &KernelBootInformation) {
     unsafe {
         let idt = GLOBAL_IDT.get_mut_ref().unwrap();
         attach_interrupt!(idt, dummy_irq, 32..=48);
+        attach_interrupt!(idt, ps2::interrupt_handler_first_port, 33);
+        attach_interrupt!(idt, ps2::interrupt_handler_second_port, 44);
         idt.submit_entries().unwrap().load();
         set_quiet_interrupt(32, true);
         pic_init(32);
