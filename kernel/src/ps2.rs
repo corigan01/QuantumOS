@@ -60,4 +60,164 @@ impl StatusFlags {
             parity_error: value & (1 << 7) != 0,
         }
     }
+
+    pub fn wait_ready() {
+        loop {
+            let flags = Self::read();
+
+            if !flags.output_buffer_status {
+                break;
+            }
+        }
+    }
+
+    pub fn wait_data() {
+        loop {
+            let flags = Self::read();
+
+            if flags.output_buffer_status {
+                break;
+            }
+        }
+    }
+}
+
+enum TestStatus {
+    Passed,
+    Failed,
+    ClockStuckHigh,
+    ClockStuckLow,
+    DataStuckLow,
+    DataStuckHigh,
+}
+
+const PS2_COMMAND_BYTE_READ_BEGIN: u8 = 0x20;
+const PS2_COMMAND_BYTE_READ_END: u8 = 0x3F;
+const PS2_COMMAND_BYTE_WRITE_BEGIN: u8 = 0x60;
+const PS2_COMMAND_BYTE_WRITE_END: u8 = 0x7F;
+const PS2_COMMAND_BYTE_DISABLE_SECOND: u8 = 0xA7;
+const PS2_COMMAND_BYTE_ENABLE_SECOND: u8 = 0xA8;
+const PS2_COMMAND_BYTE_TEST_SECOND: u8 = 0xA9;
+const PS2_COMMAND_BYTE_TEST_CONTROLLER: u8 = 0xAA;
+const PS2_COMMAND_BYTE_TEST_FIRST: u8 = 0xAB;
+const PS2_COMMAND_BYTE_DISABLE_FIRST: u8 = 0xAD;
+const PS2_COMMAND_BYTE_ENABLE_FIRST: u8 = 0xAE;
+const PS2_COMMAND_BYTE_READ_INPUT_PORT: u8 = 0xC0;
+const PS2_COMMAND_BYTE_READ_OUTPUT_PORT: u8 = 0xD0;
+const PS2_COMMAND_BYTE_WRITE_OUTPUT_PORT: u8 = 0xD1;
+const PS2_COMMAND_BYTE_WRITE_FIRST_OUTPUT: u8 = 0xD2;
+const PS2_COMMAND_BYTE_WRITE_SECOND_OUTPUT: u8 = 0xD3;
+const PS2_COMMAND_BYTE_WRITE_SECOND_INPUT: u8 = 0xD4;
+
+unsafe fn ps2_read_ram(address: u8) -> u8 {
+    assert!(
+        address <= PS2_COMMAND_BYTE_WRITE_END - PS2_COMMAND_BYTE_WRITE_BEGIN,
+        "Address goes out of range of ps2"
+    );
+    let command_byte = PS2_COMMAND_BYTE_READ_BEGIN + address;
+    PS2_CONTROLLER_COMMAND_PORT.write_u8(command_byte);
+    StatusFlags::wait_data();
+    PS2_CONTROLLER_DATA_PORT.read_u8()
+}
+
+unsafe fn ps2_write_ram(address: u8, value: u8) {
+    assert!(
+        address <= PS2_COMMAND_BYTE_WRITE_END - PS2_COMMAND_BYTE_WRITE_BEGIN,
+        "Address goes out of range of ps2"
+    );
+    let command_byte = PS2_COMMAND_BYTE_WRITE_BEGIN + address;
+    PS2_CONTROLLER_COMMAND_PORT.write_u8(command_byte);
+    StatusFlags::wait_ready();
+    PS2_CONTROLLER_DATA_PORT.write_u8(value);
+}
+
+unsafe fn ps2_disable_first_port() {
+    PS2_CONTROLLER_COMMAND_PORT.write_u8(PS2_COMMAND_BYTE_DISABLE_FIRST);
+}
+
+unsafe fn ps2_enable_first_port() {
+    PS2_CONTROLLER_COMMAND_PORT.write_u8(PS2_COMMAND_BYTE_ENABLE_FIRST_FIRST);
+}
+
+unsafe fn ps2_disable_second_port() {
+    PS2_CONTROLLER_COMMAND_PORT.write_u8(PS2_COMMAND_BYTE_DISABLE_SECOND);
+}
+
+unsafe fn ps2_enable_second_port() {
+    PS2_CONTROLLER_COMMAND_PORT.write_u8(PS2_COMMAND_BYTE_ENABLE_SECOND);
+}
+
+unsafe fn ps2_test_controller() -> TestStatus {
+    PS2_CONTROLLER_COMMAND_PORT.write_u8(PS2_COMMAND_BYTE_TEST_CONTROLLER);
+    StatusFlags::wait_data();
+    let status = PS2_CONTROLLER_DATA_PORT.read_u8();
+
+    match status {
+        0x55 => TestStatus::Passed,
+        0xFC => TestStatus::Failed,
+
+        _ => panic!("PS2 Controller should be recv this byte when testing ... byte={status}"),
+    }
+}
+
+unsafe fn ps2_test_second_port() -> TestStatus {
+    PS2_CONTROLLER_COMMAND_PORT.write_u8(PS2_COMMAND_BYTE_TEST_SECOND);
+    StatusFlags::wait_data();
+    let status = PS2_CONTROLLER_DATA_PORT.read_u8();
+
+    match status {
+        0x00 => TestStatus::Passed,
+        0x01 => TestStatus::ClockStuckLow,
+        0x02 => TestStatus::ClockStuckHigh,
+        0x03 => TestStatus::DataStuckLow,
+        0x04 => TestStatus::DataStuckHigh,
+
+        _ => panic!("PS2 Controller should be recv this byte when testing ... byte={status}"),
+    }
+}
+
+unsafe fn ps2_test_first_port() -> TestStatus {
+    PS2_CONTROLLER_COMMAND_PORT.write_u8(PS2_COMMAND_BYTE_TEST_FIRST);
+    StatusFlags::wait_data();
+    let status = PS2_CONTROLLER_DATA_PORT.read_u8();
+
+    match status {
+        0x00 => TestStatus::Passed,
+        0x01 => TestStatus::ClockStuckLow,
+        0x02 => TestStatus::ClockStuckHigh,
+        0x03 => TestStatus::DataStuckLow,
+        0x04 => TestStatus::DataStuckHigh,
+
+        _ => panic!("PS2 Controller should be recv this byte when testing ... byte={status}"),
+    }
+}
+
+unsafe fn ps2_read_controller_output_port() -> u8 {
+    PS2_CONTROLLER_COMMAND_PORT.write_u8(PS2_COMMAND_BYTE_READ_OUTPUT_PORT);
+    StatusFlags::wait_data();
+    PS2_CONTROLLER_DATA_PORT.read_u8()
+}
+
+unsafe fn ps2_write_controller_output_port(value: u8) {
+    PS2_CONTROLLER_COMMAND_PORT.write_u8(PS2_COMMAND_BYTE_WRITE_OUTPUT_PORT);
+    StatusFlags::wait_ready();
+    PS2_CONTROLLER_DATA_PORT.write_u8(value);
+}
+
+unsafe fn ps2_write_first_output_buffer(value: u8) {
+    PS2_CONTROLLER_COMMAND_PORT.write_u8(PS2_COMMAND_BYTE_WRITE_FIRST_OUTPUT);
+    StatusFlags::wait_ready();
+    PS2_CONTROLLER_DATA_PORT.write_u8(value);
+}
+
+unsafe fn ps2_write_second_output_buffer(value: u8) {
+    PS2_CONTROLLER_COMMAND_PORT.write_u8(PS2_COMMAND_BYTE_WRITE_SECOND_OUTPUT);
+    StatusFlags::wait_ready();
+    PS2_CONTROLLER_DATA_PORT.write_u8(value);
+}
+
+unsafe fn ps2_write_second_input_buffer(value: u8) {
+    PS2_CONTROLLER_COMMAND_PORT.write_u8(PS2_COMMAND_BYTE_WRITE_SECOND_INPUT);
+    StatusFlags::wait_ready();
+    PS2_CONTROLLER_DATA_PORT.write_u8(value);
 }
