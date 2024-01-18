@@ -82,7 +82,7 @@ impl StatusFlags {
     }
 }
 
-enum TestStatus {
+pub enum TestStatus {
     Passed,
     Failed,
     ClockStuckHigh,
