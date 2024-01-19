@@ -59,6 +59,7 @@ use quantum_lib::x86_64::tables::idt::{
 use quantum_lib::{attach_interrupt, debug_print, debug_println, kernel_entry, rect};
 use quantum_os::clock::rtc::update_and_get_time;
 use quantum_os::pic::{pic_eoi, pic_init};
+use quantum_os::ps2::{interrupt_handler_first_port, interrupt_handler_second_port, ps2_init};
 use quantum_os::qemu::{exit_qemu, QemuExitCode};
 use quantum_utils::human_bytes::HumanBytes;
 
@@ -69,15 +70,15 @@ static mut SERIAL_CONNECTION: PossiblyUninit<SerialDevice> = PossiblyUninit::new
 kernel_entry!(main);
 
 fn setup_serial_debug() {
-    let serial = unsafe { &mut SERIAL_CONNECTION };
-
-    let connection = StreamConnectionBuilder::new()
-        .console_connection()
-        .add_connection_name("Serial")
-        .add_who_using("Kernel")
-        .does_support_scrolling(true)
-        .add_outlet(serial.get_mut_ref().unwrap())
-        .build();
+    let connection = unsafe {
+        StreamConnectionBuilder::new()
+            .console_connection()
+            .add_connection_name("Serial")
+            .add_who_using("Kernel")
+            .does_support_scrolling(true)
+            .add_outlet(SERIAL_CONNECTION.get_mut_ref().unwrap())
+            .build()
+    };
 
     add_connection_to_global_stream(connection).unwrap();
 
@@ -164,7 +165,7 @@ fn interrupt(frame: InterruptFrame, interrupt_id: u8, error: Option<u64>) {
     );
 }
 
-fn dummy_irq(frame: InterruptFrame, interrupt_id: u8, error: Option<u64>) {
+fn dummy_irq(_frame: InterruptFrame, interrupt_id: u8, _error: Option<u64>) {
     let info = ExtraHandlerInfo::new(interrupt_id);
 
     if !info.quiet_interrupt {
@@ -287,14 +288,18 @@ fn main(boot_info: &KernelBootInformation) {
     debug_println!("{}", "OK".green().bold());
     debug_print!("Enabling PIC ");
     unsafe {
-        let idt = unsafe { GLOBAL_IDT.get_mut_ref().unwrap() };
+        let idt = GLOBAL_IDT.get_mut_ref().unwrap();
         attach_interrupt!(idt, dummy_irq, 32..=48);
+        attach_interrupt!(idt, interrupt_handler_first_port, 33);
+        attach_interrupt!(idt, interrupt_handler_second_port, 44);
         idt.submit_entries().unwrap().load();
         set_quiet_interrupt(32, true);
         pic_init(32);
         Interrupts::enable();
     }
     debug_println!("{}", "OK".green().bold());
+
+    let _ = ps2_init();
 
     loop {}
 

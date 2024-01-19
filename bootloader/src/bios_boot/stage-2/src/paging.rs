@@ -24,14 +24,13 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 */
 
-
-use quantum_lib::{debug_print, debug_println};
 use quantum_lib::address_utils::virtual_address::VirtAddress;
-use quantum_utils::human_bytes::HumanBytes;
 use quantum_lib::x86_64::paging::config::PageConfigBuilder;
 use quantum_lib::x86_64::paging::structures::{PageMapLevel2, PageMapLevel3, PageMapLevel4};
+use quantum_lib::x86_64::registers::{Segment, SegmentRegs, CR0, CR3, CR4, IA32_EFER};
 use quantum_lib::x86_64::PrivlLevel;
-use quantum_lib::x86_64::registers::{CR0, CR3, CR4, IA32_EFER, Segment, SegmentRegs};
+use quantum_lib::{debug_print, debug_println};
+use quantum_utils::human_bytes::HumanBytes;
 
 static mut LEVEL4: PageMapLevel4 = PageMapLevel4::new();
 static mut LEVEL3: PageMapLevel3 = PageMapLevel3::new();
@@ -40,18 +39,15 @@ static mut LEVEL2: [PageMapLevel2; 5] = [PageMapLevel2::new(); 5];
 pub unsafe fn enable_paging() {
     debug_print!("building pages ...");
 
-    let level4 = &mut LEVEL4;
-    let level3 = &mut LEVEL3;
-    let level2_tables = &mut LEVEL2;
-
-    for (offset, level2) in level2_tables.iter_mut().enumerate() {
+    for (offset, level2) in LEVEL2.iter_mut().enumerate() {
         let offset_addition = offset as u64 * HumanBytes::GIB as u64;
 
         for i in 0..512 {
-            let huge_address = VirtAddress::new((i * 2 * HumanBytes::MIB as u64 + offset_addition) as u64)
-                .unwrap()
-                .try_aligned()
-                .unwrap();
+            let huge_address =
+                VirtAddress::new((i * 2 * HumanBytes::MIB as u64 + offset_addition) as u64)
+                    .unwrap()
+                    .try_aligned()
+                    .unwrap();
 
             let two_mb_entries = PageConfigBuilder::new()
                 .level2()
@@ -78,7 +74,7 @@ pub unsafe fn enable_paging() {
             .build()
             .unwrap();
 
-        level3.set_entry(level_2_entry, offset).unwrap();
+        LEVEL3.set_entry(level_2_entry, offset).unwrap();
     }
 
     debug_print!("L3...");
@@ -89,15 +85,15 @@ pub unsafe fn enable_paging() {
         .read_write(true)
         .executable(true)
         .user_page(false)
-        .set_address_of_next_table(level3.get_address())
+        .set_address_of_next_table(LEVEL3.get_address())
         .build()
         .unwrap();
 
-    level4.set_entry(level_3_config, 0).unwrap();
+    LEVEL4.set_entry(level_3_config, 0).unwrap();
 
     debug_print!("L4...");
-    let level4_address = level4.get_address().as_u64();
-    debug_println!(" OK ({}Gib Mapped!)", level2_tables.len());
+    let level4_address = LEVEL4.get_address().as_u64();
+    debug_println!(" OK ({}Gib Mapped!)", LEVEL2.len());
 
     debug_print!("Loading CR3 ... ");
     CR3::set_page_directory_base_register(level4_address as *mut u8);

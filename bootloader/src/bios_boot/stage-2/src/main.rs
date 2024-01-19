@@ -30,12 +30,12 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 use core::arch::asm;
 use core::panic::PanicInfo;
 
-use quantum_utils::human_bytes::HumanBytes;
-use quantum_lib::debug::{add_connection_to_global_stream, set_panic};
 use quantum_lib::debug::stream_connection::StreamConnectionBuilder;
+use quantum_lib::debug::{add_connection_to_global_stream, set_panic};
 use quantum_lib::debug_println;
-use quantum_lib::x86_64::{PrivlLevel};
 use quantum_lib::x86_64::registers::{CpuStack, Segment, SegmentRegs};
+use quantum_lib::x86_64::PrivlLevel;
+use quantum_utils::human_bytes::HumanBytes;
 
 use stage_2::debug::{display_string, setup_framebuffer};
 use stage_2::gdt::LONG_MODE_GDT;
@@ -48,7 +48,6 @@ use quantum_lib::possibly_uninit::PossiblyUninit;
 static mut SERIAL_CONNECTION: PossiblyUninit<SerialDevice> = PossiblyUninit::new_lazy(|| {
     SerialDevice::new(SerialPort::Com1, SerialBaud::Baud115200).unwrap()
 });
-
 
 #[no_mangle]
 #[link_section = ".start"]
@@ -70,8 +69,6 @@ pub extern "C" fn _start(boot_info: u32) -> ! {
         true,
     );
 
-    let serial = unsafe { &mut SERIAL_CONNECTION };
-
     let stream_connection = StreamConnectionBuilder::new()
         .console_connection()
         .add_simple_outlet(display_string)
@@ -79,13 +76,15 @@ pub extern "C" fn _start(boot_info: u32) -> ! {
         .does_support_scrolling(true)
         .build();
 
-    let connection = StreamConnectionBuilder::new()
-        .console_connection()
-        .add_connection_name("Serial")
-        .add_who_using("Stage2")
-        .does_support_scrolling(true)
-        .add_outlet(serial.get_mut_ref().unwrap())
-        .build();
+    let connection = unsafe {
+        StreamConnectionBuilder::new()
+            .console_connection()
+            .add_connection_name("Serial")
+            .add_who_using("Stage2")
+            .does_support_scrolling(true)
+            .add_outlet(SERIAL_CONNECTION.get_mut_ref().unwrap())
+            .build()
+    };
 
     add_connection_to_global_stream(stream_connection).unwrap();
     add_connection_to_global_stream(connection).unwrap();
@@ -109,10 +108,7 @@ fn main(boot_info: &BootInfo) {
         }
     }
 
-    debug_println!(
-        "Memory Avl: {}",
-        HumanBytes::from(total_memory)
-    );
+    debug_println!("Memory Avl: {}", HumanBytes::from(total_memory));
 
     debug_println!("Vga info: {:#?}", boot_info.get_video_information());
 
@@ -124,7 +120,9 @@ fn main(boot_info: &BootInfo) {
 
     debug_println!("Entering Stage3! 0x{:x} {:x?}", ptr, data_ref);
 
-    unsafe { enter_stage3(boot_info); }
+    unsafe {
+        enter_stage3(boot_info);
+    }
 }
 
 #[no_mangle]
@@ -132,7 +130,7 @@ pub unsafe fn enter_stage3(boot_info: &BootInfo) {
     SegmentRegs::set_data_segments(Segment::new(2, PrivlLevel::Ring0));
 
     CpuStack::push(0);
-    CpuStack::push(boot_info as *const BootInfo as u32 );
+    CpuStack::push(boot_info as *const BootInfo as u32);
     CpuStack::push(0);
     CpuStack::push(boot_info.get_stage_3_entry().ptr as u32);
 
@@ -150,7 +148,6 @@ pub unsafe fn enter_stage3(boot_info: &BootInfo) {
         in("rax") 0,
         in("rdi") 0
     );
-
 }
 
 #[panic_handler]

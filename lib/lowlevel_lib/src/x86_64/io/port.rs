@@ -25,10 +25,6 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 use crate::x86_64::raw_cpu_io_port::{byte_in, byte_out, word_in, word_out};
 
-pub struct ReadWritePort;
-pub struct WriteOnlyPort;
-pub struct ReadOnlyPort;
-
 #[allow(dead_code)]
 #[derive(Debug, Copy, Clone)]
 pub struct IOPort(u16);
