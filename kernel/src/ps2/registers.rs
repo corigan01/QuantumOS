@@ -175,7 +175,7 @@ impl StatusRegister {
 
 /// # Test Status
 /// Possible Result of testing the PS2 controller or its ports.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum TestStatus {
     /// # Test Passed
     /// The test has passed.
@@ -349,7 +349,7 @@ impl CommandRegister {
     /// Ask the controller to preform a self test, and the result of the
     /// self test is returned as a TestStatus.
     pub fn test_controller() -> TestStatus {
-        unsafe { Self::write(Self::PS2_COMMAND_BYTE_TEST_FIRST) };
+        unsafe { Self::write(Self::PS2_COMMAND_BYTE_TEST_CONTROLLER) };
         Self::wait_read();
         let value = DataRegister::read();
 
@@ -357,7 +357,7 @@ impl CommandRegister {
             0x55 => TestStatus::TestPassed,
             0xFC => TestStatus::TestFailed,
 
-            _ => unreachable!("PS2 Should only return 0..4 when reading back test data, the machine must be in unstable state. Data={value}")
+            _ => unreachable!("PS2 Should only return {{0x55, 0xFC}} when reading back test data, the machine must be in unstable state. Data={value}")
         }
     }
 

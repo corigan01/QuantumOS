@@ -28,13 +28,15 @@ use crate::{
     pic::pic_eoi,
     ps2::registers::{ControllerConfiguration, TestStatus},
 };
+use owo_colors::OwoColorize;
 use qk_alloc::vec::Vec;
-use quantum_lib::{debug_println, x86_64::tables::idt::InterruptFrame};
+use quantum_lib::{debug_print, debug_println, x86_64::tables::idt::InterruptFrame};
 
 mod registers;
 
 // FIXME: There are more types of Devices that we should support. For now, we only support
 //        basic mouse and keyboard from QEMU.
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub enum DeviceType {
     Keyboard,
     Mouse,
@@ -63,32 +65,24 @@ static mut SECOND_PORT_RECV_BUFFER: Vec<u8> = Vec::new();
 
 pub fn interrupt_handler_first_port(
     _frame: InterruptFrame,
-    interrupt_id: u8,
+    _interrupt_id: u8,
     _error_code: Option<u64>,
 ) {
     unsafe {
         FIRST_PORT_RECV_BUFFER.push(DataRegister::read());
     }
-    unsafe { pic_eoi(interrupt_id) };
+    unsafe { pic_eoi(1) };
 }
 
 pub fn interrupt_handler_second_port(
     _frame: InterruptFrame,
-    interrupt_id: u8,
+    _interrupt_id: u8,
     _error_code: Option<u64>,
 ) {
     unsafe {
         SECOND_PORT_RECV_BUFFER.push(DataRegister::read());
     }
-    unsafe { pic_eoi(interrupt_id) };
-}
-
-pub fn first_port_recv() -> &'static Vec<u8> {
-    unsafe { &FIRST_PORT_RECV_BUFFER }
-}
-
-pub fn second_port_recv() -> &'static Vec<u8> {
-    unsafe { &SECOND_PORT_RECV_BUFFER }
+    unsafe { pic_eoi(12) };
 }
 
 fn wait_read() {
@@ -125,42 +119,69 @@ const IDENTIFY_COMMAND: u8 = 0xF2;
 
 const DEVICE_RESP_ACK: u8 = 0xFA;
 
-pub fn ps2_init() -> Result<(), &str> {
-    debug_println!("Init PS/2");
-    if CommandRegister::test_controller() != TestStatus::TestPassed {
-        return Err("PS/2 Controller failed to pass self test");
+pub fn ps2_init() -> Result<(), &'static str> {
+    debug_print!("Init PS/2 Controller ");
+
+    CommandRegister::diable_first_port();
+    CommandRegister::disable_second_port();
+    ControllerConfiguration::set_first_port_translation(false);
+
+    for _ in 0..16 {
+        DataRegister::read();
     }
 
+    if CommandRegister::test_controller() != TestStatus::TestPassed {
+        debug_println!("Controller self test failed!");
+        return Err("Controller self test failed");
+    }
+
+    debug_println!("{}", "OK".green().bold());
+
+    ControllerConfiguration::set_first_port_interrupt(false);
     ControllerConfiguration::set_second_port_clock(false);
     let is_second_port = if ControllerConfiguration::is_second_port_clock_enabled() {
         debug_println!("Found PS/2 controller with one port");
         false
     } else {
         debug_println!("Found PS/2 controller with two ports");
+        ControllerConfiguration::set_second_port_clock(true);
+        ControllerConfiguration::set_second_port_interrupt(false);
         true
     };
 
-    let is_device_in_first = CommandRegister::test_first_port() == TestStatus::TestPassed;
-    let is_device_in_second = if is_second_port {
-        CommandRegister::test_second_port() == TestStatus::TestPassed
+    let is_first = if CommandRegister::test_first_port() == TestStatus::TestPassed {
+        debug_println!("Found PS/2 Device on port 0");
+        ControllerConfiguration::set_first_port_clock(true);
+        ControllerConfiguration::set_first_port_interrupt(true);
+        true
     } else {
         false
     };
 
-    if is_device_in_first {
-        debug_println!("Found PS/2 Device on port 0");
-        unsafe { write_first_ps2_port(DISABLE_SCANNING_COMMAND) };
-        clear_recv_buffers();
-        while second_port_recv().len() == 0 {}
-        let popped_value = unsafe { FIRST_PORT_RECV_BUFFER.pop().unwrap() };
-        if popped_value != DEVICE_RESP_ACK {
-            debug_println!(
-                "PS/2 Port 0: Device sent weird data -- Got {}, but expected 'ACK' ({})",
-                popped_value,
-                DEVICE_RESP_ACK
-            );
-        }
+    let is_second =
+        if is_second_port && CommandRegister::test_second_port() == TestStatus::TestPassed {
+            debug_println!("Found PS/2 Device on port 1");
+            ControllerConfiguration::set_second_port_clock(true);
+            ControllerConfiguration::set_second_port_interrupt(true);
+            true
+        } else {
+            false
+        };
+
+    if is_first {
+        CommandRegister::enable_first_port();
     }
 
-    Ok(())
+    if is_second {
+        CommandRegister::enable_second_port();
+    }
+
+    clear_recv_buffers();
+
+    if is_first || is_second {
+        Ok(())
+    } else {
+        debug_println!("No PS/2 devices found");
+        Err("No devices detected")
+    }
 }
