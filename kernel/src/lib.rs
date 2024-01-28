@@ -37,6 +37,8 @@ Quantum OS Lib file, documentation coming soon!
 
 pub mod apic;
 pub mod clock;
+pub mod gdt;
+pub mod interrupts;
 pub mod keyboard;
 pub mod pic;
 pub mod ps2;
