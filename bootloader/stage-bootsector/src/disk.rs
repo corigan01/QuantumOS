@@ -1,5 +1,7 @@
+use crate::tiny_panic::fail;
+
 #[repr(packed, C)]
-struct DiskAccessPacket {
+pub struct DiskAccessPacket {
     packet_size: u8,
     always_zero: u8,
     sectors: u16,
@@ -9,37 +11,45 @@ struct DiskAccessPacket {
 }
 
 impl DiskAccessPacket {
-    pub fn read(disk: u8, sectors: u16, lba: u64, ptr: (u16, u16)) {
-        let base_segment = ptr.0;
-        let base_ptr = ptr.1;
+    pub fn new(sectors: u16, lba: u64, ptr: u32) -> Self {
+        let base_segment = (ptr >> 4) as u16;
+        let base_ptr = ptr as u16 & 0xF;
 
-        let packet = Self {
-            packet_size: core::mem::size_of::<Self>() as u8,
+        Self {
+            packet_size: 0x10,
             always_zero: 0,
             sectors,
             base_ptr,
             base_segment,
             lba,
-        };
+        }
+    }
 
-        let packet_address = &packet as *const Self;
+    pub fn read(&self, disk: u16) {
+        let packet_address = self as *const Self as u16;
+        let status: u16;
 
         unsafe {
             core::arch::asm!("
-                push si
                 mov si, {packet:x}
+                mov ax, 0x4200
                 int 0x13
-                push ax
-                mov al, 'D'
-                jc .fail
-                pop ax
-                pop si
-                pop si
+                jc 1f
+                mov {status:x}, 0
+                jmp 2f
+                1:
+                mov {status:x}, 1
+                2:
             ",
+                in("dx") disk,
                 packet = in(reg) packet_address,
-                in("dl") disk,
-                in("ax") 0x4200,
-            )
+                status = out(reg) status,
+            );
         };
+
+        // If the interrupt failed, we want to abort and tell the user
+        if status == 1 {
+            fail(b'D');
+        }
     }
 }
