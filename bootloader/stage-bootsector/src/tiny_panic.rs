@@ -11,16 +11,10 @@ pub fn putc(c: u8) {
     }
 }
 
-pub fn fail(msg: u8) -> ! {
+pub extern "C" fn fail(msg: u8) -> ! {
     putc(b':');
-    putc(b'(');
-    putc(b'-');
     putc(msg);
     putc(b'\n');
-    halt();
-}
-
-pub fn halt() -> ! {
     loop {
         unsafe { asm!("hlt") };
     }
