@@ -1,7 +1,9 @@
 [package]
-name = "quantum"
+name = "quantum-loader"
 authors = ["corigan01 <corigan01@gmail.com>"]
-version = "0.1.0"
+description = "Quantum Operating System Bootloader"
+documentation = "https://github.com/corigan01/QuantumOS"
+version = "0.1.1"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -14,7 +16,7 @@ members = ["./stage-bootsector"]
 [workspace.package]
 version = "0.1.0"
 authors = ["corigan01 <corigan01@gmail.com>"]
-description = "Quantum Operating system"
+description = "Quantum Operating System Bootloader"
 documentation = "https://github.com/corigan01/QuantumOS"
 
 [profile.release]
