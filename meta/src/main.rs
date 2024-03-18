@@ -14,7 +14,8 @@ fn main() {
             todo!("build")
         }
         cmdline::TaskOption::Run => {
-            block_on(build_bootloader(Path::new("../"), false)).unwrap();
+            let artifacts = block_on(build_bootloader(Path::new("../"), false)).unwrap();
+            println!("{:#?}", artifacts);
         }
         cmdline::TaskOption::Clean => {
             todo!("clean")
