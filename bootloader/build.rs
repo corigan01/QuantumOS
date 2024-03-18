@@ -53,39 +53,11 @@ fn target_dir() -> String {
     env::var("OUT_DIR").unwrap()
 }
 
-fn output_path(arch: ArchSelect, package: &str) -> String {
-    let target = target_dir();
-
-    // Maybe could just be a match, but to avoid having to
-    // update paths in two spots I made it take the target
-    // from the arch path.
-    let arch_name = arch.to_string().to_lowercase();
-    let arch_name = arch_name
-        .split("/")
-        .last()
-        .unwrap()
-        .split(".")
-        .nth(0)
-        .unwrap();
-
-    // FIXME: This is a hacky solution for what should be
-    // an easy problem. Maybe there is a better way todo this?
-    Path::new(target.as_str())
-        .join("../../../../../")
-        .join(arch_name)
-        .join(package)
-        .join(package)
-        .canonicalize()
-        .unwrap()
-        .to_str()
-        .unwrap()
-        .into()
-}
-
 fn cargo_helper(profile: Option<&str>, package: &str, arch: ArchSelect) -> String {
     let cargo_bin = cargo_path();
     let compile_mode = compile_mode();
     let compile_mode = profile.unwrap_or(compile_mode.as_str());
+    let target_dir = target_dir();
 
     println!("cargo:rerun-if-changed={}", package);
 
@@ -94,13 +66,15 @@ fn cargo_helper(profile: Option<&str>, package: &str, arch: ArchSelect) -> Strin
         .env_remove("CARGO_ENCODED_RUSTFLAGS")
         .env_remove("RUSTC_WORKSPACE_WRAPPER")
         .args([
-            "build",
-            "--package",
+            "install",
+            "--path",
             package,
             "--profile",
             compile_mode,
             "--target",
             arch.to_string().as_str(),
+            "--root",
+            target_dir.as_str(),
         ])
         .status()
         .unwrap()
@@ -108,7 +82,11 @@ fn cargo_helper(profile: Option<&str>, package: &str, arch: ArchSelect) -> Strin
         .then_some(())
         .expect("Failed to build");
 
-    output_path(arch, package)
+    PathBuf::from(target_dir)
+        .join("bin")
+        .join(package)
+        .to_string_lossy()
+        .into()
 }
 
 fn convert_bin(path: &str, arch: ArchSelect) -> String {
@@ -146,10 +124,19 @@ fn build_stages() {
         ArchSelect::I386,
     );
 
-    let target_dir = PathBuf::from(manifest_dir()).join("target").join("bin");
+    let target_dir = PathBuf::from(target_dir()).join("bin");
     fs::create_dir_all(&target_dir).unwrap();
     fs::copy(bootsector, target_dir.join("stage-bootsector.bin")).unwrap();
     fs::copy(stage_16bit, target_dir.join("stage-16bit.bin")).unwrap();
+
+    println!(
+        "cargo:rustc-env=STAGE_BOOTSECTOR_PATH={}",
+        target_dir.join("stage-bootsector.bin").to_str().unwrap()
+    );
+    println!(
+        "cargo:rustc-env=STAGE_16BIT_PATH={}",
+        target_dir.join("stage-16bit.bin").to_str().unwrap()
+    );
 }
 
 fn main() {

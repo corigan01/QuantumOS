@@ -1,0 +1,5 @@
+[workspace]
+members = ["kernel", "meta"]
+exclude = ["bootloader"]
+default-members = ["meta"]
+resolver = "2"
