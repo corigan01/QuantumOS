@@ -87,6 +87,8 @@ fn cargo_helper(profile: Option<&str>, package: &str, arch: ArchSelect) -> Strin
     let compile_mode = compile_mode();
     let compile_mode = profile.unwrap_or(compile_mode.as_str());
 
+    println!("cargo:rerun-if-changed={}", package);
+
     Command::new(cargo_bin)
         .env_remove("RUSTFLAGS")
         .env_remove("CARGO_ENCODED_RUSTFLAGS")
@@ -130,6 +132,9 @@ fn convert_bin(path: &str, arch: ArchSelect) -> String {
 }
 
 fn main() {
+    println!("cargo:rerun-if-changed=build.rs");
+    println!("cargo:rerun-if-changed=linkerscripts");
+
     let build_bootsector = cargo_helper(
         Some("stage-bootsector"),
         "stage-bootsector",
