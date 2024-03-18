@@ -30,4 +30,3 @@ lto = true
 codegen-units = 1
 debug = 0
 overflow-checks = false
-panic = "abort"
