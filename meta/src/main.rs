@@ -1,5 +1,9 @@
+use artifacts::build_bootloader;
 use clap::Parser;
+use futures::executor::block_on;
+use std::path::Path;
 
+mod artifacts;
 mod cmdline;
 
 fn main() {
@@ -10,7 +14,7 @@ fn main() {
             todo!("build")
         }
         cmdline::TaskOption::Run => {
-            todo!("run")
+            block_on(build_bootloader(Path::new("../"), false)).unwrap();
         }
         cmdline::TaskOption::Clean => {
             todo!("clean")
