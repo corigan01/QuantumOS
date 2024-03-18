@@ -35,7 +35,7 @@ MEMORY {
 
 SECTIONS {
     .boot : {
-        *(.boot .boot.* .loader .loader.* .text .text.* .data .data.*)
+        *(.boot .boot.* .loader .loader.* .text .text.* .data .data.* .got .got.*)
     } > BOOT_SEC
 
     .magic : {

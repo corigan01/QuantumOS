@@ -19,14 +19,12 @@ documentation = "https://github.com/corigan01/QuantumOS"
 
 [profile.release]
 panic = "abort"
-debug = "line-tables-only"
 strip = true
-overflow-checks = true
-
-[profile.stage-bootsector]
-inherits = "release"
 opt-level="z"
 lto = true
 codegen-units = 1
 debug = 0
 overflow-checks = false
+
+[profile.stage-bootsector]
+inherits = "release"
