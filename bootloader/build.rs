@@ -131,15 +131,25 @@ fn convert_bin(path: &str, arch: ArchSelect) -> String {
     bin_path
 }
 
+fn build_stages() {
+    let _bootsector = convert_bin(
+        &cargo_helper(
+            Some("stage-bootsector"),
+            "stage-bootsector",
+            ArchSelect::I386,
+        ),
+        ArchSelect::I386,
+    );
+
+    let _stage_16bit = convert_bin(
+        &cargo_helper(Some("stage-16bit"), "stage-16bit", ArchSelect::I386),
+        ArchSelect::I386,
+    );
+}
+
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-changed=linkerscripts");
 
-    let build_bootsector = cargo_helper(
-        Some("stage-bootsector"),
-        "stage-bootsector",
-        ArchSelect::I386,
-    );
-
-    convert_bin(&build_bootsector, ArchSelect::I386);
+    build_stages();
 }
