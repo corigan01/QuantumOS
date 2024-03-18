@@ -1,0 +1,30 @@
+[package]
+name = "quantum"
+authors = ["corigan01 <corigan01@gmail.com>"]
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+
+[workspace]
+members = ["./stage-bootsector"]
+
+[workspace.package]
+version = "0.1.0"
+authors = ["corigan01 <corigan01@gmail.com>"]
+description = "Quantum Operating system"
+documentation = "https://github.com/corigan01/QuantumOS"
+
+[profile.release]
+panic = "abort"
+strip = true
+opt-level="z"
+lto = true
+codegen-units = 1
+debug = 0
+overflow-checks = false
+
+[profile.stage-bootsector]
+inherits = "release"

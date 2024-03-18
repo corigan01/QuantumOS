@@ -5,7 +5,7 @@ fn main() {
     println!(
         "cargo:rustc-link-arg-bins=--script={}",
         local_path
-            .join("../../linkerscripts/i386-quantum_loader.ld")
+            .join("../linkerscripts/i386-quantum_loader.ld")
             .display()
     )
 }
