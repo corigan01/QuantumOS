@@ -1,5 +1,5 @@
 use std::fmt::Display;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::{env, fs};
 
@@ -132,7 +132,7 @@ fn convert_bin(path: &str, arch: ArchSelect) -> String {
 }
 
 fn build_stages() {
-    let _bootsector = convert_bin(
+    let bootsector = convert_bin(
         &cargo_helper(
             Some("stage-bootsector"),
             "stage-bootsector",
@@ -141,10 +141,15 @@ fn build_stages() {
         ArchSelect::I386,
     );
 
-    let _stage_16bit = convert_bin(
+    let stage_16bit = convert_bin(
         &cargo_helper(Some("stage-16bit"), "stage-16bit", ArchSelect::I386),
         ArchSelect::I386,
     );
+
+    let target_dir = PathBuf::from(manifest_dir()).join("target").join("bin");
+    fs::create_dir_all(&target_dir).unwrap();
+    fs::copy(bootsector, target_dir.join("stage-bootsector.bin")).unwrap();
+    fs::copy(stage_16bit, target_dir.join("stage-16bit.bin")).unwrap();
 }
 
 fn main() {
