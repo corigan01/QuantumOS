@@ -77,10 +77,14 @@ fn cargo_helper(profile: Option<&str>, package: &str, arch: ArchSelect) -> Strin
 }
 
 fn main() {
-    let crate_name = env::var("CARGO_CFG_TARGET_OS").unwrap();
-    if crate_name == "none" {
+    let root_crate_test = env::var("CARGO_CFG_TARGET_OS").unwrap();
+    if root_crate_test == "none" {
         return;
     }
 
-    let _build_bootsector = cargo_helper(Some("release"), "stage-bootsector", ArchSelect::I386);
+    let _build_bootsector = cargo_helper(
+        Some("stage-bootsector"),
+        "stage-bootsector",
+        ArchSelect::I386,
+    );
 }
