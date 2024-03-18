@@ -23,7 +23,7 @@
 # OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #*/
 
-.section "bootloader"
+.section .loader, "awx"
 .global bios_entry
 .code16
 
@@ -40,6 +40,8 @@ bios_entry:
         mov fs, ax
         mov gs, ax
         mov es, ax
+
+        cld
 
         # Setup the stack, this will give use some room to do the rest of the setup
         mov sp, 0x7c00 # Ptr     = 0x7C00
@@ -68,7 +70,7 @@ enable_a20:
         int 0x15
         jb .fail
         cmp ah, 0x00
-        jnz .not_supported
+        jnz .fail
 
         # Check if A20 is able to be enabled
         mov ax, 0x2402
@@ -89,13 +91,6 @@ enable_a20:
         jnz .fail
 .return:
         ret
-
-# If A20 is not supported by this sytem, we print a 'N' (not enough bytes for a
-# full string) and spin.
-.not_supported:
-        mov al, 'N'
-        call putc
-        jmp spin
 
 # If we fail (i.e Bios interrupt failed) then we put an 'F' and quit. Again its 
 # the same story, we don't really have enough bytes to print an entire string.

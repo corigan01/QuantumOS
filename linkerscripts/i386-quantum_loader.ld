@@ -10,8 +10,9 @@ MEMORY {
     /* 0x00000500	0x00007BFF	almost 30 KiB	Conventional memory	usable memory */
     LOW_30K      (rwx) : ORIGIN = 0x00000500, LENGTH = 0x076FF
 
-    /* 0x00007C00	0x00007DFF	512 bytes	Your OS BootSector */
-    BOOT_SEC     (rwx) : ORIGIN = 0x00007C00, LENGTH = 0x001FD
+    /* 0x00007C00	0x00007DFF	512 bytes       BootSector */
+    BOOT_SEC     (rwx) : ORIGIN = 0x00007C00, LENGTH = 0x001BE
+    PART_TABLE   (r)   : ORIGIN = 0x00007BBE, LENGTH = 0x00040
     BOOT_MAGIC   (r)   : ORIGIN = 0x00007DFE, LENGTH = 0x00002
 
     /* 0x00007E00	0x0007FFFF	480.5 KiB	Conventional memory */
@@ -34,7 +35,7 @@ MEMORY {
 
 SECTIONS {
     .boot : {
-        *(.boot .boot.* .text .text.* .data .data.*)
+        *(.boot .boot.* .loader .loader.* .text .text.* .data .data.*)
     } > BOOT_SEC
 
     .magic : {
