@@ -62,9 +62,6 @@ fn cargo_helper(profile: Option<&str>, package: &str, arch: ArchSelect) -> Strin
     println!("cargo:rerun-if-changed={}", package);
 
     Command::new(cargo_bin)
-        .env_remove("RUSTFLAGS")
-        .env_remove("CARGO_ENCODED_RUSTFLAGS")
-        .env_remove("RUSTC_WORKSPACE_WRAPPER")
         .args([
             "install",
             "--path",

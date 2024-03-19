@@ -16,27 +16,26 @@ pub struct BootloaderArtifacts {
 
 pub async fn build_bootloader(project_root: &Path, release: bool) -> Result<BootloaderArtifacts> {
     Command::new("cargo")
-        .env_clear()
-        .env("PATH", env::var("PATH")?)
-        .current_dir(project_root.join("bootloader"))
+        // .env_clear()
+        // .env(
+        //     "PATH",
+        //     env::var("PATH").context("Could not get 'PATH' enviroment var.")?,
+        // )
+        .current_dir(project_root.join("kernel"))
         .args([
             "build",
             "--profile",
             if release { "release" } else { "dev" },
         ])
         .status()
-        .await?
+        .await
+        .context("Could not spawn cargo")?
         .success()
         .then_some(())
         .context("Could not build Quantum-OS's Bootloader!")?;
 
     Ok(BootloaderArtifacts {
-        bootsector: project_root
-            .join("bootloader/target/bin/stage-bootsector.bin")
-            .canonicalize()
-            .unwrap(),
-        stage_16: project_root
-            .join("bootloader/target/bin/stage-16bit.bin")
-            .canonicalize()?,
+        bootsector: project_root.join("bootloader/target/bin/stage-bootsector.bin"),
+        stage_16: project_root.join("bootloader/target/bin/stage-16bit.bin"),
     })
 }
