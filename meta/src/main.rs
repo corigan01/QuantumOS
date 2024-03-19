@@ -1,7 +1,9 @@
-use artifacts::build_bootloader;
 use clap::Parser;
 use futures::executor::block_on;
+use std::env;
 use std::path::Path;
+
+use crate::artifacts::build_project;
 
 mod artifacts;
 mod cmdline;
@@ -14,7 +16,7 @@ fn main() {
             todo!("build")
         }
         cmdline::TaskOption::Run => {
-            let artifacts = block_on(build_bootloader(Path::new("./"), false)).unwrap();
+            let artifacts = block_on(build_project(Path::new("./"), false)).unwrap();
             println!("{:#?}", artifacts);
         }
         cmdline::TaskOption::Clean => {
