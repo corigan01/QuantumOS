@@ -1,17 +1,17 @@
 use anyhow::{Context, Error, Result};
 use async_process::{Command, Stdio};
-use futures::{future, Future};
-use std::env;
+use futures::future;
 use std::fmt::Display;
 use std::fs;
 use std::path::{Path, PathBuf};
 
 #[derive(Clone, Debug)]
-pub struct BootloaderArtifacts {
+pub struct Artifacts {
     pub bootsector: PathBuf,
     pub stage_16: PathBuf,
     // stage_32: PathBuf,
-    // stage_64: PathBuf
+    // stage_64: PathBuf,
+    pub kernel: PathBuf,
 }
 
 #[allow(unused)]
@@ -49,7 +49,6 @@ impl Display for ArchSelect {
 
 async fn cargo_helper(profile: Option<&str>, package: &str, arch: ArchSelect) -> Result<PathBuf> {
     let compile_mode = profile.unwrap_or("release");
-    println!("cargo:rerun-if-changed={}", package);
 
     Command::new("cargo")
         .env_remove("RUSTFLAGS")
@@ -68,14 +67,18 @@ async fn cargo_helper(profile: Option<&str>, package: &str, arch: ArchSelect) ->
             "-Zbuild-std=core",
             "-Zbuild-std-features=compiler-builtins-mem",
         ])
-        .stdout(Stdio::inherit())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
         .status()
         .await?
         .success()
         .then_some(())
         .ok_or(Error::msg("Failed to run Cargo"))?;
 
-    Ok(PathBuf::from("./target").join("bin").join(package))
+    Ok(PathBuf::from("./target")
+        .join("bin/")
+        .join(package.split('/').last().unwrap().trim())
+        .canonicalize()?)
 }
 
 async fn convert_bin(path: &Path, arch: ArchSelect) -> Result<PathBuf> {
@@ -84,8 +87,8 @@ async fn convert_bin(path: &Path, arch: ArchSelect) -> Result<PathBuf> {
         _ => todo!("Add more objcopy arches"),
     };
 
-    let bin_path = path.join(".bin");
-    fs::copy(path, &bin_path)?;
+    let bin_path = path.with_extension("bin");
+    fs::copy(path, &bin_path).context("Failed to duplicate ELF output file")?;
 
     Command::new("objcopy")
         .args([
@@ -96,7 +99,8 @@ async fn convert_bin(path: &Path, arch: ArchSelect) -> Result<PathBuf> {
             &bin_path.as_path().to_str().unwrap(),
         ])
         .status()
-        .await?
+        .await
+        .context("Failed to convert ELF file to BIN")?
         .success()
         .then_some(())
         .ok_or(Error::msg("Failed to run objcopy"))?;
@@ -104,7 +108,7 @@ async fn convert_bin(path: &Path, arch: ArchSelect) -> Result<PathBuf> {
     Ok(bin_path)
 }
 
-pub async fn build_project(project_root: &Path, release: bool) -> Result<BootloaderArtifacts> {
+pub async fn build_project(project_root: &Path, release: bool) -> Result<Artifacts> {
     let (stage_bootsector, stage_16bit, kernel) = future::try_join3(
         cargo_helper(
             Some("stage-bootsector"),
@@ -120,5 +124,20 @@ pub async fn build_project(project_root: &Path, release: bool) -> Result<Bootloa
     )
     .await?;
 
-    todo!()
+    println!(
+        "B={:?}, 16={:?}, k={:?}",
+        stage_bootsector, stage_16bit, kernel
+    );
+
+    let (bootsector, stage_16) = future::try_join(
+        convert_bin(&stage_bootsector, ArchSelect::I386),
+        convert_bin(&stage_16bit, ArchSelect::I386),
+    )
+    .await?;
+
+    Ok(Artifacts {
+        bootsector,
+        stage_16,
+        kernel,
+    })
 }

@@ -1,6 +1,5 @@
 use clap::Parser;
 use futures::executor::block_on;
-use std::env;
 use std::path::Path;
 
 use crate::artifacts::build_project;
