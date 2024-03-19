@@ -54,21 +54,23 @@ async fn cargo_helper(profile: Option<&str>, package: &str, arch: ArchSelect) ->
         .env_remove("RUSTFLAGS")
         .env_remove("CARGO_ENCODED_RUSTFLAGS")
         .env_remove("RUSTC_WORKSPACE_WRAPPER")
+        .env("CARGO_TERM_PROGRESS_WHEN", "never")
         .args([
-            "install",
-            "--path",
+            "build",
+            "--package",
             package,
             "--profile",
             compile_mode,
             "--target",
             arch.to_string().as_str(),
-            "--root",
-            "./target",
+            "--out-dir",
+            "./target/bin",
             "-Zbuild-std=core",
             "-Zbuild-std-features=compiler-builtins-mem",
+            "-Zunstable-options",
         ])
         .stdout(Stdio::null())
-        .stderr(Stdio::null())
+        .stderr(Stdio::inherit())
         .status()
         .await?
         .success()
@@ -77,7 +79,7 @@ async fn cargo_helper(profile: Option<&str>, package: &str, arch: ArchSelect) ->
 
     Ok(PathBuf::from("./target")
         .join("bin/")
-        .join(package.split('/').last().unwrap().trim())
+        .join(package)
         .canonicalize()?)
 }
 
@@ -108,19 +110,15 @@ async fn convert_bin(path: &Path, arch: ArchSelect) -> Result<PathBuf> {
     Ok(bin_path)
 }
 
-pub async fn build_project(project_root: &Path, release: bool) -> Result<Artifacts> {
+pub async fn build_project() -> Result<Artifacts> {
     let (stage_bootsector, stage_16bit, kernel) = future::try_join3(
         cargo_helper(
             Some("stage-bootsector"),
-            "./bootloader/stage-bootsector",
+            "stage-bootsector",
             ArchSelect::I386,
         ),
-        cargo_helper(
-            Some("stage-16bit"),
-            "./bootloader/stage-16bit",
-            ArchSelect::I386,
-        ),
-        cargo_helper(None, "./kernel", ArchSelect::X64),
+        cargo_helper(Some("stage-16bit"), "stage-16bit", ArchSelect::I386),
+        cargo_helper(None, "kernel", ArchSelect::X64),
     )
     .await?;
 

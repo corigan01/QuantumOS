@@ -6,6 +6,7 @@ use crate::artifacts::build_project;
 
 mod artifacts;
 mod cmdline;
+mod disk;
 
 fn main() {
     let args = cmdline::CommandLine::parse();
@@ -15,7 +16,7 @@ fn main() {
             todo!("build")
         }
         cmdline::TaskOption::Run => {
-            let artifacts = block_on(build_project(Path::new("./"), false)).unwrap();
+            let artifacts = block_on(build_project()).expect("Failed to build Quantum Project");
             println!("{:#?}", artifacts);
         }
         cmdline::TaskOption::Clean => {
