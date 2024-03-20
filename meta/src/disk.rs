@@ -1,10 +1,9 @@
 use anyhow::{Context, Error, Result};
 use mbrman::{MBRPartitionEntry, MBR};
-use std::io::{Seek, Write};
-use std::ops::AsyncFnOnce;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use tokio::fs::{File, OpenOptions};
-use tokio::io::{self, AsyncReadExt, AsyncSeekExt, AsyncWriteExt, BufStream};
+use tokio::io::{self, AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
 
 const DISK_IMG_SIZE: usize = 1024 * 1024 * 512;
 
@@ -75,11 +74,12 @@ impl DiskImgBaker {
         Ok(())
     }
 
-    pub async fn finish_and_write(mut self) -> Result<()> {
+    pub async fn finish_and_write(mut self) -> Result<PathBuf> {
         let mut disk_img = self.root_img.into_std().await;
         self.mbr.write_into(&mut disk_img)?;
+        disk_img.flush()?;
 
-        Ok(())
+        Ok(tmp_find_target().join("img").join("disk.img"))
     }
 }
 
