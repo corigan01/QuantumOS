@@ -12,6 +12,7 @@ pub fn putc(c: u8) {
     }
 }
 
+#[no_mangle]
 extern "C" fn entry(disk_id: u16) {
     putc(b'H');
 }

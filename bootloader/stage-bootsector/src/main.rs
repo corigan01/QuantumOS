@@ -26,5 +26,10 @@ extern "C" fn main(disk_number: u16) {
         }
     }
 
+    unsafe {
+        core::arch::asm!("push {disk_number:x}", disk_number = in(reg) disk_number);
+        core::arch::asm!("ljmp $0x7e0, $0x0", options(att_syntax));
+    }
+
     tiny_panic::fail(b'&');
 }

@@ -1,4 +1,4 @@
-ENTRY(entry)
+ENTRY(bios_entry)
 
 MEMORY {
     /* 0x00000000	0x000003FF	1 KiB	Real Mode IVT (Interrupt Vector Table)	unusable in real mode	640 KiB RAM ("Low memory") */
@@ -16,9 +16,8 @@ MEMORY {
     BOOT_MAGIC   (r)   : ORIGIN = 0x00007DFE, LENGTH = 0x00002
 
     /* 0x00007E00	0x0007FFFF	480.5 KiB	Conventional memory */
-    CODE_LIMIT   (rwx) : ORIGIN = 0x00007E00, LENGTH = 64K
-    REAL_DATA    (rwx) : ORIGIN = 0x00017E00, LENGTH = 64K
-    DATA_LIMIT   (rwx) : ORIGIN = 0x00017E00, LENGTH = 0x6FFFF
+    CODE_LIMIT   (rwx) : ORIGIN = 0x00007E00, LENGTH = 0x08200
+    DATA_LIMIT   (rwx) : ORIGIN = 0x00010000, LENGTH = 0x6FFFF
 
     /* 0x00080000	0x0009FFFF	128 KiB	EBDA (Extended BIOS Data Area)	partially used by the EBDA */
 	EBDA (r) : ORIGIN = 0x00080000, LENGTH = 0x1FFFF
@@ -35,25 +34,11 @@ MEMORY {
 }
 
 SECTIONS {
-    . = 0;
-    .text : {
-        *(.text .text.*)
-    } > CODE_LIMIT
+    .boot : {
+        *(.boot .boot.* .loader .loader.* .text .text.* .data .data.* .got .got.*)
+    } > BOOT_SEC
 
-    . = 0;
-    .GDT : {
-        *(.GDT .GDT.*)
-    } > REAL_DATA
-
-    .data : {
-        *(.data .data.*)
-    } > REAL_DATA
-
-    .rodata : {
-        *(.rodata .rodata.*)
-    } > REAL_DATA
-
-    .bss :  {
-        *(.bss .bss.*)
-    } > REAL_DATA
+    .magic : {
+        SHORT(0xaa55)
+    } > BOOT_MAGIC
 }
