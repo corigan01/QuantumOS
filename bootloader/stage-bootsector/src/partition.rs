@@ -8,13 +8,13 @@ pub struct MbrEntry {
     pub count: u32,
 }
 
-pub const PARTITION_PTR: *mut MbrEntry = 0x7BBE as *const MbrEntry as *mut MbrEntry;
+pub const PARTITION_PTR: *mut MbrEntry = 0x7DBE as *const MbrEntry as *mut MbrEntry;
 
 pub unsafe fn find_bootable() -> *mut MbrEntry {
     for offset in 0..4 {
         let new_ptr = PARTITION_PTR.add(offset);
 
-        if (&*new_ptr).bootable == 0x80 {
+        if (&*new_ptr).bootable == 0x80 && (&*new_ptr).lba != 0 {
             return new_ptr;
         }
     }
