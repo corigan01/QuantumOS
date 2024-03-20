@@ -14,7 +14,7 @@ extern "C" fn entry(disk_id: u16) {
     for c in b"test" {
         panic::putc(*c);
     }
-    panic!("Test");
+    // panic!("Test");
 
     loop {}
 }
