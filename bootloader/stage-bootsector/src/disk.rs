@@ -1,6 +1,6 @@
 use crate::tiny_panic::fail;
 
-#[repr(packed, C)]
+#[repr(C)]
 pub struct DiskAccessPacket {
     packet_size: u8,
     always_zero: u8,
@@ -25,6 +25,7 @@ impl DiskAccessPacket {
         }
     }
 
+    #[inline(never)]
     pub fn read(&self, disk: u16) {
         let packet_address = self as *const Self as u16;
         let status: u16;
