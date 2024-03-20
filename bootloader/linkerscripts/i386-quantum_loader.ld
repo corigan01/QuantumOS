@@ -35,25 +35,27 @@ MEMORY {
 }
 
 SECTIONS {
-    . = 0;
+    .begin : {
+        *(.begin .begin.*)
+    } > CODE_LIMIT
+    
     .text : {
         *(.text .text.*)
     } > CODE_LIMIT
-
-    . = 0;
+    
     .GDT : {
         *(.GDT .GDT.*)
-    } > REAL_DATA
+    } > CODE_LIMIT
 
     .data : {
         *(.data .data.*)
-    } > REAL_DATA
+    } > CODE_LIMIT
 
     .rodata : {
         *(.rodata .rodata.*)
-    } > REAL_DATA
+    } > CODE_LIMIT
 
     .bss :  {
         *(.bss .bss.*)
-    } > REAL_DATA
+    } > CODE_LIMIT
 }
