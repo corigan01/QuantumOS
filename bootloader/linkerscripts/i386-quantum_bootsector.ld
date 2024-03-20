@@ -12,7 +12,7 @@ MEMORY {
 
     /* 0x00007C00	0x00007DFF	512 bytes       BootSector */
     BOOT_SEC     (rwx) : ORIGIN = 0x00007C00, LENGTH = 0x001BE
-    PART_TABLE   (r)   : ORIGIN = 0x00007BBE, LENGTH = 0x00040
+    PART_TABLE   (r)   : ORIGIN = 0x00007DBE, LENGTH = 0x00040
     BOOT_MAGIC   (r)   : ORIGIN = 0x00007DFE, LENGTH = 0x00002
 
     /* 0x00007E00	0x0007FFFF	480.5 KiB	Conventional memory */

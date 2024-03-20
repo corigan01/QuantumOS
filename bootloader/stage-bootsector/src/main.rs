@@ -15,11 +15,12 @@ extern "C" fn main(disk_number: u16) {
     let mut load_ptr = 0x7E00;
 
     loop {
-        disk::DiskAccessPacket::new(1, bootable.lba as u64, load_ptr).read(disk_number);
+        let load_count = bootable.count.min(32) as u16;
+        disk::DiskAccessPacket::new(load_count, bootable.lba as u64, load_ptr).read(disk_number);
 
-        bootable.lba += 1;
-        bootable.count -= 1;
-        load_ptr += 0x200;
+        bootable.lba += load_count as u32;
+        bootable.count -= load_count as u32;
+        load_ptr += 512 * load_count as u32;
 
         if bootable.count == 0 {
             break;
