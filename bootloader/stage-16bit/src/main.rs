@@ -3,21 +3,24 @@
 
 use core::fmt::Write;
 
+use console::bios_write_char;
 use unreal::enter_unreal;
 
+mod console;
+mod disk;
 mod panic;
 mod unreal;
 
 #[no_mangle]
 #[link_section = ".begin"]
-extern "C" fn entry(_disk_id: u16) {
+extern "C" fn entry(disk_id: u16) {
     unsafe { enter_unreal() };
 
-    panic::BiosPrinter::write_fmt(
-        &mut panic::BiosPrinter {},
-        format_args!("This is a test {}", unsafe { *(0x10_000 as *const u8) }),
-    )
-    .unwrap();
-
+    bios_println!();
+    main(disk_id);
     loop {}
+}
+
+fn main(disk_id: u16) {
+    bios_println!("Qauntum Loader");
 }
