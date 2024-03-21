@@ -6,8 +6,11 @@ use core::fmt::Write;
 use console::bios_write_char;
 use unreal::enter_unreal;
 
+use crate::{disk::BiosDisk, io::Read};
+
 mod console;
 mod disk;
+mod io;
 mod panic;
 mod unreal;
 
@@ -23,4 +26,8 @@ extern "C" fn entry(disk_id: u16) {
 
 fn main(disk_id: u16) {
     bios_println!("Qauntum Loader");
+    let mut disk = BiosDisk::new(disk_id);
+    let mut buffer = [0; 512];
+
+    disk.read(&mut buffer);
 }

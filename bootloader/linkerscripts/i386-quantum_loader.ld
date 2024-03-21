@@ -42,6 +42,10 @@ SECTIONS {
     .text : {
         *(.text .text.*)
     } > CODE_LIMIT
+
+    .buffer : {
+        *(.buffer .buffer.*)
+    } > CODE_LIMIT
     
     .GDT : {
         *(.GDT .GDT.*)
