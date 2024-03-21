@@ -5,6 +5,7 @@ mod disk;
 mod partition;
 mod tiny_panic;
 
+use bioscall::video;
 use core::{arch::global_asm, include_str};
 
 global_asm!(include_str!("init.s"));
@@ -27,7 +28,7 @@ extern "C" fn main(disk_number: u16) {
         }
     }
 
-    tiny_panic::putc(b's');
+    video::putc(b's');
 
     unsafe {
         core::arch::asm!("

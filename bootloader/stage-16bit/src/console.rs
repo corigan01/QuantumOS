@@ -1,16 +1,5 @@
+use bioscall::video;
 use core::fmt::Write;
-
-pub fn bios_write_char(c: char) {
-    unsafe {
-        core::arch::asm!("
-                int 0x10
-            ",
-            in("ax") 0x0e00 | ((c as u16) & 0xFF),
-            in("cx") 0x01,
-            in("dx") 0,
-        );
-    }
-}
 
 pub struct BiosConsole {}
 
@@ -19,10 +8,10 @@ impl Write for BiosConsole {
         for c in s.chars() {
             match c {
                 '\n' => {
-                    bios_write_char('\n');
-                    bios_write_char('\r');
+                    video::print_char('\n');
+                    video::print_char('\r');
                 }
-                _ => bios_write_char(c),
+                _ => video::print_char(c),
             }
         }
 

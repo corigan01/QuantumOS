@@ -1,4 +1,5 @@
 #[repr(C)]
+#[derive(Clone, Copy, Default)]
 pub struct Regs8 {
     pub al: u8,
     pub ah: u8,
@@ -11,6 +12,7 @@ pub struct Regs8 {
 }
 
 #[repr(C)]
+#[derive(Clone, Copy, Default)]
 pub struct Regs16 {
     pub ax: u16,
     pub bx: u16,
@@ -23,6 +25,7 @@ pub struct Regs16 {
 }
 
 #[repr(C)]
+#[derive(Clone, Copy, Default)]
 pub struct Regs32 {
     pub eax: u32,
     pub ebx: u32,
@@ -35,6 +38,7 @@ pub struct Regs32 {
 }
 
 #[repr(C)]
+#[derive(Clone, Copy, Default)]
 pub struct Regs64 {
     pub rax: u64,
     pub rbx: u64,

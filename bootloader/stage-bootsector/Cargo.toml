@@ -6,3 +6,5 @@ authors.workspace = true
 description.workspace = true
 documentation.workspace = true
 
+[dependencies]
+bioscall = { workspace = true }

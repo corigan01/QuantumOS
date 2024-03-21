@@ -1,9 +1,6 @@
 #![no_std]
 #![no_main]
 
-use core::fmt::Write;
-
-use console::bios_write_char;
 use unreal::enter_unreal;
 
 use crate::{disk::BiosDisk, io::Read};

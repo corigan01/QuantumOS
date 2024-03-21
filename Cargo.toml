@@ -9,6 +9,10 @@ authors = ["corigan01 <corigan01@gmail.com>"]
 description = "Quantum Operating System Bootloader"
 documentation = "https://github.com/corigan01/QuantumOS"
 
+[workspace.dependencies]
+arch = { path = "arch" }
+bioscall = { path = "bioscall" }
+
 [profile.release]
 panic = "abort"
 # strip = true
