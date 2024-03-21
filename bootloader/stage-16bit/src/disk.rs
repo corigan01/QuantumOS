@@ -93,16 +93,16 @@ impl Read for BiosDisk {
         assert!(reading_start % 512 == 0, "Reading Start should be aligned");
         assert!(reading_end % 512 == 0, "Reading End should be aligned");
 
-        while starting_sector <= ending_sector {
-            bios_println!("Reading sector: {}/{}", starting_sector, ending_sector);
+        while starting_sector < ending_sector {
             let sectors_to_read =
-                ((starting_sector - ending_sector) as usize).min(MAX_SECTORS_PER_READ);
+                ((ending_sector - starting_sector) as usize).min(MAX_SECTORS_PER_READ);
+            bios_println!("Reading sector: {}:{}", starting_sector, sectors_to_read);
             disk::raw_read(self.id, starting_sector, sectors_to_read, buf_ptr).unwrap();
 
             starting_sector += sectors_to_read as u64;
             buf_ptr = unsafe { buf_ptr.add(sectors_to_read as usize * 512) };
         }
 
-        todo!("{:x?}", buf)
+        0
     }
 }

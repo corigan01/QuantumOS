@@ -31,13 +31,9 @@ extern "C" fn main(disk_number: u16) {
     video::putc(b's');
 
     unsafe {
-        core::arch::asm!("
-            mov ax, 0x7C00
-            mov sp, ax
-            push {disk_number:x}
-            ", disk_number = in(reg) disk_number);
-        core::arch::asm!("ljmp $0x00, $0x7e00", options(att_syntax));
-    }
+        let stage1: fn(u16) = core::mem::transmute(0x7E00_usize);
+        stage1(disk_number);
+    };
 
     tiny_panic::fail(b'&');
 }

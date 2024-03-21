@@ -59,6 +59,7 @@ pub struct Regs64 {
 }
 
 pub mod eflags {
+    #[inline(never)]
     pub fn read() -> usize {
         let mut flags;
 
@@ -67,13 +68,14 @@ pub mod eflags {
                 pushf
                 pop {0:x}
             ",
-                lateout(reg) flags
+                out(reg) flags
             )
         }
 
         flags
     }
 
+    #[inline(always)]
     pub fn carry() -> bool {
         read() & 1 != 0
     }

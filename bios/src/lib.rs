@@ -9,6 +9,7 @@ pub const INVALID_BIOS_CALL_AX: u16 = 0x80;
 pub const NOT_SUPPORTED_CALL_AX: u16 = 0x86;
 
 #[must_use = "BiosStatus must be used"]
+#[derive(Debug)]
 pub enum BiosStatus {
     Success,
     InvalidInput,
@@ -21,7 +22,7 @@ impl BiosStatus {
     pub fn unwrap(self) {
         match self {
             Self::Success => (),
-            _ => panic!("Failed to unwrap BiosStatus"),
+            _ => panic!("Failed to unwrap BiosStatus: {:?}", self),
         }
     }
 
@@ -61,27 +62,30 @@ pub unsafe fn int_0x10(mut reg: Regs16) -> BiosStatus {
 
 #[inline]
 pub unsafe fn int_0x13(mut reg: Regs16) -> BiosStatus {
+    let status: u16;
+
     asm!("
-        push bx
         push si
         mov si, {si:x}
-        mov bx, {bx:x}
         int 0x13
+        jc 1f
+        mov {status:x}, 0
+        jmp 2f
+        1:
+        mov {status:x}, 1
+        2:
         pop si
-        pop bx
         ",
-        bx = in(reg) reg.bx,
         si = in(reg) reg.si,
+        status = out(reg) status,
         inout("ax") reg.ax => reg.ax,
-        in("cx") reg.cx,
         in("dx") reg.dx,
-        in("di") reg.di,
     );
 
     match reg.ax {
         INVALID_BIOS_CALL_AX => BiosStatus::InvalidData,
         NOT_SUPPORTED_CALL_AX => BiosStatus::NotSupported,
-        _ if eflags::carry() => BiosStatus::Failed,
+        _ if status == 1 => BiosStatus::Failed,
         _ => BiosStatus::Success,
     }
 }
@@ -111,13 +115,14 @@ pub mod video {
             ..Regs16::default()
         };
 
-        let _ = unsafe { int_0x10(regs) };
+        unsafe { int_0x10(regs) }.unwrap();
     }
 }
 
 pub mod disk {
     use crate::{int_0x13, BiosStatus};
     use arch::registers::Regs16;
+    use core::ptr::addr_of;
 
     const DISK_DAP_READ: u16 = 0x4200;
 
@@ -148,8 +153,12 @@ pub mod disk {
     }
 
     pub fn raw_read(disk_id: u16, lba: u64, count: usize, ptr: *mut u8) -> BiosStatus {
-        let address = ptr as u32;
-        let package = DiskAccessPacket::new(count as u16, lba, address);
+        let package = DiskAccessPacket::new(count as u16, lba, ptr as u32);
+
+        assert!(
+            addr_of!(package) as u32 & 0xFFFF == addr_of!(package) as u32,
+            "Package address cannot be larger then 16 bit!"
+        );
 
         let reg = Regs16 {
             dx: disk_id,
