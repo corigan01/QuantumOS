@@ -12,7 +12,7 @@ pub fn putc(c: u8) {
     }
 }
 
-struct BiosPrinter {}
+pub struct BiosPrinter {}
 
 impl Write for BiosPrinter {
     fn write_str(&mut self, s: &str) -> core::fmt::Result {
@@ -22,7 +22,7 @@ impl Write for BiosPrinter {
                     putc(byte);
                     putc(b'\r');
                 }
-                b => putc(byte),
+                b => putc(b),
             }
         }
         Ok(())

@@ -17,8 +17,8 @@ MEMORY {
 
     /* 0x00007E00	0x0007FFFF	480.5 KiB	Conventional memory */
     CODE_LIMIT   (rwx) : ORIGIN = 0x00007E00, LENGTH = 64K
-    REAL_DATA    (rwx) : ORIGIN = 0x00017E00, LENGTH = 64K
-    DATA_LIMIT   (rwx) : ORIGIN = 0x00017E00, LENGTH = 0x6FFFF
+    REAL_DATA    (rwx) : ORIGIN = 0x00010000, LENGTH = 64K
+    DATA_LIMIT   (rwx) : ORIGIN = 0x00010000, LENGTH = 0x6FFFF
 
     /* 0x00080000	0x0009FFFF	128 KiB	EBDA (Extended BIOS Data Area)	partially used by the EBDA */
 	EBDA (r) : ORIGIN = 0x00080000, LENGTH = 0x1FFFF
@@ -49,13 +49,13 @@ SECTIONS {
 
     .data : {
         *(.data .data.*)
-    } > CODE_LIMIT
+    } > REAL_DATA
 
     .rodata : {
         *(.rodata .rodata.*)
-    } > CODE_LIMIT
+    } > REAL_DATA
 
     .bss :  {
         *(.bss .bss.*)
-    } > CODE_LIMIT
+    } > REAL_DATA
 }
