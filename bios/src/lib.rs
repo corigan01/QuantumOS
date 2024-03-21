@@ -8,17 +8,36 @@ use core::arch::asm;
 pub const INVALID_BIOS_CALL_AX: u16 = 0x80;
 pub const NOT_SUPPORTED_CALL_AX: u16 = 0x86;
 
-pub enum BiosErrorKind {
+#[must_use = "BiosStatus must be used"]
+pub enum BiosStatus {
+    Success,
     InvalidInput,
     InvalidData,
     NotSupported,
     Failed,
 }
 
-type Result<T> = core::result::Result<T, BiosErrorKind>;
+impl BiosStatus {
+    pub fn unwrap(self) {
+        match self {
+            Self::Success => (),
+            _ => panic!("Failed to unwrap BiosStatus"),
+        }
+    }
+
+    pub fn fail(self) {
+        match self {
+            Self::Success => (),
+            _ => {
+                video::putc(b'b');
+                loop {}
+            }
+        }
+    }
+}
 
 #[inline]
-pub unsafe fn int_0x10(mut reg: Regs16) -> Result<()> {
+pub unsafe fn int_0x10(mut reg: Regs16) -> BiosStatus {
     asm!("
         push bx
         mov bx, {0:x}
@@ -33,10 +52,37 @@ pub unsafe fn int_0x10(mut reg: Regs16) -> Result<()> {
     );
 
     match reg.ax {
-        INVALID_BIOS_CALL_AX => Err(BiosErrorKind::InvalidData),
-        NOT_SUPPORTED_CALL_AX => Err(BiosErrorKind::NotSupported),
-        _ if eflags::carry() => Err(BiosErrorKind::Failed),
-        _ => Ok(()),
+        INVALID_BIOS_CALL_AX => BiosStatus::InvalidData,
+        NOT_SUPPORTED_CALL_AX => BiosStatus::NotSupported,
+        _ if eflags::carry() => BiosStatus::Failed,
+        _ => BiosStatus::Success,
+    }
+}
+
+#[inline]
+pub unsafe fn int_0x13(mut reg: Regs16) -> BiosStatus {
+    asm!("
+        push bx
+        push si
+        mov si, {si:x}
+        mov bx, {bx:x}
+        int 0x13
+        pop si
+        pop bx
+        ",
+        bx = in(reg) reg.bx,
+        si = in(reg) reg.si,
+        inout("ax") reg.ax => reg.ax,
+        in("cx") reg.cx,
+        in("dx") reg.dx,
+        in("di") reg.di,
+    );
+
+    match reg.ax {
+        INVALID_BIOS_CALL_AX => BiosStatus::InvalidData,
+        NOT_SUPPORTED_CALL_AX => BiosStatus::NotSupported,
+        _ if eflags::carry() => BiosStatus::Failed,
+        _ => BiosStatus::Success,
     }
 }
 
@@ -66,5 +112,52 @@ pub mod video {
         };
 
         let _ = unsafe { int_0x10(regs) };
+    }
+}
+
+pub mod disk {
+    use crate::{int_0x13, BiosStatus};
+    use arch::registers::Regs16;
+
+    const DISK_DAP_READ: u16 = 0x4200;
+
+    #[repr(C)]
+    struct DiskAccessPacket {
+        packet_size: u8,
+        always_zero: u8,
+        sectors: u16,
+        base_ptr: u16,
+        base_segment: u16,
+        lba: u64,
+    }
+
+    impl DiskAccessPacket {
+        fn new(sectors: u16, lba: u64, ptr: u32) -> Self {
+            let base_segment = (ptr >> 4) as u16;
+            let base_ptr = ptr as u16 & 0xF;
+
+            Self {
+                packet_size: 0x10,
+                always_zero: 0,
+                sectors,
+                base_ptr,
+                base_segment,
+                lba,
+            }
+        }
+    }
+
+    pub fn raw_read(disk_id: u16, lba: u64, count: usize, ptr: *mut u8) -> BiosStatus {
+        let address = ptr as u32;
+        let package = DiskAccessPacket::new(count as u16, lba, address);
+
+        let reg = Regs16 {
+            dx: disk_id,
+            ax: DISK_DAP_READ,
+            si: (&package) as *const DiskAccessPacket as u16,
+            ..Regs16::default()
+        };
+
+        unsafe { int_0x13(reg) }
     }
 }

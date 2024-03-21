@@ -17,7 +17,7 @@ extern "C" fn entry(disk_id: u16) {
 
     bios_println!();
     main(disk_id);
-    loop {}
+    panic!("Not supposed to return!");
 }
 
 fn main(disk_id: u16) {
@@ -25,5 +25,7 @@ fn main(disk_id: u16) {
     let mut disk = BiosDisk::new(disk_id);
     let mut buffer = [0; 512];
 
+    bios_println!("Reading Disk...");
     disk.read(&mut buffer);
+    bios_println!("Done");
 }
