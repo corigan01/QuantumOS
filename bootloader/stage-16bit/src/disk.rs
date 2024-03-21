@@ -48,7 +48,7 @@ impl Read for BiosDisk {
         let mut buf_ptr = buf.as_mut_ptr();
 
         // Not aligned start
-        let non_alignment_start = reading_start & 0x1FF;
+        let non_alignment_start = reading_start % 512;
         if non_alignment_start != 0 {
             bios_println!("Non alignment start: {}", non_alignment_start);
             disk::raw_read(self.id, starting_sector, 1, unsafe {
@@ -60,18 +60,18 @@ impl Read for BiosDisk {
                 ptr::copy_nonoverlapping(
                     TEMP_BUFFER.as_ptr().add(non_alignment_start as usize),
                     buf.as_mut_ptr(),
-                    (512 - non_alignment_start) as usize,
+                    (512 - non_alignment_start as usize).min(buf.len()),
                 )
             };
 
             starting_sector += 1;
-            reading_start += non_alignment_start;
+            reading_start += 512 - non_alignment_start;
             buf_ptr = unsafe { buf_ptr.add(non_alignment_start as usize) };
         }
 
         // not aligned end
         let non_alignment_end = reading_end & 0x1FF;
-        if non_alignment_end != 0 {
+        if non_alignment_end != 0 && ending_sector > starting_sector {
             bios_println!("Non alignment end: {}", non_alignment_end);
             disk::raw_read(self.id, ending_sector + 1, 1, unsafe {
                 TEMP_BUFFER.as_mut_ptr().add(non_alignment_end as usize)
@@ -90,8 +90,16 @@ impl Read for BiosDisk {
             reading_end -= non_alignment_end;
         }
 
-        assert!(reading_start % 512 == 0, "Reading Start should be aligned");
-        assert!(reading_end % 512 == 0, "Reading End should be aligned");
+        assert!(
+            reading_start % 512 == 0,
+            "Reading Start should be aligned: {}",
+            reading_start
+        );
+        assert!(
+            reading_end % 512 == 0 || ending_sector <= starting_sector,
+            "Reading End should be aligned: {}",
+            reading_end
+        );
 
         while starting_sector < ending_sector {
             let sectors_to_read =

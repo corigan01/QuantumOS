@@ -1,7 +1,10 @@
 #![no_std]
 #![no_main]
 
-use crate::{disk::BiosDisk, io::Read};
+use crate::{
+    disk::BiosDisk,
+    io::{Read, Seek},
+};
 use unreal::enter_unreal;
 
 mod console;
@@ -23,9 +26,10 @@ extern "C" fn entry(disk_id: u16) {
 fn main(disk_id: u16) {
     bios_println!("Qauntum Loader");
     let mut disk = BiosDisk::new(disk_id);
-    let mut buffer = [0; 512];
+    disk.seek(500);
+    let mut buffer = [0; 40];
 
     bios_println!("Reading Disk...");
     disk.read(&mut buffer);
-    // bios_println!("Done: {:?}", buffer);
+    bios_println!("Done: {:x?}", buffer);
 }
