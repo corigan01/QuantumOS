@@ -53,3 +53,24 @@ pub struct Regs64 {
     pub r14: u64,
     pub r15: u64,
 }
+
+pub mod eflags {
+    pub fn read() -> usize {
+        let mut flags;
+
+        unsafe {
+            core::arch::asm!("
+                pushf
+                pop {0:x}
+            ",
+                lateout(reg) flags
+            )
+        }
+
+        flags
+    }
+
+    pub fn carry() -> bool {
+        read() & 1 != 0
+    }
+}
