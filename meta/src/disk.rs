@@ -104,7 +104,7 @@ async fn create_diskimg(name: &str, size: usize) -> Result<File> {
     Ok(file)
 }
 
-pub async fn write_file_into_fat(
+pub async fn _write_file_into_fat(
     fat: &mut fatfs::FileSystem<std::fs::File>,
     src_path: &Path,
     dest_path: &str,
