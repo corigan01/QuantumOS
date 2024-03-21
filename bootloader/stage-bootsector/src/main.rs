@@ -5,7 +5,7 @@ mod disk;
 mod partition;
 mod tiny_panic;
 
-use bioscall::video;
+use bios::video;
 use core::{arch::global_asm, include_str};
 
 global_asm!(include_str!("init.s"));

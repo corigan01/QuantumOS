@@ -1,4 +1,4 @@
-use bioscall::video;
+use bios::video;
 use core::fmt::Write;
 
 pub struct BiosConsole {}

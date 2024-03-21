@@ -1,5 +1,5 @@
 [workspace]
-members = ["kernel", "meta", "bootloader", "bootloader/stage-bootsector", "bootloader/stage-16bit", "bioscall", "arch"]
+members = ["kernel", "meta", "bootloader", "bootloader/stage-bootsector", "bootloader/stage-16bit", "bios", "arch"]
 default-members = ["meta"]
 resolver = "2"
 
@@ -11,7 +11,7 @@ documentation = "https://github.com/corigan01/QuantumOS"
 
 [workspace.dependencies]
 arch = { path = "arch" }
-bioscall = { path = "bioscall" }
+bios = { path = "bios" }
 
 [profile.release]
 panic = "abort"

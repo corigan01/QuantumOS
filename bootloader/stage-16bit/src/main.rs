@@ -1,9 +1,8 @@
 #![no_std]
 #![no_main]
 
-use unreal::enter_unreal;
-
 use crate::{disk::BiosDisk, io::Read};
+use unreal::enter_unreal;
 
 mod console;
 mod disk;

@@ -1,4 +1,4 @@
-use bioscall::video::putc;
+use bios::video::putc;
 use core::{arch::asm, panic::PanicInfo};
 
 pub extern "C" fn fail(msg: u8) -> ! {
