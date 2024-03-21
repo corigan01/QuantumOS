@@ -32,6 +32,7 @@ impl DiskAccessPacket {
 
         unsafe {
             core::arch::asm!("
+                push si
                 mov si, {packet:x}
                 mov ax, 0x4200
                 int 0x13
@@ -41,6 +42,7 @@ impl DiskAccessPacket {
                 1:
                 mov {status:x}, 1
                 2:
+                pop si
             ",
                 in("dx") disk,
                 packet = in(reg) packet_address,
