@@ -3,6 +3,7 @@
 
 use crate::{
     disk::BiosDisk,
+    fatfs::Fat,
     io::{Read, Seek},
     mbr::Mbr,
 };
@@ -30,6 +31,8 @@ fn main(disk_id: u16) {
     bios_println!("Qauntum Loader");
     let mut disk = BiosDisk::new(disk_id);
     let mbr = Mbr::new(disk).unwrap();
+    let partition = mbr.partition(1).unwrap();
+    let fat = Fat::new(partition).unwrap();
 
-    bios_println!("{:#?}", mbr.partition(0));
+    bios_println!("{:#?}", fat);
 }

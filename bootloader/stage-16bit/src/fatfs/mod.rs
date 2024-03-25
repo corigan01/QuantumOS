@@ -1,8 +1,11 @@
+use core::fmt::Debug;
+
 use self::bpb::Bpb;
 use crate::io::{Read, Seek};
 
 mod bpb;
 
+#[derive(Debug)]
 pub enum FatKind {
     Fat12,
     Fat16,
@@ -100,11 +103,27 @@ impl<Part: ReadSeek> Fat<Part> {
         })
     }
 
+    pub fn volume_label<'a>(&'a self) -> &'a str {
+        self.bpb.volume_label()
+    }
+
     pub fn print_dir(&mut self, name: &str) {
         todo!()
     }
 
     pub fn read(&mut self, name: &str, buf: &mut [u8]) -> Result<usize, &'static str> {
         todo!()
+    }
+}
+
+impl<Part: ReadSeek> Debug for Fat<Part> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("Fat")
+            .field("kind", &self.bpb.kind())
+            .field("bytes", &(self.bpb.total_sectors() * 512))
+            .field("name", &self.volume_label())
+            .finish()?;
+
+        Ok(())
     }
 }

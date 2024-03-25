@@ -1,8 +1,7 @@
+use super::{FatKind, ReadSeek, Sector};
 use core::ops::RangeInclusive;
 
-use super::{FatKind, ReadSeek, Sector};
-
-#[repr(C)]
+#[repr(C, packed)]
 #[derive(Clone, Copy)]
 pub struct Bpb {
     jmp_boot: [u8; 3],
@@ -22,7 +21,7 @@ pub struct Bpb {
     extended: ExtendedBpb,
 }
 
-#[repr(C)]
+#[repr(C, packed)]
 #[derive(Clone, Copy)]
 struct Bpb16 {
     drive_number: u8,
@@ -33,7 +32,7 @@ struct Bpb16 {
     fs_str: [u8; 8],
 }
 
-#[repr(C)]
+#[repr(C, packed)]
 #[derive(Clone, Copy)]
 struct Bpb32 {
     fat_size: u32,
@@ -140,5 +139,12 @@ impl Bpb {
         let fat_end = fat_start + (self.fat_sectors() as u64);
 
         fat_start..=fat_end
+    }
+
+    pub fn volume_label<'a>(&'a self) -> &'a str {
+        match self.safe_extended() {
+            ExtendedKind::Fat16(ext) => core::str::from_utf8(&ext.volume_label).unwrap(),
+            ExtendedKind::Fat32(ext) => core::str::from_utf8(&ext.volume_label).unwrap(),
+        }
     }
 }
