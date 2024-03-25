@@ -11,6 +11,7 @@ mod console;
 mod disk;
 mod fatfs;
 mod io;
+mod mbr;
 mod panic;
 mod unreal;
 
