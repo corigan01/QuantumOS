@@ -69,18 +69,12 @@ impl Bpb {
     const FAT16_CLUSTERS: usize = 65525;
 
     pub(crate) fn new<Disk: ReadSeek>(disk: &mut Disk) -> Result<Self, &'static str> {
-        let mut bpb = unsafe { core::mem::zeroed::<Self>() };
+        let mut sector_buffer = [0u8; 512];
+
         disk.seek(0);
+        disk.read(&mut sector_buffer);
 
-        // Treat ourself as if we were a slice
-        let self_slice = unsafe {
-            &mut (*core::ptr::slice_from_raw_parts_mut(
-                ((&mut bpb) as *mut Self) as *mut u8,
-                core::mem::size_of_val(&bpb),
-            ))
-        };
-
-        disk.read(self_slice);
+        let bpb: Self = unsafe { *sector_buffer.as_ptr().cast() };
 
         // TODO: Add more checks for BPB to ensure that it is valid before returning it
         if bpb.bytes_per_sector == 0 || bpb.sectors_per_cluster == 0 {
