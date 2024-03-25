@@ -53,20 +53,21 @@ impl<Disk: ReadSeekCopy> Mbr<Disk> {
         Ok(mbr)
     }
 
-    pub fn partition(&self, index: usize) -> Partition<Disk> {
-        if index >= 4 {
-            panic!("Partition Index out of range");
+    pub fn partition(&self, index: usize) -> Option<Partition<Disk>> {
+        let entry = &self.entries.get(index)?;
+
+        if entry.count == 0 || entry.sector_start == 0 {
+            return None;
         }
 
-        let entry = &self.entries[index];
-        Partition::<Disk> {
+        Some(Partition::<Disk> {
             bootable: entry.boot_flag == 0x80,
             kind: entry.kind,
             lba_start: entry.sector_start,
             lba_count: entry.count,
             seek: 0,
             disk: self.disk,
-        }
+        })
     }
 }
 
