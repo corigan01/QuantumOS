@@ -4,6 +4,7 @@
 use crate::{
     disk::BiosDisk,
     io::{Read, Seek},
+    mbr::Mbr,
 };
 use unreal::enter_unreal;
 
@@ -28,10 +29,7 @@ extern "C" fn entry(disk_id: u16) {
 fn main(disk_id: u16) {
     bios_println!("Qauntum Loader");
     let mut disk = BiosDisk::new(disk_id);
-    disk.seek(511);
-    let mut buffer = [0; 520];
+    let mbr = Mbr::new(disk).unwrap();
 
-    bios_println!("Reading Disk...");
-    disk.read(&mut buffer);
-    bios_println!("Done: {:x?}", buffer);
+    bios_println!("{:#?}", mbr.partition(0).bootable);
 }

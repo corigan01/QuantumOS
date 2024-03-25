@@ -5,10 +5,10 @@ trait ReadSeekCopy: Read + Seek + Copy {}
 impl<T: Read + Seek + Copy> ReadSeekCopy for T {}
 
 pub struct Partition<Disk: ReadSeekCopy> {
-    bootable: bool,
-    kind: u8,
-    lba_start: u32,
-    lba_count: u32,
+    pub bootable: bool,
+    pub kind: u8,
+    pub lba_start: u32,
+    pub lba_count: u32,
     seek: u64,
     disk: Disk,
 }
@@ -37,7 +37,7 @@ pub struct Mbr<Disk: ReadSeekCopy> {
 impl<Disk: ReadSeekCopy> Mbr<Disk> {
     pub fn new(mut disk: Disk) -> Result<Self, &'static str> {
         let mut sector_buffer = [0u8; 512];
-        disk.seek(0);
+        disk.seek(440);
         disk.read(&mut sector_buffer);
 
         let mut mbr: Self = unsafe { *sector_buffer.as_ptr().cast() };
