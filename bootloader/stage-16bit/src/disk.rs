@@ -11,6 +11,7 @@ const MAX_SECTORS_PER_READ: usize = 32;
 #[link_section = ".buffer"]
 static mut TEMP_BUFFER: [u8; 512] = [0u8; 512];
 
+#[derive(Clone, Copy)]
 pub struct BiosDisk {
     id: u16,
     seek: u64,
