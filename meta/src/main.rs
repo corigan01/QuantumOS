@@ -8,7 +8,10 @@ use std::{
     process::Command,
 };
 
-use crate::{artifacts::build_project, disk::DiskImgBaker};
+use crate::{
+    artifacts::build_project,
+    disk::{create_bootloader_dir, DiskImgBaker},
+};
 
 mod artifacts;
 mod cmdline;
@@ -22,6 +25,24 @@ async fn build() -> Result<PathBuf> {
     disk.write_bootsector(&artifacts.bootsector).await?;
     disk.write_stage16(&artifacts.stage_16).await?;
 
+    let bootloader_dir_path = create_bootloader_dir(
+        "fatfs",
+        [
+            (
+                artifacts.bootsector.as_path(),
+                Path::new("bootloader/bootsector.bin"),
+            ),
+            (
+                &artifacts.stage_16.as_path(),
+                Path::new("bootloader/stage_16.bin"),
+            ),
+            (&artifacts.kernel.as_path(), Path::new("kernel.elf")),
+        ]
+        .into_iter(),
+    )
+    .await?;
+
+    disk.dir_to_fat(&bootloader_dir_path).await?;
     disk.finish_and_write().await
 }
 
