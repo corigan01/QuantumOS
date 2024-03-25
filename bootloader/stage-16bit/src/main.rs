@@ -9,6 +9,7 @@ use unreal::enter_unreal;
 
 mod console;
 mod disk;
+mod fatfs;
 mod io;
 mod panic;
 mod unreal;
