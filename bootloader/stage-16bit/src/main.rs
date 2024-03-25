@@ -31,5 +31,5 @@ fn main(disk_id: u16) {
     let mut disk = BiosDisk::new(disk_id);
     let mbr = Mbr::new(disk).unwrap();
 
-    bios_println!("{:#?}", mbr.partition(0).bootable);
+    bios_println!("{:#?}", mbr.partition(0));
 }

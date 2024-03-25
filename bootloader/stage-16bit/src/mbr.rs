@@ -1,5 +1,5 @@
 use crate::io::{Read, Seek};
-use core::marker::PhantomData;
+use core::{fmt::Debug, marker::PhantomData};
 
 trait ReadSeekCopy: Read + Seek + Copy {}
 impl<T: Read + Seek + Copy> ReadSeekCopy for T {}
@@ -87,5 +87,18 @@ impl<Disk: ReadSeekCopy> Seek for Partition<Disk> {
 
     fn stream_position(&mut self) -> u64 {
         self.seek
+    }
+}
+
+impl<Disk: ReadSeekCopy> Debug for Partition<Disk> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("Partition")
+            .field("bootable", &self.bootable)
+            .field("kind", &format_args!("0x{:02x}", &self.kind))
+            .field("lba_start", &self.lba_start)
+            .field("lba_count", &self.lba_count)
+            .finish()?;
+
+        Ok(())
     }
 }
