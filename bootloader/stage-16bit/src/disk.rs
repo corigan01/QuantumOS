@@ -83,7 +83,7 @@ impl Read for BiosDisk {
                     TEMP_BUFFER.as_ptr(),
                     buf.as_mut_ptr()
                         .add((reading_end - non_alignment_end) as usize),
-                    (512 - non_alignment_end) as usize,
+                    non_alignment_end as usize,
                 );
             }
 

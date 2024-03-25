@@ -26,8 +26,8 @@ extern "C" fn entry(disk_id: u16) {
 fn main(disk_id: u16) {
     bios_println!("Qauntum Loader");
     let mut disk = BiosDisk::new(disk_id);
-    disk.seek(500);
-    let mut buffer = [0; 40];
+    disk.seek(511);
+    let mut buffer = [0; 520];
 
     bios_println!("Reading Disk...");
     disk.read(&mut buffer);
