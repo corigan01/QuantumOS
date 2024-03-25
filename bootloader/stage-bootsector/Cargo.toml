@@ -1,0 +1,10 @@
+[package]
+name = "stage-bootsector"
+edition = "2021"
+version = "0.2.0"
+authors.workspace = true
+description.workspace = true
+documentation.workspace = true
+
+[dependencies]
+bios = { workspace = true }
