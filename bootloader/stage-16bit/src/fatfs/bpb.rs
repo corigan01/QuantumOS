@@ -1,4 +1,6 @@
-use super::{FatKind, ReadSeek};
+use core::ops::RangeInclusive;
+
+use super::{FatKind, ReadSeek, Sector};
 
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -88,6 +90,10 @@ impl Bpb {
         Ok(bpb)
     }
 
+    pub fn sector_size(&self) -> usize {
+        self.bytes_per_sector as usize
+    }
+
     fn root_sectors(&self) -> usize {
         // 3.5 Determination of FAT type when mounting the Volume (page: 14)
         ((self.root_entries as usize * Self::ROOT_ENTRY_SIZE)
@@ -133,5 +139,12 @@ impl Bpb {
             FatKind::Fat12 | FatKind::Fat16 => ExtendedKind::Fat16(unsafe { &self.extended.fat16 }),
             FatKind::Fat32 => ExtendedKind::Fat32(unsafe { &self.extended.fat32 }),
         }
+    }
+
+    pub fn fat_range(&self) -> RangeInclusive<Sector> {
+        let fat_start = self.reserved_sectors as u64;
+        let fat_end = fat_start + (self.fat_sectors() as u64);
+
+        fat_start..=fat_end
     }
 }
