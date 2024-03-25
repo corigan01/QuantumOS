@@ -1,7 +1,6 @@
 use anyhow::{anyhow, Context, Error, Result};
-use fatfs::{FileSystem, FsOptions};
+use fatfs::FsOptions;
 use mbrman::{MBRPartitionEntry, MBR};
-use std::fs::FileType;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use tokio::fs::{File, OpenOptions};

@@ -19,7 +19,6 @@ mod disk;
 
 async fn build() -> Result<PathBuf> {
     let artifacts = build_project().await.context("Failed to build artifacts")?;
-    println!("{:#?}", artifacts);
 
     let mut disk = DiskImgBaker::new().await?;
     disk.write_bootsector(&artifacts.bootsector).await?;

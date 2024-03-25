@@ -122,11 +122,6 @@ pub async fn build_project() -> Result<Artifacts> {
     )
     .await?;
 
-    println!(
-        "B={:?}, 16={:?}, k={:?}",
-        stage_bootsector, stage_16bit, kernel
-    );
-
     let (bootsector, stage_16) = future::try_join(
         convert_bin(&stage_bootsector, ArchSelect::I386),
         convert_bin(&stage_16bit, ArchSelect::I386),
