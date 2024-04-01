@@ -1,12 +1,7 @@
 #![no_std]
 #![no_main]
 
-use crate::{
-    disk::BiosDisk,
-    fatfs::Fat,
-    io::{Read, Seek},
-    mbr::Mbr,
-};
+use crate::{disk::BiosDisk, fatfs::Fat, mbr::Mbr};
 use unreal::enter_unreal;
 
 mod console;
@@ -29,9 +24,10 @@ extern "C" fn entry(disk_id: u16) {
 
 fn main(disk_id: u16) {
     bios_println!("Qauntum Loader");
-    let mut disk = BiosDisk::new(disk_id);
+    let disk = BiosDisk::new(disk_id);
     let mbr = Mbr::new(disk).unwrap();
     let partition = mbr.partition(1).unwrap();
+
     let fat = Fat::new(partition).unwrap();
 
     bios_println!("{:#?}", fat);

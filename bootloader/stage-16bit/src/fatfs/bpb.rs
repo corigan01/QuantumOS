@@ -1,4 +1,4 @@
-use super::{FatKind, ReadSeek, Sector};
+use super::{ClusterId, FatKind, ReadSeek, Sector};
 use core::ops::RangeInclusive;
 
 #[repr(C, packed)]
@@ -145,6 +145,13 @@ impl Bpb {
         match self.safe_extended() {
             ExtendedKind::Fat16(ext) => core::str::from_utf8(&ext.volume_label).unwrap(),
             ExtendedKind::Fat32(ext) => core::str::from_utf8(&ext.volume_label).unwrap(),
+        }
+    }
+
+    pub fn root_cluster(&self) -> ClusterId {
+        match self.safe_extended() {
+            ExtendedKind::Fat16(_) => 2,
+            ExtendedKind::Fat32(ext) => ext.root_cluster as ClusterId,
         }
     }
 }

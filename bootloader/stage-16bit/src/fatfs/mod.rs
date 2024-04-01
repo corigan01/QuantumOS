@@ -3,6 +3,7 @@ use core::fmt::Debug;
 use self::bpb::Bpb;
 use crate::io::{Read, Seek};
 
+mod inode;
 mod bpb;
 
 #[derive(Debug)]
@@ -108,6 +109,8 @@ impl<Part: ReadSeek> Fat<Part> {
     }
 
     pub fn print_dir(&mut self, name: &str) {
+        let root_directory = 
+        
         todo!()
     }
 
