@@ -26,7 +26,6 @@ pub struct Fat<Part: ReadSeek> {
 }
 
 type ClusterId = u32;
-type Sector = u64;
 
 enum FatEntry {
     Free,

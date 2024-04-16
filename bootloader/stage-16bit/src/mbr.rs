@@ -1,7 +1,7 @@
 use crate::io::{Read, Seek};
-use core::{fmt::Debug, marker::PhantomData};
+use core::fmt::Debug;
 
-trait ReadSeekCopy: Read + Seek + Copy {}
+pub trait ReadSeekCopy: Read + Seek + Copy {}
 impl<T: Read + Seek + Copy> ReadSeekCopy for T {}
 
 pub struct Partition<Disk: ReadSeekCopy> {

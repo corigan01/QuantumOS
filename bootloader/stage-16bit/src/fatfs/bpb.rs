@@ -1,6 +1,6 @@
 use crate::bios_println;
 
-use super::{ClusterId, FatKind, ReadSeek, Sector};
+use super::{ClusterId, FatKind, ReadSeek};
 use core::ops::RangeInclusive;
 
 #[repr(C, packed)]
@@ -136,7 +136,7 @@ impl Bpb {
         }
     }
 
-    pub fn fat_range(&self) -> RangeInclusive<Sector> {
+    pub fn fat_range(&self) -> RangeInclusive<u64> {
         let fat_start = self.reserved_sectors as u64;
         let fat_end = fat_start + (self.fat_sectors() as u64);
 
