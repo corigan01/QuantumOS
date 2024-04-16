@@ -3,8 +3,8 @@ use core::fmt::Debug;
 use self::bpb::Bpb;
 use crate::io::{Read, Seek};
 
-mod inode;
 mod bpb;
+mod inode;
 
 #[derive(Debug)]
 pub enum FatKind {
@@ -109,8 +109,8 @@ impl<Part: ReadSeek> Fat<Part> {
     }
 
     pub fn print_dir(&mut self, name: &str) {
-        let root_directory = 
-        
+        let root_directory = self.bpb.root_cluster();
+
         todo!()
     }
 
