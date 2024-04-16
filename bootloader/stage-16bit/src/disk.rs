@@ -28,6 +28,7 @@ impl BiosDisk {
 
 impl Seek for BiosDisk {
     fn seek(&mut self, pos: u64) -> u64 {
+        bios_println!("Disk Seek: {:x}", pos);
         self.seek = pos;
 
         pos
@@ -51,7 +52,6 @@ impl Read for BiosDisk {
         // Not aligned start
         let non_alignment_start = reading_start % 512;
         if non_alignment_start != 0 {
-            bios_println!("Non alignment start: {}", non_alignment_start);
             disk::raw_read(self.id, starting_sector, 1, unsafe {
                 TEMP_BUFFER.as_mut_ptr()
             })
@@ -73,7 +73,6 @@ impl Read for BiosDisk {
         // not aligned end
         let non_alignment_end = reading_end & 0x1FF;
         if non_alignment_end != 0 && ending_sector > starting_sector {
-            bios_println!("Non alignment end: {}", non_alignment_end);
             disk::raw_read(self.id, ending_sector + 1, 1, unsafe {
                 TEMP_BUFFER.as_mut_ptr().add(non_alignment_end as usize)
             })
@@ -105,7 +104,6 @@ impl Read for BiosDisk {
         while starting_sector < ending_sector {
             let sectors_to_read =
                 ((ending_sector - starting_sector) as usize).min(MAX_SECTORS_PER_READ);
-            bios_println!("Reading sector: {}:{}", starting_sector, sectors_to_read);
             disk::raw_read(self.id, starting_sector, sectors_to_read, buf_ptr).unwrap();
 
             starting_sector += sectors_to_read as u64;

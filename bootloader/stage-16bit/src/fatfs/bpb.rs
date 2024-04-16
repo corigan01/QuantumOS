@@ -1,3 +1,5 @@
+use crate::bios_println;
+
 use super::{ClusterId, FatKind, ReadSeek, Sector};
 use core::ops::RangeInclusive;
 
@@ -150,7 +152,7 @@ impl Bpb {
 
     pub fn root_cluster(&self) -> ClusterId {
         match self.safe_extended() {
-            ExtendedKind::Fat16(_) => 2,
+            ExtendedKind::Fat16(_) => 0,
             ExtendedKind::Fat32(ext) => ext.root_cluster as ClusterId,
         }
     }
