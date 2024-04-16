@@ -1,13 +1,14 @@
 use core::mem::size_of;
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum Inode {
     Dir(DirectoryEntry),
     File(DirectoryEntry),
     LongFileName(LongFileName),
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
+#[repr(C, packed)]
 pub struct DirectoryEntry {
     name: [u8; 11],
     attributes: u8,
@@ -23,7 +24,8 @@ pub struct DirectoryEntry {
     file_size: u32,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
+#[repr(C, packed)]
 pub struct LongFileName {
     ordering: u8,
     wchar_low: [u16; 5],
@@ -35,48 +37,67 @@ pub struct LongFileName {
     wchar_high: [u16; 2],
 }
 
-impl LongFileName {
-    pub fn as_iter<'a>(&'a self) -> LongFileNameIter<'a> {
-        LongFileNameIter {
-            long_filename: self,
+impl Inode {
+    pub fn as_iter<'a>(&'a self) -> NameIter<'a> {
+        NameIter {
+            entry: self,
             index: 0,
         }
     }
 }
 
-pub struct LongFileNameIter<'a> {
-    long_filename: &'a LongFileName,
+pub struct NameIter<'a> {
+    entry: &'a Inode,
     index: usize,
 }
 
-impl<'a> Iterator for LongFileNameIter<'a> {
+impl<'a> Iterator for NameIter<'a> {
     type Item = char;
 
     fn next(&mut self) -> Option<Self::Item> {
-        match self.index {
-            0..=4 => Some(self.long_filename.wchar_low[self.index as usize] as u8 as char),
-            5..=10 => Some(self.long_filename.wchar_mid[self.index as usize - 5] as u8 as char),
-            11..=12 => Some(self.long_filename.wchar_high[self.index as usize - 11] as u8 as char),
+        let return_value = match self.entry {
+            Inode::LongFileName(long_name) if (0..=4).contains(&self.index) => {
+                Some(long_name.wchar_low[self.index as usize] as u8 as char)
+            }
+            Inode::LongFileName(long_name) if (5..=10).contains(&self.index) => {
+                Some(long_name.wchar_mid[self.index as usize - 5] as u8 as char)
+            }
+            Inode::LongFileName(long_name) if (11..=12).contains(&self.index) => {
+                Some(long_name.wchar_high[self.index as usize - 11] as u8 as char)
+            }
+            Inode::Dir(dir) if (0..=10).contains(&self.index) => Some(dir.name[self.index] as char),
+            Inode::File(file) if (0..=10).contains(&self.index) => {
+                Some(file.name[self.index] as char)
+            }
             _ => None,
-        }
+        };
+
+        self.index += 1;
+
+        return_value
     }
 }
 
-impl<Array> From<Array> for Inode
-where
-    Array: AsRef<[u8]>,
-{
-    fn from(value: Array) -> Self {
+impl<'a> TryFrom<&'a [u8]> for Inode {
+    type Error = &'static str;
+    fn try_from(value: &'a [u8]) -> Result<Inode, Self::Error> {
         let value = value.as_ref();
         assert!(
-            value.len() >= size_of::<Self>(),
-            "Byte stream for Inode cannot be less than Inode's size!"
+            value.len() >= size_of::<DirectoryEntry>(),
+            "Byte stream for Inode cannot be less than Inode's size! buf.len() = {}, while size_of::<DirectoryEntry> = {}", value.len(), size_of::<DirectoryEntry>()
         );
 
         match value[1] {
-            e if e & 0x10 != 0 => Inode::Dir(unsafe { *value.as_ptr().cast::<DirectoryEntry>() }),
-            0x0F => Inode::LongFileName(unsafe { *value.as_ptr().cast::<LongFileName>() }),
-            _ => Inode::File(unsafe { *value.as_ptr().cast::<DirectoryEntry>() }),
+            0 => Err("Empty Entry"),
+            e if e & 0x10 != 0 => Ok(Inode::Dir(unsafe {
+                *value.as_ptr().cast::<DirectoryEntry>()
+            })),
+            0x0F => Ok(Inode::LongFileName(unsafe {
+                *value.as_ptr().cast::<LongFileName>()
+            })),
+            _ => Ok(Inode::File(unsafe {
+                *value.as_ptr().cast::<DirectoryEntry>()
+            })),
         }
     }
 }

@@ -109,7 +109,7 @@ impl DiskImgBaker {
             &mut fat_slice,
             fatfs::FormatVolumeOptions::new()
                 .bytes_per_sector(512)
-                .bytes_per_cluster(4096)
+                .bytes_per_cluster(512 * 2)
                 .total_sectors(fs_sectors)
                 .fats(2)
                 .drive_num(0x80)

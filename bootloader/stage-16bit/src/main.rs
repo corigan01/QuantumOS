@@ -28,7 +28,8 @@ fn main(disk_id: u16) {
     let mbr = Mbr::new(disk).unwrap();
     let partition = mbr.partition(1).unwrap();
 
-    let fat = Fat::new(partition).unwrap();
+    let mut fat = Fat::new(partition).unwrap();
+    fat.print_dir("/");
 
     bios_println!("{:#?}", fat);
 }

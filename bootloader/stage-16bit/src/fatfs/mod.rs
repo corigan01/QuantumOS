@@ -1,7 +1,11 @@
-use core::fmt::Debug;
+use core::{fmt::Debug, mem::size_of};
 
 use self::bpb::Bpb;
-use crate::io::{Read, Seek};
+use crate::{
+    bios_print, bios_println,
+    fatfs::inode::{DirectoryEntry, Inode},
+    io::{Read, Seek},
+};
 
 mod bpb;
 mod inode;
@@ -108,10 +112,42 @@ impl<Part: ReadSeek> Fat<Part> {
         self.bpb.volume_label()
     }
 
-    pub fn print_dir(&mut self, name: &str) {
-        let root_directory = self.bpb.root_cluster();
+    pub fn print_dir(&mut self, _name: &str) {
+        assert_eq!(
+            self.bpb.cluster_sectors(),
+            2,
+            "TODO: Expecting cluster size to be 2 sectors"
+        );
+        let root_cluster = self.bpb.root_cluster();
+        let mut root_data = [0u8; 1024];
 
-        todo!()
+        self.disk.seek(self.bpb.cluster_physical_loc(root_cluster));
+        self.disk.read(&mut root_data);
+
+        for file_entry in root_data
+            .chunks(size_of::<DirectoryEntry>())
+            .map(|slice| slice.try_into())
+            .filter(|entry: &Result<Inode, _>| entry.is_ok())
+        {
+            bios_print!("Inode: ");
+
+            match file_entry.unwrap() {
+                Inode::LongFileName(_) => bios_print!("LongFileName"),
+                Inode::Dir(_) => bios_print!("Dir"),
+                Inode::File(_) => bios_print!("File"),
+            }
+
+            bios_print!(" ");
+
+            file_entry
+                .unwrap()
+                .as_iter()
+                // .for_each(|c| bios_print!("{:02x}", c as u8));
+                .for_each(|c| bios_print!("{}", c));
+            bios_println!();
+        }
+
+        todo!("Finish printing dir")
     }
 
     pub fn read(&mut self, name: &str, buf: &mut [u8]) -> Result<usize, &'static str> {
