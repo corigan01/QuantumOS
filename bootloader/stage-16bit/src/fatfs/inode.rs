@@ -87,8 +87,9 @@ impl<'a> TryFrom<&'a [u8]> for Inode {
             "Byte stream for Inode cannot be less than Inode's size! buf.len() = {}, while size_of::<DirectoryEntry> = {}", value.len(), size_of::<DirectoryEntry>()
         );
 
-        match value[1] {
+        match value[11] {
             0 => Err("Empty Entry"),
+            0x08 => Err("Volume Label is not an inode"),
             e if e & 0x10 != 0 => Ok(Inode::Dir(unsafe {
                 *value.as_ptr().cast::<DirectoryEntry>()
             })),
