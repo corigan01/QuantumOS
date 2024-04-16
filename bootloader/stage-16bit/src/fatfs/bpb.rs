@@ -154,4 +154,16 @@ impl Bpb {
             ExtendedKind::Fat32(ext) => ext.root_cluster as ClusterId,
         }
     }
+
+    pub fn cluster_physical_loc(&self, cluster: ClusterId) -> u64 {
+        let first_data_cluster =
+            self.reserved_sectors as u64 + self.fat_sectors() as u64 + self.root_sectors() as u64;
+        let cluster_size = self.sectors_per_cluster as u64;
+
+        first_data_cluster + (cluster as u64 * cluster_size)
+    }
+
+    pub fn cluster_sectors(&self) -> usize {
+        self.sectors_per_cluster as usize
+    }
 }
