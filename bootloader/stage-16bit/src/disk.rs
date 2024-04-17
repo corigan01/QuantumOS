@@ -1,10 +1,7 @@
 use bios::disk;
 use core::ptr;
 
-use crate::{
-    bios_println,
-    io::{Read, Seek},
-};
+use crate::io::{Read, Seek};
 
 const MAX_SECTORS_PER_READ: usize = 32;
 
@@ -28,9 +25,7 @@ impl BiosDisk {
 
 impl Seek for BiosDisk {
     fn seek(&mut self, pos: u64) -> u64 {
-        bios_println!("Disk Seek: {:x}", pos);
         self.seek = pos;
-
         pos
     }
 

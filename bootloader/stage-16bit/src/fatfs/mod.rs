@@ -175,8 +175,6 @@ impl<Part: ReadSeek> Fat<Part> {
 
             for inode in data
                 .chunks(size_of::<DirectoryEntry>())
-                .filter(|array| array != &[0; 32])
-                .inspect(|array| bios_println!("{:02X}", array[10]))
                 .map(|slice| slice.try_into())
                 .filter_map(|entry: Result<Inode, _>| entry.ok())
             {
@@ -192,7 +190,6 @@ impl<Part: ReadSeek> Fat<Part> {
                             .then(|| lfn_count)
                             .unwrap_or(lfn.ordering);
                         let offset = (ordering_number * 13) as usize;
-                        bios_print!(".");
 
                         lfn_count += 1;
                         filename_str[offset..(offset + 13)]

@@ -160,7 +160,6 @@ impl Bpb {
     pub fn cluster_physical_loc(&self, cluster: ClusterId) -> u64 {
         let common =
             self.reserved_sectors as u64 + (self.fat_sectors() as u64 * self.number_fats as u64);
-        bios_println!("ClusterID: {}", cluster);
         if cluster == 0 {
             return common * (self.bytes_per_sector as u64);
         }
