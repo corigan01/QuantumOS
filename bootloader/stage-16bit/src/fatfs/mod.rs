@@ -3,7 +3,7 @@ use core::{fmt::Debug, mem::size_of};
 use self::bpb::Bpb;
 use crate::{
     bios_print, bios_println,
-    fatfs::inode::{DirectoryEntry, Inode, LongFileName},
+    fatfs::inode::{DirectoryEntry, Inode},
     io::{Read, Seek},
 };
 
