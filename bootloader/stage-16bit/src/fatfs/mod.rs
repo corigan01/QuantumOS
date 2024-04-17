@@ -184,11 +184,7 @@ impl<Part: ReadSeek> Fat<Part> {
 
                 match inode {
                     Inode::LongFileName(lfn) => {
-                        let ordering_number = lfn
-                            .ordering
-                            .ge(&0x40)
-                            .then(|| lfn_count)
-                            .unwrap_or(lfn.ordering);
+                        let ordering_number = (lfn.ordering - 1) & (u8::MAX ^ 0x40);
                         let offset = (ordering_number * 13) as usize;
 
                         lfn_count += 1;
