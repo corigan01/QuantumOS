@@ -161,14 +161,14 @@ impl Bpb {
         let common =
             self.reserved_sectors as u64 + (self.fat_sectors() as u64 * self.number_fats as u64);
         bios_println!("ClusterID: {}", cluster);
-        let first_data_sector = if cluster == 0 {
-            common
-        } else {
-            common + self.root_sectors() as u64
-        };
+        if cluster == 0 {
+            return common * (self.bytes_per_sector as u64);
+        }
 
+        let first_data_sector = common + self.root_sectors() as u64;
         let cluster_sectors = self.sectors_per_cluster as u64;
-        (first_data_sector + (cluster as u64 * cluster_sectors)) * (self.bytes_per_sector as u64)
+        (first_data_sector + ((cluster - 2) as u64 * cluster_sectors))
+            * (self.bytes_per_sector as u64)
     }
 
     pub fn cluster_sectors(&self) -> usize {

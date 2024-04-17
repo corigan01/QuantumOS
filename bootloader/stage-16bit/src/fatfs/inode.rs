@@ -1,5 +1,7 @@
 use core::mem::size_of;
 
+use super::ClusterId;
+
 #[derive(Clone, Copy, Debug)]
 pub enum Inode {
     Dir(DirectoryEntry),
@@ -10,7 +12,7 @@ pub enum Inode {
 #[derive(Clone, Copy, Debug)]
 #[repr(C, packed)]
 pub struct DirectoryEntry {
-    name: [u8; 11],
+    pub(super) name: [u8; 11],
     attributes: u8,
     reserved: u8,
     time_tenth: u8,
@@ -27,18 +29,18 @@ pub struct DirectoryEntry {
 #[derive(Clone, Copy, Debug)]
 #[repr(C, packed)]
 pub struct LongFileName {
-    ordering: u8,
-    wchar_low: [u16; 5],
-    attributes: u8,
-    kind: u8,
-    checksum: u8,
-    wchar_mid: [u16; 6],
-    reserved: u16,
-    wchar_high: [u16; 2],
+    pub(super) ordering: u8,
+    pub(super) wchar_low: [u16; 5],
+    pub(super) attributes: u8,
+    pub(super) kind: u8,
+    pub(super) checksum: u8,
+    pub(super) wchar_mid: [u16; 6],
+    pub(super) reserved: u16,
+    pub(super) wchar_high: [u16; 2],
 }
 
 impl Inode {
-    pub fn as_iter<'a>(&'a self) -> NameIter<'a> {
+    pub fn name_iter<'a>(&'a self) -> NameIter<'a> {
         NameIter {
             entry: self,
             index: 0,
@@ -87,9 +89,11 @@ impl<'a> TryFrom<&'a [u8]> for Inode {
             "Byte stream for Inode cannot be less than Inode's size! buf.len() = {}, while size_of::<DirectoryEntry> = {}", value.len(), size_of::<DirectoryEntry>()
         );
 
+        if value.iter().all(|&item| item == 0) {
+            return Err("Null Entry");
+        }
+
         match value[11] {
-            0 => Err("Empty Entry"),
-            0x08 => Err("Volume Label is not an inode"),
             e if e & 0x10 != 0 => Ok(Inode::Dir(unsafe {
                 *value.as_ptr().cast::<DirectoryEntry>()
             })),
@@ -100,5 +104,11 @@ impl<'a> TryFrom<&'a [u8]> for Inode {
                 *value.as_ptr().cast::<DirectoryEntry>()
             })),
         }
+    }
+}
+
+impl DirectoryEntry {
+    pub fn cluster_id(&self) -> ClusterId {
+        self.cluster_low as u32 | ((self.cluster_high as u32) << 16)
     }
 }

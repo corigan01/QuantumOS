@@ -3,7 +3,7 @@ use core::{fmt::Debug, mem::size_of};
 use self::bpb::Bpb;
 use crate::{
     bios_print, bios_println,
-    fatfs::inode::{DirectoryEntry, Inode},
+    fatfs::inode::{DirectoryEntry, Inode, LongFileName},
     io::{Read, Seek},
 };
 
@@ -140,7 +140,7 @@ impl<Part: ReadSeek> Fat<Part> {
 
             file_entry
                 .unwrap()
-                .as_iter()
+                .name_iter()
                 // .for_each(|c| bios_print!("{:02x}", c as u8));
                 .for_each(|c| bios_print!("{}", c));
             bios_println!();
@@ -149,8 +149,111 @@ impl<Part: ReadSeek> Fat<Part> {
         todo!("Finish printing dir")
     }
 
-    pub fn read(&mut self, name: &str, buf: &mut [u8]) -> Result<usize, &'static str> {
-        todo!()
+    pub fn cluster_of(&mut self, name: &str) -> Result<ClusterId, &'static str> {
+        assert_eq!(
+            self.bpb.cluster_sectors(),
+            2,
+            "TODO: Expecting cluster size to be 2 sectors"
+        );
+
+        let mut path = name.split('/').filter(|str| !str.is_empty()).peekable();
+        let mut inode_cluster = self.bpb.root_cluster();
+        let mut data = [0u8; 1024];
+
+        'outer: loop {
+            let Some(path_part) = path.next() else {
+                todo!("path_part is somehow none");
+            };
+
+            // Max string size for FAT is 256-chars
+            let mut filename_str = [0u8; 256];
+            let mut filename_len = 0;
+            let mut lfn_count = 0;
+
+            self.disk.seek(self.bpb.cluster_physical_loc(inode_cluster));
+            self.disk.read(&mut data);
+
+            for inode in data
+                .chunks(size_of::<DirectoryEntry>())
+                .filter(|array| array != &[0; 32])
+                .inspect(|array| bios_println!("{:02X}", array[10]))
+                .map(|slice| slice.try_into())
+                .filter_map(|entry: Result<Inode, _>| entry.ok())
+            {
+                let filename = core::str::from_utf8(&filename_str[..filename_len])
+                    .unwrap_or("")
+                    .trim();
+
+                match inode {
+                    Inode::LongFileName(lfn) => {
+                        let ordering_number = lfn
+                            .ordering
+                            .ge(&0x40)
+                            .then(|| lfn_count)
+                            .unwrap_or(lfn.ordering);
+                        let offset = (ordering_number * 13) as usize;
+                        bios_print!(".");
+
+                        lfn_count += 1;
+                        filename_str[offset..(offset + 13)]
+                            .iter_mut()
+                            .zip(
+                                inode
+                                    .name_iter()
+                                    .filter(|lfn_c| lfn_c.is_ascii() && *lfn_c != '\0'),
+                            )
+                            .for_each(|(filename_c, inode_c)| {
+                                *filename_c = inode_c as u8;
+                                filename_len += 1;
+                            });
+                    }
+                    Inode::Dir(entry) => {
+                        bios_println!("DIR : name = '{}' key = '{}'", filename, path_part);
+                        if path_part.trim().eq_ignore_ascii_case(filename) {
+                            // more todo
+                            if path.peek().is_some() {
+                                inode_cluster = entry.cluster_id();
+                                continue 'outer;
+                            }
+
+                            return Ok(entry.cluster_id());
+                        }
+
+                        filename_str = [0u8; 256];
+                        filename_len = 0;
+                        lfn_count = 0;
+                        continue;
+                    }
+                    Inode::File(file) => {
+                        bios_println!(
+                            "FILE: name = '{}' -- {:?} key = '{}'",
+                            filename,
+                            core::str::from_utf8(&file.name),
+                            path_part
+                        );
+
+                        // Files cannot have other files after it in the path:
+                        // So, we must not be the one.
+                        if path.peek().is_some() {
+                            filename_str = [0u8; 256];
+                            filename_len = 0;
+                            lfn_count = 0;
+                            continue;
+                        }
+
+                        if path_part.trim().eq_ignore_ascii_case(filename) {
+                            return Ok(file.cluster_id());
+                        }
+
+                        filename_str = [0u8; 256];
+                        filename_len = 0;
+                        lfn_count = 0;
+                    }
+                }
+            }
+
+            return Err("Could not find file");
+        }
     }
 }
 

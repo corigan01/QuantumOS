@@ -29,7 +29,7 @@ fn main(disk_id: u16) {
     let partition = mbr.partition(1).unwrap();
 
     let mut fat = Fat::new(partition).unwrap();
-    fat.print_dir("/");
+    bios_println!("{:?}", fat.cluster_of("/bootloader/bootsector.bin"));
 
     bios_println!("{:#?}", fat);
 }
