@@ -111,44 +111,6 @@ impl<Part: ReadSeek> Fat<Part> {
         self.bpb.volume_label()
     }
 
-    pub fn print_dir(&mut self, _name: &str) {
-        assert_eq!(
-            self.bpb.cluster_sectors(),
-            2,
-            "TODO: Expecting cluster size to be 2 sectors"
-        );
-        let root_cluster = self.bpb.root_cluster();
-        let mut root_data = [0u8; 1024];
-
-        self.disk.seek(self.bpb.cluster_physical_loc(root_cluster));
-        self.disk.read(&mut root_data);
-
-        for file_entry in root_data
-            .chunks(size_of::<DirectoryEntry>())
-            .map(|slice| slice.try_into())
-            .filter(|entry: &Result<Inode, _>| entry.is_ok())
-        {
-            bios_print!("Inode: ");
-
-            match file_entry.unwrap() {
-                Inode::LongFileName(_) => bios_print!("LongFileName"),
-                Inode::Dir(_) => bios_print!("Dir"),
-                Inode::File(_) => bios_print!("File"),
-            }
-
-            bios_print!(" ");
-
-            file_entry
-                .unwrap()
-                .name_iter()
-                // .for_each(|c| bios_print!("{:02x}", c as u8));
-                .for_each(|c| bios_print!("{}", c));
-            bios_println!();
-        }
-
-        todo!("Finish printing dir")
-    }
-
     pub fn cluster_of(&mut self, name: &str) -> Result<ClusterId, &'static str> {
         assert_eq!(
             self.bpb.cluster_sectors(),
@@ -168,7 +130,6 @@ impl<Part: ReadSeek> Fat<Part> {
             // Max string size for FAT is 256-chars
             let mut filename_str = [0u8; 256];
             let mut filename_len = 0;
-            let mut lfn_count = 0;
 
             self.disk.seek(self.bpb.cluster_physical_loc(inode_cluster));
             self.disk.read(&mut data);
