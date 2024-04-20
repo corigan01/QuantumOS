@@ -148,7 +148,6 @@ impl<Part: ReadSeek> Fat<Part> {
                         let ordering_number = (lfn.ordering - 1) & (u8::MAX ^ 0x40);
                         let offset = (ordering_number * 13) as usize;
 
-                        lfn_count += 1;
                         filename_str[offset..(offset + 13)]
                             .iter_mut()
                             .zip(
@@ -175,7 +174,6 @@ impl<Part: ReadSeek> Fat<Part> {
 
                         filename_str = [0u8; 256];
                         filename_len = 0;
-                        lfn_count = 0;
                         continue;
                     }
                     Inode::File(file) => {
