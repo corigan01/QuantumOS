@@ -189,7 +189,6 @@ impl<Part: ReadSeek> Fat<Part> {
                         if path.peek().is_some() {
                             filename_str = [0u8; 256];
                             filename_len = 0;
-                            lfn_count = 0;
                             continue;
                         }
 
@@ -199,7 +198,6 @@ impl<Part: ReadSeek> Fat<Part> {
 
                         filename_str = [0u8; 256];
                         filename_len = 0;
-                        lfn_count = 0;
                     }
                 }
             }
