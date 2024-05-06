@@ -1,5 +1,3 @@
-use crate::bios_println;
-
 use super::{ClusterId, FatKind, ReadSeek};
 use core::ops::RangeInclusive;
 
