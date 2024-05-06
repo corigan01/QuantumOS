@@ -1,0 +1,23 @@
+on: push
+name: Clippy Kernel
+jobs:
+
+  clippy_check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v1
+      - name: Set Nightly
+        run: rustup override set nightly
+      - name: Add Rust SRC
+        run: rustup component add rust-src
+      - name: Add LLVM Tools Preview
+        run: rustup component add llvm-tools-preview
+      - uses: actions-rs/toolchain@v1
+        with:
+            toolchain: nightly
+            components: clippy
+            override: true
+      - uses: actions-rs/clippy-check@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          args: --all-features --manifest-path=kernel/Cargo.toml --target kernel/x86_64-quantum_os.json -Zbuild-std=core -Zbuild-std-features=compiler-builtins-mem
