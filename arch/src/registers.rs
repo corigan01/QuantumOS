@@ -75,7 +75,6 @@ pub mod eflags {
         flags
     }
 
-    #[inline(always)]
     pub fn carry() -> bool {
         read() & 1 != 0
     }
