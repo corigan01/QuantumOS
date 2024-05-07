@@ -124,7 +124,7 @@ impl<Part: ReadSeek> Fat<Part> {
 
         'outer: loop {
             let Some(path_part) = path.next() else {
-                todo!("path_part is somehow none");
+                unreachable!("path_part is somehow none");
             };
 
             // Max string size for FAT is 256-chars
