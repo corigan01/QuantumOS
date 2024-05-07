@@ -70,6 +70,13 @@ impl FatEntry {
     }
 }
 
+pub struct FatFile<'a, Part: ReadSeek> {
+    id: ClusterId,
+    fatfs: &'a mut Fat<Part>,
+}
+
+impl<'a, Part> FatFile<'a, Part> where Part: ReadSeek {}
+
 impl<Part: ReadSeek> Fat<Part> {
     pub fn new(mut disk: Part) -> Result<Self, &'static str> {
         let bpb = Bpb::new(&mut disk)?;
@@ -109,6 +116,10 @@ impl<Part: ReadSeek> Fat<Part> {
 
     pub fn volume_label<'a>(&'a self) -> &'a str {
         self.bpb.volume_label()
+    }
+
+    pub fn open<'a>(&'a mut self, name: &str) -> Result<FatFile<'a, Part>, &'static str> {
+        todo!()
     }
 
     pub fn cluster_of(&mut self, name: &str) -> Result<ClusterId, &'static str> {
