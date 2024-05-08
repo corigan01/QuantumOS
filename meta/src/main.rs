@@ -18,9 +18,11 @@ mod cmdline;
 mod disk;
 
 async fn build() -> Result<PathBuf> {
-    let artifacts = build_project().await.context("Failed to build artifacts")?;
+    let (artifacts, mut disk) = tokio::join!(build_project(), DiskImgBaker::new());
 
-    let mut disk = DiskImgBaker::new().await?;
+    let artifacts = artifacts.expect("Failed to build artifacts!");
+    let mut disk = disk?;
+
     disk.write_bootsector(&artifacts.bootsector).await?;
     disk.write_stage16(&artifacts.stage_16).await?;
 
