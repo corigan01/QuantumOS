@@ -118,8 +118,13 @@ impl<Part: ReadSeek> Fat<Part> {
         self.bpb.volume_label()
     }
 
-    pub fn read<'a>(&'a mut self, name: &str) -> Result<FatFile<'a, Part>, &'static str> {
-        todo!()
+    pub fn open<'a>(&'a mut self, name: &str) -> Result<FatFile<'a, Part>, &'static str> {
+        let start_cluster = self.cluster_of(name)?;
+
+        Ok(FatFile {
+            id: start_cluster,
+            fatfs: self,
+        })
     }
 
     pub fn cluster_of(&mut self, name: &str) -> Result<ClusterId, &'static str> {
