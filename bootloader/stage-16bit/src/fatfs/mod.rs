@@ -119,7 +119,7 @@ impl<Part: ReadSeek> Fat<Part> {
 
         let mut sector_array = [0u8; 512];
         self.disk.seek(entry_sector);
-        self.disk.read(&mut sector_array);
+        self.disk.read(&mut sector_array)?;
 
         Ok(match self.bpb.kind() {
             FatKind::Fat16 => unsafe {
@@ -173,7 +173,7 @@ impl<Part: ReadSeek> Fat<Part> {
             let mut filename_len = 0;
 
             self.disk.seek(self.bpb.cluster_physical_loc(inode_cluster));
-            self.disk.read(&mut data);
+            self.disk.read(&mut data)?;
 
             for inode in data
                 .chunks(size_of::<DirectoryEntry>())

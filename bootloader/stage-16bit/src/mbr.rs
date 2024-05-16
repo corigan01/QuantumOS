@@ -1,3 +1,4 @@
+use crate::error::{BootloaderError, Result};
 use crate::io::{Read, Seek};
 use core::fmt::Debug;
 
@@ -35,10 +36,10 @@ pub struct Mbr<Disk: ReadSeekCopy> {
 }
 
 impl<Disk: ReadSeekCopy> Mbr<Disk> {
-    pub fn new(mut disk: Disk) -> Result<Self, &'static str> {
+    pub fn new(mut disk: Disk) -> Result<Self> {
         let mut sector_buffer = [0u8; 512];
         disk.seek(440);
-        disk.read(&mut sector_buffer);
+        disk.read(&mut sector_buffer)?;
 
         let mut mbr: Self = unsafe { *sector_buffer.as_ptr().cast() };
 
@@ -47,7 +48,7 @@ impl<Disk: ReadSeekCopy> Mbr<Disk> {
         mbr.disk = disk;
 
         if mbr.signature != 0xaa55 {
-            return Err("Not valid MBR Signature");
+            return Err(BootloaderError::InvalidInput);
         }
 
         Ok(mbr)
@@ -72,7 +73,7 @@ impl<Disk: ReadSeekCopy> Mbr<Disk> {
 }
 
 impl<Disk: ReadSeekCopy> Read for Partition<Disk> {
-    fn read(&mut self, buf: &mut [u8]) -> Result<usize, crate::error::BootloaderError> {
+    fn read(&mut self, buf: &mut [u8]) -> Result<usize> {
         let seek_offset = self.seek + (self.lba_start as u64 * 512);
         self.disk.seek(seek_offset);
 

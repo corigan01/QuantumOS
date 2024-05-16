@@ -72,7 +72,7 @@ impl Bpb {
         let mut sector_buffer = [0u8; 512];
 
         disk.seek(0);
-        disk.read(&mut sector_buffer);
+        disk.read(&mut sector_buffer)?;
 
         let bpb: Self = unsafe { *sector_buffer.as_ptr().cast() };
 
