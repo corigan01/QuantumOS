@@ -1,6 +1,7 @@
 use bios::disk;
 use core::ptr;
 
+use crate::error::Result;
 use crate::io::{Read, Seek};
 
 const MAX_SECTORS_PER_READ: usize = 32;
@@ -35,7 +36,7 @@ impl Seek for BiosDisk {
 }
 
 impl Read for BiosDisk {
-    fn read(&mut self, buf: &mut [u8]) {
+    fn read(&mut self, buf: &mut [u8]) -> Result<usize> {
         let mut reading_start = self.seek;
         let mut reading_end = reading_start + (buf.len() as u64);
 
@@ -104,5 +105,8 @@ impl Read for BiosDisk {
             starting_sector += sectors_to_read as u64;
             buf_ptr = unsafe { buf_ptr.add(sectors_to_read as usize * 512) };
         }
+
+        // FIXME: Use real bytes read to use here
+        Ok(0)
     }
 }

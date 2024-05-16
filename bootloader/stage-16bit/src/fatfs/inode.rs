@@ -1,5 +1,7 @@
 use core::mem::size_of;
 
+use crate::error::BootloaderError;
+
 use super::ClusterId;
 
 #[derive(Clone, Copy, Debug)]
@@ -81,7 +83,7 @@ impl<'a> Iterator for NameIter<'a> {
 }
 
 impl<'a> TryFrom<&'a [u8]> for Inode {
-    type Error = &'static str;
+    type Error = BootloaderError;
     fn try_from(value: &'a [u8]) -> Result<Inode, Self::Error> {
         let value = value.as_ref();
         assert!(
@@ -90,7 +92,7 @@ impl<'a> TryFrom<&'a [u8]> for Inode {
         );
 
         if value.iter().all(|&item| item == 0) {
-            return Err("Null Entry");
+            return Err(BootloaderError::NotFound);
         }
 
         match value[11] {

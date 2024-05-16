@@ -72,7 +72,7 @@ impl<Disk: ReadSeekCopy> Mbr<Disk> {
 }
 
 impl<Disk: ReadSeekCopy> Read for Partition<Disk> {
-    fn read(&mut self, buf: &mut [u8]) {
+    fn read(&mut self, buf: &mut [u8]) -> Result<usize, crate::error::BootloaderError> {
         let seek_offset = self.seek + (self.lba_start as u64 * 512);
         self.disk.seek(seek_offset);
 

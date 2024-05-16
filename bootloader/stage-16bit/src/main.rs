@@ -6,6 +6,7 @@ use unreal::enter_unreal;
 
 mod console;
 mod disk;
+mod error;
 mod fatfs;
 mod io;
 mod mbr;

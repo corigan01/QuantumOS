@@ -1,4 +1,5 @@
 use super::{ClusterId, FatKind, ReadSeek};
+use crate::error::{BootloaderError, Result};
 use core::ops::RangeInclusive;
 
 #[repr(C, packed)]
@@ -67,7 +68,7 @@ impl Bpb {
     const FAT12_CLUSTERS: usize = 4085;
     const FAT16_CLUSTERS: usize = 65525;
 
-    pub(crate) fn new<Disk: ReadSeek>(disk: &mut Disk) -> Result<Self, &'static str> {
+    pub(crate) fn new<Disk: ReadSeek>(disk: &mut Disk) -> Result<Self> {
         let mut sector_buffer = [0u8; 512];
 
         disk.seek(0);
@@ -77,7 +78,7 @@ impl Bpb {
 
         // TODO: Add more checks for BPB to ensure that it is valid before returning it
         if bpb.bytes_per_sector == 0 || bpb.sectors_per_cluster == 0 {
-            return Err("Not valid BPB structure on disk");
+            return Err(BootloaderError::InvalidInput);
         }
 
         Ok(bpb)

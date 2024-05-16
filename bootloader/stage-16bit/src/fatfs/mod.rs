@@ -1,3 +1,4 @@
+use crate::error::Result;
 use core::{fmt::Debug, mem::size_of};
 
 use self::bpb::Bpb;
@@ -71,26 +72,49 @@ impl FatEntry {
 }
 
 pub struct FatFile<'a, Part: ReadSeek> {
-    id: ClusterId,
+    start_cluster: ClusterId,
     fatfs: &'a mut Fat<Part>,
+    seek: u64,
 }
 
 impl<'a, Part> FatFile<'a, Part> where Part: ReadSeek {}
+impl<'a, Part> Seek for FatFile<'a, Part>
+where
+    Part: ReadSeek,
+{
+    fn seek(&mut self, pos: u64) -> u64 {
+        self.seek = pos;
+        self.seek
+    }
+
+    fn stream_position(&mut self) -> u64 {
+        self.seek
+    }
+}
+
+impl<'a, Part> Read for FatFile<'a, Part>
+where
+    Part: ReadSeek,
+{
+    fn read(&mut self, buf: &mut [u8]) -> Result<usize> {
+        todo!()
+    }
+}
 
 impl<Part: ReadSeek> Fat<Part> {
-    pub fn new(mut disk: Part) -> Result<Self, &'static str> {
+    pub fn new(mut disk: Part) -> Result<Self> {
         let bpb = Bpb::new(&mut disk)?;
 
         Ok(Self { disk, bpb })
     }
 
-    fn read_fat(&mut self, id: ClusterId) -> Result<FatEntry, &'static str> {
+    fn read_fat(&mut self, id: ClusterId) -> Result<FatEntry> {
         let fat_region = self.bpb.fat_range();
         let entry_sector = (*fat_region.start()) + (id as u64 / (self.bpb.sector_size() as u64));
         let entry_offset = id as usize % self.bpb.sector_size();
 
         if entry_sector > *fat_region.end() {
-            return Err("Out of range cluster");
+            return Err(crate::error::BootloaderError::InvalidInput);
         }
 
         let mut sector_array = [0u8; 512];
@@ -118,16 +142,17 @@ impl<Part: ReadSeek> Fat<Part> {
         self.bpb.volume_label()
     }
 
-    pub fn open<'a>(&'a mut self, name: &str) -> Result<FatFile<'a, Part>, &'static str> {
+    pub fn open<'a>(&'a mut self, name: &str) -> Result<FatFile<'a, Part>> {
         let start_cluster = self.cluster_of(name)?;
 
         Ok(FatFile {
-            id: start_cluster,
+            start_cluster,
             fatfs: self,
+            seek: 0,
         })
     }
 
-    pub fn cluster_of(&mut self, name: &str) -> Result<ClusterId, &'static str> {
+    pub fn cluster_of(&mut self, name: &str) -> Result<ClusterId> {
         assert_eq!(
             self.bpb.cluster_sectors(),
             2,
@@ -153,7 +178,7 @@ impl<Part: ReadSeek> Fat<Part> {
             for inode in data
                 .chunks(size_of::<DirectoryEntry>())
                 .map(|slice| slice.try_into())
-                .filter_map(|entry: Result<Inode, _>| entry.ok())
+                .filter_map(|entry: Result<Inode>| entry.ok())
             {
                 let filename = core::str::from_utf8(&filename_str[..filename_len])
                     .unwrap_or("")
@@ -218,7 +243,7 @@ impl<Part: ReadSeek> Fat<Part> {
                 }
             }
 
-            return Err("Could not find file");
+            return Err(crate::error::BootloaderError::NotFound);
         }
     }
 }
