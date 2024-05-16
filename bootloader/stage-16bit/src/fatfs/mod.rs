@@ -118,7 +118,7 @@ impl<Part: ReadSeek> Fat<Part> {
         self.bpb.volume_label()
     }
 
-    pub fn open<'a>(&'a mut self, name: &str) -> Result<FatFile<'a, Part>, &'static str> {
+    pub fn read<'a>(&'a mut self, name: &str) -> Result<FatFile<'a, Part>, &'static str> {
         todo!()
     }
 
