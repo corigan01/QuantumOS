@@ -18,7 +18,7 @@ mod cmdline;
 mod disk;
 
 async fn build() -> Result<PathBuf> {
-    let (artifacts, mut disk) = tokio::join!(build_project(), DiskImgBaker::new());
+    let (artifacts, disk) = tokio::join!(build_project(), DiskImgBaker::new());
 
     let artifacts = artifacts.expect("Failed to build artifacts!");
     let mut disk = disk?;
