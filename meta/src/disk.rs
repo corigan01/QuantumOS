@@ -14,17 +14,23 @@ fn tmp_find_target() -> PathBuf {
     PathBuf::from("./target/").canonicalize().unwrap()
 }
 
+/// # Disk Image Baker
+/// A builder for the disk image and `bootloader` configuration. Used to
+/// build correct and working `bootable` disk images using paths to
+/// artifacts (build products).
 pub struct DiskImgBaker {
     root_img: File,
     mbr: MBR,
 }
 
 impl DiskImgBaker {
+    /// # New
+    /// Create a new bootloader configuration builder.
     pub async fn new() -> Result<Self> {
         let root_img = create_diskimg("disk", DISK_IMG_SIZE).await?;
 
-        // FIXME: This surely is not okay?
         let mbr = MBR::new_from(
+            // FIXME: This surely is not okay?
             &mut root_img.try_clone().await?.into_std().await,
             512,
             [b'Q', b'-', b'O', b'S'],

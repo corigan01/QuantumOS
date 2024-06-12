@@ -86,6 +86,7 @@ impl Read for BiosDisk {
             reading_end -= non_alignment_end;
         }
 
+        // Aligned buffer
         assert!(
             reading_start % 512 == 0,
             "Reading Start should be aligned: {}",

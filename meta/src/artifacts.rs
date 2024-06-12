@@ -16,8 +16,11 @@ pub struct Artifacts {
 
 #[allow(unused)]
 enum ArchSelect {
+    /// # Intel 368 (16bit mode)
     I386,
+    /// # Intel 686 (32bit mode)
     I686,
+    /// # Intel IA-32A (64bit mode)
     X64,
 }
 
