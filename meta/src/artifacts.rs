@@ -66,7 +66,7 @@ async fn cargo_helper(profile: Option<&str>, package: &str, arch: ArchSelect) ->
             compile_mode,
             "--target",
             arch.to_string().as_str(),
-            "--out-dir",
+            "--artifact-dir",
             "./target/bin",
             "-Zbuild-std=core",
             "-Zbuild-std-features=compiler-builtins-mem",
