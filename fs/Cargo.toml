@@ -1,0 +1,13 @@
+[package]
+name = "fs"
+edition = "2021"
+version.workspace = true
+authors.workspace = true
+description.workspace = true
+documentation.workspace = true
+
+[features]
+default = ["fatfs"]
+fatfs = []
+
+[dependencies]
