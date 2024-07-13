@@ -4,6 +4,8 @@ use futures::future;
 use std::fmt::Display;
 use std::fs;
 use std::path::{Path, PathBuf};
+use tokio::fs::OpenOptions;
+use tokio::io::AsyncWriteExt;
 
 #[derive(Clone, Debug)]
 pub struct Artifacts {
@@ -12,6 +14,7 @@ pub struct Artifacts {
     // stage_32: PathBuf,
     // stage_64: PathBuf,
     pub kernel: PathBuf,
+    pub boot_cfg: PathBuf,
 }
 
 #[allow(unused)]
@@ -113,8 +116,23 @@ async fn convert_bin(path: &Path, arch: ArchSelect) -> Result<PathBuf> {
     Ok(bin_path)
 }
 
+async fn build_bootloader_config() -> Result<PathBuf> {
+    let target_location = PathBuf::from("./target/qconfig.cfg");
+
+    let mut file = OpenOptions::new()
+        .read(true)
+        .create(true)
+        .write(true)
+        .open(&target_location)
+        .await?;
+
+    file.write_all(br#"qboot-version=0.0.1"#).await?;
+
+    Ok(target_location)
+}
+
 pub async fn build_project() -> Result<Artifacts> {
-    let (stage_bootsector, stage_16bit, kernel) = future::try_join3(
+    let (stage_bootsector, stage_16bit, kernel, boot_cfg) = future::try_join4(
         cargo_helper(
             Some("stage-bootsector"),
             "stage-bootsector",
@@ -122,6 +140,7 @@ pub async fn build_project() -> Result<Artifacts> {
         ),
         cargo_helper(Some("stage-16bit"), "stage-16bit", ArchSelect::I386),
         cargo_helper(None, "kernel", ArchSelect::X64),
+        build_bootloader_config(),
     )
     .await?;
 
@@ -135,5 +154,6 @@ pub async fn build_project() -> Result<Artifacts> {
         bootsector,
         stage_16,
         kernel,
+        boot_cfg,
     })
 }

@@ -1,5 +1,5 @@
 [workspace]
-members = ["kernel", "meta", "bootloader", "bootloader/stage-bootsector", "bootloader/stage-16bit", "bios", "arch"]
+members = ["kernel", "meta", "bootloader", "bootloader/stage-bootsector", "bootloader/stage-16bit", "bios", "arch", "fs"]
 default-members = ["meta"]
 resolver = "2"
 

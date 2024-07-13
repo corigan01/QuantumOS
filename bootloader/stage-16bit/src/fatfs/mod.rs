@@ -1,4 +1,4 @@
-use crate::error::Result;
+use crate::error::{BootloaderError, Result};
 use core::{fmt::Debug, mem::size_of};
 
 use self::bpb::Bpb;
@@ -28,6 +28,7 @@ pub struct Fat<Part: ReadSeek> {
 
 type ClusterId = u32;
 
+#[derive(Debug, Clone, Copy)]
 enum FatEntry {
     Free,
     Next(ClusterId),
@@ -97,7 +98,46 @@ where
     Part: ReadSeek,
 {
     fn read(&mut self, buf: &mut [u8]) -> Result<usize> {
-        todo!()
+        let cluster_bytes =
+            (self.fatfs.bpb.cluster_sectors() * self.fatfs.bpb.sector_size()) as u64;
+        let mut bytes_read = 0;
+
+        loop {
+            let cluster_info = self
+                .fatfs
+                .cluster_of_offset(self.start_cluster, self.seek)?;
+
+            let disk_loc = self.fatfs.bpb.cluster_physical_loc(cluster_info.0) + cluster_info.1;
+
+            self.fatfs.disk.seek(disk_loc);
+            let bytes_until_cluster_end = cluster_bytes - cluster_info.1;
+            let bytes_until_read_end = bytes_until_cluster_end.min((buf.len() - bytes_read) as u64);
+
+            bios_println!(
+                "Reading file: cluster={} offset={} disk-loc=({},{}) cluster-end={}",
+                cluster_info.0,
+                cluster_info.1,
+                disk_loc as usize / self.fatfs.bpb.sector_size(),
+                disk_loc as usize % self.fatfs.bpb.sector_size(),
+                bytes_until_read_end
+            );
+
+            self.fatfs
+                .disk
+                .read(&mut buf[bytes_read..bytes_read + bytes_until_read_end as usize])?;
+
+            bytes_read += bytes_until_read_end as usize;
+            self.seek += bytes_until_read_end;
+
+            assert!(
+                bytes_read <= buf.len(),
+                "It should not be possible to read more bytes ({}) than the buffer has capacity for ({})!", bytes_read, buf.len()
+            );
+
+            if bytes_read == buf.len() {
+                return Ok(bytes_read);
+            }
+        }
     }
 }
 
@@ -136,6 +176,31 @@ impl<Part: ReadSeek> Fat<Part> {
             },
             FatKind::Fat12 => todo!("Support reading FAT12"),
         })
+    }
+
+    fn cluster_of_offset(
+        &mut self,
+        cluster_start: ClusterId,
+        offset: u64,
+    ) -> Result<(ClusterId, u64)> {
+        let mut search_cluster = cluster_start;
+        let mut total_offset = 0;
+        let cluster_size_bytes = (self.bpb.cluster_sectors() * self.bpb.sector_size()) as u64;
+
+        loop {
+            if offset - total_offset <= cluster_size_bytes {
+                return Ok((search_cluster, offset % cluster_size_bytes));
+            }
+
+            match self.read_fat(search_cluster)? {
+                FatEntry::Next(next) => {
+                    search_cluster = next;
+                    total_offset += cluster_size_bytes;
+                }
+                FatEntry::EOF => return Err(BootloaderError::EOF),
+                _ => return Err(BootloaderError::NotFound),
+            }
+        }
     }
 
     pub fn volume_label<'a>(&'a self) -> &'a str {

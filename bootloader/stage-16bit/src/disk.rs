@@ -1,6 +1,7 @@
 use bios::disk;
 use core::ptr;
 
+use crate::bios_println;
 use crate::error::Result;
 use crate::io::{Read, Seek};
 
@@ -69,6 +70,12 @@ impl Read for BiosDisk {
         // not aligned end
         let non_alignment_end = reading_end & 0x1FF;
         if non_alignment_end != 0 && ending_sector > starting_sector {
+            bios_println!(
+                "NotAlignedEnd: {} {}",
+                ending_sector + 1,
+                reading_end - non_alignment_end
+            );
+
             disk::raw_read(self.id, ending_sector + 1, 1, unsafe {
                 TEMP_BUFFER.as_mut_ptr().add(non_alignment_end as usize)
             })
@@ -101,6 +108,7 @@ impl Read for BiosDisk {
         while starting_sector < ending_sector {
             let sectors_to_read =
                 ((ending_sector - starting_sector) as usize).min(MAX_SECTORS_PER_READ);
+            bios_println!("RawRead: {} {}", starting_sector, sectors_to_read);
             disk::raw_read(self.id, starting_sector, sectors_to_read, buf_ptr).unwrap();
 
             starting_sector += sectors_to_read as u64;
