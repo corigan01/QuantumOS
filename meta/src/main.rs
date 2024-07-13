@@ -50,7 +50,7 @@ async fn build() -> Result<PathBuf> {
 
 fn run_qemu(disk_target_path: &Path) -> Result<()> {
     Command::new("qemu-system-x86_64")
-        .arg("--enable-kvm")
+        // .arg("--enable-kvm")
         .arg("-device")
         .arg("isa-debug-exit,iobase=0xf4,iosize=0x04")
         .arg("-d")
