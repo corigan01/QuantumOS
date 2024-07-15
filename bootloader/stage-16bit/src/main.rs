@@ -1,15 +1,16 @@
 #![no_std]
 #![no_main]
 
-use crate::{disk::BiosDisk, fatfs::Fat, mbr::Mbr};
-use io::{Read, Seek};
+use crate::{disk::BiosDisk, mbr::Mbr};
 use unreal::enter_unreal;
+
+use fs::fatfs::Fat;
+use fs::io::{Read, Seek, SeekFrom};
 
 mod console;
 mod disk;
 mod error;
-mod fatfs;
-mod io;
+// mod fatfs;
 mod mbr;
 mod panic;
 mod unreal;
@@ -34,7 +35,7 @@ fn main(disk_id: u16) {
     let mut fat_file = fat.open("/qconfig.cfg").unwrap();
 
     let mut buffer = [0u8; 32];
-    fat_file.seek(0);
+    fat_file.seek(SeekFrom::Start(1));
     fat_file.read(&mut buffer).unwrap();
 
     bios_print!(

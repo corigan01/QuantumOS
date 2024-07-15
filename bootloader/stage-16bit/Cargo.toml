@@ -8,3 +8,4 @@ documentation.workspace = true
 
 [dependencies]
 bios = { workspace = true }
+fs = { workspace = true, features = ["fatfs"]}

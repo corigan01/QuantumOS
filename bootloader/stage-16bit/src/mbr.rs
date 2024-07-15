@@ -1,6 +1,6 @@
-use crate::error::{BootloaderError, Result};
-use crate::io::{Read, Seek};
 use core::fmt::Debug;
+use fs::error::{FsError, Result};
+use fs::io::{Read, Seek, SeekFrom};
 
 pub trait ReadSeekCopy: Read + Seek + Copy {}
 impl<T: Read + Seek + Copy> ReadSeekCopy for T {}
@@ -38,7 +38,7 @@ pub struct Mbr<Disk: ReadSeekCopy> {
 impl<Disk: ReadSeekCopy> Mbr<Disk> {
     pub fn new(mut disk: Disk) -> Result<Self> {
         let mut sector_buffer = [0u8; 512];
-        disk.seek(440);
+        disk.seek(SeekFrom::Start(440));
         disk.read(&mut sector_buffer)?;
 
         let mut mbr: Self = unsafe { *sector_buffer.as_ptr().cast() };
@@ -48,7 +48,7 @@ impl<Disk: ReadSeekCopy> Mbr<Disk> {
         mbr.disk = disk;
 
         if mbr.signature != 0xaa55 {
-            return Err(BootloaderError::InvalidInput);
+            return Err(FsError::InvalidInput);
         }
 
         Ok(mbr)
@@ -75,16 +75,20 @@ impl<Disk: ReadSeekCopy> Mbr<Disk> {
 impl<Disk: ReadSeekCopy> Read for Partition<Disk> {
     fn read(&mut self, buf: &mut [u8]) -> Result<usize> {
         let seek_offset = self.seek + (self.lba_start as u64 * 512);
-        self.disk.seek(seek_offset);
+        self.disk.seek(SeekFrom::Start(seek_offset));
 
         self.disk.read(buf)
     }
 }
 
 impl<Disk: ReadSeekCopy> Seek for Partition<Disk> {
-    fn seek(&mut self, pos: u64) -> u64 {
-        self.seek = pos;
-        self.seek
+    fn seek(&mut self, pos: SeekFrom) -> Result<u64> {
+        match pos {
+            SeekFrom::Start(pos) => self.seek = pos,
+            _ => todo!("Seek is not fully implemented"),
+        }
+
+        Ok(self.seek)
     }
 
     fn stream_position(&mut self) -> u64 {

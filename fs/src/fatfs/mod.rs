@@ -1,14 +1,13 @@
+use self::bpb::Bpb;
 use crate::{
     error::{FsError, Result},
     io::SeekFrom,
 };
-use core::{fmt::Debug, mem::size_of};
-
-use self::bpb::Bpb;
 use crate::{
     fatfs::inode::{DirectoryEntry, Inode},
     io::{Read, Seek},
 };
+use core::{fmt::Debug, mem::size_of};
 
 mod bpb;
 mod inode;

@@ -2,8 +2,8 @@ use bios::disk;
 use core::ptr;
 
 use crate::bios_println;
-use crate::error::Result;
-use crate::io::{Read, Seek};
+use fs::error::Result;
+use fs::io::{Read, Seek, SeekFrom};
 
 const MAX_SECTORS_PER_READ: usize = 32;
 
@@ -26,9 +26,12 @@ impl BiosDisk {
 }
 
 impl Seek for BiosDisk {
-    fn seek(&mut self, pos: u64) -> u64 {
-        self.seek = pos;
-        pos
+    fn seek(&mut self, pos: SeekFrom) -> Result<u64> {
+        match pos {
+            SeekFrom::Start(pos) => self.seek = pos,
+            _ => todo!("Seek is not fully implemented"),
+        }
+        Ok(self.seek)
     }
 
     fn stream_position(&mut self) -> u64 {

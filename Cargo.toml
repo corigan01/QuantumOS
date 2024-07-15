@@ -12,6 +12,7 @@ documentation = "https://github.com/corigan01/QuantumOS"
 [workspace.dependencies]
 arch = { path = "arch" }
 bios = { path = "bios" }
+fs = { path = "fs" }
 
 [profile.release]
 panic = "abort"

@@ -1,3 +1,5 @@
+#![no_std]
+
 #[cfg(feature = "fatfs")]
 pub mod fatfs;
 
