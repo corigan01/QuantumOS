@@ -313,3 +313,11 @@ impl<Part: ReadSeek> Debug for Fat<Part> {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod test {
+    #[test]
+    fn test() {
+        assert!(true, "True Should Be True!");
+    }
+}
