@@ -31,6 +31,8 @@ pub fn read_smooth_from_block_device<Device: BlockDevice>(
 ) -> Result<usize> {
     let mut data_copied = 0;
 
+    // FIXME: We should try to read bytes into our 'data' buffer directly as much as possible
+    //        Instead of a copy from the 'read_block' method.
     loop {
         let block_index =
             ((offset_bytes + data_copied as u64) / Device::BLOCK_SIZE as u64) as usize;
