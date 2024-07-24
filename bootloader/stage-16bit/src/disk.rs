@@ -1,8 +1,8 @@
-use bios::disk;
-use core::ptr;
+use bios::disk::raw_read;
+use bios::BiosStatus;
+use fs::read_block::BlockDevice;
 
-use crate::bios_println;
-use fs::error::Result;
+use fs::error::{FsError, Result};
 use fs::io::{Read, Seek, SeekFrom};
 
 const MAX_SECTORS_PER_READ: usize = 32;
@@ -25,100 +25,50 @@ impl BiosDisk {
     }
 }
 
-impl Seek for BiosDisk {
-    fn seek(&mut self, pos: SeekFrom) -> Result<u64> {
-        match pos {
-            SeekFrom::Start(pos) => self.seek = pos,
-            _ => todo!("Seek is not fully implemented"),
-        }
-        Ok(self.seek)
-    }
+impl BlockDevice for BiosDisk {
+    const BLOCK_SIZE: usize = 512;
 
-    fn stream_position(&mut self) -> u64 {
-        self.seek
+    fn read_block<'a>(&'a mut self, block_offset: u64) -> Result<&'a [u8]> {
+        match raw_read(self.id, block_offset, 1, unsafe {
+            TEMP_BUFFER.as_mut_ptr()
+        }) {
+            BiosStatus::Success => Ok(unsafe { TEMP_BUFFER.as_slice() }),
+            BiosStatus::InvalidInput | BiosStatus::InvalidData => Err(FsError::InvalidInput),
+            BiosStatus::NotSupported => Err(FsError::NotSupported),
+            BiosStatus::Failed => Err(FsError::ReadError),
+        }
     }
 }
 
 impl Read for BiosDisk {
     fn read(&mut self, buf: &mut [u8]) -> Result<usize> {
-        let mut reading_start = self.seek;
-        let mut reading_end = reading_start + (buf.len() as u64);
+        fs::read_block::read_smooth_from_block_device(self, self.seek, buf)
+    }
+}
 
-        let mut starting_sector = reading_start / 512;
-        let ending_sector = reading_end / 512;
-
-        let mut buf_ptr = buf.as_mut_ptr();
-
-        // Not aligned start
-        let non_alignment_start = reading_start % 512;
-        if non_alignment_start != 0 {
-            disk::raw_read(self.id, starting_sector, 1, unsafe {
-                TEMP_BUFFER.as_mut_ptr()
-            })
-            .unwrap();
-
-            unsafe {
-                ptr::copy_nonoverlapping(
-                    TEMP_BUFFER.as_ptr().add(non_alignment_start as usize),
-                    buf.as_mut_ptr(),
-                    (512 - non_alignment_start as usize).min(buf.len()),
-                )
-            };
-
-            starting_sector += 1;
-            reading_start += 512 - non_alignment_start;
-            buf_ptr = unsafe { buf_ptr.add(non_alignment_start as usize) };
-        }
-
-        // not aligned end
-        let non_alignment_end = reading_end & 0x1FF;
-        if non_alignment_end != 0 && ending_sector > starting_sector {
-            bios_println!(
-                "NotAlignedEnd: {} {}",
-                ending_sector + 1,
-                reading_end - non_alignment_end
-            );
-
-            disk::raw_read(self.id, ending_sector + 1, 1, unsafe {
-                TEMP_BUFFER.as_mut_ptr().add(non_alignment_end as usize)
-            })
-            .unwrap();
-
-            unsafe {
-                ptr::copy_nonoverlapping(
-                    TEMP_BUFFER.as_ptr(),
-                    buf.as_mut_ptr()
-                        .add((reading_end - non_alignment_end) as usize),
-                    non_alignment_end as usize,
-                );
+impl Seek for BiosDisk {
+    fn seek(&mut self, pos: SeekFrom) -> Result<u64> {
+        match pos {
+            SeekFrom::Start(start) => {
+                self.seek = start;
             }
-
-            reading_end -= non_alignment_end;
+            SeekFrom::Current(current) => {
+                self.seek = self
+                    .seek
+                    .checked_add_signed(current)
+                    .ok_or(FsError::InvalidInput)?;
+            }
+            SeekFrom::End(end) => {
+                self.seek
+                    .checked_add_signed(end)
+                    .ok_or(FsError::InvalidInput)?;
+            }
         }
 
-        // Aligned buffer
-        assert!(
-            reading_start % 512 == 0,
-            "Reading Start should be aligned: {}",
-            reading_start
-        );
-        assert!(
-            reading_end % 512 == 0 || ending_sector <= starting_sector,
-            "Reading End should be aligned: {}",
-            reading_end
-        );
+        Ok(self.seek)
+    }
 
-        while starting_sector < ending_sector {
-            let sectors_to_read =
-                ((ending_sector - starting_sector) as usize).min(MAX_SECTORS_PER_READ);
-            bios_println!("RawRead: {} {}", starting_sector, sectors_to_read);
-            disk::raw_read(self.id, starting_sector, sectors_to_read, buf_ptr).unwrap();
-
-            starting_sector += sectors_to_read as u64;
-            buf_ptr = unsafe { buf_ptr.add(sectors_to_read as usize * 512) };
-        }
-
-        // FIXME: Use real bytes read to use here
-        Ok(0)
+    fn stream_position(&mut self) -> u64 {
+        self.seek
     }
 }
