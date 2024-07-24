@@ -21,7 +21,7 @@ pub trait BlockDevice {
     /// Since the size of each block is not known at compile time,
     /// it must be up to the programmer to keep track of providing
     /// the bytes this block device had read.
-    fn read_block<'a>(&'a mut self, block_offset: usize) -> Result<&'a [u8]>;
+    fn read_block<'a>(&'a mut self, block_offset: u64) -> Result<&'a [u8]>;
 }
 
 pub fn read_smooth_from_block_device<Device: BlockDevice>(
@@ -34,8 +34,7 @@ pub fn read_smooth_from_block_device<Device: BlockDevice>(
     // FIXME: We should try to read bytes into our 'data' buffer directly as much as possible
     //        Instead of a copy from the 'read_block' method.
     loop {
-        let block_index =
-            ((offset_bytes + data_copied as u64) / Device::BLOCK_SIZE as u64) as usize;
+        let block_index = (offset_bytes + data_copied as u64) / Device::BLOCK_SIZE as u64;
         let block_offset =
             ((offset_bytes + data_copied as u64) % Device::BLOCK_SIZE as u64) as usize;
 
@@ -82,7 +81,7 @@ mod test {
     impl BlockDevice for Dummy {
         const BLOCK_SIZE: usize = 10;
 
-        fn read_block<'a>(&'a mut self, block_offset: usize) -> crate::error::Result<&'a [u8]> {
+        fn read_block<'a>(&'a mut self, block_offset: u64) -> crate::error::Result<&'a [u8]> {
             self.buf = [block_offset as u8; 10];
             Ok(&self.buf)
         }

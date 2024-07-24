@@ -4,6 +4,7 @@ pub enum FsError {
     ReadError,
     InvalidInput,
     NotFound,
+    NotSupported,
 }
 
 pub type Result<T> = core::result::Result<T, FsError>;
