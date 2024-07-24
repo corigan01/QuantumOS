@@ -35,7 +35,7 @@ fn main(disk_id: u16) {
     let mut fat_file = fat.open("/qconfig.cfg").unwrap();
 
     let mut buffer = [0u8; 32];
-    fat_file.seek(SeekFrom::Start(1));
+    fat_file.seek(SeekFrom::Start(0));
     fat_file.read(&mut buffer).unwrap();
 
     bios_print!(
