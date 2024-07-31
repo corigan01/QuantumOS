@@ -7,10 +7,10 @@ use unreal::enter_unreal;
 use fs::fatfs::Fat;
 use fs::io::{Read, Seek, SeekFrom};
 
+mod bump_alloc;
 mod console;
 mod disk;
 mod error;
-// mod fatfs;
 mod mbr;
 mod panic;
 mod unreal;
@@ -27,6 +27,7 @@ extern "C" fn entry(disk_id: u16) {
 
 fn main(disk_id: u16) {
     bios_println!("Qauntum Loader");
+
     let disk = BiosDisk::new(disk_id);
     let mbr = Mbr::new(disk).unwrap();
     let partition = mbr.partition(1).unwrap();
