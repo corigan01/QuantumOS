@@ -1,6 +1,6 @@
 #![no_std]
 
-use arch::registers::{eflags, Regs16};
+use arch::registers::{eflags, Regs16, Regs32};
 use core::arch::asm;
 
 // FIXME: Should only build in 16bit x86 systems!
@@ -90,6 +90,32 @@ pub unsafe fn int_0x13(mut reg: Regs16) -> BiosStatus {
     }
 }
 
+#[inline]
+pub unsafe fn int_0x15(reg: &mut Regs32, es: u16) -> BiosStatus {
+    asm!("
+        mov es, {es:x}
+        push ebx
+        mov ebx, {ebx:x}
+        int 0x10
+        mov {ebx:x}, ebx
+        pop ebx
+        ",
+        es = in(reg) es,
+        ebx = inout(reg) reg.ebx,
+        inout("eax") reg.eax => reg.eax,
+        in("ecx") reg.ecx,
+        in("edx") reg.edx,
+        in("edi") reg.edi,
+    );
+
+    match reg.eax as u16 {
+        INVALID_BIOS_CALL_AX => BiosStatus::InvalidData,
+        NOT_SUPPORTED_CALL_AX => BiosStatus::NotSupported,
+        _ if eflags::carry() => BiosStatus::Failed,
+        _ => BiosStatus::Success,
+    }
+}
+
 pub mod video {
     use crate::int_0x10;
     use arch::registers::Regs16;
@@ -168,5 +194,50 @@ pub mod disk {
         };
 
         unsafe { int_0x13(reg) }
+    }
+}
+
+pub mod memory {
+    use crate::{int_0x15, BiosStatus};
+    use arch::registers::Regs32;
+
+    #[repr(C)]
+    struct MemoryEntry {
+        base_address: u64,
+        region_length: u64,
+        region_type: u32,
+        acpi_attributes: u32,
+    }
+
+    // FIXME: We should not be returning a Result with BiosStatus as the error, but instead
+    //        it should be a type containing the error kind.
+    unsafe fn read_region(ptr: *mut MemoryEntry, ebx: u32) -> Result<u32, BiosStatus> {
+        let low_ptr = ptr as u32 % 0x10;
+        let high_ptr = ptr as u16 / 0x10;
+
+        // First Call to e820
+        let mut regs = if ebx == 0 {
+            Regs32 {
+                eax: 0xE820,
+                ebx: 0,
+                edx: 0x534D4150,
+                ecx: 24,
+                edi: low_ptr,
+                ..Regs32::default()
+            }
+        } else {
+            Regs32 {
+                eax: 0xE820,
+                ebx,
+                ecx: 24,
+                edi: low_ptr,
+                ..Regs32::default()
+            }
+        };
+
+        match int_0x15(&mut regs, high_ptr) {
+            BiosStatus::Success => Ok(regs.ebx),
+            err => Err(err),
+        }
     }
 }
