@@ -1,5 +1,6 @@
 #![no_std]
 #![no_main]
+#![allow(binary_asm_labels)]
 
 mod disk;
 mod partition;
