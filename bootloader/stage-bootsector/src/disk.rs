@@ -36,12 +36,12 @@ impl DiskAccessPacket {
                 mov si, {packet:x}
                 mov ax, 0x4200
                 int 0x13
-                jc 1f
+                jc 3f
                 mov {status:x}, 0
-                jmp 2f
-                1:
+                jmp 4f
+                3:
                 mov {status:x}, 1
-                2:
+                4:
                 pop si
             ",
                 in("dx") disk,
