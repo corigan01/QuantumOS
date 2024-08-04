@@ -29,6 +29,8 @@ extern "C" fn entry(disk_id: u16) {
 
 fn main(disk_id: u16) -> ! {
     bios_println!("Qauntum Loader");
+
+    // - Memory Setup
     let memory_map = crate::memory::memory_map();
 
     let ideal_region = memory_map
@@ -45,6 +47,8 @@ fn main(disk_id: u16) -> ! {
             ideal_region.region_length as usize,
         )
     };
+
+    // - Filesystem Enumeration
 
     // FIXME: We need to figure out a new way of handing partitions from mbr
     //        since partitions currently cannot be used to create Fats that
@@ -65,6 +69,7 @@ fn main(disk_id: u16) -> ! {
 
     let mut fatfs = Fat::new(mbr.partition(partition_number).unwrap()).unwrap();
 
+    // - Config File
     let mut qconfig = fatfs.open("qconfig.cfg").unwrap();
     let qconfig_filesize = qconfig.filesize();
     let qconfig_buffer = unsafe { alloc.allocate(qconfig_filesize) }.unwrap();
@@ -72,8 +77,17 @@ fn main(disk_id: u16) -> ! {
         .read(qconfig_buffer)
         .expect("Unable to read qconfig!");
 
-    let qconfig_str = core::str::from_utf8(&qconfig_buffer).unwrap();
-    bios_println!("{:#?}", BootloaderConfig::parse_file(&qconfig_str).unwrap());
+    let qconfig = core::str::from_utf8(&qconfig_buffer).unwrap();
+    let qconfig = BootloaderConfig::parse_file(&qconfig).unwrap();
+
+    // - Bootloader32
+    let mut bootloader32 = fatfs
+        .open(qconfig.bootloader32)
+        .expect("Unable to find bootloader32");
+    let bootloader32_buffer = unsafe { alloc.allocate(bootloader32.filesize()) }.unwrap();
+    bootloader32
+        .read(bootloader32_buffer)
+        .expect("Unable to read bootloader32");
 
     panic!("Not supposed to return!");
 }

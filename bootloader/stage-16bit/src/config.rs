@@ -1,10 +1,10 @@
 #[repr(C)]
 #[derive(Default, Debug)]
 pub struct BootloaderConfig<'a> {
-    bootloader32: &'a str,
-    bootloader64: &'a str,
-    kernel: &'a str,
-    expected_vbe_mode: Option<(u32, u32)>,
+    pub bootloader32: &'a str,
+    pub bootloader64: &'a str,
+    pub kernel: &'a str,
+    pub expected_vbe_mode: Option<(u32, u32)>,
 }
 
 impl<'a> BootloaderConfig<'a> {
