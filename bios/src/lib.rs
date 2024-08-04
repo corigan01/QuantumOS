@@ -219,6 +219,15 @@ pub mod memory {
         }
     }
 
+    /// # Read Mapping
+    /// Reads the computer's memory map using Bios-Call-0x15's 0xE820 command.
+    ///
+    /// Returns the amount of memory entries read.
+    ///
+    /// # Saftey
+    /// This function will only read memory regions it has room to fit in the
+    /// provided buffer. If there are more regions than will fit in the buffer
+    /// this function will simply return and return the size of the buffer.
     pub fn read_mapping(memory: &mut [MemoryEntry]) -> Result<usize, BiosStatus> {
         let mut ebx = 0;
 
@@ -228,7 +237,7 @@ pub mod memory {
             ebx = unsafe { read_region(entry_ptr, ebx) }?;
 
             if ebx == 0 {
-                return Ok(en - 1);
+                return Ok(en + 1);
             }
         }
 
