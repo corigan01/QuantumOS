@@ -51,9 +51,11 @@ async fn build() -> Result<PathBuf> {
     disk.finish_and_write().await
 }
 
-fn run_qemu(disk_target_path: &Path) -> Result<()> {
+fn run_qemu(disk_target_path: &Path, enable_kvm: bool) -> Result<()> {
+    let kvm: &[&str] = if enable_kvm { &["--enable-kvm"] } else { &[] };
+
     Command::new("qemu-system-x86_64")
-        // .arg("--enable-kvm")
+        .args(kvm)
         .arg("-device")
         .arg("isa-debug-exit,iobase=0xf4,iosize=0x04")
         .arg("-d")
@@ -90,7 +92,7 @@ async fn main() -> Result<()> {
             todo!("build")
         }
         cmdline::TaskOption::Run => {
-            run_qemu(&build().await?)?;
+            run_qemu(&build().await?, args.enable_kvm)?;
         }
         cmdline::TaskOption::Clean => {
             todo!("clean")
