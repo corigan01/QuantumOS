@@ -9,6 +9,7 @@ use fs::io::Read;
 use unreal::enter_unreal;
 
 mod bump_alloc;
+mod config;
 mod console;
 mod disk;
 mod mbr;
