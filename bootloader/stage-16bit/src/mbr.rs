@@ -38,7 +38,7 @@ impl<Disk: ReadSeek> Mbr<Disk> {
     pub fn new(mut disk: Disk) -> Result<Self> {
         let mut mbr: Self = unsafe { core::mem::zeroed() };
 
-        disk.seek(SeekFrom::Start(440));
+        disk.seek(SeekFrom::Start(440))?;
         disk.read(unsafe { core::slice::from_raw_parts_mut((&mut mbr as *mut Self).cast(), 512) })?;
 
         // Its okay to store the disk in here because we immediatly overwrite
@@ -73,7 +73,7 @@ impl<Disk: ReadSeek> Mbr<Disk> {
 impl<'a, Disk: ReadSeek> Read for Partition<'a, Disk> {
     fn read(&mut self, buf: &mut [u8]) -> Result<usize> {
         let seek_offset = self.seek + (self.lba_start as u64 * 512);
-        self.disk.seek(SeekFrom::Start(seek_offset));
+        self.disk.seek(SeekFrom::Start(seek_offset))?;
 
         self.disk.read(buf)
     }

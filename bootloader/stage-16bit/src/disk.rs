@@ -5,8 +5,6 @@ use fs::read_block::BlockDevice;
 use fs::error::{FsError, Result};
 use fs::io::{Read, Seek, SeekFrom};
 
-const MAX_SECTORS_PER_READ: usize = 32;
-
 #[link_section = ".buffer"]
 static mut TEMP_BUFFER: [u8; 512] = [0u8; 512];
 

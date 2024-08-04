@@ -5,13 +5,12 @@ use crate::{disk::BiosDisk, mbr::Mbr};
 use bios::memory::MemoryEntry;
 use bump_alloc::BumpAlloc;
 use fs::fatfs::Fat;
-use fs::io::{Read, Seek, SeekFrom};
+use fs::io::Read;
 use unreal::enter_unreal;
 
 mod bump_alloc;
 mod console;
 mod disk;
-mod error;
 mod mbr;
 mod memory;
 mod panic;
