@@ -3,6 +3,7 @@
 
 use crate::{disk::BiosDisk, mbr::Mbr};
 use bios::memory::MemoryEntry;
+use bump_alloc::BumpAlloc;
 use fs::fatfs::Fat;
 use fs::io::{Read, Seek, SeekFrom};
 use unreal::enter_unreal;
@@ -37,6 +38,13 @@ fn main(disk_id: u16) -> ! {
         })
         .expect("Cannot find high memory above 1MB!");
 
+    let mut alloc = unsafe {
+        BumpAlloc::new(
+            ideal_region.base_address as *mut u8,
+            ideal_region.region_length as usize,
+        )
+    };
+
     // FIXME: We need to figure out a new way of handing partitions from mbr
     //        since partitions currently cannot be used to create Fats that
     //        escape this closure. This means we need to create a new Fat
@@ -55,7 +63,18 @@ fn main(disk_id: u16) -> ! {
         .expect("Cannot find valid FAT Partition!");
 
     let mut fatfs = Fat::new(mbr.partition(partition_number).unwrap()).unwrap();
-    let qconfig = fatfs.open("qconfig.cfg").unwrap();
+
+    let mut qconfig = fatfs.open("qconfig.cfg").unwrap();
+    let qconfig_filesize = qconfig.filesize();
+    let qconfig_buffer = unsafe { alloc.allocate(qconfig_filesize) }.unwrap();
+    qconfig
+        .read(qconfig_buffer)
+        .expect("Unable to read qconfig!");
+
+    bios_println!(
+        "Qconfig:\n{}\n",
+        core::str::from_utf8(&qconfig_buffer).unwrap()
+    );
 
     panic!("Not supposed to return!");
 }

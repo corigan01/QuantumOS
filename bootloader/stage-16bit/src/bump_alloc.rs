@@ -11,7 +11,7 @@ impl BumpAlloc {
         }
     }
 
-    pub unsafe fn allocate(&mut self, size: usize) -> Option<*mut u8> {
+    pub unsafe fn allocate<'a>(&'a mut self, size: usize) -> Option<&mut [u8]> {
         let bumped_ptr = self.current_ptr.add(size);
         if bumped_ptr > self.end {
             return None;
@@ -20,6 +20,6 @@ impl BumpAlloc {
         let allocation_start = self.current_ptr;
         self.current_ptr = bumped_ptr;
 
-        Some(allocation_start)
+        Some(core::slice::from_raw_parts_mut(allocation_start, size))
     }
 }
