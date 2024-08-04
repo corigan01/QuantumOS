@@ -29,9 +29,7 @@ impl BlockDevice for BiosDisk {
     const BLOCK_SIZE: usize = 512;
 
     fn read_block<'a>(&'a mut self, block_offset: u64) -> Result<&'a [u8]> {
-        match raw_read(self.id, block_offset, 1, unsafe {
-            TEMP_BUFFER.as_mut_ptr()
-        }) {
+        match unsafe { raw_read(self.id, block_offset, 1, TEMP_BUFFER.as_mut_ptr()) } {
             BiosStatus::Success => Ok(unsafe { TEMP_BUFFER.as_slice() }),
             BiosStatus::InvalidInput | BiosStatus::InvalidData => Err(FsError::InvalidInput),
             BiosStatus::NotSupported => Err(FsError::NotSupported),

@@ -62,22 +62,13 @@ pub unsafe fn int_0x10(mut reg: Regs16) -> BiosStatus {
 
 #[inline]
 pub unsafe fn int_0x13(mut reg: Regs16) -> BiosStatus {
-    let status: u16;
-
     asm!("
         push si
         mov si, {si:x}
         int 0x13
-        jc 1f
-        mov {status:x}, 0
-        jmp 2f
-        1:
-        mov {status:x}, 1
-        2:
         pop si
         ",
         si = in(reg) reg.si,
-        status = out(reg) status,
         inout("ax") reg.ax => reg.ax,
         in("dx") reg.dx,
     );
@@ -85,27 +76,24 @@ pub unsafe fn int_0x13(mut reg: Regs16) -> BiosStatus {
     match reg.ax {
         INVALID_BIOS_CALL_AX => BiosStatus::InvalidData,
         NOT_SUPPORTED_CALL_AX => BiosStatus::NotSupported,
-        _ if status == 1 => BiosStatus::Failed,
+        _ if eflags::carry() => BiosStatus::Failed,
         _ => BiosStatus::Success,
     }
 }
 
 #[inline]
 pub unsafe fn int_0x15(reg: &mut Regs32, es: u16) -> BiosStatus {
-    asm!("
-        mov es, {es:x}
-        push ebx
-        mov ebx, {ebx:x}
-        int 0x10
-        mov {ebx:x}, ebx
-        pop ebx
-        ",
-        es = in(reg) es,
-        ebx = inout(reg) reg.ebx,
+    asm!(
+        "push es",
+        "mov es, {es:e}",
+        "int 0x15",
+        "pop es",
         inout("eax") reg.eax => reg.eax,
-        in("ecx") reg.ecx,
-        in("edx") reg.edx,
-        in("edi") reg.edi,
+        inout("ebx") reg.ebx => reg.ebx,
+        inout("ecx") reg.ecx => reg.ecx,
+        inout("edx") reg.edx => reg.edx,
+        inout("edi") reg.edi => reg.edi,
+        es = in(reg) es,
     );
 
     match reg.eax as u16 {
@@ -178,7 +166,7 @@ pub mod disk {
         }
     }
 
-    pub fn raw_read(disk_id: u16, lba: u64, count: usize, ptr: *mut u8) -> BiosStatus {
+    pub unsafe fn raw_read(disk_id: u16, lba: u64, count: usize, ptr: *mut u8) -> BiosStatus {
         let package = DiskAccessPacket::new(count as u16, lba, ptr as u32);
 
         assert!(
@@ -202,42 +190,48 @@ pub mod memory {
     use arch::registers::Regs32;
 
     #[repr(C)]
-    struct MemoryEntry {
-        base_address: u64,
-        region_length: u64,
-        region_type: u32,
-        acpi_attributes: u32,
+    #[derive(Clone, Copy, Debug)]
+    pub struct MemoryEntry {
+        pub base_address: u64,
+        pub region_length: u64,
+        pub region_type: u32,
+        pub acpi_attributes: u32,
     }
 
     // FIXME: We should not be returning a Result with BiosStatus as the error, but instead
     //        it should be a type containing the error kind.
     unsafe fn read_region(ptr: *mut MemoryEntry, ebx: u32) -> Result<u32, BiosStatus> {
-        let low_ptr = ptr as u32 % 0x10;
-        let high_ptr = ptr as u16 / 0x10;
+        let low_ptr = (ptr as u32) % 0x10;
+        let high_ptr = ((ptr as u32) / 0x10) as u16;
 
-        // First Call to e820
-        let mut regs = if ebx == 0 {
-            Regs32 {
-                eax: 0xE820,
-                ebx: 0,
-                edx: 0x534D4150,
-                ecx: 24,
-                edi: low_ptr,
-                ..Regs32::default()
-            }
-        } else {
-            Regs32 {
-                eax: 0xE820,
-                ebx,
-                ecx: 24,
-                edi: low_ptr,
-                ..Regs32::default()
-            }
+        let mut regs = Regs32 {
+            eax: 0xE820,
+            ebx,
+            ecx: 24,
+            edx: 0x534D4150,
+            edi: low_ptr,
+            ..Regs32::default()
         };
 
         match int_0x15(&mut regs, high_ptr) {
             BiosStatus::Success => Ok(regs.ebx),
             err => Err(err),
         }
+    }
+
+    pub fn read_mapping(memory: &mut [MemoryEntry]) -> Result<usize, BiosStatus> {
+        let mut ebx = 0;
+
+        for (en, entry) in memory.iter_mut().enumerate() {
+            let entry_ptr = entry as *mut MemoryEntry;
+
+            ebx = unsafe { read_region(entry_ptr, ebx) }?;
+
+            if ebx == 0 {
+                return Ok(en - 1);
+            }
+        }
+
+        Ok(memory.len())
     }
 }

@@ -51,6 +51,10 @@ SECTIONS {
         *(.GDT .GDT.*)
     } > CODE_LIMIT
 
+    .memory_map : {
+        *(.memory_map .memory_map.*)
+    } > CODE_LIMIT
+
     .data : {
         *(.data .data.*)
     } > REAL_DATA
