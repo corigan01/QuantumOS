@@ -28,7 +28,8 @@ extern "C" fn main(disk_number: u16) {
         }
     }
 
-    video::putc(b's');
+    video::putc(b'O');
+    video::putc(b'K');
 
     unsafe {
         let stage1: fn(u16) = core::mem::transmute(0x7E00_usize);
