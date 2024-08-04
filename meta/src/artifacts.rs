@@ -126,7 +126,15 @@ async fn build_bootloader_config() -> Result<PathBuf> {
         .open(&target_location)
         .await?;
 
-    file.write_all(br#"qboot-version=0.0.1"#).await?;
+    file.write_all(
+        br#"
+bootloader32=/bootloader/bootloader32.bin
+bootloader64=/bootloader/bootloader64.bin
+kernel=/kernel.elf
+vbe-mode=1280x720
+"#,
+    )
+    .await?;
 
     Ok(target_location)
 }
