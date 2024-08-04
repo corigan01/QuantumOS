@@ -4,6 +4,7 @@
 use crate::{disk::BiosDisk, mbr::Mbr};
 use bios::memory::MemoryEntry;
 use bump_alloc::BumpAlloc;
+use config::BootloaderConfig;
 use fs::fatfs::Fat;
 use fs::io::Read;
 use unreal::enter_unreal;
@@ -71,10 +72,8 @@ fn main(disk_id: u16) -> ! {
         .read(qconfig_buffer)
         .expect("Unable to read qconfig!");
 
-    bios_println!(
-        "Qconfig:\n{}\n",
-        core::str::from_utf8(&qconfig_buffer).unwrap()
-    );
+    let qconfig_str = core::str::from_utf8(&qconfig_buffer).unwrap();
+    bios_println!("{:#?}", BootloaderConfig::parse_file(&qconfig_str).unwrap());
 
     panic!("Not supposed to return!");
 }
