@@ -70,7 +70,7 @@ fn main(disk_id: u16) -> ! {
     let mut fatfs = Fat::new(mbr.partition(partition_number).unwrap()).unwrap();
 
     // - Config File
-    let mut qconfig = fatfs.open("qconfig.cfg").unwrap();
+    let mut qconfig = fatfs.open("bootloader/qconfig.cfg").unwrap();
     let qconfig_filesize = qconfig.filesize();
     let qconfig_buffer = unsafe { alloc.allocate(qconfig_filesize) }.unwrap();
     qconfig
