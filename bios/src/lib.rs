@@ -198,6 +198,11 @@ pub mod memory {
         pub acpi_attributes: u32,
     }
 
+    impl MemoryEntry {
+        pub const REGION_RESERVED: u32 = 0x2;
+        pub const REGION_FREE: u32 = 0x1;
+    }
+
     // FIXME: We should not be returning a Result with BiosStatus as the error, but instead
     //        it should be a type containing the error kind.
     unsafe fn read_region(ptr: *mut MemoryEntry, ebx: u32) -> Result<u32, BiosStatus> {

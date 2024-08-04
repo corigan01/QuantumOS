@@ -1,19 +1,18 @@
 #![no_std]
 #![no_main]
 
-use core::mem::MaybeUninit;
-
 use crate::{disk::BiosDisk, mbr::Mbr};
-use unreal::enter_unreal;
-
+use bios::memory::MemoryEntry;
 use fs::fatfs::Fat;
 use fs::io::{Read, Seek, SeekFrom};
+use unreal::enter_unreal;
 
 mod bump_alloc;
 mod console;
 mod disk;
 mod error;
 mod mbr;
+mod memory;
 mod panic;
 mod unreal;
 
@@ -24,46 +23,39 @@ extern "C" fn entry(disk_id: u16) {
 
     bios_println!();
     main(disk_id);
-    panic!("Not supposed to return!");
 }
 
-#[no_mangle]
-#[link_name = ".memory_map"]
-static mut MEMORY_MAP_AREA: MaybeUninit<[bios::memory::MemoryEntry; 32]> = MaybeUninit::zeroed();
-
-fn main(disk_id: u16) {
+fn main(disk_id: u16) -> ! {
     bios_println!("Qauntum Loader");
+    let memory_map = crate::memory::memory_map();
 
-    // let disk = BiosDisk::new(disk_id);
-    // let mbr = Mbr::new(disk).unwrap();
-    // let partition = mbr.partition(1).unwrap();
+    let ideal_region = memory_map
+        .iter()
+        .find(|region| {
+            region.region_type != MemoryEntry::REGION_RESERVED
+                && region.base_address >= (1024 * 1024)
+        })
+        .expect("Cannot find high memory above 1MB!");
 
-    // let mut fat = Fat::new(partition).unwrap();
-    // let mut fat_file = fat.open("/qconfig.cfg").unwrap();
+    // FIXME: We need to figure out a new way of handing partitions from mbr
+    //        since partitions currently cannot be used to create Fats that
+    //        escape this closure. This means we need to create a new Fat
+    //        which should be avoided if its already known to be valid.
+    let mut mbr = Mbr::new(BiosDisk::new(disk_id)).expect("Cannot read MBR!");
+    let partition_number = (0..4)
+        .into_iter()
+        .find_map(|part_number| {
+            let Some(partition) = mbr.partition(part_number) else {
+                return None;
+            };
 
-    // let mut buffer = [0u8; 32];
-    // fat_file.seek(SeekFrom::Start(0));
-    // fat_file.read(&mut buffer).unwrap();
+            let mut fat = Fat::new(partition).ok()?;
+            fat.entry_of("qconfig.cfg").ok().map(|_| part_number)
+        })
+        .expect("Cannot find valid FAT Partition!");
 
-    // bios_print!(
-    //     "FILE: --------\n{}\n---------\n{:x?}",
-    //     core::str::from_utf8(&buffer).unwrap(),
-    //     buffer
-    // );
-    // bios_println!("{:#?}", fat);
+    let mut fatfs = Fat::new(mbr.partition(partition_number).unwrap()).unwrap();
+    let qconfig = fatfs.open("qconfig.cfg").unwrap();
 
-    let stable_regions =
-        unsafe { bios::memory::read_mapping(MEMORY_MAP_AREA.assume_init_mut()) }.unwrap();
-    let memory_regions = unsafe { &MEMORY_MAP_AREA.assume_init_mut()[..stable_regions] };
-
-    bios_println!("stable regions: {}", stable_regions);
-
-    for region in memory_regions {
-        bios_println!(
-            "[{:04b}] - {:08x} : {}",
-            region.region_type,
-            region.base_address,
-            region.region_length
-        );
-    }
+    panic!("Not supposed to return!");
 }

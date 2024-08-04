@@ -2,16 +2,16 @@ use core::fmt::Debug;
 use fs::error::{FsError, Result};
 use fs::io::{Read, Seek, SeekFrom};
 
-pub trait ReadSeekCopy: Read + Seek + Copy {}
-impl<T: Read + Seek + Copy> ReadSeekCopy for T {}
+pub trait ReadSeek: Read + Seek {}
+impl<T: Read + Seek> ReadSeek for T {}
 
-pub struct Partition<Disk: ReadSeekCopy> {
+pub struct Partition<'a, Disk: ReadSeek> {
     pub bootable: bool,
     pub kind: u8,
     pub lba_start: u32,
     pub lba_count: u32,
     seek: u64,
-    disk: Disk,
+    disk: &'a mut Disk,
 }
 
 #[repr(C, packed)]
@@ -26,8 +26,7 @@ pub struct MbrPart {
 }
 
 #[repr(C)]
-#[derive(Clone, Copy)]
-pub struct Mbr<Disk: ReadSeekCopy> {
+pub struct Mbr<Disk: ReadSeek> {
     disk_id: u32,
     reserved: u16,
     entries: [MbrPart; 4],
@@ -35,13 +34,12 @@ pub struct Mbr<Disk: ReadSeekCopy> {
     disk: Disk,
 }
 
-impl<Disk: ReadSeekCopy> Mbr<Disk> {
+impl<Disk: ReadSeek> Mbr<Disk> {
     pub fn new(mut disk: Disk) -> Result<Self> {
-        let mut sector_buffer = [0u8; 512];
-        disk.seek(SeekFrom::Start(440));
-        disk.read(&mut sector_buffer)?;
+        let mut mbr: Self = unsafe { core::mem::zeroed() };
 
-        let mut mbr: Self = unsafe { *sector_buffer.as_ptr().cast() };
+        disk.seek(SeekFrom::Start(440));
+        disk.read(unsafe { core::slice::from_raw_parts_mut((&mut mbr as *mut Self).cast(), 512) })?;
 
         // Its okay to store the disk in here because we immediatly overwrite
         // its sector derived value (the bootloader code) with the disk.
@@ -54,7 +52,7 @@ impl<Disk: ReadSeekCopy> Mbr<Disk> {
         Ok(mbr)
     }
 
-    pub fn partition(&self, index: usize) -> Option<Partition<Disk>> {
+    pub fn partition<'a>(&'a mut self, index: usize) -> Option<Partition<'a, Disk>> {
         let entry = &self.entries.get(index)?;
 
         if entry.count == 0 || entry.sector_start == 0 {
@@ -67,12 +65,12 @@ impl<Disk: ReadSeekCopy> Mbr<Disk> {
             lba_start: entry.sector_start,
             lba_count: entry.count,
             seek: 0,
-            disk: self.disk,
+            disk: &mut self.disk,
         })
     }
 }
 
-impl<Disk: ReadSeekCopy> Read for Partition<Disk> {
+impl<'a, Disk: ReadSeek> Read for Partition<'a, Disk> {
     fn read(&mut self, buf: &mut [u8]) -> Result<usize> {
         let seek_offset = self.seek + (self.lba_start as u64 * 512);
         self.disk.seek(SeekFrom::Start(seek_offset));
@@ -81,7 +79,7 @@ impl<Disk: ReadSeekCopy> Read for Partition<Disk> {
     }
 }
 
-impl<Disk: ReadSeekCopy> Seek for Partition<Disk> {
+impl<'a, Disk: ReadSeek> Seek for Partition<'a, Disk> {
     fn seek(&mut self, pos: SeekFrom) -> Result<u64> {
         match pos {
             SeekFrom::Start(pos) => self.seek = pos,
@@ -96,7 +94,7 @@ impl<Disk: ReadSeekCopy> Seek for Partition<Disk> {
     }
 }
 
-impl<Disk: ReadSeekCopy> Debug for Partition<Disk> {
+impl<'a, Disk: ReadSeek> Debug for Partition<'a, Disk> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("Partition")
             .field("bootable", &self.bootable)

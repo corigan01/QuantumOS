@@ -13,17 +13,17 @@ pub enum Inode {
 #[repr(C, packed)]
 pub struct DirectoryEntry {
     pub(super) name: [u8; 11],
-    attributes: u8,
-    reserved: u8,
-    time_tenth: u8,
-    creation_time: u16,
-    creation_date: u16,
-    last_access_date: u16,
-    cluster_high: u16,
-    modified_time: u16,
-    modified_date: u16,
-    cluster_low: u16,
-    file_size: u32,
+    pub(super) attributes: u8,
+    pub(super) reserved: u8,
+    pub(super) time_tenth: u8,
+    pub(super) creation_time: u16,
+    pub(super) creation_date: u16,
+    pub(super) last_access_date: u16,
+    pub(super) cluster_high: u16,
+    pub(super) modified_time: u16,
+    pub(super) modified_date: u16,
+    pub(super) cluster_low: u16,
+    pub(super) file_size: u32,
 }
 
 #[derive(Clone, Copy, Debug)]

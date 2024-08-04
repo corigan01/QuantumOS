@@ -74,9 +74,16 @@ impl FatEntry {
 }
 
 pub struct FatFile<'a, Part: ReadSeek> {
+    filesize: usize,
     start_cluster: ClusterId,
     fatfs: &'a mut Fat<Part>,
     seek: u64,
+}
+
+impl<'a, Part: ReadSeek> FatFile<'a, Part> {
+    pub const fn filesize(&self) -> usize {
+        self.filesize
+    }
 }
 
 impl<'a, Part> FatFile<'a, Part> where Part: ReadSeek {}
@@ -203,16 +210,17 @@ impl<Part: ReadSeek> Fat<Part> {
     }
 
     pub fn open<'a>(&'a mut self, name: &str) -> Result<FatFile<'a, Part>> {
-        let start_cluster = self.cluster_of(name)?;
+        let entry_info = self.entry_of(name)?;
 
         Ok(FatFile {
-            start_cluster,
+            filesize: entry_info.file_size as usize,
+            start_cluster: entry_info.cluster_id(),
             fatfs: self,
             seek: 0,
         })
     }
 
-    pub fn cluster_of(&mut self, name: &str) -> Result<ClusterId> {
+    pub fn entry_of(&mut self, name: &str) -> Result<DirectoryEntry> {
         assert_eq!(
             self.bpb.cluster_sectors(),
             2,
@@ -271,7 +279,7 @@ impl<Part: ReadSeek> Fat<Part> {
                                 continue 'outer;
                             }
 
-                            return Ok(entry.cluster_id());
+                            return Ok(entry);
                         }
 
                         filename_str = [0u8; 256];
@@ -288,7 +296,7 @@ impl<Part: ReadSeek> Fat<Part> {
                         }
 
                         if path_part.trim().eq_ignore_ascii_case(filename) {
-                            return Ok(file.cluster_id());
+                            return Ok(file);
                         }
 
                         filename_str = [0u8; 256];

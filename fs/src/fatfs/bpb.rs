@@ -78,7 +78,7 @@ impl Bpb {
         let bpb: Self = unsafe { *sector_buffer.as_ptr().cast() };
 
         // TODO: Add more checks for BPB to ensure that it is valid before returning it
-        if bpb.bytes_per_sector == 0 || bpb.sectors_per_cluster == 0 {
+        if bpb.bytes_per_sector == 0 || bpb.sectors_per_cluster == 0 || bpb.jmp_boot[0] != 0xEB {
             return Err(FsError::InvalidInput);
         }
 
