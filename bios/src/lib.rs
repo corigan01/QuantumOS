@@ -229,7 +229,7 @@ pub mod memory {
     ///
     /// Returns the amount of memory entries read.
     ///
-    /// # Saftey
+    /// # Safety
     /// This function will only read memory regions it has room to fit in the
     /// provided buffer. If there are more regions than will fit in the buffer
     /// this function will simply return and return the size of the buffer.
