@@ -17,6 +17,7 @@ mod mbr;
 mod memory;
 mod panic;
 mod unreal;
+mod vbe;
 
 #[no_mangle]
 #[link_section = ".begin"]
@@ -63,7 +64,9 @@ fn main(disk_id: u16) -> ! {
             };
 
             let mut fat = Fat::new(partition).ok()?;
-            fat.entry_of("qconfig.cfg").ok().map(|_| part_number)
+            fat.entry_of("bootloader/qconfig.cfg")
+                .ok()
+                .map(|_| part_number)
         })
         .expect("Cannot find valid FAT Partition!");
 
