@@ -47,26 +47,27 @@ impl BiosStatus {
 }
 
 macro_rules! bios_call {
-    (priv, u16 $id:ident: $value:expr) => {
-        let $id: u16 = $value;
+    (priv, $type:ty, $id:ident: $value:expr) => {
+        let $id: $type = $value;
     };
-    (priv, u16 mut $id:ident: $value:expr) => {
-        let mut $id: u16 = $value;
+    (priv, $type:ty, mut $id:ident: $value:expr) => {
+        let mut $id: $type = $value;
     };
-    (priv, u16 $id:ident: ) => {
-        let $id: u16 = 0;
+    (priv, $type:ty, $id:ident: ) => {
+        let $id: $type = 0;
     };
-    (priv, u16 mut $id:ident: ) => {
-        let mut $id: u16 = 0;
+    (priv, $type:ty, mut $id:ident: ) => {
+        let mut $id: $type = 0;
     };
+
     (int: $number:literal, $(ax: $ax:expr,)? $(bx: $bx:expr,)? $(cx: $cx:expr,)? $(dx: $dx:expr,)? $(es: $es:expr,)? $(di: $di:expr,)? $(si: $si:expr)?) => {{
-        bios_call!(priv, u16 mut ax: $($ax)?);
-        bios_call!(priv, u16 bx: $($bx)?);
-        bios_call!(priv, u16 cx: $($cx)?);
-        bios_call!(priv, u16 dx: $($dx)?);
-        bios_call!(priv, u16 es: $($es)?);
-        bios_call!(priv, u16 di: $($di)?);
-        bios_call!(priv, u16 si: $($si)?);
+        bios_call!(priv, u16, mut ax: $($ax)?);
+        bios_call!(priv, u16, bx: $($bx)?);
+        bios_call!(priv, u16, cx: $($cx)?);
+        bios_call!(priv, u16, dx: $($dx)?);
+        bios_call!(priv, u16, es: $($es)?);
+        bios_call!(priv, u16, di: $($di)?);
+        bios_call!(priv, u16, si: $($si)?);
 
         #[allow(unused_assignments)]
         unsafe { ::core::arch::asm!(
@@ -95,6 +96,8 @@ macro_rules! bios_call {
     }};
 }
 
+// FIXME: We should remove this function and add int0x15 into macro!
+//        However, currently the macro causes the bootloader to fail.
 #[inline]
 pub unsafe fn int_0x15(reg: &mut Regs32, es: u16) -> BiosStatus {
     asm!(
@@ -119,6 +122,7 @@ pub unsafe fn int_0x15(reg: &mut Regs32, es: u16) -> BiosStatus {
 }
 
 pub mod video {
+    use core::ptr::addr_of;
     const TELETYPE_OUTPUT_CHAR: u16 = 0x0E00;
 
     #[inline]
@@ -212,7 +216,13 @@ pub mod video {
     impl Vesa {
         pub fn quarry() -> Result<Self, VesaErrorKind> {
             let uninit_self = unsafe { core::mem::zeroed() };
-            todo!();
+
+            bios_call!(
+                int: 10,
+                ax: 0x4F00,
+                es: addr_of!(uninit_self) as u16 / 0x10,
+                di: addr_of!(uninit_self) as u16 % 0x10,
+            );
 
             Ok(uninit_self)
         }
@@ -274,8 +284,7 @@ pub mod disk {
 }
 
 pub mod memory {
-    use crate::{int_0x15, BiosStatus};
-    use arch::registers::Regs32;
+    use crate::BiosStatus;
 
     #[repr(C)]
     #[derive(Clone, Copy, Debug)]
@@ -294,6 +303,9 @@ pub mod memory {
     // FIXME: We should not be returning a Result with BiosStatus as the error, but instead
     //        it should be a type containing the error kind.
     unsafe fn read_region(ptr: *mut MemoryEntry, ebx: u32) -> Result<u32, BiosStatus> {
+        use crate::int_0x15;
+        use arch::registers::Regs32;
+
         let low_ptr = (ptr as u32) % 0x10;
         let high_ptr = ((ptr as u32) / 0x10) as u16;
 
