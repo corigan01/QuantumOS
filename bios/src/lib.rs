@@ -19,6 +19,15 @@ pub enum BiosStatus {
 }
 
 impl BiosStatus {
+    fn from_ax(ax: u16) -> Self {
+        match ax {
+            INVALID_BIOS_CALL_AX => Self::InvalidInput,
+            NOT_SUPPORTED_CALL_AX => BiosStatus::NotSupported,
+            _ if eflags::carry() => BiosStatus::Failed,
+            _ => BiosStatus::Success,
+        }
+    }
+
     pub fn unwrap(self) {
         match self {
             Self::Success => (),
@@ -37,48 +46,53 @@ impl BiosStatus {
     }
 }
 
-#[inline]
-pub unsafe fn int_0x10(mut reg: Regs16) -> BiosStatus {
-    asm!("
-        push bx
-        mov bx, {0:x}
-        int 0x10
-        pop bx
-        ",
-        in(reg) reg.bx,
-        inout("ax") reg.ax => reg.ax,
-        in("cx") reg.cx,
-        in("dx") reg.dx,
-        in("di") reg.di,
-    );
+macro_rules! bios_call {
+    (priv, u16 $id:ident: $value:expr) => {
+        let $id: u16 = $value;
+    };
+    (priv, u16 mut $id:ident: $value:expr) => {
+        let mut $id: u16 = $value;
+    };
+    (priv, u16 $id:ident: ) => {
+        let $id: u16 = 0;
+    };
+    (priv, u16 mut $id:ident: ) => {
+        let mut $id: u16 = 0;
+    };
+    (int: $number:literal, $(ax: $ax:expr,)? $(bx: $bx:expr,)? $(cx: $cx:expr,)? $(dx: $dx:expr,)? $(es: $es:expr,)? $(di: $di:expr,)? $(si: $si:expr)?) => {{
+        bios_call!(priv, u16 mut ax: $($ax)?);
+        bios_call!(priv, u16 bx: $($bx)?);
+        bios_call!(priv, u16 cx: $($cx)?);
+        bios_call!(priv, u16 dx: $($dx)?);
+        bios_call!(priv, u16 es: $($es)?);
+        bios_call!(priv, u16 di: $($di)?);
+        bios_call!(priv, u16 si: $($si)?);
 
-    match reg.ax {
-        INVALID_BIOS_CALL_AX => BiosStatus::InvalidData,
-        NOT_SUPPORTED_CALL_AX => BiosStatus::NotSupported,
-        _ if eflags::carry() => BiosStatus::Failed,
-        _ => BiosStatus::Success,
-    }
-}
+        #[allow(unused_assignments)]
+        unsafe { ::core::arch::asm!(
+            concat!("
+                push es
+                push bx
+                push si
+                mov es, {es:x}
+                mov bx, {bx:x}
+                mov si, {si:x}
+                int 0x",$number,"
+                pop si
+                pop bx
+                pop es
+            "),
+            bx = in(reg) bx,
+            es = in(reg) es,
+            si = in(reg) si,
+            inout("ax") ax => ax,
+            in("cx") cx,
+            in("dx") dx,
+            in("di") di
+        ) }
 
-#[inline]
-pub unsafe fn int_0x13(mut reg: Regs16) -> BiosStatus {
-    asm!("
-        push si
-        mov si, {si:x}
-        int 0x13
-        pop si
-        ",
-        si = in(reg) reg.si,
-        inout("ax") reg.ax => reg.ax,
-        in("dx") reg.dx,
-    );
-
-    match reg.ax {
-        INVALID_BIOS_CALL_AX => BiosStatus::InvalidData,
-        NOT_SUPPORTED_CALL_AX => BiosStatus::NotSupported,
-        _ if eflags::carry() => BiosStatus::Failed,
-        _ => BiosStatus::Success,
-    }
+        ax
+    }};
 }
 
 #[inline]
@@ -105,10 +119,7 @@ pub unsafe fn int_0x15(reg: &mut Regs32, es: u16) -> BiosStatus {
 }
 
 pub mod video {
-    use crate::int_0x10;
-    use arch::registers::Regs16;
-
-    const TELETYPE_OUTPUT: u16 = 0x0E00;
+    const TELETYPE_OUTPUT_CHAR: u16 = 0x0E00;
 
     #[inline]
     pub fn putc(c: u8) {
@@ -124,18 +135,100 @@ pub mod video {
 
     #[inline]
     pub fn print_char(c: char) {
-        let regs = Regs16 {
-            ax: TELETYPE_OUTPUT | (c as u16 & 0x00FF),
-            ..Regs16::default()
+        bios_call! {
+            int: 10,
+            ax: TELETYPE_OUTPUT_CHAR | (c as u16 & 0x00FF),
         };
+    }
 
-        unsafe { int_0x10(regs) }.unwrap();
+    #[repr(C)]
+    #[derive(Copy, Clone)]
+    pub struct VesaMode {
+        pub attributes: u16,
+        pub window_a: u8,
+        pub window_b: u8,
+        pub granularity: u16,
+        pub window_size: u16,
+        pub segment_a: u16,
+        pub segment_b: u16,
+        pub win_function_ptr: u32,
+        pub pitch: u16,
+        pub width: u16,
+        pub height: u16,
+        pub w_char: u8,
+        pub y_char: u8,
+        pub planes: u8,
+        pub bpp: u8,
+        pub banks: u8,
+        pub memory_model: u8,
+        pub bank_size: u8,
+        pub image_pages: u8,
+        pub reserved1: u8,
+        pub red_mask: u8,
+        pub red_pos: u8,
+        pub green_mask: u8,
+        pub green_pos: u8,
+        pub blue_mask: u8,
+        pub blue_pos: u8,
+        pub reserved_mask: u8,
+        pub reserved_pos: u8,
+        pub color_attributes: u8,
+        pub framebuffer: u32,
+        pub off_screen_memory_offset: u32,
+        pub off_screen_memory_size: u16,
+        reserved2: [u8; 206],
+    }
+
+    impl Default for VesaMode {
+        fn default() -> Self {
+            // As of writing, Rust's auto Default
+            // cannot handle the reserved2 feild
+            // but everything can be init to zero.
+            unsafe { core::mem::zeroed() }
+        }
+    }
+
+    #[repr(C)]
+    #[derive(Clone, Copy, Default)]
+    pub struct Vesa {
+        pub signature: [u8; 4],
+        pub version: u16,
+        pub oem_string_ptr: [u16; 2],
+        pub capabilities: [u8; 4],
+        pub video_mode_ptr: [u16; 2],
+        pub size_64k_blocks: u16,
+    }
+
+    #[derive(Clone, Copy, Debug)]
+    pub enum VesaErrorKind {
+        NotSupported,
+        Failed,
+        InvalidHardware,
+        Invalid,
+    }
+
+    pub struct VesaModeIter {}
+
+    impl Vesa {
+        pub fn quarry() -> Result<Self, VesaErrorKind> {
+            let uninit_self = unsafe { core::mem::zeroed() };
+            todo!();
+
+            Ok(uninit_self)
+        }
+
+        pub fn oem_string(&self) -> &'static str {
+            todo!()
+        }
+
+        pub fn supported_modes_iter(&self) -> VesaModeIter {
+            todo!()
+        }
     }
 }
 
 pub mod disk {
-    use crate::{int_0x13, BiosStatus};
-    use arch::registers::Regs16;
+    use crate::BiosStatus;
     use core::ptr::addr_of;
 
     const DISK_DAP_READ: u16 = 0x4200;
@@ -169,19 +262,14 @@ pub mod disk {
     pub unsafe fn raw_read(disk_id: u16, lba: u64, count: usize, ptr: *mut u8) -> BiosStatus {
         let package = DiskAccessPacket::new(count as u16, lba, ptr as u32);
 
-        assert!(
-            addr_of!(package) as u32 & 0xFFFF == addr_of!(package) as u32,
-            "Package address cannot be larger then 16 bit!"
-        );
+        assert!(addr_of!(package) as u32 & 0xFFFF == addr_of!(package) as u32);
 
-        let reg = Regs16 {
-            dx: disk_id,
+        BiosStatus::from_ax(bios_call! {
+            int: 13,
             ax: DISK_DAP_READ,
-            si: (&package) as *const DiskAccessPacket as u16,
-            ..Regs16::default()
-        };
-
-        unsafe { int_0x13(reg) }
+            dx: disk_id,
+            si: addr_of!(package) as u16
+        })
     }
 }
 
