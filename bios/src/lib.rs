@@ -1,6 +1,6 @@
 #![no_std]
 
-use arch::registers::{eflags, Regs16, Regs32};
+use arch::registers::{eflags, Regs32};
 use core::arch::asm;
 
 // FIXME: Should only build in 16bit x86 systems!
@@ -145,8 +145,7 @@ pub mod video {
         };
     }
 
-    #[repr(C)]
-    #[derive(Copy, Clone)]
+    #[repr(C, packed)]
     pub struct VesaMode {
         pub attributes: u16,
         pub window_a: u8,
@@ -183,23 +182,14 @@ pub mod video {
         reserved2: [u8; 206],
     }
 
-    impl Default for VesaMode {
-        fn default() -> Self {
-            // As of writing, Rust's auto Default
-            // cannot handle the reserved2 feild
-            // but everything can be init to zero.
-            unsafe { core::mem::zeroed() }
-        }
-    }
-
     #[repr(C)]
-    #[derive(Clone, Copy, Default)]
+    #[derive(Clone, Copy, Debug)]
     pub struct Vesa {
         pub signature: [u8; 4],
         pub version: u16,
-        pub oem_string_ptr: [u16; 2],
+        pub oem_string_ptr: (u16, u16),
         pub capabilities: [u8; 4],
-        pub video_mode_ptr: [u16; 2],
+        pub video_mode_ptr: (u16, u16),
         pub size_64k_blocks: u16,
     }
 
@@ -211,11 +201,23 @@ pub mod video {
         Invalid,
     }
 
-    pub struct VesaModeIter {}
+    #[repr(C)]
+    #[derive(Clone, Copy, Debug)]
+    pub struct VesaModeId(u16);
+
+    impl VesaModeId {
+        pub fn get_id(self) -> u16 {
+            self.0
+        }
+
+        pub fn querry(self) -> Result<VesaMode, VesaErrorKind> {
+            todo!()
+        }
+    }
 
     impl Vesa {
         pub fn quarry() -> Result<Self, VesaErrorKind> {
-            let uninit_self = unsafe { core::mem::zeroed() };
+            let uninit_self: Self = unsafe { core::mem::zeroed() };
 
             bios_call!(
                 int: 10,
@@ -224,15 +226,31 @@ pub mod video {
                 di: addr_of!(uninit_self) as u16 % 0x10,
             );
 
-            Ok(uninit_self)
+            if &uninit_self.signature == b"VESA" && uninit_self.version == 0x0300 {
+                Ok(uninit_self)
+            } else {
+                Err(VesaErrorKind::Invalid)
+            }
         }
 
-        pub fn oem_string(&self) -> &'static str {
-            todo!()
-        }
+        pub fn modes(&self) -> impl Iterator<Item = VesaModeId> {
+            let modes_loc = self.video_mode_ptr.1 as u32 * 0x10 + self.video_mode_ptr.0 as u32;
+            let modes_ptr = modes_loc as *const VesaModeId;
 
-        pub fn supported_modes_iter(&self) -> VesaModeIter {
-            todo!()
+            let mut mode_len = 0;
+            loop {
+                unsafe {
+                    if (*modes_ptr.add(mode_len)).0 == 0 {
+                        break;
+                    }
+
+                    mode_len += 1;
+                }
+            }
+
+            unsafe { core::slice::from_raw_parts(modes_ptr, mode_len) }
+                .into_iter()
+                .copied()
         }
     }
 }

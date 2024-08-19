@@ -3,6 +3,7 @@
 
 use crate::{disk::BiosDisk, mbr::Mbr};
 use bios::memory::MemoryEntry;
+use bios::video::Vesa;
 use bump_alloc::BumpAlloc;
 use config::BootloaderConfig;
 use fs::fatfs::Fat;
@@ -17,7 +18,7 @@ mod mbr;
 mod memory;
 mod panic;
 mod unreal;
-mod vbe;
+// mod vbe;
 
 #[no_mangle]
 #[link_section = ".begin"]
@@ -48,6 +49,9 @@ fn main(disk_id: u16) -> ! {
             ideal_region.region_length as usize,
         )
     };
+
+    let vesa = Vesa::quarry().unwrap();
+    vesa.modes().for_each(|item| bios_print!("{:?}", item));
 
     // - Filesystem Enumeration
 
