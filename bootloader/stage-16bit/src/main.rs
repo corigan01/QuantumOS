@@ -3,7 +3,7 @@
 
 use crate::{disk::BiosDisk, mbr::Mbr};
 use bios::memory::MemoryEntry;
-use bios::video::{Vesa, VesaModeId};
+use bios::video::Vesa;
 use bump_alloc::BumpAlloc;
 use config::BootloaderConfig;
 use fs::fatfs::Fat;
@@ -50,24 +50,6 @@ fn main(disk_id: u16) -> ! {
         )
     };
 
-    let want_x = 1280;
-    let want_y = 720;
-
-    let vesa = Vesa::quarry().unwrap();
-    let modes = vesa
-        .modes()
-        .filter_map(|id| id.querry().ok().map(|mode| (id, mode)))
-        .reduce(|closest_mode, (id, mode)| {
-            if closest_mode.1.width.abs_diff(want_x) > mode.width.abs_diff(want_x)
-                && closest_mode.1.height.abs_diff(want_y) > mode.height.abs_diff(want_y)
-            {
-                return (id, mode);
-            }
-
-            closest_mode
-        });
-    bios_println!("Closest = {:?}", modes);
-
     // - Filesystem Enumeration
 
     // FIXME: We need to figure out a new way of handing partitions from mbr
@@ -101,6 +83,24 @@ fn main(disk_id: u16) -> ! {
 
     let qconfig = core::str::from_utf8(&qconfig_buffer).unwrap();
     let qconfig = BootloaderConfig::parse_file(&qconfig).unwrap();
+
+    // - Video Mode Config
+    let (want_x, want_y) = qconfig.expected_vbe_mode.unwrap_or((800, 600));
+
+    let vesa = Vesa::quarry().unwrap();
+    let modes = vesa
+        .modes()
+        .filter_map(|id| id.querry().ok().map(|mode| (id, mode)))
+        .reduce(|closest_mode, (id, mode)| {
+            if closest_mode.1.width.abs_diff(want_x) > mode.width.abs_diff(want_x)
+                && closest_mode.1.height.abs_diff(want_y) > mode.height.abs_diff(want_y)
+            {
+                return (id, mode);
+            }
+
+            closest_mode
+        });
+    bios_println!("Closest = {:?}", modes);
 
     // - Bootloader32
     let mut bootloader32 = fatfs

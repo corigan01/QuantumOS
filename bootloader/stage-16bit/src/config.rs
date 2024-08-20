@@ -4,7 +4,7 @@ pub struct BootloaderConfig<'a> {
     pub bootloader32: &'a str,
     pub bootloader64: &'a str,
     pub kernel: &'a str,
-    pub expected_vbe_mode: Option<(u32, u32)>,
+    pub expected_vbe_mode: Option<(u16, u16)>,
 }
 
 impl<'a> BootloaderConfig<'a> {
