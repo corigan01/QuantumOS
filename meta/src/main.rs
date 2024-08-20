@@ -37,6 +37,10 @@ async fn build() -> Result<PathBuf> {
                 &artifacts.stage_16.as_path(),
                 Path::new("bootloader/stage_16.bin"),
             ),
+            (
+                &artifacts.stage_32.as_path(),
+                Path::new("bootloader/stage_32.bin"),
+            ),
             (&artifacts.kernel.as_path(), Path::new("kernel.elf")),
             (
                 &artifacts.boot_cfg.as_path(),

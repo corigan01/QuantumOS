@@ -1,5 +1,5 @@
 [workspace]
-members = ["kernel", "meta", "bootloader", "bootloader/stage-bootsector", "bootloader/stage-16bit", "bios", "arch", "fs"]
+members = ["kernel", "meta", "bootloader", "bootloader/stage-bootsector", "bootloader/stage-16bit","bootloader/stage-32bit", "bios", "arch", "fs"]
 default-members = ["meta"]
 resolver = "2"
 
@@ -14,7 +14,8 @@ arch = { path = "arch" }
 bios = { path = "bios" }
 fs = { path = "fs" }
 
-[profile.release]
+[profile.stage-bootsector]
+inherits = "release"
 panic = "abort"
 strip = true
 opt-level="z"
@@ -23,8 +24,15 @@ codegen-units = 1
 debug = 0
 overflow-checks = false
 
-[profile.stage-bootsector]
-inherits = "release"
-
 [profile.stage-16bit]
+inherits = "release"
+panic = "abort"
+strip = true
+opt-level="z"
+lto = true
+codegen-units = 1
+debug = 0
+overflow-checks = false
+
+[profile.stage-32bit]
 inherits = "release"

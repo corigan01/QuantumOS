@@ -11,7 +11,7 @@ use tokio::io::AsyncWriteExt;
 pub struct Artifacts {
     pub bootsector: PathBuf,
     pub stage_16: PathBuf,
-    // stage_32: PathBuf,
+    pub stage_32: PathBuf,
     // stage_64: PathBuf,
     pub kernel: PathBuf,
     pub boot_cfg: PathBuf,
@@ -92,6 +92,7 @@ async fn cargo_helper(profile: Option<&str>, package: &str, arch: ArchSelect) ->
 async fn convert_bin(path: &Path, arch: ArchSelect) -> Result<PathBuf> {
     let arch = match arch {
         ArchSelect::I386 => "elf32-i386",
+        ArchSelect::I686 => "elf64-x86-64",
         _ => todo!("Add more objcopy arches"),
     };
 
@@ -128,8 +129,8 @@ async fn build_bootloader_config() -> Result<PathBuf> {
 
     file.write_all(
         br#"
-bootloader32=/bootloader/bootloader32.bin
-bootloader64=/bootloader/bootloader64.bin
+bootloader32=/bootloader/stage_32.bin
+bootloader64=/bootloader/stage_64.bin
 kernel=/kernel.elf
 vbe-mode=1280x720
 "#,
@@ -140,27 +141,30 @@ vbe-mode=1280x720
 }
 
 pub async fn build_project() -> Result<Artifacts> {
-    let (stage_bootsector, stage_16bit, kernel, boot_cfg) = future::try_join4(
+    let (stage_bootsector, stage_16bit, stage_32bit, kernel, boot_cfg) = future::try_join5(
         cargo_helper(
             Some("stage-bootsector"),
             "stage-bootsector",
             ArchSelect::I386,
         ),
         cargo_helper(Some("stage-16bit"), "stage-16bit", ArchSelect::I386),
+        cargo_helper(Some("stage-32bit"), "stage-32bit", ArchSelect::I686),
         cargo_helper(None, "kernel", ArchSelect::X64),
         build_bootloader_config(),
     )
     .await?;
 
-    let (bootsector, stage_16) = future::try_join(
+    let (bootsector, stage_16, stage_32) = future::try_join3(
         convert_bin(&stage_bootsector, ArchSelect::I386),
         convert_bin(&stage_16bit, ArchSelect::I386),
+        convert_bin(&stage_32bit, ArchSelect::I686),
     )
     .await?;
 
     Ok(Artifacts {
         bootsector,
         stage_16,
+        stage_32,
         kernel,
         boot_cfg,
     })
