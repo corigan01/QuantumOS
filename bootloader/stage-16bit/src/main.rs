@@ -3,7 +3,7 @@
 
 use crate::{disk::BiosDisk, mbr::Mbr};
 use bios::memory::MemoryEntry;
-use bios::video::Vesa;
+use bios::video::{Vesa, VesaModeId};
 use bump_alloc::BumpAlloc;
 use config::BootloaderConfig;
 use fs::fatfs::Fat;
@@ -50,10 +50,23 @@ fn main(disk_id: u16) -> ! {
         )
     };
 
+    let want_x = 1280;
+    let want_y = 720;
+
     let vesa = Vesa::quarry().unwrap();
     let modes = vesa
         .modes()
-        .for_each(|item| bios_println!("{:?}", item.querry()));
+        .filter_map(|id| id.querry().ok().map(|mode| (id, mode)))
+        .reduce(|closest_mode, (id, mode)| {
+            if closest_mode.1.width.abs_diff(want_x) > mode.width.abs_diff(want_x)
+                && closest_mode.1.height.abs_diff(want_y) > mode.height.abs_diff(want_y)
+            {
+                return (id, mode);
+            }
+
+            closest_mode
+        });
+    bios_println!("Closest = {:?}", modes);
 
     // - Filesystem Enumeration
 
