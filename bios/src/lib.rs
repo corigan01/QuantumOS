@@ -230,15 +230,15 @@ pub mod video {
                 di: (addr_of!(uninit_mode) as u32 % 0x10) as u16,
             );
 
-            // if uninit_mode.attributes & 0x90 != 0x90 {
-            //     // We don't currently want to deal with non-linear framebuffer support
-            //     return Err(VesaErrorKind::NotSupported);
-            // }
+            if uninit_mode.attributes & 0x90 != 0x90 {
+                // We don't currently want to deal with non-linear framebuffer support
+                return Err(VesaErrorKind::NotSupported);
+            }
 
-            // if uninit_mode.memory_model != 4 && uninit_mode.memory_model != 6 {
-            //     // same with non-packed pixel modes
-            //     return Err(VesaErrorKind::NotSupported);
-            // }
+            if uninit_mode.memory_model != 4 && uninit_mode.memory_model != 6 {
+                // same with non-packed pixel modes
+                return Err(VesaErrorKind::NotSupported);
+            }
 
             Ok(uninit_mode)
         }
@@ -262,7 +262,7 @@ pub mod video {
             }
         }
 
-        pub fn modes(&self) -> &[VesaModeId] {
+        pub fn modes(&self) -> impl Iterator<Item = VesaModeId> {
             let modes_loc = (self.video_mode_ptr.1 as u32 * 0x10) + self.video_mode_ptr.0 as u32;
             let modes_ptr = modes_loc as *const VesaModeId;
 
@@ -278,6 +278,8 @@ pub mod video {
             }
 
             unsafe { core::slice::from_raw_parts(modes_ptr, mode_len) }
+                .into_iter()
+                .copied()
         }
 
         pub fn idk(&self) -> (u16, u16) {
