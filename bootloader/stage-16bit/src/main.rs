@@ -51,7 +51,18 @@ fn main(disk_id: u16) -> ! {
     };
 
     let vesa = Vesa::quarry().unwrap();
-    vesa.modes().for_each(|item| bios_print!("{:?}", item));
+    let modes = vesa.modes();
+
+    bios_println!("addr: {} -- {:?}", modes.as_ptr() as usize, vesa.idk());
+
+    modes
+        .iter()
+        .copied()
+        // .filter(|item| item.get_id() != 0)
+        .inspect(|item| bios_println!("{}:", item.get_id()))
+        .for_each(|item| bios_println!("{:?}", item.querry()));
+
+    bios_println!("addr: {} -- {:?}", modes.as_ptr() as usize, vesa.idk());
 
     // - Filesystem Enumeration
 

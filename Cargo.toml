@@ -16,7 +16,7 @@ fs = { path = "fs" }
 
 [profile.release]
 panic = "abort"
-# strip = true
+strip = true
 opt-level="z"
 lto = true
 codegen-units = 1

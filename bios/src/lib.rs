@@ -83,13 +83,13 @@ macro_rules! bios_call {
                 pop bx
                 pop es
             "),
-            bx = in(reg) bx,
-            es = in(reg) es,
-            si = in(reg) si,
             inout("ax") ax => ax,
             in("cx") cx,
             in("dx") dx,
-            in("di") di
+            in("di") di,
+            bx = in(reg) bx,
+            es = in(reg) es,
+            si = in(reg) si,
         ) }
 
         ax
@@ -145,7 +145,7 @@ pub mod video {
         };
     }
 
-    #[repr(C, packed)]
+    #[repr(C, align(256))]
     pub struct VesaMode {
         pub attributes: u16,
         pub window_a: u8,
@@ -182,8 +182,17 @@ pub mod video {
         reserved2: [u8; 206],
     }
 
+    impl core::fmt::Debug for VesaMode {
+        fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            f.debug_struct("VesaMode")
+                .field("x", &self.width)
+                .field("y", &self.height)
+                .finish()
+        }
+    }
+
     #[repr(C)]
-    #[derive(Clone, Copy, Debug)]
+    #[derive(Clone, Copy, Default)]
     pub struct Vesa {
         pub signature: [u8; 4],
         pub version: u16,
@@ -211,19 +220,39 @@ pub mod video {
         }
 
         pub fn querry(self) -> Result<VesaMode, VesaErrorKind> {
-            todo!()
+            let uninit_mode: VesaMode = unsafe { core::mem::zeroed() };
+
+            bios_call!(
+                int: 10,
+                ax: 0x4F01,
+                cx: self.0,
+                es: (addr_of!(uninit_mode) as u32 / 0x10) as u16,
+                di: (addr_of!(uninit_mode) as u32 % 0x10) as u16,
+            );
+
+            // if uninit_mode.attributes & 0x90 != 0x90 {
+            //     // We don't currently want to deal with non-linear framebuffer support
+            //     return Err(VesaErrorKind::NotSupported);
+            // }
+
+            // if uninit_mode.memory_model != 4 && uninit_mode.memory_model != 6 {
+            //     // same with non-packed pixel modes
+            //     return Err(VesaErrorKind::NotSupported);
+            // }
+
+            Ok(uninit_mode)
         }
     }
 
     impl Vesa {
         pub fn quarry() -> Result<Self, VesaErrorKind> {
-            let uninit_self: Self = unsafe { core::mem::zeroed() };
+            let uninit_self: Self = Default::default();
 
             bios_call!(
                 int: 10,
                 ax: 0x4F00,
-                es: addr_of!(uninit_self) as u16 / 0x10,
-                di: addr_of!(uninit_self) as u16 % 0x10,
+                es: (addr_of!(uninit_self) as u32 / 0x10) as u16,
+                di: (addr_of!(uninit_self) as u32 % 0x10) as u16,
             );
 
             if &uninit_self.signature == b"VESA" && uninit_self.version == 0x0300 {
@@ -233,14 +262,14 @@ pub mod video {
             }
         }
 
-        pub fn modes(&self) -> impl Iterator<Item = VesaModeId> {
-            let modes_loc = self.video_mode_ptr.1 as u32 * 0x10 + self.video_mode_ptr.0 as u32;
+        pub fn modes(&self) -> &[VesaModeId] {
+            let modes_loc = (self.video_mode_ptr.1 as u32 * 0x10) + self.video_mode_ptr.0 as u32;
             let modes_ptr = modes_loc as *const VesaModeId;
 
             let mut mode_len = 0;
             loop {
                 unsafe {
-                    if (*modes_ptr.add(mode_len)).0 == 0 {
+                    if (*modes_ptr.add(mode_len)).0 == 0xFFFF {
                         break;
                     }
 
@@ -249,8 +278,10 @@ pub mod video {
             }
 
             unsafe { core::slice::from_raw_parts(modes_ptr, mode_len) }
-                .into_iter()
-                .copied()
+        }
+
+        pub fn idk(&self) -> (u16, u16) {
+            self.video_mode_ptr
         }
     }
 }
