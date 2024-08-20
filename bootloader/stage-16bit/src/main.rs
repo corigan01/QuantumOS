@@ -95,11 +95,12 @@ fn main(disk_id: u16) -> ! {
             if closest_mode.1.width.abs_diff(want_x) > mode.width.abs_diff(want_x)
                 && closest_mode.1.height.abs_diff(want_y) > mode.height.abs_diff(want_y)
             {
-                return (id, mode);
+                (id, mode)
+            } else {
+                closest_mode
             }
-
-            closest_mode
         });
+
     bios_println!("Closest = {:?}", modes);
 
     // - Bootloader32
