@@ -11,6 +11,10 @@ pub struct CommandLine {
     /// Enable Qemu's KVM
     #[arg(long, default_value_t = false)]
     pub enable_kvm: bool,
+
+    /// Print stdout to commandline
+    #[arg(long = "nographic", default_value_t = false)]
+    pub no_graphic: bool,
 }
 
 #[derive(Subcommand, Debug, Clone)]
