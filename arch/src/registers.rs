@@ -58,6 +58,16 @@ pub struct Regs64 {
     pub r15: u64,
 }
 
+macro_rules! flag_get {
+    ($method_name: ident, $bit: literal) => {
+        #[doc = concat!("# Get ", stringify!($method_name))]
+        /// Check if this flag is set, or unset by reading the state of this register.
+        pub fn $method_name() -> bool {
+            read() & $bit != 0
+        }
+    };
+}
+
 pub mod eflags {
     #[inline(never)]
     pub fn read() -> usize {
@@ -75,7 +85,45 @@ pub mod eflags {
         flags
     }
 
-    pub fn carry() -> bool {
-        read() & 1 != 0
+    flag_get!(carry, 0);
+    flag_get!(parity, 2);
+    flag_get!(auxiliary, 4);
+    flag_get!(zero, 6);
+    flag_get!(sign, 7);
+    flag_get!(trap, 8);
+    flag_get!(interrupts_enabled, 9);
+    flag_get!(direction, 10);
+    flag_get!(overflow, 11);
+    flag_get!(nested_task, 14);
+    flag_get!(resume, 16);
+    flag_get!(v8086_mode, 17);
+    flag_get!(alignment_check, 18);
+    flag_get!(virt_interrupt, 19);
+    flag_get!(virt_pending, 20);
+    flag_get!(cpuid_available, 21);
+}
+
+pub mod cr0 {
+    #[inline(never)]
+    pub fn read() -> usize {
+        let mut flags;
+
+        unsafe {
+            core::arch::asm!("
+                mov eax, cr0
+            ",
+                out("eax") flags
+            )
+        }
+
+        flags
+    }
+
+    #[inline(never)]
+    pub unsafe fn write(value: usize) {
+        core::arch::asm!(
+            "mov cr0, eax",
+            in("eax") value
+        )
     }
 }
