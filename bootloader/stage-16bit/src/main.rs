@@ -107,10 +107,16 @@ fn main(disk_id: u16) -> ! {
     let mut bootloader32 = fatfs
         .open(qconfig.bootloader32)
         .expect("Unable to find bootloader32");
+
+    // Our bootloader needs to be at 0x00200000
+    alloc.push_ptr_to(0x00200000 as *mut u8);
+
     let bootloader32_buffer = unsafe { alloc.allocate(bootloader32.filesize()) }.unwrap();
     bootloader32
         .read(bootloader32_buffer)
         .expect("Unable to read bootloader32");
+
+    bios_println!("Loaded: '{}'", qconfig.bootloader32);
 
     panic!("Not supposed to return!");
 }

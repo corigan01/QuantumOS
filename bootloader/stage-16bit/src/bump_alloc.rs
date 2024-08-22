@@ -11,7 +11,7 @@ impl BumpAlloc {
         }
     }
 
-    pub unsafe fn allocate<'a>(&'a mut self, size: usize) -> Option<&'a mut [u8]> {
+    pub unsafe fn allocate(&mut self, size: usize) -> Option<&'static mut [u8]> {
         let bumped_ptr = self.current_ptr.add(size);
         if bumped_ptr > self.end {
             return None;
@@ -21,5 +21,13 @@ impl BumpAlloc {
         self.current_ptr = bumped_ptr;
 
         Some(core::slice::from_raw_parts_mut(allocation_start, size))
+    }
+
+    pub fn push_ptr_to(&mut self, new_ptr: *mut u8) {
+        if new_ptr > self.end {
+            panic!("Cannot push ptr past end of allocation area!");
+        }
+
+        self.current_ptr = new_ptr;
     }
 }
