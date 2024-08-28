@@ -82,3 +82,7 @@ pub unsafe fn enter_unreal() {
         in(reg) 0x0
     );
 }
+
+pub unsafe fn enter_stage2(entry_point: *const u8) {
+    todo!()
+}
