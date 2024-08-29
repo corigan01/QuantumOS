@@ -1,3 +1,4 @@
+use arch::registers;
 use core::{arch::asm, mem::size_of};
 
 type GDEntry = u64;
@@ -84,5 +85,8 @@ pub unsafe fn enter_unreal() {
 }
 
 pub unsafe fn enter_stage2(entry_point: *const u8) {
+    arch::interrupts::disable_interrupts();
+    cr0::set_protected_mode(true);
+
     todo!()
 }

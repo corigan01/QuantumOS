@@ -1,3 +1,5 @@
+use crate::CpuPrivilege;
+
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
 pub struct Regs8 {
@@ -56,6 +58,35 @@ pub struct Regs64 {
     pub r13: u64,
     pub r14: u64,
     pub r15: u64,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct SegmentRegisters {
+    cs: u16,
+    ds: u16,
+    es: u16,
+    ss: u16,
+    fs: u16,
+    gs: u16,
+}
+
+#[derive(Clone, Copy)]
+#[repr(transparent)]
+pub struct Segment(pub u16);
+
+impl Segment {
+    pub fn new(gdt_index: u16, privl: CpuPrivilege) -> Self {
+        let privl: u16 = privl.into();
+
+        Self((gdt_index << 3) | privl)
+    }
+}
+
+impl SegmentRegisters {
+    pub fn set_data_segments(segment: Segment) -> Self {
+        todo!()
+    }
 }
 
 macro_rules! flag_get {
