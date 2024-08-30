@@ -1,0 +1,38 @@
+[workspace]
+members = ["kernel", "meta", "bootloader", "bootloader/stage-bootsector", "bootloader/stage-16bit","bootloader/stage-32bit", "bios", "arch", "fs"]
+default-members = ["meta"]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+authors = ["corigan01 <corigan01@gmail.com>"]
+description = "Quantum Operating System Bootloader"
+documentation = "https://github.com/corigan01/QuantumOS"
+
+[workspace.dependencies]
+arch = { path = "arch" }
+bios = { path = "bios" }
+fs = { path = "fs" }
+
+[profile.stage-bootsector]
+inherits = "release"
+panic = "abort"
+strip = true
+opt-level="z"
+lto = true
+codegen-units = 1
+debug = 0
+overflow-checks = false
+
+[profile.stage-16bit]
+inherits = "release"
+panic = "abort"
+strip = true
+opt-level="z"
+lto = true
+codegen-units = 1
+debug = 0
+overflow-checks = false
+
+[profile.stage-32bit]
+inherits = "release"

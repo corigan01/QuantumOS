@@ -1,0 +1,11 @@
+[package]
+name = "stage-16bit"
+edition = "2021"
+version.workspace = true
+authors.workspace = true
+description.workspace = true
+documentation.workspace = true
+
+[dependencies]
+bios = { workspace = true }
+fs = { workspace = true, features = ["fatfs"]}

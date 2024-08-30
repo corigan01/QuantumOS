@@ -1,20 +1,9 @@
 [package]
-name = "quantum_os"
+name = "kernel"
 version = "0.1.0"
 edition = "2021"
-build="build.rs"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-spin = "0.9.8"
-quantum_lib = {path = "../lib/lowlevel_lib" }
-bootloader = {path = "../bootloader/bootloader"}
-qk_alloc = { path = "../lib/qk_alloc" }
-qk_mem = { path = "../lib/qk_mem" }
-quantum_utils = { path = "../lib/quantum_utils" }
-fs = { path = "../lib/fs" }
-
-owo-colors = "3.5.0"
-
-[dependencies.lazy_static]
-version = "1.4.0"
-features = ["spin_no_std"]
+quantum-loader = { path="../bootloader" }

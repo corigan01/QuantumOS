@@ -1,0 +1,12 @@
+[package]
+name = "quantum-loader"
+authors = ["corigan01 <corigan01@gmail.com>"]
+description = "Quantum Operating System Bootloader"
+documentation = "https://github.com/corigan01/QuantumOS"
+version = "0.1.1"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+
