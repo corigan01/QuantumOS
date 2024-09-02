@@ -84,8 +84,15 @@ impl Segment {
 }
 
 impl SegmentRegisters {
-    pub fn set_data_segments(segment: Segment) -> Self {
-        todo!()
+    pub unsafe fn set_data_segments(segment: Segment) {
+        core::arch::asm!(
+            "mov ds, ax",
+            "mov es, ax",
+            "mov ss, ax",
+            "mov fs, ax",
+            "mov gs, ax",
+            in("ax") segment.0
+        )
     }
 }
 
@@ -104,13 +111,8 @@ macro_rules! flag_set {
         #[doc = concat!("# Get ", stringify!($method_name))]
         /// Set this flag if 'flag' is set to true, or unset this flag if 'flag' is set to false.
         pub unsafe fn $method_name(flag: bool) {
-            let read_value = if flag {
-                read() | (1 << $bit)
-            } else {
-                read() & !(1 << $bit)
-            };
-
-            write(read_value);
+            use bits::BitManipulation;
+            write(*read().set_bit($bit, flag));
         }
     };
 }

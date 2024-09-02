@@ -1,5 +1,5 @@
 [workspace]
-members = ["kernel", "meta", "bootloader", "bootloader/stage-bootsector", "bootloader/stage-16bit","bootloader/stage-32bit", "bios", "arch", "fs"]
+members = ["kernel", "meta", "bootloader", "bootloader/stage-bootsector", "bootloader/stage-16bit","bootloader/stage-32bit", "bios", "arch", "fs", "bits"]
 default-members = ["meta"]
 resolver = "2"
 
@@ -13,6 +13,7 @@ documentation = "https://github.com/corigan01/QuantumOS"
 arch = { path = "arch" }
 bios = { path = "bios" }
 fs = { path = "fs" }
+bits = { path = "bits" }
 
 [profile.stage-bootsector]
 inherits = "release"

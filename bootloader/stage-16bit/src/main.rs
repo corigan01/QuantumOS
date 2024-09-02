@@ -109,7 +109,8 @@ fn main(disk_id: u16) -> ! {
         .expect("Unable to find bootloader32");
 
     // Our bootloader needs to be at 0x00200000
-    alloc.push_ptr_to(0x00200000 as *mut u8);
+    let bootloader_entrypoint = 0x00200000 as *mut u8;
+    alloc.push_ptr_to(bootloader_entrypoint);
 
     let bootloader32_buffer = unsafe { alloc.allocate(bootloader32.filesize()) }.unwrap();
     bootloader32
@@ -118,5 +119,7 @@ fn main(disk_id: u16) -> ! {
 
     bios_println!("Loaded: '{}'", qconfig.bootloader32);
 
-    panic!("Failed to enter stage-32!");
+    bios_println!("{:?}", bootloader32_buffer);
+
+    unsafe { unreal::enter_stage2(bootloader_entrypoint) };
 }

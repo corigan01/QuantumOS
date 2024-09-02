@@ -5,8 +5,8 @@ mod panic;
 
 #[no_mangle]
 #[link_section = ".begin"]
-extern "C" fn entry() {
-    main();
+extern "C" fn _start() {
+    loop {}
     panic!("Main should not return");
 }
 
