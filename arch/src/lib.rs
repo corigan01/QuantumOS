@@ -30,3 +30,27 @@ impl Into<u16> for CpuPrivilege {
         }
     }
 }
+
+pub mod stack {
+    #[inline(always)]
+    #[cfg(target_pointer_width = "64")]
+    pub fn stack_ptr() -> usize {
+        let value: u64;
+        unsafe {
+            core::arch::asm!("mov {0}, rsp", out(reg) value);
+        }
+
+        value as usize
+    }
+
+    #[inline(always)]
+    #[cfg(target_pointer_width = "32")]
+    pub fn stack_ptr() -> usize {
+        let value: u32;
+        unsafe {
+            core::arch::asm!("mov {0}, esp", out(reg) value);
+        }
+
+        value as usize
+    }
+}
