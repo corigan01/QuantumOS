@@ -1,5 +1,10 @@
-use arch::registers;
 use core::{arch::asm, mem::size_of};
+
+use arch::{
+    interrupts::disable_interrupts,
+    registers::{cr0, Segment, SegmentRegisters},
+    stack::{align_stack, push_stack},
+};
 
 type GDEntry = u64;
 
@@ -84,9 +89,25 @@ pub unsafe fn enter_unreal() {
     );
 }
 
-pub unsafe fn enter_stage2(entry_point: *const u8) {
-    arch::interrupts::disable_interrupts();
+pub unsafe fn enter_stage2(entry_point: *const u8) -> ! {
+    disable_interrupts();
     cr0::set_protected_mode(true);
 
-    todo!()
+    align_stack();
+    push_stack(entry_point as u32);
+
+    SegmentRegisters::set_data_segments(Segment::new(2, arch::CpuPrivilege::Ring0));
+
+    asm!("ljmp $0x8, $2f", "2:", options(att_syntax));
+    asm!("
+            .code32
+            pop {},
+            call {},
+            4:
+            jmp 4b
+        ",
+        out(reg) _
+    );
+
+    panic!("Stage32 should never return");
 }
