@@ -118,5 +118,5 @@ fn main(disk_id: u16) -> ! {
 
     bios_println!("Loaded: '{}'", qconfig.bootloader32);
 
-    panic!("Not supposed to return!");
+    panic!("Failed to enter stage-32!");
 }
