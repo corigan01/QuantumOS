@@ -92,14 +92,6 @@ pub unsafe fn enter_unreal() {
 #[inline(never)]
 pub unsafe fn enter_stage2(entry_point: *const u8) -> ! {
     disable_interrupts();
-    // core::arch::asm!(
-    //     "
-    //     cli
-    //     mov eax, cr0
-    //     or eax, 1
-    //     mov cr0, eax
-    // "
-    // );
     cr0::set_protected_mode(true);
 
     align_stack();
