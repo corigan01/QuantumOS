@@ -160,7 +160,7 @@ pub mod eflags {
 }
 
 pub mod cr0 {
-    #[inline(never)]
+    #[inline(always)]
     pub fn read() -> usize {
         let mut flags;
 
@@ -175,7 +175,7 @@ pub mod cr0 {
         flags
     }
 
-    #[inline(never)]
+    #[inline(always)]
     pub unsafe fn write(value: usize) {
         core::arch::asm!(
             "mov cr0, eax",

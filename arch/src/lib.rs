@@ -3,12 +3,14 @@
 pub mod registers;
 
 pub mod interrupts {
+    #[inline(always)]
     pub unsafe fn enable_interrupts() {
-        core::arch::asm!("cli");
+        core::arch::asm!("sti");
     }
 
+    #[inline(always)]
     pub unsafe fn disable_interrupts() {
-        core::arch::asm!("sti");
+        core::arch::asm!("cli");
     }
 }
 

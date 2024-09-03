@@ -89,8 +89,17 @@ pub unsafe fn enter_unreal() {
     );
 }
 
+#[inline(never)]
 pub unsafe fn enter_stage2(entry_point: *const u8) -> ! {
     disable_interrupts();
+    // core::arch::asm!(
+    //     "
+    //     cli
+    //     mov eax, cr0
+    //     or eax, 1
+    //     mov cr0, eax
+    // "
+    // );
     cr0::set_protected_mode(true);
 
     align_stack();
@@ -101,8 +110,8 @@ pub unsafe fn enter_stage2(entry_point: *const u8) -> ! {
     asm!("ljmp $0x8, $2f", "2:", options(att_syntax));
     asm!("
             .code32
-            pop {0:e},
-            call {0:e},
+            pop {0:e}
+            call {0:e}
             4:
             jmp 4b
         ",
