@@ -6,10 +6,10 @@ mod panic;
 #[no_mangle]
 #[link_section = ".begin"]
 extern "C" fn _start() {
-    loop {}
+    main();
     panic!("Main should not return");
 }
 
 fn main() {
-    unsafe { *(0x8B000 as *mut char) = '3' };
+    unsafe { *(0xB8000 as *mut char) = '3' };
 }
