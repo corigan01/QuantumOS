@@ -1,5 +1,5 @@
 [workspace]
-members = ["kernel", "meta", "bootloader", "bootloader/stage-bootsector", "bootloader/stage-16bit","bootloader/stage-32bit", "bios", "arch", "fs", "bits"]
+members = ["kernel", "meta", "bootloader", "bootloader/stage-bootsector", "bootloader/stage-16bit","bootloader/stage-32bit", "crates/bios", "crates/arch", "crates/fs", "crates/bits"]
 default-members = ["meta"]
 resolver = "2"
 
@@ -10,10 +10,10 @@ description = "Quantum Operating System Bootloader"
 documentation = "https://github.com/corigan01/QuantumOS"
 
 [workspace.dependencies]
-arch = { path = "arch" }
-bios = { path = "bios" }
-fs = { path = "fs" }
-bits = { path = "bits" }
+arch = { path = "crates/arch" }
+bios = { path = "crates/bios" }
+fs = { path = "crates/fs" }
+bits = { path = "crates/bits" }
 
 [profile.stage-bootsector]
 inherits = "release"

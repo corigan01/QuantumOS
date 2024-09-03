@@ -99,7 +99,6 @@ async fn main() -> Result<()> {
     match args.option.unwrap_or(cmdline::TaskOption::Run) {
         cmdline::TaskOption::Build => {
             build().await?;
-            todo!("build")
         }
         cmdline::TaskOption::Run => {
             run_qemu(&build().await?, args.enable_kvm, args.no_graphic)?;
