@@ -4,6 +4,7 @@
 use crate::{disk::BiosDisk, mbr::Mbr};
 use bios::memory::MemoryEntry;
 use bios::video::Vesa;
+use bootloader::Stage16toStage32;
 use bump_alloc::BumpAlloc;
 use config::BootloaderConfig;
 use fs::fatfs::Fat;
@@ -107,6 +108,14 @@ fn main(disk_id: u16) -> ! {
         closest_video_id.get_id(),
         closest_video_info
     );
+
+    // - Stage-to-Stage
+    let stage_to_stage = unsafe {
+        &mut *(alloc
+            .allocate(size_of::<Stage16toStage32>())
+            .expect("Unable to allocate Stage-to-Stage!")
+            .as_mut_ptr() as *mut Stage16toStage32)
+    };
 
     // - Bootloader32
     let mut bootloader32 = fatfs
