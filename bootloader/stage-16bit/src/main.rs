@@ -88,7 +88,7 @@ fn main(disk_id: u16) -> ! {
     let (want_x, want_y) = qconfig.expected_vbe_mode.unwrap_or((800, 600));
 
     let vesa = Vesa::quarry().unwrap();
-    let modes = vesa
+    let (closest_video_id, closest_video_info) = vesa
         .modes()
         .filter_map(|id| id.querry().ok().map(|mode| (id, mode)))
         .reduce(|closest_mode, (id, mode)| {
@@ -99,9 +99,14 @@ fn main(disk_id: u16) -> ! {
             } else {
                 closest_mode
             }
-        });
+        })
+        .expect("Find a optimal video mode");
 
-    bios_println!("Closest = {:?}", modes);
+    bios_println!(
+        "Optimal Video Mode  = (0x{:00x}) {:?}",
+        closest_video_id.get_id(),
+        closest_video_info
+    );
 
     // - Bootloader32
     let mut bootloader32 = fatfs
@@ -119,7 +124,6 @@ fn main(disk_id: u16) -> ! {
 
     bios_println!("Loaded: '{}'", qconfig.bootloader32);
 
-    bios_println!("{:?}", bootloader32_buffer);
-
+    closest_video_id.set().expect("Unable to set video mode");
     unsafe { unreal::enter_stage2(bootloader_entrypoint) };
 }

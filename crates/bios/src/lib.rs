@@ -242,6 +242,16 @@ pub mod video {
 
             Ok(uninit_mode)
         }
+
+        pub fn set(self) -> Result<(), VesaErrorKind> {
+            bios_call!(
+                int: 10,
+                ax: 0x4F02,
+                bx: self.0,
+            );
+
+            Ok(())
+        }
     }
 
     impl Vesa {
