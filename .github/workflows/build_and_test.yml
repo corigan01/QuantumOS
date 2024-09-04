@@ -16,6 +16,8 @@ jobs:
     - uses: actions/checkout@v3
     - name: Install Rustup
       run: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+    - name: Add rust to path
+      run: . "$HOME/.cargo/env"
     - name: Update Rust
       run: rustup update
     - name: Set Nightly
