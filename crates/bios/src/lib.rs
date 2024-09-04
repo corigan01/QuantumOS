@@ -1,6 +1,8 @@
 #![no_std]
 
+#[cfg(target_pointer_width = "32")]
 use arch::registers::{eflags, Regs32};
+#[cfg(target_pointer_width = "32")]
 use core::arch::asm;
 
 // FIXME: Should only build in 16bit x86 systems!
@@ -19,6 +21,7 @@ pub enum BiosStatus {
 }
 
 impl BiosStatus {
+    #[cfg(target_pointer_width = "32")]
     fn from_ax(ax: u16) -> Self {
         match ax {
             INVALID_BIOS_CALL_AX => Self::InvalidInput,
@@ -36,6 +39,7 @@ impl BiosStatus {
     }
 
     pub fn fail(self) {
+        #[cfg(target_pointer_width = "32")]
         match self {
             Self::Success => (),
             _ => {
@@ -46,6 +50,7 @@ impl BiosStatus {
     }
 }
 
+#[cfg(target_pointer_width = "32")]
 macro_rules! bios_call {
     (priv, $type:ty, $id:ident: $value:expr) => {
         let $id: $type = $value;
@@ -99,6 +104,7 @@ macro_rules! bios_call {
 // FIXME: We should remove this function and add int0x15 into macro!
 //        However, currently the macro causes the bootloader to fail.
 #[inline]
+#[cfg(target_pointer_width = "32")]
 pub unsafe fn int_0x15(reg: &mut Regs32, es: u16) -> BiosStatus {
     asm!(
         "push es",
@@ -122,10 +128,13 @@ pub unsafe fn int_0x15(reg: &mut Regs32, es: u16) -> BiosStatus {
 }
 
 pub mod video {
+    #[cfg(target_pointer_width = "32")]
     use core::ptr::addr_of;
+    #[cfg(target_pointer_width = "32")]
     const TELETYPE_OUTPUT_CHAR: u16 = 0x0E00;
 
     #[inline]
+    #[cfg(target_pointer_width = "32")]
     pub fn putc(c: u8) {
         unsafe {
             core::arch::asm!("
@@ -138,6 +147,7 @@ pub mod video {
     }
 
     #[inline]
+    #[cfg(target_pointer_width = "32")]
     pub fn print_char(c: char) {
         bios_call! {
             int: 10,
@@ -215,10 +225,15 @@ pub mod video {
     pub struct VesaModeId(u16);
 
     impl VesaModeId {
+        pub unsafe fn force_mode(mode: u16) -> Self {
+            Self(mode)
+        }
+
         pub fn get_id(self) -> u16 {
             self.0
         }
 
+        #[cfg(target_pointer_width = "32")]
         pub fn querry(self) -> Result<VesaMode, VesaErrorKind> {
             let uninit_mode: VesaMode = unsafe { core::mem::zeroed() };
 
@@ -243,6 +258,7 @@ pub mod video {
             Ok(uninit_mode)
         }
 
+        #[cfg(target_pointer_width = "32")]
         pub fn set(self) -> Result<(), VesaErrorKind> {
             bios_call!(
                 int: 10,
@@ -255,6 +271,7 @@ pub mod video {
     }
 
     impl Vesa {
+        #[cfg(target_pointer_width = "32")]
         pub fn quarry() -> Result<Self, VesaErrorKind> {
             let uninit_self: Self = Default::default();
 
@@ -291,13 +308,10 @@ pub mod video {
                 .into_iter()
                 .copied()
         }
-
-        pub fn idk(&self) -> (u16, u16) {
-            self.video_mode_ptr
-        }
     }
 }
 
+#[cfg(target_pointer_width = "32")]
 pub mod disk {
     use crate::BiosStatus;
     use core::ptr::addr_of;
@@ -345,6 +359,7 @@ pub mod disk {
 }
 
 pub mod memory {
+    #[cfg(target_pointer_width = "32")]
     use crate::BiosStatus;
 
     #[repr(C)]
@@ -363,6 +378,7 @@ pub mod memory {
 
     // FIXME: We should not be returning a Result with BiosStatus as the error, but instead
     //        it should be a type containing the error kind.
+    #[cfg(target_pointer_width = "32")]
     unsafe fn read_region(ptr: *mut MemoryEntry, ebx: u32) -> Result<u32, BiosStatus> {
         use crate::int_0x15;
         use arch::registers::Regs32;
@@ -394,6 +410,7 @@ pub mod memory {
     /// This function will only read memory regions it has room to fit in the
     /// provided buffer. If there are more regions than will fit in the buffer
     /// this function will simply return and return the size of the buffer.
+    #[cfg(target_pointer_width = "32")]
     pub fn read_mapping(memory: &mut [MemoryEntry]) -> Result<usize, BiosStatus> {
         let mut ebx = 0;
 
