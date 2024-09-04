@@ -1,0 +1,5 @@
+[build]
+target = "../linkerscripts/i386-quantum_loader.json"
+
+[unstable]
+build-std = ["core"]
