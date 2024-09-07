@@ -1,14 +1,30 @@
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
+#![no_std]
+
+pub mod terminal;
+
+/// # Framebuffer
+/// A struct to draw graphics into framebuffer.
+pub struct Framebuffer {
+    buffer: *mut u32,
+    height: u64,
+    width: u64,
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+impl Framebuffer {
+    /// # New Linear
+    /// Make a new framebuffer based off a linear framebuffer with zero blanking or padding.
+    pub unsafe fn new_linear(
+        buffer: *mut u32,
+        bits_per_pixel: u8,
+        height: u64,
+        width: u64,
+    ) -> Self {
+        assert_eq!(bits_per_pixel, 32, "Only 32-bits per pixel is supported!");
 
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
+        Framebuffer {
+            buffer,
+            height,
+            width,
+        }
     }
 }
