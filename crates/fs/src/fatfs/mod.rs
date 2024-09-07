@@ -200,7 +200,7 @@ impl<Part: ReadSeek> Fat<Part> {
                     total_offset += cluster_size_bytes;
                 }
                 FatEntry::EOF => return Err(FsError::EndOfFile),
-                _ => return Err(FsError::NotFound),
+                _ => return Err(FsError::ReadError),
             }
         }
     }
