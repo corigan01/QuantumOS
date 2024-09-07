@@ -1,11 +1,17 @@
 #![no_std]
 
+use core::ptr::write_volatile;
+
 pub mod terminal;
 
 /// # Color
 /// A color in the binary format (u32 - r: u8, g: u8, b: u8, alpha: u8).
 #[derive(Clone, Copy)]
 pub struct Color(pub u32);
+
+impl Color {
+    pub const WHITE: Self = Self(0xFFFFFFFF);
+}
 
 /// # Framebuffer
 /// A struct to draw graphics into framebuffer.
@@ -48,9 +54,11 @@ impl Framebuffer {
 
         let verticality_to_linearity = y * self.width * Self::ALLOWED_BPP;
         unsafe {
-            *(self
-                .buffer
-                .add(verticality_to_linearity + (x * Self::ALLOWED_BPP))) = color
+            write_volatile(
+                self.buffer
+                    .add(verticality_to_linearity + (x * Self::ALLOWED_BPP)),
+                color,
+            );
         };
     }
 }
