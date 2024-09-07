@@ -1,5 +1,18 @@
 [workspace]
-members = ["kernel", "meta", "bootloader", "bootloader/stage-bootsector", "bootloader/stage-16bit","bootloader/stage-32bit", "crates/bios", "crates/arch", "crates/fs", "crates/bits"]
+members = [
+  "kernel", 
+  "meta", 
+  "bootloader", 
+  "bootloader/stage-bootsector", 
+  "bootloader/stage-16bit",
+  "bootloader/stage-32bit", 
+  "crates/bios", 
+  "crates/arch", 
+  "crates/fs", 
+  "crates/bits", 
+  "crates/binfont",
+  "crates/bootgfx"]
+
 default-members = ["meta"]
 resolver = "2"
 
@@ -15,6 +28,8 @@ bios = { path = "crates/bios" }
 fs = { path = "crates/fs" }
 bits = { path = "crates/bits" }
 bootloader = { path = "bootloader/" }
+binfont = { path = "crates/binfont" }
+bootgfx = { path = "crates/bootgfx" }
 
 [profile.stage-bootsector]
 inherits = "release"
