@@ -164,18 +164,12 @@ impl<Part: ReadSeek> Fat<Part> {
         self.disk.read(&mut sector_array)?;
 
         Ok(match self.bpb.kind() {
-            FatKind::Fat16 => unsafe {
-                FatEntry::from_fat16(
-                    (&*core::ptr::slice_from_raw_parts(sector_array.as_ptr() as *const u16, 256))
-                        [entry_offset] as ClusterId,
-                )
-            },
-            FatKind::Fat32 => unsafe {
-                FatEntry::from_fat32(
-                    (&*core::ptr::slice_from_raw_parts(sector_array.as_ptr() as *const u32, 128))
-                        [entry_offset] as ClusterId,
-                )
-            },
+            FatKind::Fat16 => FatEntry::from_fat16(unsafe {
+                core::ptr::read_unaligned(sector_array.as_ptr().add(entry_offset * 2))
+            } as ClusterId),
+            FatKind::Fat32 => FatEntry::from_fat32(unsafe {
+                core::ptr::read_unaligned(sector_array.as_ptr().add(entry_offset * 4))
+            } as ClusterId),
             FatKind::Fat12 => todo!("Support reading FAT12"),
         })
     }

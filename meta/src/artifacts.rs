@@ -128,8 +128,7 @@ async fn build_bootloader_config() -> Result<PathBuf> {
         .await?;
 
     file.write_all(
-        br#"
-bootloader32=/bootloader/stage_32.bin
+        br#"bootloader32=/bootloader/stage_32.bin
 bootloader64=/bootloader/stage_64.bin
 kernel=/kernel.elf
 vbe-mode=1280x720

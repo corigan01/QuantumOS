@@ -85,6 +85,8 @@ fn main(disk_id: u16) -> ! {
     let qconfig = core::str::from_utf8(&qconfig_buffer).unwrap();
     let qconfig = BootloaderConfig::parse_file(&qconfig).unwrap();
 
+    bios_println!("{:#?}", qconfig);
+
     // - Video Mode Config
     let (want_x, want_y) = qconfig.expected_vbe_mode.unwrap_or((800, 600));
 
@@ -146,5 +148,10 @@ fn main(disk_id: u16) -> ! {
     bios_println!("Loaded: '{}'", qconfig.bootloader32);
 
     closest_video_id.set().expect("Unable to set video mode");
-    unsafe { unreal::enter_stage2(bootloader_entrypoint) };
+    unsafe {
+        unreal::enter_stage2(
+            bootloader_entrypoint,
+            stage_to_stage as *const Stage16toStage32,
+        )
+    };
 }
