@@ -117,6 +117,18 @@ fn main(disk_id: u16) -> ! {
             .as_mut_ptr() as *mut Stage16toStage32)
     };
 
+    // TODO: Load kernel and stage64 section
+    stage_to_stage.stage64_ptr = 0;
+    stage_to_stage.kernel_ptr = 0;
+
+    stage_to_stage
+        .memory_map
+        .iter_mut()
+        .zip(memory_map)
+        .for_each(|(dest, src)| *dest = *src);
+
+    stage_to_stage.video_mode = (closest_video_id, closest_video_info);
+
     // - Bootloader32
     let mut bootloader32 = fatfs
         .open(qconfig.bootloader32)
