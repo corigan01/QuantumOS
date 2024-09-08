@@ -11,6 +11,7 @@ pub struct Color(pub u32);
 
 impl Color {
     pub const WHITE: Self = Self(0xFFFFFFFF);
+    pub const QUANTUM_BACKGROUND: Self = Self(0xFF121212);
 }
 
 /// # Framebuffer
@@ -70,5 +71,17 @@ impl Framebuffer {
                 self.draw_pixel(x, y, color);
             }
         }
+    }
+
+    /// # Height
+    /// Get the height of the framebuffer.
+    pub const fn height(&self) -> usize {
+        self.height
+    }
+
+    /// # Width
+    /// Get the width of the framebuffer.
+    pub const fn width(&self) -> usize {
+        self.width
     }
 }
