@@ -1,6 +1,8 @@
 #![no_std]
 #![no_main]
 
+use core::ptr::addr_of_mut;
+
 use crate::{disk::BiosDisk, mbr::Mbr};
 use bios::memory::MemoryEntry;
 use bios::video::Vesa;
@@ -94,6 +96,7 @@ fn main(disk_id: u16) -> ! {
     let (closest_video_id, closest_video_info) = vesa
         .modes()
         .filter_map(|id| id.querry().ok().map(|mode| (id, mode)))
+        .filter(|(id, mode)| mode.bpp == 32)
         .reduce(|closest_mode, (id, mode)| {
             if closest_mode.1.width.abs_diff(want_x) > mode.width.abs_diff(want_x)
                 && closest_mode.1.height.abs_diff(want_y) > mode.height.abs_diff(want_y)
@@ -125,11 +128,13 @@ fn main(disk_id: u16) -> ! {
     stage_to_stage.stage64_ptr = 0;
     stage_to_stage.kernel_ptr = 0;
 
-    stage_to_stage
-        .memory_map
-        .iter_mut()
-        .zip(memory_map)
-        .for_each(|(dest, src)| *dest = *src);
+    unsafe {
+        core::ptr::copy_nonoverlapping(
+            memory_map.as_ptr(),
+            stage_to_stage.memory_map.as_mut_ptr(),
+            memory_map.len(),
+        )
+    };
 
     stage_to_stage.video_mode = (closest_video_id, closest_video_info);
 

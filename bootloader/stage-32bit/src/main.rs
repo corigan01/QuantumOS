@@ -24,5 +24,6 @@ fn main(stage_to_stage: &Stage16toStage32) {
         )
     };
 
-    fb.draw_pixel(2, 2, Color::WHITE);
+    fb.draw_rec(10, 10, 100, 100, Color::WHITE);
+    loop {}
 }

@@ -67,21 +67,21 @@ fn run_qemu(
     } else {
         &[]
     };
-    let log_interrupts: &[&str] = if log_interrupts { &["-d", "int"] } else { &[] };
+    let log_interrupts: &[&str] = if log_interrupts {
+        &["-d", "int"]
+    } else {
+        &["-d", "cpu_reset"]
+    };
 
     Command::new("qemu-system-x86_64")
         .args(kvm)
         .args(no_graphic)
-        .args(log_interrupts)
         .arg("--name")
         .arg("Quantum OS")
         .arg("-device")
         .arg("isa-debug-exit,iobase=0xf4,iosize=0x04")
-        .arg("-d")
-        .arg("int")
-        .arg("-d")
-        .arg("cpu_reset")
         .arg("--no-reboot")
+        .args(log_interrupts)
         .arg("-m")
         .arg("256M")
         .arg("-k")

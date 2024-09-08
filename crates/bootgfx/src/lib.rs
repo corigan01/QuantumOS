@@ -52,13 +52,23 @@ impl Framebuffer {
             return;
         }
 
-        let verticality_to_linearity = y * self.width * Self::ALLOWED_BPP;
+        let verticality_to_linearity = y * self.width;
         unsafe {
-            write_volatile(
-                self.buffer
-                    .add(verticality_to_linearity + (x * Self::ALLOWED_BPP)),
-                color,
-            );
+            write_volatile(self.buffer.add(verticality_to_linearity + x), color);
         };
+    }
+
+    /// # Draw Rectangle
+    /// Draw a rectangle of a color onto the framebuffer.
+    pub fn draw_rec(&mut self, x: usize, y: usize, length: usize, height: usize, color: Color) {
+        // TODO: Use memory functions to speed this up. However, this may never
+        //       be used so I don't want to optimize it until it gets used out-
+        //       side the bootloader.
+
+        for y in y..(y + height) {
+            for x in x..(x + length) {
+                self.draw_pixel(x, y, color);
+            }
+        }
     }
 }
