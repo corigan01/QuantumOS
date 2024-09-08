@@ -30,4 +30,12 @@ impl BumpAlloc {
 
         self.current_ptr = new_ptr;
     }
+
+    pub fn align_ptr_to(&mut self, alignment: usize) {
+        unsafe {
+            self.current_ptr = self
+                .current_ptr
+                .add(self.current_ptr.align_offset(alignment))
+        };
+    }
 }

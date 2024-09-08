@@ -12,6 +12,10 @@ pub struct CommandLine {
     #[arg(long, default_value_t = false)]
     pub enable_kvm: bool,
 
+    /// Print all interrupts to stdout
+    #[arg(long = "log-int", default_value_t = false)]
+    pub log_interrupts: bool,
+
     /// Print stdout to commandline
     #[arg(long = "nographic", default_value_t = false)]
     pub no_graphic: bool,

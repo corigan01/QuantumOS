@@ -18,11 +18,11 @@ fn main(stage_to_stage: &Stage16toStage32) {
     let mut fb = unsafe {
         Framebuffer::new_linear(
             video_info.framebuffer as *mut u32,
-            video_info.bpp,
+            32,
             video_info.height as usize,
             video_info.width as usize,
         )
     };
 
-    // fb.draw_pixel(2, 2, Color::WHITE);
+    fb.draw_pixel(2, 2, Color::WHITE);
 }

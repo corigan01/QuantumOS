@@ -112,6 +112,8 @@ fn main(disk_id: u16) -> ! {
     );
 
     // - Stage-to-Stage
+    alloc.align_ptr_to(align_of::<Stage16toStage32>());
+
     let stage_to_stage = unsafe {
         &mut *(alloc
             .allocate(size_of::<Stage16toStage32>())

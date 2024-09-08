@@ -55,21 +55,30 @@ async fn build() -> Result<PathBuf> {
     disk.finish_and_write().await
 }
 
-fn run_qemu(disk_target_path: &Path, enable_kvm: bool, enable_no_graphic: bool) -> Result<()> {
+fn run_qemu(
+    disk_target_path: &Path,
+    enable_kvm: bool,
+    enable_no_graphic: bool,
+    log_interrupts: bool,
+) -> Result<()> {
     let kvm: &[&str] = if enable_kvm { &["--enable-kvm"] } else { &[] };
     let no_graphic: &[&str] = if enable_no_graphic {
         &["-nographic", "-serial", "mon:stdio"]
     } else {
         &[]
     };
+    let log_interrupts: &[&str] = if log_interrupts { &["-d", "int"] } else { &[] };
 
     Command::new("qemu-system-x86_64")
         .args(kvm)
         .args(no_graphic)
+        .args(log_interrupts)
         .arg("--name")
         .arg("Quantum OS")
         .arg("-device")
         .arg("isa-debug-exit,iobase=0xf4,iosize=0x04")
+        .arg("-d")
+        .arg("int")
         .arg("-d")
         .arg("cpu_reset")
         .arg("--no-reboot")
@@ -103,7 +112,12 @@ async fn main() -> Result<()> {
             build().await?;
         }
         cmdline::TaskOption::Run => {
-            run_qemu(&build().await?, args.enable_kvm, args.no_graphic)?;
+            run_qemu(
+                &build().await?,
+                args.enable_kvm,
+                args.no_graphic,
+                args.log_interrupts,
+            )?;
         }
         cmdline::TaskOption::Clean => {
             todo!("clean")
