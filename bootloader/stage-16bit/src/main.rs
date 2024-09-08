@@ -132,7 +132,7 @@ fn main(disk_id: u16) -> ! {
         core::ptr::copy_nonoverlapping(
             memory_map.as_ptr(),
             stage_to_stage.memory_map.as_mut_ptr(),
-            memory_map.len(),
+            memory_map.len().min(stage_to_stage.memory_map.len()),
         )
     };
 
