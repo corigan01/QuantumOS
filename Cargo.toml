@@ -11,7 +11,7 @@ members = [
   "crates/fs", 
   "crates/bits", 
   "crates/binfont",
-  "crates/bootgfx"]
+  "crates/bootgfx", "crates/lldebug"]
 
 default-members = ["meta"]
 resolver = "2"
