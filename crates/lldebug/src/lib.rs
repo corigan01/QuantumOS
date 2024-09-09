@@ -30,7 +30,7 @@ pub struct DebugStream {
 
 impl DebugStream {
     /// # New
-    /// Create a new debug stream.
+    /// Create a new debug stream with stream name and outlet provider.
     pub fn new(stream_name: &'static str, outlet: OutletRef) -> Self {
         Self {
             stream_name,
