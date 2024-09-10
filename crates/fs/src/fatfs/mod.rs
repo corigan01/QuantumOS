@@ -152,16 +152,19 @@ impl<Part: ReadSeek> Fat<Part> {
 
     fn read_fat(&mut self, id: ClusterId) -> Result<FatEntry> {
         let fat_region = self.bpb.fat_range();
-        let entry_sector =
-            (*fat_region.start()) + ((id + 1) as u64 / (self.bpb.sector_size() as u64));
-        let entry_offset = (id + 1) as usize % self.bpb.sector_size();
+        let entries_per_sector = (self.bpb.sector_size()) / self.bpb.fat_entry_bytes();
+
+        let entry_sector = (id / entries_per_sector as u32) as u64 + *fat_region.start();
+        let entry_offset = (id % entries_per_sector as u32) as usize;
 
         if entry_sector > *fat_region.end() {
             return Err(FsError::InvalidInput);
         }
 
         let mut sector_array = [0u8; 512];
-        self.disk.seek(SeekFrom::Start(entry_sector))?;
+        self.disk.seek(SeekFrom::Start(
+            entry_sector * self.bpb.sector_size() as u64,
+        ))?;
         self.disk.read(&mut sector_array)?;
 
         Ok(match self.bpb.kind() {

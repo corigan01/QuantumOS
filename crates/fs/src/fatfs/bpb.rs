@@ -173,4 +173,12 @@ impl Bpb {
     pub fn cluster_sectors(&self) -> usize {
         self.sectors_per_cluster as usize
     }
+
+    pub fn fat_entry_bytes(&self) -> usize {
+        match self.kind() {
+            FatKind::Fat12 => todo!("Fat12 not impl"),
+            FatKind::Fat16 => 2,
+            FatKind::Fat32 => 4,
+        }
+    }
 }
