@@ -1,8 +1,6 @@
 #![no_std]
 #![no_main]
 
-use core::ptr::addr_of_mut;
-
 use crate::{disk::BiosDisk, mbr::Mbr};
 use bios::memory::MemoryEntry;
 use bios::video::Vesa;
