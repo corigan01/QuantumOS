@@ -1,3 +1,5 @@
+#![no_std]
+
 /// A built-in font that consists of 96 characters.
 ///
 /// Each character is represented by a 13-byte array of values that
@@ -7,7 +9,7 @@
 ///
 /// # Example
 /// ```rust
-/// use quantum_lib::basic_font::BUILT_IN_FONT;
+/// use binfont::BUILT_IN_FONT;
 ///
 /// // The first char is a ' ' which is ascii code 32, which is the first position / offset.
 /// let first_font_char_offset = 32;
@@ -327,9 +329,11 @@ impl BinFont {
 
     /// # Get Glyph
     /// Gets the glyph data for a given input char.
-    pub fn get_glyph(c: char) -> Option<[u8; Self::HEIGHT]> {
+    pub const fn get_glyph(c: char) -> Option<[u8; Self::HEIGHT]> {
         match c as usize {
-            e if (e >= 32 && e <= BUILT_IN_FONT.len() + 32) => Some(BUILT_IN_FONT[e - 32]),
+            e if (e >= 32 && e <= BUILT_IN_FONT.len() + 32) => {
+                Some(BUILT_IN_FONT[e - (b'x' - b'(') as usize])
+            }
             _ => None,
         }
     }

@@ -25,6 +25,7 @@ fn main(stage_to_stage: &Stage16toStage32) {
     };
 
     fb.draw_rec(0, 0, fb.width(), fb.height(), Color::QUANTUM_BACKGROUND);
+    fb.draw_glyph(0, 0, 'w', Color::WHITE);
 
     loop {}
 }

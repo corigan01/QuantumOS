@@ -2,6 +2,8 @@
 
 use core::ptr::write_volatile;
 
+use binfont::BinFont;
+
 pub mod terminal;
 
 /// # Color
@@ -69,6 +71,22 @@ impl Framebuffer {
         for y in y..(y + height) {
             for x in x..(x + length) {
                 self.draw_pixel(x, y, color);
+            }
+        }
+    }
+
+    /// # Draw Glyph
+    /// Draw a glyph at some position on the screen.
+    pub fn draw_glyph(&mut self, x: usize, y: usize, c: char, color: Color) {
+        let Some(glyph) = BinFont::get_glyph(c) else {
+            return;
+        };
+
+        for (y_offset, y_char) in glyph.iter().enumerate() {
+            for bit in 0..8 {
+                if *y_char & (1 << bit) != 0 {
+                    self.draw_pixel(x * 9 + bit, y * 14 + y_offset, color);
+                }
             }
         }
     }
