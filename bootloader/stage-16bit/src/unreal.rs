@@ -95,19 +95,17 @@ pub unsafe fn enter_stage2(entry_point: *const u8, stage_to_stage: *const Stage1
     disable_interrupts();
     cr0::set_protected_mode(true);
 
+    SegmentRegisters::set_data_segments(Segment::new(2, arch::CpuPrivilege::Ring0));
+
     align_stack();
     push_stack(stage_to_stage as usize);
     push_stack(entry_point as usize);
-
-    SegmentRegisters::set_data_segments(Segment::new(2, arch::CpuPrivilege::Ring0));
 
     asm!("ljmp $0x8, $2f", "2:", options(att_syntax));
     asm!("
             .code32
             pop {0:e}
             call {0:e}
-            4:
-            jmp 4b
         ",
         out(reg) _
     );

@@ -22,7 +22,8 @@
 /// // Now paint the pixels to the screen from bottom to top, and from right to left
 /// // ...
 /// ```
-pub const BUILT_IN_FONT: [[u8; 13]; 96] = [
+#[link_section = ".font"]
+pub static BUILT_IN_FONT: [[u8; 13]; 96] = [
     [
         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
     ], // space :32
@@ -329,12 +330,7 @@ impl BinFont {
 
     /// # Get Glyph
     /// Gets the glyph data for a given input char.
-    pub const fn get_glyph(c: char) -> Option<[u8; Self::HEIGHT]> {
-        match c as usize {
-            e if (e >= 32 && e <= BUILT_IN_FONT.len() + 32) => {
-                Some(BUILT_IN_FONT[e - (b'x' - b'(') as usize])
-            }
-            _ => None,
-        }
+    pub fn get_glyph(c: u8) -> Option<&'static [u8; Self::HEIGHT]> {
+        BUILT_IN_FONT.get(c as usize - 32)
     }
 }

@@ -56,6 +56,7 @@ pub mod stack {
         value as usize
     }
 
+    #[inline(always)]
     pub unsafe fn align_stack() {
         #[cfg(target_pointer_width = "32")]
         core::arch::asm!("and esp, 0xffffff00");
@@ -63,6 +64,7 @@ pub mod stack {
         core::arch::asm!("and rsp, 0xffffffffffffff00");
     }
 
+    #[inline(always)]
     pub unsafe fn push_stack(value: usize) {
         #[cfg(target_pointer_width = "32")]
         core::arch::asm!("push {}", in(reg) (value as u32));

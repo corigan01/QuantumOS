@@ -77,15 +77,15 @@ impl Framebuffer {
 
     /// # Draw Glyph
     /// Draw a glyph at some position on the screen.
-    pub fn draw_glyph(&mut self, x: usize, y: usize, c: char, color: Color) {
+    pub fn draw_glyph(&mut self, x: usize, y: usize, c: u8, color: Color) {
         let Some(glyph) = BinFont::get_glyph(c) else {
             return;
         };
 
-        for (y_offset, y_char) in glyph.iter().enumerate() {
+        for (y_offset, y_char) in glyph.iter().copied().enumerate() {
             for bit in 0..8 {
-                if *y_char & (1 << bit) != 0 {
-                    self.draw_pixel(x * 9 + bit, y * 14 + y_offset, color);
+                if (y_char >> bit) & 1 != 1 {
+                    self.draw_pixel(x + bit, y + y_offset, color);
                 }
             }
         }

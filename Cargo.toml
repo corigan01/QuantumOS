@@ -53,3 +53,7 @@ overflow-checks = false
 
 [profile.stage-32bit]
 inherits = "release"
+panic = "abort"
+strip = false
+debug = 1
+overflow-checks = true
