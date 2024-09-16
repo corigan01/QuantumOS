@@ -11,7 +11,10 @@ members = [
   "crates/fs", 
   "crates/bits", 
   "crates/binfont",
-  "crates/bootgfx", "crates/lldebug"]
+  "crates/bootgfx", 
+  "crates/lldebug", 
+  "crates/serial"
+  ]
 
 default-members = ["meta"]
 resolver = "2"
@@ -30,6 +33,7 @@ bits = { path = "crates/bits" }
 bootloader = { path = "bootloader/" }
 binfont = { path = "crates/binfont" }
 bootgfx = { path = "crates/bootgfx" }
+serial = { path = "crates/serial" }
 
 [profile.stage-bootsector]
 inherits = "release"
