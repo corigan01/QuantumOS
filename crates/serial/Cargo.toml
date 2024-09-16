@@ -7,3 +7,4 @@ description.workspace = true
 documentation.workspace = true
 
 [dependencies]
+arch = { workspace = true }
