@@ -41,14 +41,14 @@ impl IOPort {
     pub unsafe fn read_byte(self) -> u8 {
         let mut port_value;
 
-        asm!("in al, dx", out("al") port_value, in("dx") self.0);
+        asm!("in al, dx", out("al") port_value, in("dx") self.0, options(nomem, nostack, preserves_flags));
         return port_value;
     }
 
     /// # Write Byte
     /// Write a byte to the cpu io bus.
     pub unsafe fn write_byte(self, byte: u8) {
-        asm!("out dx, al", in("dx") self.0, in("al") byte);
+        asm!("out dx, al", in("dx") self.0, in("al") byte, options(nomem, nostack, preserves_flags));
     }
 
     /// # Read Word
@@ -56,13 +56,13 @@ impl IOPort {
     pub unsafe fn read_word(self) -> u16 {
         let mut port_value;
 
-        asm!("in ax, dx", out("ax") port_value, in("dx") self.0);
+        asm!("in ax, dx", out("ax") port_value, in("dx") self.0, options(nomem, nostack, preserves_flags));
         return port_value;
     }
 
     /// # Write Word
     /// Writes a word to the cpu io bus.
     pub unsafe fn write_word(self, word: u16) {
-        asm!("out dx, ax", in("dx") self.0, in("ax") word);
+        asm!("out dx, ax", in("dx") self.0, in("ax") word, options(nomem, nostack, preserves_flags));
     }
 }
