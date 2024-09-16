@@ -56,7 +56,7 @@ extern "C" fn entry(disk_id: u16) {
 }
 
 fn main(disk_id: u16) -> ! {
-    bios_println!("Qauntum Loader");
+    bios_println!("Quantum Loader");
 
     // - Memory Setup
     let memory_map = crate::memory::memory_map();
