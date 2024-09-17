@@ -25,7 +25,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 /// # Ports
 /// COMMS ports for serial io on x86.
-mod ports {
+pub(crate) mod ports {
     use arch::io::IOPort;
 
     pub const COM1: IOPort = IOPort::new(0x3f8);
@@ -36,6 +36,8 @@ mod ports {
     pub const COM6: IOPort = IOPort::new(0x4f8);
     pub const COM7: IOPort = IOPort::new(0x5e8);
     pub const COM8: IOPort = IOPort::new(0x4e8);
+
+    pub const COMMS_ARRAY: [IOPort; 8] = [COM1, COM2, COM3, COM4, COM5, COM6, COM7, COM8];
 }
 
 mod offsets {
@@ -106,3 +108,7 @@ impl_reg!(RW: read_line_control, write_line_control, offsets::RW_LINE_CONTROL);
 impl_reg!(RW: read_modem_control, write_modem_control, offsets::RW_MODEM_CONTROL);
 impl_reg!(R: read_line_status, offsets::R_LINE_STATUS);
 impl_reg!(RW: read_scratch, write_scratch, offsets::RW_SCRATCH);
+
+// FIXME: I am not sure how I want to impl this, I just want to get some
+//        debug info right now and want to get a basic product out. I
+//        should rewrite this when I get back into the kernel :^)
