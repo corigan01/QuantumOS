@@ -28,30 +28,32 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 use bootgfx::{Color, Framebuffer};
 use bootloader::Stage16toStage32;
+use serial::Serial;
 
 mod panic;
 
 #[no_mangle]
 #[link_section = ".begin"]
-extern "C" fn _start(stage_to_stage: *const Stage16toStage32) {
+fn _start(stage_to_stage: *const Stage16toStage32) {
     main(unsafe { &(*stage_to_stage) });
     panic!("Main should not return");
 }
 
 fn main(stage_to_stage: &Stage16toStage32) {
-    let video_info = &stage_to_stage.video_mode.1;
-    let mut fb = unsafe {
-        Framebuffer::new_linear(
-            video_info.framebuffer as *mut u32,
-            32,
-            video_info.height as usize,
-            video_info.width as usize,
-        )
-    };
+    // let video_info = &stage_to_stage.video_mode.1;
+    // let mut fb = unsafe {
+    //     Framebuffer::new_linear(
+    //         video_info.framebuffer as *mut u32,
+    //         32,
+    //         video_info.height as usize,
+    //         video_info.width as usize,
+    //     )
+    // };
 
-    fb.draw_rec(0, 0, fb.width(), fb.height(), Color::QUANTUM_BACKGROUND);
-    fb.draw_glyph(10, 10, b'a', Color::WHITE);
-    fb.draw_glyph(20, 10, b'b', Color::WHITE);
+    // fb.draw_rec(0, 0, fb.width(), fb.height(), Color::QUANTUM_BACKGROUND);
+    let serial = Serial::probe_first(serial::baud::SerialBaud::Baud115200).unwrap();
 
-    loop {}
+    loop {
+        serial.transmit_byte(b'H');
+    }
 }

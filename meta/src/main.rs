@@ -80,6 +80,8 @@ fn run_qemu(
         .arg("Quantum OS")
         .arg("-device")
         .arg("isa-debug-exit,iobase=0xf4,iosize=0x04")
+        .arg("-serial")
+        .arg("stdio")
         .arg("--no-reboot")
         .args(log_interrupts)
         .arg("-m")

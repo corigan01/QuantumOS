@@ -23,6 +23,8 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+#![no_std]
+
 use arch::io::IOPort;
 
 pub mod baud;
@@ -102,7 +104,7 @@ impl Serial {
 }
 
 impl core::fmt::Write for Serial {
-    fn write_str(&mut self, s: &str) -> std::fmt::Result {
+    fn write_str(&mut self, s: &str) -> core::fmt::Result {
         for byte in s.bytes() {
             self.transmit_byte(byte);
         }
