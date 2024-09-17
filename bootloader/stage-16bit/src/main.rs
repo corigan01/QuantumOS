@@ -176,7 +176,7 @@ fn main(disk_id: u16) -> ! {
         .expect("Unable to read bootloader32");
 
     bios_println!(
-        "{:x} -> {:02x?}",
+        "{:x} -> \n{:02x?}",
         (bootloader32_buffer.as_ptr() as usize),
         bootloader32_buffer
     );

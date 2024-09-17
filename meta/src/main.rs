@@ -65,7 +65,7 @@ fn run_qemu(
     let no_graphic: &[&str] = if enable_no_graphic {
         &["-nographic", "-serial", "mon:stdio"]
     } else {
-        &[]
+        &["-serial", "stdio"]
     };
     let log_interrupts: &[&str] = if log_interrupts {
         &["-d", "int"]
@@ -80,8 +80,6 @@ fn run_qemu(
         .arg("Quantum OS")
         .arg("-device")
         .arg("isa-debug-exit,iobase=0xf4,iosize=0x04")
-        .arg("-serial")
-        .arg("stdio")
         .arg("--no-reboot")
         .args(log_interrupts)
         .arg("-m")
