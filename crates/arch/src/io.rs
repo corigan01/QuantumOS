@@ -23,7 +23,10 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use core::arch::asm;
+use core::{
+    arch::asm,
+    ops::{Add, Sub},
+};
 
 #[derive(Clone, Copy)]
 pub struct IOPort(u16);
@@ -64,5 +67,21 @@ impl IOPort {
     /// Writes a word to the cpu io bus.
     pub unsafe fn write_word(self, word: u16) {
         asm!("out dx, ax", in("dx") self.0, in("ax") word, options(nomem, nostack, preserves_flags));
+    }
+}
+
+impl Add<u16> for IOPort {
+    type Output = Self;
+
+    fn add(self, rhs: u16) -> Self::Output {
+        Self(self.0 + rhs)
+    }
+}
+
+impl Sub<u16> for IOPort {
+    type Output = Self;
+
+    fn sub(self, rhs: u16) -> Self::Output {
+        Self(self.0 - rhs)
     }
 }

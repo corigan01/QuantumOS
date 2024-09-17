@@ -60,3 +60,9 @@ mod offsets {
     /// # (Read/Write) Scratch Register Offset
     pub const RW_SCRATCH: u16 = 7;
 }
+
+macro_rules! read_register {
+    ($func_name: ident, $port_offset: ident) => {
+        pub unsafe fn $func_name(port: u16) -> u8 {}
+    };
+}
