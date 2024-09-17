@@ -34,6 +34,7 @@ bootloader = { path = "bootloader/" }
 binfont = { path = "crates/binfont" }
 bootgfx = { path = "crates/bootgfx" }
 serial = { path = "crates/serial" }
+lldebug = { path = "crates/lldebug" }
 
 [profile.stage-bootsector]
 inherits = "release"

@@ -26,34 +26,25 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #![no_main]
 #![no_std]
 
-use bootgfx::{Color, Framebuffer};
 use bootloader::Stage16toStage32;
+use lldebug::{make_global_debug, println};
 use serial::Serial;
 
 mod panic;
 
+make_global_debug!(SERIAL_DEBUG, Serial, init_serial_debug, "stage32", "serial");
+
 #[no_mangle]
 #[link_section = ".begin"]
-fn _start(stage_to_stage: *const Stage16toStage32) {
+extern "C" fn _start(stage_to_stage: *const Stage16toStage32) {
     main(unsafe { &(*stage_to_stage) });
     panic!("Main should not return");
 }
 
-fn main(stage_to_stage: &Stage16toStage32) {
-    // let video_info = &stage_to_stage.video_mode.1;
-    // let mut fb = unsafe {
-    //     Framebuffer::new_linear(
-    //         video_info.framebuffer as *mut u32,
-    //         32,
-    //         video_info.height as usize,
-    //         video_info.width as usize,
-    //     )
-    // };
-
-    // fb.draw_rec(0, 0, fb.width(), fb.height(), Color::QUANTUM_BACKGROUND);
-    let serial = Serial::probe_first(serial::baud::SerialBaud::Baud115200).unwrap();
+fn main(_stage_to_stage: &Stage16toStage32) {
+    init_serial_debug(|| Serial::probe_first(serial::baud::SerialBaud::Baud115200));
 
     loop {
-        serial.transmit_byte(b'H');
+        println!("Hello World!");
     }
 }

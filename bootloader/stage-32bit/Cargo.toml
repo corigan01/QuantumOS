@@ -10,3 +10,4 @@ documentation.workspace = true
 bootloader = {workspace = true}
 bootgfx = {workspace = true}
 serial = {workspace = true}
+lldebug = {workspace = true}
