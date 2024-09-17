@@ -25,9 +25,10 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 use core::panic::PanicInfo;
 
+use lldebug::println;
+
 #[panic_handler]
-fn panic(_info: &PanicInfo) -> ! {
-    loop {
-        unsafe { core::arch::asm!("nop") };
-    }
+fn panic(info: &PanicInfo) -> ! {
+    println!("PANIC! -- {}", info);
+    loop {}
 }

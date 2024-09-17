@@ -73,7 +73,6 @@ pub struct GdtPointer {
 impl GdtPointer {
     unsafe fn load(self) {
         asm!("
-                cli
                 lgdt [{ptr}]
             ",
             ptr = in(reg) &self
@@ -127,12 +126,11 @@ pub unsafe fn enter_stage2(entry_point: *const u8, stage_to_stage: *const Stage1
     push_stack(entry_point as usize);
 
     asm!("ljmp $0x8, $2f", "2:", options(att_syntax));
-    asm!("
+    asm!(
+        "
             .code32
-            pop {0:e}
-            call {0:e}
+            ret
         ",
-        out(reg) _
     );
 
     panic!("Stage32 should never return");
