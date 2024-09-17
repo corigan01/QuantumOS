@@ -38,6 +38,7 @@ macro_rules! make_global_debug {
 
         /// # Init Debug Stream Function
         /// Use this function to init any data needed for your stream!
+        #[inline]
         fn $init_function<Fun: FnOnce() -> core::option::Option<$debug_type>>(init: Fun) {
             unsafe { $debug_ident = init() };
             $crate::set_crate_nametag($crate_nametag);
