@@ -175,6 +175,13 @@ fn main(disk_id: u16) -> ! {
         .read(bootloader32_buffer)
         .expect("Unable to read bootloader32");
 
+    bios_println!(
+        "{:x} -> {:02x?}",
+        (bootloader32_buffer.as_ptr() as usize),
+        bootloader32_buffer
+    );
+    loop {}
+
     bios_println!("Loaded: '{}'", qconfig.bootloader32);
 
     closest_video_id.set().expect("Unable to set video mode");
