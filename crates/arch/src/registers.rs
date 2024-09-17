@@ -189,6 +189,7 @@ pub mod cr0 {
     pub fn read() -> usize {
         let mut flags;
 
+        #[cfg(target_pointer_width = "32")]
         unsafe {
             core::arch::asm!("
                 mov eax, cr0
@@ -197,15 +198,31 @@ pub mod cr0 {
             )
         }
 
+        #[cfg(target_pointer_width = "64")]
+        unsafe {
+            core::arch::asm!("
+                mov rax, cr0
+            ",
+                out("rax") flags
+            )
+        }
+
         flags
     }
 
     #[inline(always)]
     pub unsafe fn write(value: usize) {
+        #[cfg(target_pointer_width = "32")]
         core::arch::asm!(
             "mov cr0, eax",
             in("eax") value
-        )
+        );
+
+        #[cfg(target_pointer_width = "64")]
+        core::arch::asm!(
+            "mov cr0, rax",
+            in("rax") value
+        );
     }
 
     flag_both!(get_protected_mode, set_protected_mode, 0);
