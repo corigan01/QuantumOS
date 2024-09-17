@@ -61,8 +61,33 @@ mod offsets {
     pub const RW_SCRATCH: u16 = 7;
 }
 
-macro_rules! read_register {
-    ($func_name: ident, $port_offset: ident) => {
-        pub unsafe fn $func_name(port: u16) -> u8 {}
+macro_rules! impl_reg {
+    (R: $func_name: ident, $port_offset: expr) => {
+        pub unsafe fn $func_name(port: arch::io::IOPort) -> u8 {
+            (port + $port_offset).read_byte()
+        }
+    };
+
+    (W: $func_name: ident, $port_offset: expr) => {
+        pub unsafe fn $func_name(port: arch::io::IOPort, value: u8) {
+            (port + $port_offset).write_byte(value)
+        }
+    };
+
+    (RW: $read_name: ident, $write_name: ident, $port_offset: expr) => {
+        impl_reg!(R: $read_name, $port_offset);
+        impl_reg!(W: $write_name, $port_offset);
     };
 }
+
+impl_reg!(R: read_receive_buffer, offsets::R_RECEIVE_BUFFER);
+impl_reg!(W: write_transmit_buffer, offsets::W_TRANSMIT_BUFFER);
+impl_reg!(RW: read_interrupt_enable, write_interrupt_enable, offsets::RW_INTERRUPT_ENABLE);
+impl_reg!(RW: read_dlab_lsb, write_dlab_lsb, offsets::RW_DLAB_LSB);
+impl_reg!(RW: read_dlab_msb, write_dlab_msb, offsets::RW_DLAB_MSB);
+impl_reg!(R: read_interrupt_identification, offsets::R_INTERRUPT_IDENTIFICATION);
+impl_reg!(W: write_fifo_control, offsets::W_FIFO_CONTROL);
+impl_reg!(RW: read_line_control, write_line_control, offsets::RW_LINE_CONTROL);
+impl_reg!(RW: read_modem_control, write_modem_control, offsets::RW_MODEM_CONTROL);
+impl_reg!(R: read_line_status, offsets::R_LINE_STATUS);
+impl_reg!(RW: read_scratch, write_scratch, offsets::RW_SCRATCH);
