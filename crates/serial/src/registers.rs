@@ -22,3 +22,41 @@ NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FO
 DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+
+mod offsets {
+    /// # (Read) Receive Buffer Register Offset
+    pub const R_RECEIVE_BUFFER: u16 = 0;
+
+    /// # (Write) Transmit Buffer Register Offset
+    pub const W_TRANSMIT_BUFFER: u16 = 0;
+
+    /// # (Read/Write) Interrupt Enable Register Offset
+    pub const RW_INTERRUPT_ENABLE: u16 = 1;
+
+    /// # (Read/Write) DLAB Least Significant Byte Register Offset
+    /// -- DLAB must be set to '1'
+    pub const RW_DLAB_LSB: u16 = 0;
+
+    /// # (Read/Write) DLAB Most Sigificant Byte Register Offset
+    /// -- DLAB must be set to '1'
+    pub const RW_DLAB_MSB: u16 = 1;
+
+    /// # (Read) Interrupt Identification Register Offset
+    pub const R_INTERRUPT_IDENTIFICATION: u16 = 2;
+
+    /// # (Write) FIFO Control Register Offset
+    pub const W_FIFO_CONTROL: u16 = 2;
+
+    /// # (Read/Write) Line Control Register Offset
+    /// -- Most significant bit is the DLAB setting
+    pub const RW_LINE_CONTROL: u16 = 3;
+
+    /// # (Read/Write) Modem Control Register Offset
+    pub const RW_MODEM_CONTROL: u16 = 4;
+
+    /// # (Read) Line Status Register Offset
+    pub const R_LINE_STATUS: u16 = 6;
+
+    /// # (Read/Write) Scratch Register Offset
+    pub const RW_SCRATCH: u16 = 7;
+}
