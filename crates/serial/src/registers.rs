@@ -23,6 +23,21 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+/// # Ports
+/// COMMS ports for serial io on x86.
+mod ports {
+    use arch::io::IOPort;
+
+    pub const COM1: IOPort = IOPort::new(0x3f8);
+    pub const COM2: IOPort = IOPort::new(0x2f8);
+    pub const COM3: IOPort = IOPort::new(0x3E8);
+    pub const COM4: IOPort = IOPort::new(0x2e8);
+    pub const COM5: IOPort = IOPort::new(0x5f8);
+    pub const COM6: IOPort = IOPort::new(0x4f8);
+    pub const COM7: IOPort = IOPort::new(0x5e8);
+    pub const COM8: IOPort = IOPort::new(0x4e8);
+}
+
 mod offsets {
     /// # (Read) Receive Buffer Register Offset
     pub const R_RECEIVE_BUFFER: u16 = 0;
