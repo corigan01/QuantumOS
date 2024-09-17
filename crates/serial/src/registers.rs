@@ -40,6 +40,7 @@ pub(crate) mod ports {
     pub const COMMS_ARRAY: [IOPort; 8] = [COM1, COM2, COM3, COM4, COM5, COM6, COM7, COM8];
 }
 
+#[allow(unused)]
 mod offsets {
     /// # (Read) Receive Buffer Register Offset
     pub const R_RECEIVE_BUFFER: u16 = 0;
@@ -80,12 +81,14 @@ mod offsets {
 
 macro_rules! impl_reg {
     (R: $func_name: ident, $port_offset: expr) => {
+        #[allow(unused)]
         pub unsafe fn $func_name(port: arch::io::IOPort) -> u8 {
             (port + $port_offset).read_byte()
         }
     };
 
     (W: $func_name: ident, $port_offset: expr) => {
+        #[allow(unused)]
         pub unsafe fn $func_name(port: arch::io::IOPort, value: u8) {
             (port + $port_offset).write_byte(value)
         }

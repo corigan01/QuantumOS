@@ -36,8 +36,8 @@ make_global_debug!(SERIAL_DEBUG, Serial, init_serial_debug, "stage32", "serial")
 
 #[no_mangle]
 #[link_section = ".begin"]
-extern "C" fn _start(stage_to_stage: *const Stage16toStage32) {
-    main(unsafe { &(*stage_to_stage) });
+extern "C" fn _start(stage_to_stage: u32) {
+    main(unsafe { &(*(stage_to_stage as *const Stage16toStage32)) });
     panic!("Main should not return");
 }
 
