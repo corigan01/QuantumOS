@@ -43,7 +43,7 @@ impl<'a> Display for HexDump<'a> {
         f.write_char('\n')?;
 
         if INCLUDE_HEADER_AND_FOOTER {
-            f.write_fmt(format_args!(" + {:09} +", self.data.len()))?;
+            f.write_fmt(format_args!(" + {:9} +", self.data.len()))?;
 
             for _ in 0..(ROWS_TO_PRINT / BYTES_PER_ROW) * 5 + 1 {
                 f.write_char('-')?;
@@ -60,7 +60,7 @@ impl<'a> Display for HexDump<'a> {
             .chunks(ROWS_TO_PRINT)
             .enumerate()
             .try_for_each(|(enumerate, chunk_print)| {
-                f.write_fmt(format_args!(" | {enumerate:09x} | "))?;
+                f.write_fmt(format_args!(" | {:09x} | ", enumerate * ROWS_TO_PRINT))?;
                 chunk_print.chunks(BYTES_PER_ROW).try_for_each(|value| {
                     value
                         .iter()
@@ -76,8 +76,9 @@ impl<'a> Display for HexDump<'a> {
                 chunk_print.iter().try_for_each(|val| {
                     f.write_char(match val {
                         0 => '.',
-                        v if v.is_ascii_alphanumeric() => *v as char,
-                        _ => '_',
+                        b' ' => ' ',
+                        v if v.is_ascii_alphanumeric() || v.is_ascii_punctuation() => *v as char,
+                        _ => '.',
                     })
                 })?;
 
@@ -111,6 +112,12 @@ pub trait HexPrint {
 }
 
 impl HexPrint for &[u8] {
+    fn hexdump(&self) -> HexDump {
+        HexDump { data: self }
+    }
+}
+
+impl HexPrint for &mut [u8] {
     fn hexdump(&self) -> HexDump {
         HexDump { data: self }
     }

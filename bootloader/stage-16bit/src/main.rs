@@ -34,6 +34,7 @@ use bump_alloc::BumpAlloc;
 use config::BootloaderConfig;
 use fs::fatfs::Fat;
 use fs::io::Read;
+use lldebug::hexdump::HexPrint;
 use unreal::enter_unreal;
 
 mod bump_alloc;
@@ -176,9 +177,9 @@ fn main(disk_id: u16) -> ! {
         .expect("Unable to read bootloader32");
 
     bios_println!(
-        "{:x} -> \n{:02x?}",
+        "{:x} -> \n{}",
         (bootloader32_buffer.as_ptr() as usize),
-        bootloader32_buffer
+        bootloader32_buffer.hexdump()
     );
     loop {}
 
