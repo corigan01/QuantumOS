@@ -45,7 +45,6 @@ mod mbr;
 mod memory;
 mod panic;
 mod unreal;
-// mod vbe;
 
 #[no_mangle]
 #[link_section = ".begin"]
