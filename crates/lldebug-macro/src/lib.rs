@@ -57,9 +57,22 @@ make_debug! {
 #![feature(proc_macro_diagnostic)]
 
 use proc_macro::TokenStream;
+use syn::parse_macro_input;
 mod parse;
 
 #[proc_macro]
 pub fn make_debug(token_input: TokenStream) -> TokenStream {
+    let single_debug_item = parse_macro_input!(token_input as parse::DebugStream);
+    println!("{:#?}", single_debug_item);
+
     todo!()
+}
+
+#[cfg(test)]
+mod test {
+    #[test]
+    fn compile_one_case() {
+        let t = trybuild::TestCases::new();
+        t.pass("tests/one.rs");
+    }
 }

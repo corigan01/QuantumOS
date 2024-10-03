@@ -1,13 +1,23 @@
+use std::fmt::Debug;
+
 use syn::{
     parse::{Parse, ParseStream},
     spanned::Spanned,
-    Attribute, Error, Expr, Lit, Result, Type,
+    Attribute, Error, Expr, Lit, Result, Token, Type,
 };
 
 pub struct DebugStream {
-    doc_string: Vec<String>,
+    doc_strings: Vec<String>,
     debug_type: Type,
     init_expr: Expr,
+}
+
+impl Debug for DebugStream {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("DebugStream")
+            .field("doc_strings", &self.doc_strings)
+            .finish()
+    }
 }
 
 mod reserved {
@@ -16,7 +26,6 @@ mod reserved {
 
 impl Parse for DebugStream {
     fn parse(input: ParseStream) -> Result<Self> {
-        input.parse::<reserved::Debug>()?;
         let attributes = input.call(Attribute::parse_outer)?;
         let mut doc_strings = Vec::new();
 
@@ -41,8 +50,28 @@ impl Parse for DebugStream {
                 };
 
                 doc_strings.push(doc_string.value());
+            } else {
+                return Err(Error::new(
+                    attribute.span(),
+                    format!(
+                        "Attribute '{}' is unknown!",
+                        attribute.path().require_ident()?
+                    ),
+                ));
             }
         }
-        todo!()
+
+        input.parse::<reserved::Debug>()?;
+        input.parse::<Token![:]>()?;
+        let debug_type: syn::Type = input.parse()?;
+        input.parse::<Token![=]>()?;
+        let init_expr: syn::Expr = input.parse()?;
+        input.parse::<Token![;]>()?;
+
+        Ok(Self {
+            doc_strings,
+            debug_type,
+            init_expr,
+        })
     }
 }

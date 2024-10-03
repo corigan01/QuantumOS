@@ -11,3 +11,6 @@ proc-macro = true
 
 [dependencies]
 syn = { version = "2.0.79", features = ["full"] }
+
+[dev-dependencies]
+trybuild = "1.0"

@@ -13,8 +13,8 @@ members = [
   "crates/binfont",
   "crates/bootgfx", 
   "crates/lldebug", 
-  "crates/serial"
-  , "crates/lldebug-macro"]
+  "crates/serial", 
+  "crates/lldebug-macro"]
 
 default-members = ["meta"]
 resolver = "2"
@@ -35,6 +35,7 @@ binfont = { path = "crates/binfont" }
 bootgfx = { path = "crates/bootgfx" }
 serial = { path = "crates/serial" }
 lldebug = { path = "crates/lldebug" }
+lldebug-macro = { path = "crates/lldebug-macro" }
 
 [profile.stage-bootsector]
 inherits = "release"
