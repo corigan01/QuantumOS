@@ -7,7 +7,7 @@ make_debug! {
 
     #[debug(ScreenBuffer)]
     // This could be in-case there is no Default implemented
-    fn() -> Option<Serial> { ... }
+    fn() -> Option<ScreenBuffer> { ... }
 }
 
 ->
@@ -15,21 +15,12 @@ make_debug! {
 
 mod _debug {
     static mut DEBUG_OUTPUT_STREAM_SERIAL: Mutex<LazyCell<Option<Serial>>>
-        = Mutex::new(LazyCell::new(|| { init_macro(); ... }));
+        = Mutex::new(LazyCell::new(|| { ... }));
 
     static mut DEBUG_OUTPUT_STREAM_SCREEN_BUFFER: Mutex<LazyCell<Option<ScreenBuffer>>>
-        = Mutex::new(LazyCell::new(|| { init_macro();  ... }));
+        = Mutex::new(LazyCell::new(|| { ... }));
 
-    static mut HAS_ALREADY_INIT: AtomicBool = AtomicBool::new(false);
     fn init_macro() {
-        // Check if init is already done
-        if unsafe { HAS_ALREADY_INIT.load(Ordering::Acquire) } {
-            return;
-        }
-
-        // Ensure no one else can init
-        unsafe { HAS_ALREADY_INIT.store(true, Ordering::Store) };
-
         lldebug::set_output_fn(GLOBAL_OUTPUT_PTR);
     }
 
@@ -44,4 +35,31 @@ mod _debug {
     }
 }
 
+init_macro() --> LLDebug
+println!() --> LLDebug --> global_output --> Serial -- init -- maybe { fmt::Write }
+                                |
+                                > ScreenBuffer -- init -- maybe { fmt::Write }
+
+#[debug_ready] --> Will paste `init_macro()` in main before anything else
+fn main() {
+    // Can we use the proc macro to put this here?
+    init_macro();
+}
+
+---
+
+make_debug! {
+    Debug: Option<$TYPE> = {$EXPR};
+    Debug: $TYPE = {$EXPR};
+}
 */
+
+#![feature(proc_macro_diagnostic)]
+
+use proc_macro::TokenStream;
+mod parse;
+
+#[proc_macro]
+pub fn make_debug(token_input: TokenStream) -> TokenStream {
+    todo!()
+}

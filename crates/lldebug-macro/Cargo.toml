@@ -10,3 +10,4 @@ documentation.workspace = true
 proc-macro = true
 
 [dependencies]
+syn = { version = "2.0.79", features = ["full"] }
