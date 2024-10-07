@@ -60,6 +60,9 @@ fn main() {
     println!("Hello World"); --> $TYPE.write(...)
 }
 
+// Hmmm, maybe if one uses 'Debug' maybe we should disable
+//       the extra '[$WHERE->$STREAM]' printing.
+
 
 --- TERMINAL:
 [Stage32->Serial]: Hello World!

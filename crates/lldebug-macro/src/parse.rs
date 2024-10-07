@@ -2,7 +2,6 @@ use std::fmt::Debug;
 use syn::{
     parse::{Parse, ParseStream},
     spanned::Spanned,
-    token::Comma,
     Attribute, Error, Expr, Lit, LitStr, Result, Token, Type,
 };
 
