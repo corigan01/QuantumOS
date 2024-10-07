@@ -1,13 +1,13 @@
 use std::fmt::Debug;
-
 use syn::{
     parse::{Parse, ParseStream},
     spanned::Spanned,
-    Attribute, Error, Expr, Lit, Result, Token, Type,
+    Attribute, Error, Expr, Lit, LitStr, Result, Token, Type,
 };
 
 pub struct DebugStream {
     doc_strings: Vec<String>,
+    stream_name: Option<LitStr>,
     debug_type: Type,
     init_expr: Expr,
 }
@@ -61,7 +61,14 @@ impl Parse for DebugStream {
             }
         }
 
-        input.parse::<reserved::Debug>()?;
+        let stream_name = match input.parse::<LitStr>() {
+            Ok(str) => Some(str),
+            Err(_) => {
+                input.parse::<reserved::Debug>()?;
+                None
+            }
+        };
+
         input.parse::<Token![:]>()?;
         let debug_type: syn::Type = input.parse()?;
         input.parse::<Token![=]>()?;
@@ -70,6 +77,7 @@ impl Parse for DebugStream {
 
         Ok(Self {
             doc_strings,
+            stream_name,
             debug_type,
             init_expr,
         })

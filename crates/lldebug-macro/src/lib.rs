@@ -51,7 +51,19 @@ fn main() {
 make_debug! {
     Debug: Option<$TYPE> = {$EXPR};
     Debug: $TYPE = {$EXPR};
+    "Serial": Serial = Serial::new();
 }
+
+
+#[debug_ready]
+fn main() {
+    println!("Hello World"); --> $TYPE.write(...)
+}
+
+
+--- TERMINAL:
+[Stage32->Serial]: Hello World!
+[Stage32->Display]: Hello World!
 */
 
 #![feature(proc_macro_diagnostic)]
@@ -61,6 +73,8 @@ use quote::quote;
 use syn::parse_macro_input;
 mod parse;
 
+/// # Make Debug
+/// This is a macro!
 #[proc_macro]
 pub fn make_debug(token_input: TokenStream) -> TokenStream {
     let single_debug_item = parse_macro_input!(token_input as parse::DebugStream);
