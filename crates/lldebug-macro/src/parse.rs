@@ -2,6 +2,7 @@ use std::fmt::Debug;
 use syn::{
     parse::{Parse, ParseStream},
     spanned::Spanned,
+    token::Comma,
     Attribute, Error, Expr, Lit, LitStr, Result, Token, Type,
 };
 
@@ -73,7 +74,6 @@ impl Parse for DebugStream {
         let debug_type: syn::Type = input.parse()?;
         input.parse::<Token![=]>()?;
         let init_expr: syn::Expr = input.parse()?;
-        input.parse::<Token![;]>()?;
 
         Ok(Self {
             doc_strings,
@@ -81,5 +81,20 @@ impl Parse for DebugStream {
             debug_type,
             init_expr,
         })
+    }
+}
+
+pub struct DebugMacroInput {
+    streams: Vec<DebugStream>,
+}
+
+impl Parse for DebugMacroInput {
+    fn parse(input: ParseStream) -> Result<Self> {
+        let streams = input
+            .parse_terminated(DebugStream::parse, Token![;])?
+            .into_iter()
+            .collect();
+
+        Ok(Self { streams })
     }
 }

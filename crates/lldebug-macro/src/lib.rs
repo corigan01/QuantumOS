@@ -77,8 +77,7 @@ mod parse;
 /// This is a macro!
 #[proc_macro]
 pub fn make_debug(token_input: TokenStream) -> TokenStream {
-    let single_debug_item = parse_macro_input!(token_input as parse::DebugStream);
-    println!("{:#?}", single_debug_item);
+    let single_debug_item = parse_macro_input!(token_input as parse::DebugMacroInput);
 
     quote! {}.into()
 }
