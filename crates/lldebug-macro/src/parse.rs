@@ -23,6 +23,7 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use proc_macro2::Span;
 use std::fmt::Debug;
 use syn::{
     parse::{Parse, ParseStream},
@@ -35,6 +36,7 @@ pub struct DebugStream {
     stream_name: Option<LitStr>,
     debug_type: Type,
     init_expr: Expr,
+    stream_span: Span,
 }
 
 impl Debug for DebugStream {
@@ -51,6 +53,7 @@ mod reserved {
 
 impl Parse for DebugStream {
     fn parse(input: ParseStream) -> Result<Self> {
+        let stream_span = input.span();
         let attributes = input.call(Attribute::parse_outer)?;
         let mut doc_strings = Vec::new();
 
@@ -104,21 +107,27 @@ impl Parse for DebugStream {
             stream_name,
             debug_type,
             init_expr,
+            stream_span,
         })
     }
 }
 
 pub struct DebugMacroInput {
     streams: Vec<DebugStream>,
+    macro_span: Span,
 }
 
 impl Parse for DebugMacroInput {
     fn parse(input: ParseStream) -> Result<Self> {
+        let macro_span = input.span();
         let streams = input
             .parse_terminated(DebugStream::parse, Token![;])?
             .into_iter()
             .collect();
 
-        Ok(Self { streams })
+        Ok(Self {
+            streams,
+            macro_span,
+        })
     }
 }
