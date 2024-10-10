@@ -97,7 +97,6 @@ fn main() {
 #![feature(proc_macro_diagnostic)]
 
 use proc_macro::TokenStream;
-use quote::quote;
 use syn::parse_macro_input;
 
 mod generate;
@@ -108,6 +107,5 @@ mod parse;
 #[proc_macro]
 pub fn make_debug(token_input: TokenStream) -> TokenStream {
     let single_debug_item = parse_macro_input!(token_input as parse::DebugMacroInput);
-
-    quote! {}.into()
+    generate::generate(single_debug_item).unwrap().into()
 }

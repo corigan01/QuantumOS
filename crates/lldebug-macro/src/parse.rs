@@ -32,11 +32,11 @@ use syn::{
 };
 
 pub struct DebugStream {
-    doc_strings: Vec<String>,
-    stream_name: Option<LitStr>,
-    debug_type: Type,
-    init_expr: Expr,
-    stream_span: Span,
+    pub(crate) doc_strings: Vec<String>,
+    pub(crate) stream_name: Option<LitStr>,
+    pub(crate) debug_type: Type,
+    pub(crate) init_expr: Expr,
+    pub(crate) stream_span: Span,
 }
 
 impl Debug for DebugStream {
@@ -113,8 +113,8 @@ impl Parse for DebugStream {
 }
 
 pub struct DebugMacroInput {
-    streams: Vec<DebugStream>,
-    macro_span: Span,
+    pub(crate) streams: Vec<DebugStream>,
+    pub(crate) macro_span: Span,
 }
 
 impl Parse for DebugMacroInput {
