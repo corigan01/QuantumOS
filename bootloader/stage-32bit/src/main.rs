@@ -27,12 +27,14 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #![no_std]
 
 use bootloader::Stage16toStage32;
-use lldebug::{make_global_debug, println};
-use serial::Serial;
+use lldebug::{debug_ready, make_debug, println};
+use serial::{baud::SerialBaud, Serial};
 
 mod panic;
 
-make_global_debug!(SERIAL_DEBUG, Serial, init_serial_debug, "stage32", "serial");
+make_debug! {
+    "Serial": Serial = Serial::probe_first(SerialBaud::Baud115200).unwrap();
+}
 
 #[no_mangle]
 #[link_section = ".start"]
@@ -41,9 +43,8 @@ extern "C" fn _start(stage_to_stage: u32) {
     panic!("Main should not return");
 }
 
+#[debug_ready]
 fn main(_stage_to_stage: &Stage16toStage32) {
-    init_serial_debug(|| Serial::probe_first(serial::baud::SerialBaud::Baud115200));
-
     loop {
         println!("Hello World!");
     }
