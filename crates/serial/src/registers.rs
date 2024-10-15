@@ -82,6 +82,7 @@ mod offsets {
 macro_rules! impl_reg {
     (R: $func_name: ident, $port_offset: expr) => {
         #[allow(unused)]
+        #[inline(always)]
         pub unsafe fn $func_name(port: arch::io::IOPort) -> u8 {
             (port + $port_offset).read_byte()
         }
@@ -89,6 +90,7 @@ macro_rules! impl_reg {
 
     (W: $func_name: ident, $port_offset: expr) => {
         #[allow(unused)]
+        #[inline(always)]
         pub unsafe fn $func_name(port: arch::io::IOPort, value: u8) {
             (port + $port_offset).write_byte(value)
         }

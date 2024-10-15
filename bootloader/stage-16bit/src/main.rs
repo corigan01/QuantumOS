@@ -35,6 +35,7 @@ use config::BootloaderConfig;
 use fs::fatfs::Fat;
 use fs::io::Read;
 use lldebug::{debug_ready, hexdump::HexPrint, make_debug, println};
+use serial::Serial;
 use unreal::enter_unreal;
 
 mod bump_alloc;
@@ -47,7 +48,8 @@ mod panic;
 mod unreal;
 
 make_debug! {
-    Debug: BiosConsole = BiosConsole::new();
+    // Debug: BiosConsole = BiosConsole::new();
+    "Serial": Serial = Serial::probe_first(serial::baud::SerialBaud::Baud115200).unwrap();
 }
 
 #[no_mangle]
@@ -115,8 +117,6 @@ fn main(disk_id: u16) -> ! {
     let qconfig = core::str::from_utf8(&qconfig_buffer).unwrap();
     let qconfig = BootloaderConfig::parse_file(&qconfig).unwrap();
 
-    println!("{:#?}", qconfig);
-
     // - Video Mode Config
     let (want_x, want_y) = qconfig.expected_vbe_mode.unwrap_or((800, 600));
 
@@ -134,7 +134,7 @@ fn main(disk_id: u16) -> ! {
                 closest_mode
             }
         })
-        .expect("Find a optimal video mode");
+        .expect("Failed to find a optimal video mode");
 
     println!(
         "Optimal Video Mode  = (0x{:00x}) {:?}",
@@ -185,15 +185,15 @@ fn main(disk_id: u16) -> ! {
         (bootloader32_buffer.as_ptr() as usize),
         bootloader32_buffer.hexdump()
     );
-    loop {}
 
     println!("Loaded: '{}'", qconfig.bootloader32);
 
     closest_video_id.set().expect("Unable to set video mode");
-    unsafe {
-        unreal::enter_stage2(
-            bootloader_entrypoint,
-            stage_to_stage as *const Stage16toStage32,
-        )
-    };
+    // unsafe {
+    //     unreal::enter_stage2(
+    //         bootloader_entrypoint,
+    //         stage_to_stage as *const Stage16toStage32,
+    //     )
+    // };
+    loop {}
 }

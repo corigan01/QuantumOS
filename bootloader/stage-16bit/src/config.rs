@@ -24,7 +24,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 #[repr(C)]
-#[derive(Default, Debug)]
+#[derive(Default)]
 pub struct BootloaderConfig<'a> {
     pub bootloader32: &'a str,
     pub bootloader64: &'a str,
