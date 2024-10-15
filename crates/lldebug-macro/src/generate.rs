@@ -25,8 +25,8 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 use crate::parse::{DebugMacroInput, DebugStream};
 use proc_macro2::Span;
-use quote::quote_spanned;
-use syn::{Ident, Result};
+use quote::{quote, quote_spanned};
+use syn::{Ident, Result, Type};
 
 pub fn generate(macro_input: DebugMacroInput) -> Result<proc_macro2::TokenStream> {
     let each_macro: Vec<proc_macro2::TokenStream> = macro_input
@@ -41,6 +41,8 @@ pub fn generate(macro_input: DebugMacroInput) -> Result<proc_macro2::TokenStream
     Ok(quote_spanned! {macro_input.macro_span=>
         #[doc = "# Debug Macro Mod"]
         mod debug_macro {
+            use super::*;
+
             #init_function
 
             #(#each_macro)*
@@ -81,23 +83,60 @@ pub fn generate_stream(enumeration: usize, stream: &DebugStream) -> proc_macro2:
     let stream_init = &stream.init_expr;
 
     quote_spanned! {stream.stream_span=>
-        static #name: ::lldebug::sync::Mutex<::core::cell::LazyCell<#stream_type>> = ::lldebug::sync::Mutex::new(::core::cell::LazyCell::new(|| #stream_init));
+        static mut #name: ::core::cell::LazyCell<::lldebug::sync::Mutex<#stream_type>> = ::core::cell::LazyCell::new(|| ::lldebug::sync::Mutex::new(#stream_init));
+    }
+}
+
+fn generate_print_each(var_name: &Ident, is_option: bool) -> proc_macro2::TokenStream {
+    if is_option {
+        quote! {
+            unsafe {
+                match &mut *(#var_name).lock() {
+                    Some(inner) => {
+                        let _ = inner.write_fmt(args);
+                    },
+                    _ => ()
+                }
+            }
+        }
+    } else {
+        quote! {
+            let _ = unsafe { (*(*(#var_name)).lock()).write_fmt(args) };
+        }
     }
 }
 
 pub fn generate_init_function(macro_input: &DebugMacroInput) -> proc_macro2::TokenStream {
+    fn is_type_option(debug_type: &Type) -> bool {
+        let Type::Path(maybe_option) = debug_type else {
+            return false;
+        };
+
+        maybe_option
+            .path
+            .segments
+            .iter()
+            .any(|segment| segment.ident.to_string().contains("Option"))
+    }
+
     // FIXME: We should only do one call to `static_stream_var_name` per stream, however, this
     // is eaiser for now.
-    let stream_names: Vec<String> = macro_input
+    let stream_outputs: Vec<proc_macro2::TokenStream> = macro_input
         .streams
         .iter()
         .enumerate()
-        .map(|(count, stream)| static_stream_var_name(count, stream))
+        .map(|(count, stream)| {
+            let stream_name = Ident::new(&static_stream_var_name(count, stream), Span::call_site());
+            let is_option = is_type_option(&stream.debug_type);
+
+            generate_print_each(&stream_name, is_option)
+        })
         .collect();
 
     quote_spanned! {Span::call_site()=>
         fn debug_macro_print(crate_name: &'static str, args: ::core::fmt::Arguments) {
-
+            use core::fmt::Write;
+            #(#stream_outputs)*
         }
 
         fn debug_macro_init() {
