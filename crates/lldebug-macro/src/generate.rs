@@ -24,14 +24,16 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 use crate::parse::{DebugMacroInput, DebugStream};
+use proc_macro2::Span;
 use quote::quote_spanned;
-use syn::{spanned::Spanned, Result};
+use syn::{Ident, Result};
 
 pub fn generate(macro_input: DebugMacroInput) -> Result<proc_macro2::TokenStream> {
     let each_macro: Vec<proc_macro2::TokenStream> = macro_input
         .streams
         .iter()
-        .map(|stream| generate_stream(stream))
+        .enumerate()
+        .map(|(count, stream)| generate_stream(count, stream))
         .collect();
 
     let init_function = generate_init_function(&macro_input);
@@ -68,20 +70,38 @@ pub fn static_stream_var_name(enumeration: usize, stream: &DebugStream) -> Strin
     format!("DEBUG_STREAM_OUTPUT_{stream_name}")
 }
 
-pub fn static_stream_var(name: &str, stream: &DebugStream) -> proc_macro2::TokenStream {
+pub fn generate_stream(enumeration: usize, stream: &DebugStream) -> proc_macro2::TokenStream {
+    let name_span = match stream.stream_name {
+        Some(ref stream) => stream.span(),
+        None => Span::call_site(),
+    };
+
+    let name = Ident::new(&static_stream_var_name(enumeration, stream), name_span);
     let stream_type = &stream.debug_type;
+    let stream_init = &stream.init_expr;
 
-    quote_spanned! {stream_type.span()=>
-        static #name: core::sync::Mutex<core::cell::LazyCell<#stream_type>>
-    }
-}
-
-pub fn generate_stream(stream: &DebugStream) -> proc_macro2::TokenStream {
     quote_spanned! {stream.stream_span=>
-
+        static #name: ::lldebug::sync::Mutex<::core::cell::LazyCell<#stream_type>> = ::lldebug::sync::Mutex::new(::core::cell::LazyCell::new(|| #stream_init));
     }
 }
 
 pub fn generate_init_function(macro_input: &DebugMacroInput) -> proc_macro2::TokenStream {
-    todo!()
+    // FIXME: We should only do one call to `static_stream_var_name` per stream, however, this
+    // is eaiser for now.
+    let stream_names: Vec<String> = macro_input
+        .streams
+        .iter()
+        .enumerate()
+        .map(|(count, stream)| static_stream_var_name(count, stream))
+        .collect();
+
+    quote_spanned! {Span::call_site()=>
+        fn debug_macro_print(crate_name: &'static str, args: ::core::fmt::Arguments) {
+
+        }
+
+        fn debug_macro_init() {
+            ::lldebug::set_global_debug_fn(debug_macro_print);
+        }
+    }
 }

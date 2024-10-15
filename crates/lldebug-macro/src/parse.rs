@@ -53,7 +53,6 @@ mod reserved {
 
 impl Parse for DebugStream {
     fn parse(input: ParseStream) -> Result<Self> {
-        let stream_span = input.span();
         let attributes = input.call(Attribute::parse_outer)?;
         let mut doc_strings = Vec::new();
 
@@ -89,6 +88,7 @@ impl Parse for DebugStream {
             }
         }
 
+        let stream_span = input.span();
         let stream_name = match input.parse::<LitStr>() {
             Ok(str) => Some(str),
             Err(_) => {

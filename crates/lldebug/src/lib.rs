@@ -52,6 +52,11 @@ pub fn _print(crate_name: &'static str, args: core::fmt::Arguments) {
     }
 }
 
+// Re-exports for spin
+pub mod sync {
+    pub use spin::Mutex;
+}
+
 /// # Print
 /// Output to global output stream.
 #[macro_export]
