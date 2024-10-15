@@ -26,9 +26,9 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 use crate::parse::{DebugMacroInput, DebugStream};
 use proc_macro2::Span;
 use quote::{quote, quote_spanned};
-use syn::{Ident, Result, Type};
+use syn::{Ident, ItemFn, Result, Type};
 
-pub fn generate(macro_input: DebugMacroInput) -> Result<proc_macro2::TokenStream> {
+pub fn generate_make_debug(macro_input: DebugMacroInput) -> Result<proc_macro2::TokenStream> {
     let each_macro: Vec<proc_macro2::TokenStream> = macro_input
         .streams
         .iter()
@@ -140,8 +140,23 @@ pub fn generate_init_function(macro_input: &DebugMacroInput) -> proc_macro2::Tok
             #(#stream_outputs)*
         }
 
-        fn debug_macro_init() {
+        pub(crate) fn debug_macro_init() {
             ::lldebug::set_global_debug_fn(debug_macro_print);
+        }
+    }
+}
+
+pub fn generate_debug_ready(macro_input: ItemFn) -> proc_macro2::TokenStream {
+    let attr = &macro_input.attrs;
+    let vis = &macro_input.vis;
+    let def = &macro_input.sig;
+    let body = &macro_input.block;
+
+    quote! {
+        #( #attr )*
+        #vis #def {
+            debug_macro::debug_macro_init();
+            #body
         }
     }
 }

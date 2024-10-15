@@ -26,6 +26,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #![no_std]
 
 // Re-export the macro
+pub use lldebug_macro::debug_ready;
 pub use lldebug_macro::make_debug;
 
 pub mod hexdump;

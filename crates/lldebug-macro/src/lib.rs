@@ -97,7 +97,9 @@ fn main() {
 #![feature(proc_macro_diagnostic)]
 
 use proc_macro::TokenStream;
-use syn::parse_macro_input;
+use proc_macro2::Span;
+use quote::quote;
+use syn::{parse_macro_input, Error, ItemFn};
 
 mod generate;
 mod parse;
@@ -106,6 +108,21 @@ mod parse;
 /// This is a macro!
 #[proc_macro]
 pub fn make_debug(token_input: TokenStream) -> TokenStream {
-    let single_debug_item = parse_macro_input!(token_input as parse::DebugMacroInput);
-    generate::generate(single_debug_item).unwrap().into()
+    let macro_input = parse_macro_input!(token_input as parse::DebugMacroInput);
+    generate::generate_make_debug(macro_input).unwrap().into()
+}
+
+#[proc_macro_attribute]
+pub fn debug_ready(attr: TokenStream, item: TokenStream) -> TokenStream {
+    if attr.is_empty() {
+        let macro_input = parse_macro_input!(item as ItemFn);
+        generate::generate_debug_ready(macro_input)
+    } else {
+        Error::new(
+            Span::call_site(),
+            "Did not expect any arguments in attribute!",
+        )
+        .into_compile_error()
+    }
+    .into()
 }
