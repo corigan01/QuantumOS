@@ -40,6 +40,7 @@ pub fn generate(macro_input: DebugMacroInput) -> Result<proc_macro2::TokenStream
 
     Ok(quote_spanned! {macro_input.macro_span=>
         #[doc = "# Debug Macro Mod"]
+        #[allow(unused)]
         mod debug_macro {
             use super::*;
 
