@@ -36,7 +36,6 @@ pub struct DebugStream {
     pub(crate) stream_name: Option<LitStr>,
     pub(crate) debug_type: Type,
     pub(crate) init_expr: Expr,
-    pub(crate) stream_span: Span,
 }
 
 impl Debug for DebugStream {
@@ -88,7 +87,6 @@ impl Parse for DebugStream {
             }
         }
 
-        let stream_span = input.span();
         let stream_name = match input.parse::<LitStr>() {
             Ok(str) => Some(str),
             Err(_) => {
@@ -107,7 +105,6 @@ impl Parse for DebugStream {
             stream_name,
             debug_type,
             init_expr,
-            stream_span,
         })
     }
 }
