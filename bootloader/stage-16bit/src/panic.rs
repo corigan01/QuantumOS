@@ -23,11 +23,11 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use crate::bios_println;
 use core::panic::PanicInfo;
+use lldebug::println;
 
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
-    bios_println!("{}", info);
+    println!("{}", info);
     loop {}
 }

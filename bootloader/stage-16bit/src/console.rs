@@ -44,23 +44,8 @@ impl Write for BiosConsole {
     }
 }
 
-#[doc(hidden)]
-pub fn _print(args: ::core::fmt::Arguments) {
-    (BiosConsole {}).write_fmt(args).unwrap();
-}
-
-#[macro_export]
-macro_rules! bios_print {
-    ($($arg:tt)*) => {{
-        $crate::console::_print(format_args!($($arg)*));
-    }};
-}
-
-#[macro_export]
-macro_rules! bios_println {
-    () => {$crate::bios_print!("\n")};
-    ($($arg:tt)*) => {{
-        $crate::console::_print(format_args!($($arg)*));
-        $crate::bios_print!("\n");
-    }};
+impl BiosConsole {
+    pub fn new() -> Self {
+        Self {}
+    }
 }

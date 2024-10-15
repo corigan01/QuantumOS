@@ -26,7 +26,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #![no_std]
 #![no_main]
 
-use crate::{disk::BiosDisk, mbr::Mbr};
+use crate::{console::BiosConsole, disk::BiosDisk, mbr::Mbr};
 use bios::memory::MemoryEntry;
 use bios::video::Vesa;
 use bootloader::Stage16toStage32;
@@ -34,7 +34,7 @@ use bump_alloc::BumpAlloc;
 use config::BootloaderConfig;
 use fs::fatfs::Fat;
 use fs::io::Read;
-use lldebug::hexdump::HexPrint;
+use lldebug::{debug_ready, hexdump::HexPrint, make_debug, println};
 use unreal::enter_unreal;
 
 mod bump_alloc;
@@ -46,17 +46,22 @@ mod memory;
 mod panic;
 mod unreal;
 
+make_debug! {
+    Debug: BiosConsole = BiosConsole::new();
+}
+
 #[no_mangle]
 #[link_section = ".begin"]
 extern "C" fn entry(disk_id: u16) {
     unsafe { enter_unreal() };
 
-    bios_println!();
+    println!();
     main(disk_id);
 }
 
+#[debug_ready]
 fn main(disk_id: u16) -> ! {
-    bios_println!("Quantum Loader");
+    println!("Quantum Loader");
 
     // - Memory Setup
     let memory_map = crate::memory::memory_map();
@@ -110,7 +115,7 @@ fn main(disk_id: u16) -> ! {
     let qconfig = core::str::from_utf8(&qconfig_buffer).unwrap();
     let qconfig = BootloaderConfig::parse_file(&qconfig).unwrap();
 
-    bios_println!("{:#?}", qconfig);
+    println!("{:#?}", qconfig);
 
     // - Video Mode Config
     let (want_x, want_y) = qconfig.expected_vbe_mode.unwrap_or((800, 600));
@@ -131,7 +136,7 @@ fn main(disk_id: u16) -> ! {
         })
         .expect("Find a optimal video mode");
 
-    bios_println!(
+    println!(
         "Optimal Video Mode  = (0x{:00x}) {:?}",
         closest_video_id.get_id(),
         closest_video_info
@@ -175,14 +180,14 @@ fn main(disk_id: u16) -> ! {
         .read(bootloader32_buffer)
         .expect("Unable to read bootloader32");
 
-    bios_println!(
+    println!(
         "{:x} -> \n{}",
         (bootloader32_buffer.as_ptr() as usize),
         bootloader32_buffer.hexdump()
     );
     loop {}
 
-    bios_println!("Loaded: '{}'", qconfig.bootloader32);
+    println!("Loaded: '{}'", qconfig.bootloader32);
 
     closest_video_id.set().expect("Unable to set video mode");
     unsafe {
