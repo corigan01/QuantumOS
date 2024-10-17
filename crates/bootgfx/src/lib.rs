@@ -107,9 +107,9 @@ impl Framebuffer {
             return;
         };
 
-        for (y_offset, y_char) in glyph.iter().copied().enumerate() {
+        for (y_offset, y_char) in glyph.iter().copied().rev().enumerate() {
             for bit in 0..8 {
-                if (y_char >> bit) & 1 != 1 {
+                if (y_char >> (7 - bit)) & 1 != 0 {
                     self.draw_pixel(x + bit, y + y_offset, color);
                 }
             }

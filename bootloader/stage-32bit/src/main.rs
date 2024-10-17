@@ -62,5 +62,7 @@ fn main(stage_to_stage: &Stage16toStage32) {
         framebuffer.height(),
         Color::QUANTUM_BACKGROUND,
     );
-    framebuffer.draw_glyph(0, 0, '!', Color::WHITE);
+    framebuffer.draw_glyph(10, 10, 'Q', Color::WHITE);
+    framebuffer.draw_glyph(20, 10, 'O', Color::WHITE);
+    framebuffer.draw_glyph(30, 10, 'S', Color::WHITE);
 }
