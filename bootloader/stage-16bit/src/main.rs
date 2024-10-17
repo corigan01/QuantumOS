@@ -26,6 +26,8 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #![no_std]
 #![no_main]
 
+use core::ptr::addr_of;
+
 use crate::{console::BiosConsole, disk::BiosDisk, mbr::Mbr};
 use bios::memory::MemoryEntry;
 use bios::video::Vesa;
@@ -180,9 +182,12 @@ fn main(disk_id: u16) -> ! {
         .read(bootloader32_buffer)
         .expect("Unable to read bootloader32");
 
-    println!("Loaded: '{}'", qconfig.bootloader32);
-
     closest_video_id.set().expect("Unable to set video mode");
+
+    println!(
+        "Calling Stage32: PTR: {:?} -- S2S: {:?}",
+        bootloader_entrypoint, stage_to_stage as *const Stage16toStage32
+    );
     unsafe {
         unreal::enter_stage2(
             bootloader_entrypoint,

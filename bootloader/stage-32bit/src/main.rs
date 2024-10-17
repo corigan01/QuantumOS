@@ -26,8 +26,9 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #![no_main]
 #![no_std]
 
+use bootgfx::{Color, Framebuffer};
 use bootloader::Stage16toStage32;
-use lldebug::{debug_ready, make_debug, println};
+use lldebug::{debug_ready, make_debug};
 use serial::{baud::SerialBaud, Serial};
 
 mod panic;
@@ -44,8 +45,22 @@ extern "C" fn _start(stage_to_stage: u32) {
 }
 
 #[debug_ready]
-fn main(_stage_to_stage: &Stage16toStage32) {
-    loop {
-        println!("Hello World!");
-    }
+fn main(stage_to_stage: &Stage16toStage32) {
+    let mut framebuffer = unsafe {
+        Framebuffer::new_linear(
+            stage_to_stage.video_mode.1.framebuffer as *mut u32,
+            32,
+            stage_to_stage.video_mode.1.height as usize,
+            stage_to_stage.video_mode.1.width as usize,
+        )
+    };
+
+    framebuffer.draw_rec(
+        1,
+        1,
+        framebuffer.width(),
+        framebuffer.height(),
+        Color::QUANTUM_BACKGROUND,
+    );
+    framebuffer.draw_glyph(0, 0, '!', Color::WHITE);
 }

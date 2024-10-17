@@ -102,7 +102,7 @@ impl Framebuffer {
 
     /// # Draw Glyph
     /// Draw a glyph at some position on the screen.
-    pub fn draw_glyph(&mut self, x: usize, y: usize, c: u8, color: Color) {
+    pub fn draw_glyph(&mut self, x: usize, y: usize, c: char, color: Color) {
         let Some(glyph) = BinFont::get_glyph(c) else {
             return;
         };

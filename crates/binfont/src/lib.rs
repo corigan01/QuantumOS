@@ -355,7 +355,7 @@ impl BinFont {
 
     /// # Get Glyph
     /// Gets the glyph data for a given input char.
-    pub fn get_glyph(c: u8) -> Option<&'static [u8; Self::HEIGHT]> {
+    pub fn get_glyph(c: char) -> Option<&'static [u8; Self::HEIGHT]> {
         BUILT_IN_FONT.get(c as usize - 32)
     }
 }

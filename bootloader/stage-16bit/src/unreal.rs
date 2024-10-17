@@ -129,8 +129,10 @@ pub unsafe fn enter_stage2(entry_point: *const u8, stage_to_stage: *const Stage1
     asm!(
         "
             .code32
-            ret
+            pop {x}
+            call {x}
         ",
+        x = out(reg) _
     );
 
     panic!("Stage32 should never return");
