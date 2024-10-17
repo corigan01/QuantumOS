@@ -49,7 +49,7 @@ mod unreal;
 
 make_debug! {
     // Debug: BiosConsole = BiosConsole::new();
-    "Serial": Serial = Serial::probe_first(serial::baud::SerialBaud::Baud115200).unwrap();
+    "Serial": Option<Serial> = Serial::probe_first(serial::baud::SerialBaud::Baud115200);
 }
 
 #[no_mangle]
@@ -180,20 +180,13 @@ fn main(disk_id: u16) -> ! {
         .read(bootloader32_buffer)
         .expect("Unable to read bootloader32");
 
-    println!(
-        "{:x} -> \n{}",
-        (bootloader32_buffer.as_ptr() as usize),
-        bootloader32_buffer.hexdump()
-    );
-
     println!("Loaded: '{}'", qconfig.bootloader32);
 
     closest_video_id.set().expect("Unable to set video mode");
-    // unsafe {
-    //     unreal::enter_stage2(
-    //         bootloader_entrypoint,
-    //         stage_to_stage as *const Stage16toStage32,
-    //     )
-    // };
-    loop {}
+    unsafe {
+        unreal::enter_stage2(
+            bootloader_entrypoint,
+            stage_to_stage as *const Stage16toStage32,
+        )
+    };
 }

@@ -33,7 +33,7 @@ use serial::{baud::SerialBaud, Serial};
 mod panic;
 
 make_debug! {
-    "Serial": Serial = Serial::probe_first(SerialBaud::Baud115200).unwrap();
+    "Serial": Option<Serial> = Serial::probe_first(SerialBaud::Baud115200);
 }
 
 #[no_mangle]
