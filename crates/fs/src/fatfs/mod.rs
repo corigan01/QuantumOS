@@ -33,6 +33,7 @@ use crate::{
     io::{Read, Seek},
 };
 use core::{fmt::Debug, mem::size_of};
+use lldebug::{print, println};
 
 mod bpb;
 mod inode;
@@ -213,7 +214,7 @@ impl<Part: ReadSeek> Fat<Part> {
         let cluster_size_bytes = (self.bpb.cluster_sectors() * self.bpb.sector_size()) as u64;
 
         loop {
-            if offset - total_offset <= cluster_size_bytes {
+            if offset - total_offset < cluster_size_bytes {
                 return Ok((search_cluster, offset % cluster_size_bytes));
             }
 
