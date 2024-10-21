@@ -110,4 +110,40 @@ impl PageDirectryEntry {
         /// In its default state, page entries are **not** accessable from userspace,
         /// and will cause a #PF (Page Fault Exception).
     }
+    impl_bit! {write_though, 3
+        /// Set the 'write though' page table bit.
+        ///
+        /// This bit determains if this page table entry is able to do write though
+        /// caching.
+    }
+    impl_bit! {cache_disable, 4
+        /// Set the 'cach disable' page table bit.
+        ///
+        /// This bit determains if this page table entry is able to be cahced or not,
+        /// when disabled this page table is never cached.
+    }
+    impl_bit! {accessed, 5
+        /// Set the 'accessed' page table bit.
+        ///
+        /// This bit determains if the CPU has written to this page table or not,
+        /// often called the dirty bit.
+    }
+    impl_bit! {page_size, 6
+        /// Set the 'page size' page table bit.
+        ///
+        /// This bit determains if the page table entry is the lowest entry in the
+        /// mapping, and does not point to further down page tables. Often used to
+        /// map large sections of memory instead of 4kib sections.
+        ///
+        /// # Note
+        /// This `page size` bit is only allowed on supported systems, and should
+        /// only be set on compoatable page table entries. If this page table entry
+        /// is not supported, the CPU will generate a #PF (Page Fault Excpetion) of
+        /// a 'reserved' value.
+    }
+    impl_bit! {execute_disable, 7
+        /// Set the 'execute disable' page table bit.
+        ///
+        /// This bit determains if CPU execution is allowed in this area.
+    }
 }
