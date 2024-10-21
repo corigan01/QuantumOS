@@ -33,7 +33,6 @@ use crate::{
     io::{Read, Seek},
 };
 use core::{fmt::Debug, mem::size_of};
-use lldebug::{print, println};
 
 mod bpb;
 mod inode;
