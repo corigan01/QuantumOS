@@ -34,13 +34,13 @@ pub struct IOPort(u16);
 
 impl IOPort {
     /// # New
-    /// Crate a new x86 io port struct.
+    /// Crate a new x86 IO port struct.
     pub const fn new(port: u16) -> Self {
         Self(port)
     }
 
     /// # Read Byte
-    /// Read a byte from the cpu io bus.
+    /// Read a byte from the CPU IO bus.
     #[inline(always)]
     pub unsafe fn read_byte(self) -> u8 {
         let mut port_value;
@@ -50,14 +50,14 @@ impl IOPort {
     }
 
     /// # Write Byte
-    /// Write a byte to the cpu io bus.
+    /// Write a byte to the CPU IO bus.
     #[inline(always)]
     pub unsafe fn write_byte(self, byte: u8) {
         asm!("out dx, al", in("dx") self.0, in("al") byte, options(nomem, nostack, preserves_flags));
     }
 
     /// # Read Word
-    /// Read a word from the cpu io bus.
+    /// Read a word from the CPU IO bus.
     #[inline(always)]
     pub unsafe fn read_word(self) -> u16 {
         let mut port_value;
@@ -67,7 +67,7 @@ impl IOPort {
     }
 
     /// # Write Word
-    /// Writes a word to the cpu io bus.
+    /// Writes a word to the CPU IO bus.
     #[inline(always)]
     pub unsafe fn write_word(self, word: u16) {
         asm!("out dx, ax", in("dx") self.0, in("ax") word, options(nomem, nostack, preserves_flags));

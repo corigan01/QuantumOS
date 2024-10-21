@@ -25,7 +25,7 @@ pub struct DiskImgBaker {
 
 impl DiskImgBaker {
     /// # New
-    /// Create a new bootloader configuration builder.
+    /// Create a new boot-loader configuration builder.
     pub async fn new() -> Result<Self> {
         let root_img = create_diskimg("disk", DISK_IMG_SIZE).await?;
 

@@ -36,7 +36,7 @@ pub mod hexdump;
 pub type OutputFn = fn(&'static str, core::fmt::Arguments);
 
 /// # Global Output Stream Function
-/// Contains the fn ptr to the function responsable for displaying debug output's arguments.
+/// Contains the `fn` `ptr` to the function responsible for displaying debug output's arguments.
 static mut GLOBAL_OUTPUT_STREAM_FUNCTION: Option<OutputFn> = None;
 
 /// # Set Global Debug Function
@@ -70,7 +70,7 @@ macro_rules! print {
     }};
 }
 
-/// # Println
+/// # `Println`
 /// Output to global output stream.
 #[macro_export]
 macro_rules! println {

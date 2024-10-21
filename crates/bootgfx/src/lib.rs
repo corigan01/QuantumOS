@@ -42,7 +42,7 @@ impl Color {
 }
 
 /// # Framebuffer
-/// A struct to draw graphics into framebuffer.
+/// A `struct` to draw graphics into framebuffer.
 pub struct Framebuffer {
     buffer: *mut Color,
     height: usize,

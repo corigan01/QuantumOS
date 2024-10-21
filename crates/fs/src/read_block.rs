@@ -31,9 +31,9 @@ use crate::error::Result;
 ///
 /// ### Example
 /// For example, sometimes you have drives that can only read one
-/// sector (~512 or so bytes) at a time. However, for filesystems
+/// sector (~512 or so bytes) at a time. However, for file-systems
 /// and other logic, this can be hard to program for. This trait
-/// implementes reading from such block devices.
+/// implements reading from such block devices.
 pub trait BlockDevice {
     /// # Block Size
     /// The size of each of the blocks this media can read.

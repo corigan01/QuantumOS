@@ -340,13 +340,13 @@ pub static BUILT_IN_FONT: [[u8; 13]; 96] = [
 ];
 
 /// # Built In Font
-/// A font that is compiled into the executable. Useful for bootloader's and early
+/// A font that is compiled into the executable. Useful for boot-loader's and early
 /// kernel font.
 pub struct BinFont {}
 
 impl BinFont {
     /// # Height
-    /// The hight in pixels of the font
+    /// The height in pixels of the font
     pub const HEIGHT: usize = 13;
 
     /// # Width

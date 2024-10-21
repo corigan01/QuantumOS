@@ -55,9 +55,9 @@ pub trait BitManipulation: Sized {
         R: RangeBounds<Self>;
 }
 
-/// # Bit Manipulation Impl
+/// # Bit Manipulation `Impl`
 /// Implement this trait for many types.
-/// FIXME: We should use something like PrimInt from the num-traits create
+/// FIXME: We should use something like `PrimInt` from the num-traits create
 ///        to provide a `impl<T: PrimInt> BitManipulation for T {}`.
 macro_rules! bit_manipulation_impl {
     ($($t:ty)*) => ($(

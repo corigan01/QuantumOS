@@ -75,7 +75,7 @@ unsafe fn init_serial_device(baud: baud::SerialBaud, port: IOPort) -> bool {
 
 impl Serial {
     /// # Probe First
-    /// Probe for the first com port that will hold and loopback data.
+    /// Probe for the first com port that will hold and loop-back data.
     ///
     /// (When using an Emulator this is the best option to find which
     ///  serial port the emulator is connected to.)

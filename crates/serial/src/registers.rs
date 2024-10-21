@@ -24,7 +24,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 /// # Ports
-/// COMMS ports for serial io on x86.
+/// COMMS ports for serial IO on x86.
 pub(crate) mod ports {
     use arch::io::IOPort;
 
@@ -55,7 +55,7 @@ mod offsets {
     /// -- DLAB must be set to '1'
     pub const RW_DLAB_LSB: u16 = 0;
 
-    /// # (Read/Write) DLAB Most Sigificant Byte Register Offset
+    /// # (Read/Write) DLAB Most Significant Byte Register Offset
     /// -- DLAB must be set to '1'
     pub const RW_DLAB_MSB: u16 = 1;
 
