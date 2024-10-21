@@ -23,6 +23,31 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+/// A Page Directry Entry field.
+///
+/// # How to use?
+/// For Example, one might:
+/// ```rust
+/// use arch::paging::PageDirectryEntry;
+///
+/// let entry = PageDirectryEntry::empty()
+///     .present(true)
+///     .read_write(true)
+///     .user_access(true);
+/// ```
+///
+/// Here we are building a `PageDirectryEntry` with the `P`, `R/W`, and `U/S` bits set. The
+/// bit-field in `entry` will correspond to this change (should be compiled in).
+///
+/// # Safety
+/// This is not 'unsafe however, its not fully 'safe' either. When loading the page
+/// tables themselves, one must understand and verify that all page tables are
+/// loaded correctly. Each entry in the page table isn't unsafe by itself,
+/// however, when loaded into the system it becomes unsafe.
+///
+/// It would be a good idea to verify that all 'bit' or options set in this entry  does exactly
+/// what you intend it to do before loading it. Page tables can cause the entire system to become
+/// unstable if mapped wrong -- **this is very important.**
 #[derive(Clone, Copy)]
 pub struct PageDirectryEntry(u64);
 
@@ -31,18 +56,6 @@ macro_rules! impl_bit {
         $(#[$meta])*
         /// # Important Considerations
         /// This function is `const` and will be best used when setup in 'chains' at compile time.
-        ///
-        /// For Example, one might:
-        /// ```rust
-        /// use arch::paging::PageDirectryEntry;
-        ///
-        /// let entry = PageDirectryEntry::empty()
-        ///     .present(true)
-        ///     .read_write(true)
-        ///     .user_access(true);
-        /// ```
-        /// Here we are building a `PageDirectryEntry` with the `P`, `R/W`, and `U/S` bits set. The
-        /// bit-field in `entry` will correspond to this change (should be compiled in).
         ///
         /// # Safety
         /// This is not 'unsafe however, its not fully 'safe' either. When loading the page
@@ -66,6 +79,9 @@ macro_rules! impl_bit {
 }
 
 impl PageDirectryEntry {
+    /// Make a completly blank page table entry.
+    ///
+    /// None of the bits are set.
     pub const fn empty() -> Self {
         Self(0)
     }
