@@ -75,6 +75,7 @@ macro_rules! impl_bit {
 macro_rules! impl_entry {
     ($($(#[$meta:meta])* $entry_name: ident),*) => {
         $(
+        $(#[$meta])*
         /// # How to use?
         /// For Example, one might:
         /// ```rust
