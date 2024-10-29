@@ -123,6 +123,54 @@ macro_rules! impl_fn {
             self.0.get_bit_range(MAX_PHY_MEMORY_WIDTH as u64..=12)
         }
     };
+    {VIRT_PS1: $name:ident, $get_name: ident, $(#[$meta:meta])*} => {
+        /// # Important Considerations
+        ///
+        /// # Safety
+        /// This is not 'unsafe however, its not fully 'safe' either. When loading the page
+        /// tables themselves, one must understand and verify that all page tables are
+        /// loaded correctly. Each entry in the page table isn't unsafe by itself,
+        /// however, when loaded into the system it becomes unsafe.
+        ///
+        /// It would be a good idea to verify that this address exactly what you
+        /// intend it to do before loading it. Page tables can cause the entire system to become
+        /// unstable if mapped wrong -- **this is very important.**
+        pub fn $name(&mut self, address: u64) {
+            assert!(address & 0xFFF == 0, "Bottom 12 bits should be zero when aligned to 4kib!");
+            assert!({
+                let top_bits = address >> (MAX_PHY_MEMORY_WIDTH - 1);
+
+                let all_ones = u64::MAX >> (MAX_PHY_MEMORY_WIDTH - 1);
+                let all_zeros = 0;
+
+                (top_bits == all_ones) || (top_bits == all_zeros)
+            }, "Bottom 12 bits should be zero when aligned to 4kib!");
+
+
+            self.0.set_bit_range(MAX_PHY_MEMORY_WIDTH as u64..=12, (address >> 12));
+        }
+
+        // FIXME: Fix these docs
+        /// # The 'get' version of the docs below.
+        ///
+        /// ---
+        $(#[$meta])*
+        /// # Important Considerations
+        /// This function is `const` and will be best used when setup in 'chains' at compile time.
+        ///
+        /// # Safety
+        /// This is not 'unsafe however, its not fully 'safe' either. When loading the page
+        /// tables themselves, one must understand and verify that all page tables are
+        /// loaded correctly. Each entry in the page table isn't unsafe by itself,
+        /// however, when loaded into the system it becomes unsafe.
+        ///
+        /// It would be a good idea to verify that this 'bit' or option does exactly what you
+        /// intend it to do before loading it. Page tables can cause the entire system to become
+        /// unstable if mapped wrong -- **this is very important.**
+        pub fn $get_name(&self) -> u64 {
+            self.0.get_bit_range(MAX_PHY_MEMORY_WIDTH as u64..=12)
+        }
+    };
 }
 
 macro_rules! impl_entry {
@@ -223,7 +271,7 @@ macro_rules! impl_entry {
                 ///
                 /// This bit determains if CPU execution is allowed in this area.
             }
-            impl_fn! {VIRT_PS0: ps0_virtual_address, ps0_get_virtual_address,
+            impl_fn! {VIRT_PS0: virtual_address, get_virtual_address,
                 /// Set the virtual address of this page table.
                 ///
                 /// This determains where in memory this page entry will effect. If this page

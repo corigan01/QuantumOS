@@ -26,9 +26,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #![no_std]
 #![no_main]
 
-use core::ptr::addr_of;
-
-use crate::{console::BiosConsole, disk::BiosDisk, mbr::Mbr};
+use crate::{disk::BiosDisk, mbr::Mbr};
 use bios::memory::MemoryEntry;
 use bios::video::Vesa;
 use bootloader::Stage16toStage32;
@@ -36,13 +34,13 @@ use bump_alloc::BumpAlloc;
 use config::BootloaderConfig;
 use fs::fatfs::Fat;
 use fs::io::Read;
-use lldebug::{debug_ready, hexdump::HexPrint, make_debug, println};
+use lldebug::make_debug;
+use lldebug::{debug_ready, println};
 use serial::Serial;
 use unreal::enter_unreal;
 
 mod bump_alloc;
 mod config;
-mod console;
 mod disk;
 mod mbr;
 mod memory;
@@ -50,7 +48,6 @@ mod panic;
 mod unreal;
 
 make_debug! {
-    // Debug: BiosConsole = BiosConsole::new();
     "Serial": Option<Serial> = Serial::probe_first(serial::baud::SerialBaud::Baud115200);
 }
 
