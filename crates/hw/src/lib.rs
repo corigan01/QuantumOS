@@ -16,4 +16,9 @@ hw_macro::hw_device! {
     mod test2 {
 
     }
+
+
+    /// Dingus
+    #[field(RO, 12, test)]
+    pub dingus,
 }
