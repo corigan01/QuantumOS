@@ -8,3 +8,6 @@ documentation.workspace = true
 
 [dependencies]
 hw-macro = {workspace = true}
+
+[dev-dependencies]
+trybuild = "1.0"

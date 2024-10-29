@@ -1,6 +1,11 @@
 use proc_macro::TokenStream;
+use syn::parse_macro_input;
+
+mod hw_parse;
 
 #[proc_macro]
 pub fn hw_device(tokens: TokenStream) -> TokenStream {
+    let macro_input = parse_macro_input!(tokens as hw_parse::HwDeviceMacro);
+
     todo!()
 }
