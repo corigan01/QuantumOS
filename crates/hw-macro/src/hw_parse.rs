@@ -1,18 +1,33 @@
 use syn::{
     parse::Parse,
+    token::{Mod, Struct},
     visit::{self, Visit},
     ItemFn, ItemMod, Type,
 };
 
 pub struct HwDeviceMacro {
-    providers: MacroProviders,
+    providers: Vec<MacroProviders>,
 }
 
 impl Parse for HwDeviceMacro {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-        let providers = input.parse()?;
+        let mut providers = Vec::new();
 
-        Ok(Self { providers })
+        loop {
+            let lookahead = input.lookahead1();
+            if lookahead.peek(Mod) {
+                let module: MacroProviders = input.parse()?;
+                println!("Mod : {}", module.module.ident);
+                providers.push(module);
+            } else if lookahead.peek(Struct) {
+                println!("{:?}", input);
+                todo!()
+            } else {
+                break;
+            }
+        }
+
+        Ok(HwDeviceMacro { providers })
     }
 }
 

@@ -1,5 +1,7 @@
 pub use hw_macro::*;
 
+hw_macro::hw_device! {}
+
 hw_macro::hw_device! {
     mod test {
         fn write(input: u32) {
@@ -9,5 +11,9 @@ hw_macro::hw_device! {
         fn read() -> u32 {
             100
         }
+    }
+
+    mod test2 {
+
     }
 }
