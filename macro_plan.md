@@ -23,9 +23,18 @@ hw_device! {
 
 	// ------------------------------------------------------------------
 
+	// You can define fields to be re-useable
+	ReuseThis = generic! {
+		#[field(RO, 0)]
+		dingus
+	}
+
+	// ------------------------------------------------------------------
+
 	// Structs are possible instead of modules for when you want instances
 	// if registers.
 	#[new = 0]
+	#[impl(ReuseThis)]
 	pub struct Dingus(u64);
 
 	// This will be inside a impl block for `Dingus`
@@ -66,6 +75,10 @@ pub struct Dingus(u64);
 impl Dingus {
 	pub const fn new() -> Self {
 		Self (0)
+	}
+
+	pub const fn is_dingus_set(&self) -> bool {
+		self.0 & 1 != 0
 	}
 
 	pub const fn set_something(&mut self, value: u32) -> Self {
