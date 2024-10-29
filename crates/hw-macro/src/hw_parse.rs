@@ -2,13 +2,12 @@ use syn::{
     parse::Parse,
     token::{Mod, Struct},
     visit::{self, Visit},
-    Attribute, Expr, ExprRange, Ident, ItemFn, ItemMod, Lit, LitInt, LitStr, PatLit, PatRange,
-    Path, Token, Type, Visibility,
+    Attribute, Expr, ExprRange, Ident, ItemFn, ItemMod, Lit, LitInt, Path, Token, Type, Visibility,
 };
 
 pub struct HwDeviceMacro {
-    providers: Vec<MacroProviders>,
-    fields: Vec<MacroFields>,
+    pub(crate) providers: Vec<MacroProviders>,
+    pub(crate) fields: Vec<MacroFields>,
 }
 
 impl Parse for HwDeviceMacro {
@@ -40,7 +39,7 @@ impl Parse for HwDeviceMacro {
 }
 
 #[derive(Debug)]
-enum Access {
+pub enum Access {
     RW,
     RO,
     WO,
@@ -102,9 +101,9 @@ impl Parse for Bits {
 
 #[derive(Debug)]
 pub struct FieldArguments {
-    access: Access,
-    bits: Bits,
-    parent: Option<Path>,
+    pub(crate) access: Access,
+    pub(crate) bits: Bits,
+    pub(crate) parent: Option<Ident>,
 }
 
 impl Parse for FieldArguments {
@@ -129,11 +128,11 @@ impl Parse for FieldArguments {
 
 #[derive(Debug)]
 pub struct MacroFields {
-    docs: Vec<Lit>,
-    other_attr: Vec<Attribute>,
-    args: FieldArguments,
-    ident: Ident,
-    vis: Visibility,
+    pub(crate) docs: Vec<Lit>,
+    pub(crate) other_attr: Vec<Attribute>,
+    pub(crate) args: FieldArguments,
+    pub(crate) ident: Ident,
+    pub(crate) vis: Visibility,
 }
 
 impl Parse for MacroFields {
@@ -187,11 +186,12 @@ impl Parse for MacroFields {
     }
 }
 
+#[derive(Debug)]
 pub struct MacroProviders {
-    module: ItemMod,
-    read_type: Option<Type>,
-    write_type: Option<Type>,
-    fn_def: FnReturnTypeVisitor,
+    pub(crate) module: ItemMod,
+    pub(crate) read_type: Option<Type>,
+    pub(crate) write_type: Option<Type>,
+    pub(crate) fn_def: FnReturnTypeVisitor,
 }
 
 impl Parse for MacroProviders {
@@ -211,9 +211,9 @@ impl Parse for MacroProviders {
 }
 
 #[derive(Debug)]
-struct FnReturnTypeVisitor {
-    write_fn: Option<ItemFn>,
-    read_fn: Option<ItemFn>,
+pub struct FnReturnTypeVisitor {
+    pub(crate) write_fn: Option<ItemFn>,
+    pub(crate) read_fn: Option<ItemFn>,
 }
 
 impl FnReturnTypeVisitor {

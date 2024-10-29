@@ -1,24 +1,16 @@
 pub use hw_macro::*;
 
-hw_macro::hw_device! {}
-
 hw_macro::hw_device! {
-    mod test {
-        fn write(input: u32) {
-            println!("Input = {}", input);
+    mod cr0 {
+        pub fn read() -> u32 {
+            0
         }
 
-        fn read() -> u32 {
-            100
+        pub fn write(input: u32) {
+            println!("Value: {}", input);
         }
     }
 
-    mod test2 {
-
-    }
-
-
-    /// Dingus
-    #[field(RO, 12, test)]
-    pub dingus,
+    #[field(RW, 0, cr0)]
+    protected_mode,
 }
