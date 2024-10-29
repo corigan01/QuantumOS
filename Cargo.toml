@@ -14,7 +14,7 @@ members = [
   "crates/bootgfx", 
   "crates/lldebug", 
   "crates/serial", 
-  "crates/lldebug-macro"]
+  "crates/lldebug-macro", "crates/hw", "crates/hw-macro"]
 
 default-members = ["meta"]
 resolver = "2"
