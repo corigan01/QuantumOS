@@ -14,7 +14,10 @@ members = [
   "crates/bootgfx", 
   "crates/lldebug", 
   "crates/serial", 
-  "crates/lldebug-macro", "crates/hw", "crates/hw-macro"]
+  "crates/lldebug-macro", 
+  "crates/hw", 
+  "crates/hw-macro"
+]
 
 default-members = ["meta"]
 resolver = "2"
@@ -22,7 +25,7 @@ resolver = "2"
 [workspace.package]
 version = "0.1.0"
 authors = ["corigan01 <corigan01@gmail.com>"]
-description = "Quantum Operating System Bootloader"
+description = "Quantum Operating System"
 documentation = "https://github.com/corigan01/QuantumOS"
 
 [workspace.dependencies]
@@ -36,6 +39,8 @@ bootgfx = { path = "crates/bootgfx" }
 serial = { path = "crates/serial" }
 lldebug = { path = "crates/lldebug" }
 lldebug-macro = { path = "crates/lldebug-macro" }
+hw = { path = "crates/hw" }
+hw-macro = { path = "crates/hw-macro" }
 
 [profile.stage-bootsector]
 inherits = "release"
