@@ -87,7 +87,7 @@ impl<'a> ProviderInfo<'a> {
         }
     }
 
-    fn read_write_size_different(&self) -> bool {
+    fn _read_write_size_different(&self) -> bool {
         self.readable_bits
             .is_some_and(|read| self.writeable_bits.is_some_and(|write| write != read))
     }
@@ -160,7 +160,6 @@ fn parse_range_piece(expr: &Expr, span: Span) -> usize {
 }
 
 fn parse_range(range_expr: &syn::ExprRange, defaults: (usize, usize)) -> (usize, usize) {
-    println!("{:?}", range_expr);
     let start_bit = range_expr
         .start
         .as_ref()
@@ -203,6 +202,31 @@ fn gen_consts(provider_info: &ProviderInfo, field: &MacroFields) -> TokenStream 
     let safe_rw_range = provider_info.safe_rw_bits();
     let vis = &field.vis;
 
+    let raw_module_name = provider_info.provider.module.ident.to_string();
+    let (_, title_formatted_ident) = field.ident.to_string().chars().fold(
+        (true, String::new()),
+        |(mut new_word, mut acc), c| {
+            match c {
+                '_' => {
+                    acc.push(' ');
+                    new_word = true;
+                }
+                c if new_word => {
+                    acc.push(c.to_ascii_uppercase());
+                    new_word = false;
+                }
+                c => {
+                    acc.push(c.to_ascii_lowercase());
+                    new_word = false;
+                }
+            }
+
+            (new_word, acc)
+        },
+    );
+
+    let docs = &field.docs;
+
     match field.args.bits {
         Bits::Single(ref bit_literal) => {
             let Ok(bit_value): Result<usize, _> = bit_literal.base10_parse() else {
@@ -218,6 +242,8 @@ fn gen_consts(provider_info: &ProviderInfo, field: &MacroFields) -> TokenStream 
             let const_offset = make_const_ident(&field.ident, "_OFFSET");
 
             quote_spanned! {field.span=>
+                #[allow(unused)]
+                #(#[doc = #docs])*
                 #vis const #const_offset : usize = #bit_value;
             }
         }
@@ -251,10 +277,36 @@ fn gen_consts(provider_info: &ProviderInfo, field: &MacroFields) -> TokenStream 
             let value_offset = start;
             let value_mask: u64 = value_max << value_offset;
 
+            let doc_mask = format!(
+                " Bit mask for '{}' in `{}`.",
+                title_formatted_ident, raw_module_name
+            );
+            let doc_offset = format!(
+                " Field offset for '{}' in `{}`.",
+                title_formatted_ident, raw_module_name
+            );
+            let doc_max = format!(" Max possible value for '{}'.", title_formatted_ident);
+            let doc_bits = format!(" Number of bits a '{}' can have.", title_formatted_ident);
+
             quote_spanned! {field.span=>
+                #[doc = #doc_mask]
+                #(#[doc = #docs])*
+                #[allow(unused)]
                 #vis const #const_mask : u64 = #value_mask;
+
+                #[doc = #doc_max]
+                #(#[doc = #docs])*
+                #[allow(unused)]
                 #vis const #const_max : u64 = #value_max;
+
+                #[doc = #doc_offset]
+                #(#[doc = #docs])*
+                #[allow(unused)]
                 #vis const #const_offset : usize = #value_offset;
+
+                #[doc = #doc_bits]
+                #(#[doc = #docs])*
+                #[allow(unused)]
                 #vis const #const_bits : usize = #value_bits;
             }
         }
@@ -315,7 +367,13 @@ fn gen_read(field: &MacroFields, provider_info: &ProviderInfo, access: &Access) 
         }});
     }
 
-    quote! {
+    let docs = &field.docs;
+    let attr = &field.other_attr;
+
+    quote_spanned! {field.span=>
+        #(#[doc = #docs])*
+        #(#attr)*
+        #[allow(unused)]
         #(#function_signature)*
     }
 }
@@ -379,7 +437,13 @@ fn gen_write(field: &MacroFields, provider_info: &ProviderInfo, access: &Access)
         }});
     }
 
-    quote! {
+    let docs = &field.docs;
+    let attr = &field.other_attr;
+
+    quote_spanned! {field.span=>
+        #(#[doc = #docs])*
+        #(#attr)*
+        #[allow(unused)]
         #(#function_signature)*
     }
 }

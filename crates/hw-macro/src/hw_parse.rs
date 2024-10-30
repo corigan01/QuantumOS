@@ -4,8 +4,8 @@ use syn::{
     spanned::Spanned,
     token::{Mod, Struct},
     visit::{self, Visit},
-    Attribute, Expr, ExprRange, FnArg, Ident, ItemFn, ItemMod, Lit, LitInt, PatType, Path,
-    ReturnType, Token, Type, Visibility,
+    Attribute, Expr, ExprRange, FnArg, Ident, ItemFn, ItemMod, Lit, LitInt, PatType, ReturnType,
+    Token, Type, Visibility,
 };
 
 pub struct HwDeviceMacro {
@@ -23,14 +23,11 @@ impl Parse for HwDeviceMacro {
 
             if lookahead.peek(Mod) {
                 let module: MacroProviders = input.parse()?;
-                println!("Mod : {}", module.module.ident);
                 providers.push(module);
             } else if lookahead.peek(Struct) {
-                println!("{:?}", input);
-                todo!()
+                todo!("{:?}", input)
             } else if lookahead.peek(Token![#]) {
                 let field: MacroFields = input.parse()?;
-                println!("Field : {:#?}", field);
                 fields.push(field);
             } else {
                 break;

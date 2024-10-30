@@ -16,4 +16,8 @@ hw_macro::hw_device! {
 
     #[field(RW, 8..16, cr0)]
     pub dingus_mode,
+
+    /// does testing stuffs
+    #[field(RW, 8, cr0)]
+    test,
 }
