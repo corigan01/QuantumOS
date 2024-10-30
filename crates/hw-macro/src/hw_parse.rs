@@ -1,5 +1,7 @@
+use proc_macro2::Span;
 use syn::{
     parse::Parse,
+    spanned::Spanned,
     token::{Mod, Struct},
     visit::{self, Visit},
     Attribute, Expr, ExprRange, Ident, ItemFn, ItemMod, Lit, LitInt, Path, Token, Type, Visibility,
@@ -128,6 +130,7 @@ impl Parse for FieldArguments {
 
 #[derive(Debug)]
 pub struct MacroFields {
+    pub(crate) span: Span,
     pub(crate) docs: Vec<Lit>,
     pub(crate) other_attr: Vec<Attribute>,
     pub(crate) args: FieldArguments,
@@ -170,6 +173,7 @@ impl Parse for MacroFields {
         let field_attr =
             field_attr.ok_or(input.error("Require a #[bit] attribute, but none found!"))?;
 
+        let span = field_attr.span();
         let args = field_attr.parse_args()?;
 
         let vis = input.parse()?;
@@ -177,6 +181,7 @@ impl Parse for MacroFields {
         input.parse::<Token![,]>()?;
 
         Ok(Self {
+            span,
             docs,
             other_attr,
             args,
