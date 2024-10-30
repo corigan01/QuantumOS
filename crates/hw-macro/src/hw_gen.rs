@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use proc_macro2::{Span, TokenStream};
 use quote::{quote, quote_spanned};
-use syn::{spanned::Spanned, Expr, Ident, Lit, PatLit, PatRange, Type};
+use syn::{spanned::Spanned, Expr, Ident, Lit, Type};
 
 use crate::hw_parse::{Access, Bits, HwDeviceMacro, MacroFields, MacroProviders};
 
@@ -14,6 +14,8 @@ struct ProviderInfo<'a> {
     writeable_bits: Option<usize>,
     can_read_be_const: bool,
     can_write_be_const: bool,
+    is_read_unsafe: bool,
+    is_write_unsafe: bool,
 }
 
 impl<'a> ProviderInfo<'a> {
@@ -55,11 +57,24 @@ impl<'a> ProviderInfo<'a> {
             .read_fn
             .as_ref()
             .is_some_and(|read_fn| read_fn.sig.constness.is_some());
+
         let can_write_be_const = provider
             .fn_def
             .read_fn
             .as_ref()
             .is_some_and(|read_fn| read_fn.sig.constness.is_some());
+
+        let is_read_unsafe = provider
+            .fn_def
+            .read_fn
+            .as_ref()
+            .is_some_and(|inner| inner.sig.unsafety.is_some());
+
+        let is_write_unsafe = provider
+            .fn_def
+            .write_fn
+            .as_ref()
+            .is_some_and(|inner| inner.sig.unsafety.is_some());
 
         Self {
             provider,
@@ -67,6 +82,8 @@ impl<'a> ProviderInfo<'a> {
             writeable_bits,
             can_read_be_const,
             can_write_be_const,
+            is_read_unsafe,
+            is_write_unsafe,
         }
     }
 
@@ -159,6 +176,29 @@ fn parse_range(range_expr: &syn::ExprRange, defaults: (usize, usize)) -> (usize,
     (start_bit, end_bit)
 }
 
+fn type_for_bits(bits: &Bits, max: usize) -> TokenStream {
+    match bits {
+        Bits::Single(_) => quote! {bool},
+        Bits::Range(ref range_expr) => {
+            let (start, mut end) = parse_range(range_expr, (0, max));
+
+            if matches!(range_expr.limits, syn::RangeLimits::Closed(_)) {
+                end += 1;
+            }
+
+            let n_bits = end - start;
+
+            match n_bits {
+                ..=8 => quote! { u8 },
+                ..=16 => quote! { u16 },
+                ..=32 => quote! { u32 },
+                ..=64 => quote! { u64 },
+                _ => quote! { () },
+            }
+        }
+    }
+}
+
 fn gen_consts(provider_info: &ProviderInfo, field: &MacroFields) -> TokenStream {
     let safe_rw_range = provider_info.safe_rw_bits();
     let vis = &field.vis;
@@ -212,17 +252,72 @@ fn gen_consts(provider_info: &ProviderInfo, field: &MacroFields) -> TokenStream 
             let value_mask = value_max << value_offset;
 
             quote_spanned! {field.span=>
-                #vis const #const_mask : usize = #value_mask;
+                #vis const #const_mask : u64 = #value_mask;
+                #vis const #const_max : u64 = #value_max;
                 #vis const #const_offset : usize = #value_offset;
-                #vis const #const_max : usize = #value_max;
                 #vis const #const_bits : usize = #value_bits;
             }
         }
     }
 }
 
-fn gen_read(read_value_tokens: TokenStream, field: &MacroFields) -> TokenStream {
-    quote! {}
+fn gen_read(field: &MacroFields, provider_info: &ProviderInfo, access: &Access) -> TokenStream {
+    let is_multi = matches!(field.args.bits, Bits::Range(_));
+    let vis = &field.vis;
+
+    let (function_header, function_footer) = match access {
+        Access::RW | Access::RO if is_multi => ("get_", ""),
+        Access::RW | Access::RO if !is_multi => ("is_", "_set"),
+        Access::RW1C => ("is_", "_clear"),
+        Access::RW1O => ("is_", "_pending"),
+        _ => ("", ""),
+    };
+
+    let function_ident = Ident::new(
+        &format!("{}{}{}", function_header, &field.ident, function_footer),
+        Span::call_site(),
+    );
+
+    let mut function_signature = Vec::new();
+
+    if provider_info.can_read_be_const {
+        function_signature.push(quote! { const });
+    }
+
+    if provider_info.is_read_unsafe {
+        function_signature.push(quote! { unsafe })
+    }
+
+    let return_type = type_for_bits(&field.args.bits, provider_info.readable_bits.unwrap_or(0));
+    let read_type = provider_info
+        .provider
+        .read_type
+        .as_ref()
+        .expect("Need read() function");
+
+    function_signature.push(quote! { #vis fn #function_ident() -> #return_type });
+
+    let provider_path = &provider_info.provider.module.ident;
+    let read_val = quote! { #provider_path::read() };
+    let offset_ident = make_const_ident(&field.ident, "_OFFSET");
+
+    if is_multi {
+        let mask_ident = make_const_ident(&field.ident, "_MASK");
+
+        function_signature.push(quote! {{
+           let inner: #read_type = #read_val;
+           ((inner & (#offset_ident as #read_type)) >> (#mask_ident as #read_type)) as #return_type
+        }});
+    } else {
+        function_signature.push(quote! {{
+            let inner: #read_type = #read_val;
+            (inner & (#offset_ident as #read_type)) != 0
+        }});
+    }
+
+    quote! {
+        #(#function_signature)*
+    }
 }
 
 fn visit_field(providers: &ProviderMap, field: &MacroFields) -> TokenStream {
@@ -256,10 +351,17 @@ fn visit_field(providers: &ProviderMap, field: &MacroFields) -> TokenStream {
     let mut gen_tokens = Vec::new();
     gen_tokens.push(gen_consts(our_provider, &field));
 
+    // Read
     match field.args.access {
-        Access::RO => gen_tokens.push(gen_read(quote! {}, field)),
-        _ => todo!(),
+        Access::WO => (),
+        _ => gen_tokens.push(gen_read(field, our_provider, &field.args.access)),
     }
+
+    // Write
+    // match field.args.access {
+    //     Access::RO => (),
+    //     _ => gen_tokens.push(gen_read(quote! {}, field, &field.args.access)),
+    // }
 
     quote_spanned! {field.span=>
         #(#gen_tokens)*
