@@ -161,6 +161,8 @@ fn parse_range(range_expr: &syn::ExprRange, defaults: (usize, usize)) -> (usize,
 
 fn gen_consts(provider_info: &ProviderInfo, field: &MacroFields) -> TokenStream {
     let safe_rw_range = provider_info.safe_rw_bits();
+    let vis = &field.vis;
+
     match field.args.bits {
         Bits::Single(ref bit_literal) => {
             let Ok(bit_value): Result<usize, _> = bit_literal.base10_parse() else {
@@ -176,7 +178,7 @@ fn gen_consts(provider_info: &ProviderInfo, field: &MacroFields) -> TokenStream 
             let const_offset = make_const_ident(&field.ident, "_OFFSET");
 
             quote_spanned! {field.span=>
-                const #const_offset : usize = #bit_value;
+                #vis const #const_offset : usize = #bit_value;
             }
         }
         Bits::Range(ref range_expr) => {
@@ -210,10 +212,10 @@ fn gen_consts(provider_info: &ProviderInfo, field: &MacroFields) -> TokenStream 
             let value_mask = value_max << value_offset;
 
             quote_spanned! {field.span=>
-                const #const_mask : usize = #value_mask;
-                const #const_offset : usize = #value_offset;
-                const #const_max : usize = #value_max;
-                const #const_bits : usize = #value_bits;
+                #vis const #const_mask : usize = #value_mask;
+                #vis const #const_offset : usize = #value_offset;
+                #vis const #const_max : usize = #value_max;
+                #vis const #const_bits : usize = #value_bits;
             }
         }
     }

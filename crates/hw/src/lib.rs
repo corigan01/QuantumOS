@@ -15,5 +15,5 @@ hw_macro::hw_device! {
     protected_mode,
 
     #[field(RO, 8..16, cr0)]
-    dingus_mode,
+    pub dingus_mode,
 }
