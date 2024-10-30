@@ -247,9 +247,9 @@ fn gen_consts(provider_info: &ProviderInfo, field: &MacroFields) -> TokenStream 
             let const_bits = make_const_ident(&field.ident, "_N_BITS");
 
             let value_bits = end - start;
-            let value_max = 2usize.pow(value_bits as u32) - 1;
+            let value_max: u64 = 2u64.pow(value_bits as u32) - 1;
             let value_offset = start;
-            let value_mask = value_max << value_offset;
+            let value_mask: u64 = value_max << value_offset;
 
             quote_spanned! {field.span=>
                 #vis const #const_mask : u64 = #value_mask;
@@ -306,7 +306,7 @@ fn gen_read(field: &MacroFields, provider_info: &ProviderInfo, access: &Access) 
 
         function_signature.push(quote! {{
            let inner: #read_type = #read_val;
-           ((inner & (#offset_ident as #read_type)) >> (#mask_ident as #read_type)) as #return_type
+           ((inner & (#mask_ident as #read_type)) >> (#offset_ident as #read_type)) as #return_type
         }});
     } else {
         function_signature.push(quote! {{
