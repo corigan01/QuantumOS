@@ -180,7 +180,11 @@ fn gen_consts(provider_info: &ProviderInfo, field: &MacroFields) -> TokenStream 
             }
         }
         Bits::Range(ref range_expr) => {
-            let (start, end) = parse_range(range_expr, (0, safe_rw_range - 1));
+            let (start, mut end) = parse_range(range_expr, (0, safe_rw_range - 1));
+
+            if matches!(range_expr.limits, syn::RangeLimits::Closed(_)) {
+                end += 1;
+            }
 
             if start >= safe_rw_range || end >= safe_rw_range {
                 range_expr
