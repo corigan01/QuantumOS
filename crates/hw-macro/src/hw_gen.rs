@@ -320,6 +320,70 @@ fn gen_read(field: &MacroFields, provider_info: &ProviderInfo, access: &Access) 
     }
 }
 
+fn gen_write(field: &MacroFields, provider_info: &ProviderInfo, access: &Access) -> TokenStream {
+    let is_multi = matches!(field.args.bits, Bits::Range(_));
+    let vis = &field.vis;
+
+    let (function_header, function_footer) = match access {
+        Access::RW | Access::RO if is_multi => ("write_", ""),
+        Access::RW | Access::RO if !is_multi => ("set_", "_flag"),
+        Access::RW1C => ("clear_", ""),
+        Access::RW1O => ("activate_", ""),
+        _ => ("", ""),
+    };
+
+    let function_ident = Ident::new(
+        &format!("{}{}{}", function_header, &field.ident, function_footer),
+        Span::call_site(),
+    );
+
+    let mut function_signature = Vec::new();
+
+    // If both are const, we can also be const
+    if provider_info.can_write_be_const && provider_info.can_read_be_const {
+        function_signature.push(quote! { const });
+    }
+
+    // if either are unsafe, we are unsafe
+    if provider_info.is_write_unsafe || provider_info.is_read_unsafe {
+        function_signature.push(quote! { unsafe })
+    }
+
+    let arg_type = type_for_bits(&field.args.bits, provider_info.readable_bits.unwrap_or(0));
+    let write_type = provider_info
+        .provider
+        .write_type
+        .as_ref()
+        .expect("Need write() function");
+
+    function_signature.push(quote! { #vis fn #function_ident(value: #arg_type) });
+
+    let provider_path = &provider_info.provider.module.ident;
+    let write = quote! { #provider_path::write(val) };
+    let read = quote! { #provider_path::read() };
+    let offset_ident = make_const_ident(&field.ident, "_OFFSET");
+
+    if is_multi {
+        let mask_ident = make_const_ident(&field.ident, "_MASK");
+
+        function_signature.push(quote! {{
+            let inner = (#read as #write_type);
+            let val = (inner & !(#mask_ident as #write_type)) | ((value as #write_type) << (#offset_ident as #write_type));
+            #write;
+        }});
+    } else {
+        function_signature.push(quote! {{
+            let inner = (#read as #write_type);
+            let val = (inner & !(#offset_ident as #write_type)) | ((if value { 1 } else { 0 }) << (#offset_ident as #write_type));
+            #write;
+        }});
+    }
+
+    quote! {
+        #(#function_signature)*
+    }
+}
+
 fn visit_field(providers: &ProviderMap, field: &MacroFields) -> TokenStream {
     let Some(our_provider) = field
         .args
@@ -358,10 +422,10 @@ fn visit_field(providers: &ProviderMap, field: &MacroFields) -> TokenStream {
     }
 
     // Write
-    // match field.args.access {
-    //     Access::RO => (),
-    //     _ => gen_tokens.push(gen_read(quote! {}, field, &field.args.access)),
-    // }
+    match field.args.access {
+        Access::RO => (),
+        _ => gen_tokens.push(gen_write(field, our_provider, &field.args.access)),
+    }
 
     quote_spanned! {field.span=>
         #(#gen_tokens)*
