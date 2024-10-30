@@ -11,6 +11,6 @@ hw_macro::hw_device! {
         }
     }
 
-    #[field(RW, 0, cr0)]
+    #[field(RO, 0, cr0)]
     protected_mode,
 }

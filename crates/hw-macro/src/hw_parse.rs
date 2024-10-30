@@ -4,7 +4,8 @@ use syn::{
     spanned::Spanned,
     token::{Mod, Struct},
     visit::{self, Visit},
-    Attribute, Expr, ExprRange, Ident, ItemFn, ItemMod, Lit, LitInt, Path, Token, Type, Visibility,
+    Attribute, Expr, ExprRange, FnArg, Ident, ItemFn, ItemMod, Lit, LitInt, PatType, Path,
+    ReturnType, Token, Type, Visibility,
 };
 
 pub struct HwDeviceMacro {
@@ -194,8 +195,8 @@ impl Parse for MacroFields {
 #[derive(Debug)]
 pub struct MacroProviders {
     pub(crate) module: ItemMod,
-    pub(crate) read_type: Option<Type>,
-    pub(crate) write_type: Option<Type>,
+    pub(crate) read_type: Option<Box<Type>>,
+    pub(crate) write_type: Option<Box<Type>>,
     pub(crate) fn_def: FnReturnTypeVisitor,
 }
 
@@ -206,10 +207,24 @@ impl Parse for MacroProviders {
         let mut fn_def = FnReturnTypeVisitor::empty();
         fn_def.visit_item_mod(&module);
 
+        let write_type = fn_def.write_fn.as_ref().and_then(|write_fn| {
+            write_fn.sig.inputs.iter().find_map(|fn_arg| match fn_arg {
+                FnArg::Receiver(_) => None,
+                FnArg::Typed(PatType { ty, .. }) => Some(ty.clone()),
+            })
+        });
+        let read_type = fn_def
+            .read_fn
+            .as_ref()
+            .and_then(|read_fn| match &read_fn.sig.output {
+                ReturnType::Default => None,
+                ReturnType::Type(_, ty) => Some(ty.clone()),
+            });
+
         Ok(Self {
             module,
-            read_type: None,
-            write_type: None,
+            read_type,
+            write_type,
             fn_def,
         })
     }
