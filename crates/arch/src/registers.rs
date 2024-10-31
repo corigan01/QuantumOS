@@ -123,69 +123,6 @@ impl SegmentRegisters {
     }
 }
 
-macro_rules! flag_get {
-    ($method_name: ident, $bit: literal) => {
-        #[doc = concat!("# Get ", stringify!($method_name))]
-        /// Check if this flag is set, or unset by reading the state of this register.
-        pub fn $method_name() -> bool {
-            read() & $bit != 0
-        }
-    };
-}
-
-macro_rules! flag_set {
-    ($method_name: ident, $bit: literal) => {
-        #[doc = concat!("# Get ", stringify!($method_name))]
-        /// Set this flag if 'flag' is set to true, or unset this flag if 'flag' is set to false.
-        pub unsafe fn $method_name(flag: bool) {
-            use bits::BitManipulation;
-            write(*read().set_bit($bit, flag));
-        }
-    };
-}
-
-macro_rules! flag_both {
-    ($method_get: ident, $method_set: ident, $bit: literal) => {
-        flag_set!($method_set, $bit);
-        flag_get!($method_get, $bit);
-    };
-}
-
-pub mod eflags {
-    #[inline(never)]
-    pub fn read() -> usize {
-        let mut flags;
-
-        unsafe {
-            core::arch::asm!("
-                pushf
-                pop {0:x}
-            ",
-                out(reg) flags
-            )
-        }
-
-        flags
-    }
-
-    flag_get!(carry, 0);
-    flag_get!(parity, 2);
-    flag_get!(auxiliary, 4);
-    flag_get!(zero, 6);
-    flag_get!(sign, 7);
-    flag_get!(trap, 8);
-    flag_get!(interrupts_enabled, 9);
-    flag_get!(direction, 10);
-    flag_get!(overflow, 11);
-    flag_get!(nested_task, 14);
-    flag_get!(resume, 16);
-    flag_get!(v8086_mode, 17);
-    flag_get!(alignment_check, 18);
-    flag_get!(virt_interrupt, 19);
-    flag_get!(virt_pending, 20);
-    flag_get!(cpuid_available, 21);
-}
-
 hw_device! {
     pub mod cr0 {
         #[inline(always)]
@@ -268,4 +205,72 @@ hw_device! {
 
     #[field(RW, 31, cr0)]
     pub paging,
+}
+
+hw_device! {
+    pub mod eflags {
+        #[inline(never)]
+        pub fn read() -> u32 {
+            let mut flags;
+
+            unsafe {
+                core::arch::asm!("
+                    pushf
+                    pop {0:x}
+                ",
+                    out(reg) flags
+                )
+            }
+
+            flags
+        }
+    }
+
+    #[field(RO, 0, eflags)]
+    pub carry,
+
+    #[field(RO, 2, eflags)]
+    pub parity,
+
+    #[field(RO, 4, eflags)]
+    pub auxiliary,
+
+    #[field(RO, 6, eflags)]
+    pub zero,
+
+    #[field(RO, 7, eflags)]
+    pub sign,
+
+    #[field(RO, 8, eflags)]
+    pub trap,
+
+    #[field(RO, 9, eflags)]
+    pub interrupts_enable,
+
+    #[field(RO, 10, eflags)]
+    pub direction,
+
+    #[field(RO, 11, eflags)]
+    pub overflow,
+
+    #[field(RO, 14, eflags)]
+    pub nested_task,
+
+    #[field(RO, 16, eflags)]
+    pub resume,
+
+    #[field(RO, 17, eflags)]
+    pub v8086_mode,
+
+    #[field(RO, 18, eflags)]
+    pub alignment_check,
+
+    #[field(RO, 19, eflags)]
+    pub virt_interrupt,
+
+    #[field(RO, 20, eflags)]
+    pub virt_pending,
+
+    #[field(RO, 21, eflags)]
+    pub cpuid_available,
 }

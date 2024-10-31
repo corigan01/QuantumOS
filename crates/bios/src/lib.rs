@@ -49,7 +49,7 @@ impl BiosStatus {
         match ax {
             INVALID_BIOS_CALL_AX => Self::InvalidInput,
             NOT_SUPPORTED_CALL_AX => BiosStatus::NotSupported,
-            _ if eflags::carry() => BiosStatus::Failed,
+            _ if eflags::is_carry_set() => BiosStatus::Failed,
             _ => BiosStatus::Success,
         }
     }
@@ -190,7 +190,7 @@ pub unsafe fn int_0x15(reg: &mut Regs32, es: u16) -> BiosStatus {
     match reg.eax as u16 {
         INVALID_BIOS_CALL_AX => BiosStatus::InvalidData,
         NOT_SUPPORTED_CALL_AX => BiosStatus::NotSupported,
-        _ if eflags::carry() => BiosStatus::Failed,
+        _ if eflags::is_carry_set() => BiosStatus::Failed,
         _ => BiosStatus::Success,
     }
 }

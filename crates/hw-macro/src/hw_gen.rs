@@ -533,17 +533,17 @@ pub fn gen(input: HwDeviceMacro) -> TokenStream {
 }
 
 fn gen_module_provider(provider: &MacroProviders, place_inner: &Vec<TokenStream>) -> TokenStream {
-    let provider = &provider.module;
+    let inner = &provider.module;
 
-    let vis = &provider.vis;
-    let attr = &provider.attrs;
-    let ident = &provider.ident;
-    let signature = quote_spanned! {provider.span()=>
+    let vis = &inner.vis;
+    let attr = &inner.attrs;
+    let ident = &inner.ident;
+    let signature = quote_spanned! {inner.span()=>
         #(#attr)*
         #vis mod #ident
     };
 
-    let content = &provider
+    let content = &inner
         .content
         .as_ref()
         .expect("Requires to have module content")
