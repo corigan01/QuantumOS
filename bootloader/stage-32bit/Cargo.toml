@@ -11,4 +11,3 @@ bootloader = {workspace = true}
 bootgfx = {workspace = true}
 serial = {workspace = true}
 lldebug = {workspace = true}
-lldebug-macro = {workspace = true}
