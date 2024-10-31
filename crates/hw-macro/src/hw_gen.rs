@@ -332,6 +332,8 @@ fn gen_read(field: &MacroFields, provider_info: &ProviderInfo, access: &Access) 
 
     let mut function_signature = Vec::new();
 
+    function_signature.push(quote! { #vis });
+
     if provider_info.can_read_be_const {
         function_signature.push(quote! { const });
     }
@@ -347,10 +349,9 @@ fn gen_read(field: &MacroFields, provider_info: &ProviderInfo, access: &Access) 
         .as_ref()
         .expect("Need read() function");
 
-    function_signature.push(quote! { #vis fn #function_ident() -> #return_type });
+    function_signature.push(quote! { fn #function_ident() -> #return_type });
 
-    let provider_path = &provider_info.provider.module.ident;
-    let read_val = quote! { #provider_path::read() };
+    let read_val = quote! { read() };
     let offset_ident = make_const_ident(&field.ident, "_OFFSET");
 
     if is_multi {
@@ -397,6 +398,8 @@ fn gen_write(field: &MacroFields, provider_info: &ProviderInfo, access: &Access)
 
     let mut function_signature = Vec::new();
 
+    function_signature.push(quote! { #vis });
+
     // If both are const, we can also be const
     if provider_info.can_write_be_const && provider_info.can_read_be_const {
         function_signature.push(quote! { const });
@@ -414,11 +417,10 @@ fn gen_write(field: &MacroFields, provider_info: &ProviderInfo, access: &Access)
         .as_ref()
         .expect("Need write() function");
 
-    function_signature.push(quote! { #vis fn #function_ident(value: #arg_type) });
+    function_signature.push(quote! { fn #function_ident(value: #arg_type) });
 
-    let provider_path = &provider_info.provider.module.ident;
-    let write = quote! { #provider_path::write(val) };
-    let read = quote! { #provider_path::read() };
+    let write = quote! { write(val) };
+    let read = quote! { read() };
     let offset_ident = make_const_ident(&field.ident, "_OFFSET");
 
     if is_multi {
@@ -448,7 +450,7 @@ fn gen_write(field: &MacroFields, provider_info: &ProviderInfo, access: &Access)
     }
 }
 
-fn visit_field(providers: &ProviderMap, field: &MacroFields) -> TokenStream {
+fn visit_field(providers: &ProviderMap, field: &MacroFields) -> (String, TokenStream) {
     let Some(our_provider) = field
         .args
         .parent
@@ -473,7 +475,7 @@ fn visit_field(providers: &ProviderMap, field: &MacroFields) -> TokenStream {
                 })
             ))
             .emit();
-        return quote! {};
+        return (String::new(), quote! {});
     };
 
     let mut gen_tokens = Vec::new();
@@ -491,22 +493,38 @@ fn visit_field(providers: &ProviderMap, field: &MacroFields) -> TokenStream {
         _ => gen_tokens.push(gen_write(field, our_provider, &field.args.access)),
     }
 
-    quote_spanned! {field.span=>
-        #(#gen_tokens)*
-    }
+    (
+        our_provider.provider.module.ident.to_string(),
+        quote_spanned! {field.span=>
+            #(#gen_tokens)*
+        },
+    )
 }
 
 pub fn gen(input: HwDeviceMacro) -> TokenStream {
     let providers = inspect_providers(&input);
 
-    let mut token_mass = Vec::<TokenStream>::new();
-
-    for mod_provider in &input.providers {
-        token_mass.push(gen_module_provider(mod_provider));
-    }
+    let mut fields_for_provider: HashMap<String, Vec<TokenStream>> = HashMap::new();
 
     for field in &input.fields {
-        token_mass.push(visit_field(&providers, field));
+        let (provider_name, field) = visit_field(&providers, field);
+        if let Some(tokens) = fields_for_provider.get_mut(&provider_name) {
+            tokens.push(field);
+        } else {
+            let vec = vec![field];
+            fields_for_provider.insert(provider_name, vec);
+        }
+    }
+
+    let mut token_mass = Vec::<TokenStream>::new();
+    for mod_provider in &input.providers {
+        let provider_name = mod_provider.module.ident.to_string();
+        let fields = fields_for_provider.get(&provider_name);
+
+        token_mass.push(gen_module_provider(
+            mod_provider,
+            &fields.unwrap_or(&Vec::new()),
+        ));
     }
 
     quote! {
@@ -514,11 +532,28 @@ pub fn gen(input: HwDeviceMacro) -> TokenStream {
     }
 }
 
-fn gen_module_provider(provider: &MacroProviders) -> TokenStream {
+fn gen_module_provider(provider: &MacroProviders, place_inner: &Vec<TokenStream>) -> TokenStream {
     let provider = &provider.module;
+
+    let vis = &provider.vis;
+    let attr = &provider.attrs;
+    let ident = &provider.ident;
+    let signature = quote_spanned! {provider.span()=>
+        #(#attr)*
+        #vis mod #ident
+    };
+
+    let content = &provider
+        .content
+        .as_ref()
+        .expect("Requires to have module content")
+        .1;
 
     // TODO: We will need much more complex bahavior in the future
     quote! {
-        #provider
+        #signature {
+            #(#content)*
+            #(#place_inner)*
+        }
     }
 }

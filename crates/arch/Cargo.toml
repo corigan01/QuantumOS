@@ -8,3 +8,4 @@ documentation.workspace = true
 
 [dependencies]
 bits = {workspace = true}
+hw = {workspace = true}

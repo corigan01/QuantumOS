@@ -21,7 +21,7 @@ impl Parse for HwDeviceMacro {
         loop {
             let lookahead = input.lookahead1();
 
-            if lookahead.peek(Mod) {
+            if lookahead.peek(Mod) || (input.peek(Token![pub]) && input.peek2(Token![mod])) {
                 let module: MacroProviders = input.parse()?;
                 providers.push(module);
             } else if lookahead.peek(Struct) {

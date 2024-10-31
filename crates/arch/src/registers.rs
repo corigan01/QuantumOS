@@ -23,6 +23,8 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use hw::hw_device;
+
 use crate::CpuPrivilege;
 
 #[repr(C)]
@@ -184,56 +186,86 @@ pub mod eflags {
     flag_get!(cpuid_available, 21);
 }
 
-pub mod cr0 {
-    #[inline(always)]
-    pub fn read() -> usize {
-        let mut flags;
+hw_device! {
+    pub mod cr0 {
+        #[inline(always)]
+        pub fn read() -> u64 {
+            #[cfg(target_pointer_width = "32")]
+            let mut flags: u32;
+            #[cfg(target_pointer_width = "64")]
+            let mut flags: u64;
 
-        #[cfg(target_pointer_width = "32")]
-        unsafe {
-            core::arch::asm!("
-                mov eax, cr0
-            ",
-                out("eax") flags
-            )
+            #[cfg(target_pointer_width = "32")]
+            unsafe {
+                core::arch::asm!("
+                    mov eax, cr0
+                ",
+                    out("eax") flags
+                )
+            }
+
+            #[cfg(target_pointer_width = "64")]
+            unsafe {
+                core::arch::asm!("
+                    mov rax, cr0
+                ",
+                    out("rax") flags
+                )
+            }
+
+            #[cfg(target_pointer_width = "32")]
+            return flags as u64;
+
+            #[cfg(target_pointer_width = "64")]
+            flags
         }
 
-        #[cfg(target_pointer_width = "64")]
-        unsafe {
-            core::arch::asm!("
-                mov rax, cr0
-            ",
-                out("rax") flags
-            )
+        #[inline(always)]
+        pub unsafe fn write(value: u64) {
+            #[cfg(target_pointer_width = "32")]
+            core::arch::asm!(
+                "mov cr0, eax",
+                in("eax") (value as u32)
+            );
+
+            #[cfg(target_pointer_width = "64")]
+            core::arch::asm!(
+                "mov cr0, rax",
+                in("rax") value
+            );
         }
-
-        flags
     }
 
-    #[inline(always)]
-    pub unsafe fn write(value: usize) {
-        #[cfg(target_pointer_width = "32")]
-        core::arch::asm!(
-            "mov cr0, eax",
-            in("eax") value
-        );
+    #[field(RW, 0, cr0)]
+    pub protected_mode,
 
-        #[cfg(target_pointer_width = "64")]
-        core::arch::asm!(
-            "mov cr0, rax",
-            in("rax") value
-        );
-    }
+    #[field(RW, 1, cr0)]
+    pub monitor_co_processor,
 
-    flag_both!(get_protected_mode, set_protected_mode, 0);
-    flag_both!(get_monitor_co_processor, set_monitor_co_processor, 1);
-    flag_both!(get_x87_fpu_emulation, set_x87_fpu_emulation, 2);
-    flag_both!(get_task_switched, set_task_switched, 3);
-    flag_both!(get_extension_type, set_extention_type, 4);
-    flag_both!(get_numeric_error, set_numeric_error, 5);
-    flag_both!(get_write_protect, set_write_protect, 16);
-    flag_both!(get_alignmnet_mask, set_alignmnet_mask, 18);
-    flag_both!(get_non_write_through, set_non_write_through, 29);
-    flag_both!(get_cache_disable, set_cache_disable, 30);
-    flag_both!(get_paging, set_paging, 31);
+    #[field(RW, 2, cr0)]
+    pub x87_fpu_emulation,
+
+    #[field(RW, 3, cr0)]
+    pub task_switched,
+
+    #[field(RW, 4, cr0)]
+    pub extension_type,
+
+    #[field(RW, 5, cr0)]
+    pub numeric_error,
+
+    #[field(RW, 16, cr0)]
+    pub write_protect,
+
+    #[field(RW, 18, cr0)]
+    pub alignmnet_mask,
+
+    #[field(RW, 29, cr0)]
+    pub non_write_through,
+
+    #[field(RW, 30, cr0)]
+    pub cache_disable,
+
+    #[field(RW, 31, cr0)]
+    pub paging,
 }
