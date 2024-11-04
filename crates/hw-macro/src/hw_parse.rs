@@ -4,8 +4,8 @@ use syn::{
     spanned::Spanned,
     token::{Mod, Struct},
     visit::{self, Visit},
-    Attribute, Expr, ExprRange, FnArg, Ident, ItemFn, ItemMod, Lit, LitInt, PatType, ReturnType,
-    Token, Type, Visibility,
+    Attribute, Expr, ExprRange, FnArg, Ident, ItemFn, ItemMod, ItemStruct, Lit, LitInt, PatType,
+    ReturnType, Token, Type, Visibility,
 };
 
 pub struct HwDeviceMacro {
@@ -24,7 +24,9 @@ impl Parse for HwDeviceMacro {
             if lookahead.peek(Mod) || (input.peek(Token![pub]) && input.peek2(Token![mod])) {
                 let module: MacroProviders = input.parse()?;
                 providers.push(module);
-            } else if lookahead.peek(Struct) {
+            } else if lookahead.peek(Struct)
+                || (input.peek(Token![pub]) && input.peek2(Token![struct]))
+            {
                 todo!("{:?}", input)
             } else if lookahead.peek(Token![#]) {
                 let field: MacroFields = input.parse()?;
@@ -185,6 +187,55 @@ impl Parse for MacroFields {
             args,
             ident,
             vis,
+        })
+    }
+}
+
+#[derive(Debug)]
+pub struct StructHelperMacro {}
+
+impl Parse for StructHelperMacro {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        todo!()
+    }
+}
+
+#[derive(Debug)]
+pub struct MacroStructs {
+    item: ItemStruct,
+    read_fn: Option<(ItemFn, Type)>,
+    write_fn: Option<(ItemFn, Type)>,
+    helper: StructHelperMacro,
+}
+
+impl Parse for MacroStructs {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        let item: ItemStruct = input.parse()?;
+
+        let mut fn_def = FnReturnTypeVisitor::empty();
+        fn_def.visit_item_struct(&item);
+
+        let write_fn = fn_def.write_fn.as_ref().and_then(|write_fn| {
+            write_fn.sig.inputs.iter().find_map(|fn_arg| match fn_arg {
+                FnArg::Receiver(_) => None,
+                FnArg::Typed(PatType { ty, .. }) => Some((write_fn.clone(), ty.as_ref().clone())),
+            })
+        });
+        let read_fn = fn_def
+            .read_fn
+            .as_ref()
+            .and_then(|read_fn| match &read_fn.sig.output {
+                ReturnType::Default => None,
+                ReturnType::Type(_, ty) => Some((read_fn.clone(), ty.as_ref().clone())),
+            });
+
+        let helper = input.parse()?;
+
+        Ok(Self {
+            item,
+            read_fn,
+            write_fn,
+            helper,
         })
     }
 }

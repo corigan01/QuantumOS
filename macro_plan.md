@@ -33,7 +33,10 @@ hw_device! {
 
 	// Structs are possible instead of modules for when you want instances
 	// if registers.
-	#[new = 0]
+	#[struct(
+		once_owned = true,
+		new = Self(0),
+	)]
 	#[impl(ReuseThis)]
 	pub struct Dingus(u64);
 
