@@ -1,4 +1,4 @@
-use std::{error::Error, ops::Bound};
+use std::ops::Bound;
 
 use syn::{
     parenthesized, parse::Parse, punctuated::Punctuated, token::Paren, Attribute, Expr, ExprLit,
