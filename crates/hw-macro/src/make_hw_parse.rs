@@ -1,9 +1,8 @@
+use std::{error::Error, ops::Bound};
+
 use syn::{
-    parenthesized,
-    parse::{Parse, Parser},
-    punctuated::Punctuated,
-    token::Paren,
-    Attribute, Expr, ExprRange, Ident, Lit, LitInt, Token, Visibility,
+    parenthesized, parse::Parse, punctuated::Punctuated, token::Paren, Attribute, Expr, ExprLit,
+    ExprRange, Ident, Lit, LitInt, Token, Visibility,
 };
 
 #[derive(Debug)]
@@ -118,6 +117,48 @@ impl Parse for Bits {
             }) => Ok(Self::Single(int)),
             Expr::Range(range) => Ok(Self::Range(range)),
             _ => Err(input.error("Expected a bit (literal) or bit-range (eg. 1..2 or 5..=10)")),
+        }
+    }
+}
+
+impl Bits {
+    pub fn into_range(&self) -> Option<(Bound<usize>, Bound<usize>)> {
+        match self {
+            Self::Range(expr) => {
+                let start_number: Option<usize> =
+                    expr.start.as_ref().and_then(|start| match start.as_ref() {
+                        Expr::Lit(ExprLit {
+                            attrs: _,
+                            lit: Lit::Int(int),
+                        }) => int.base10_parse().ok(),
+                        _ => None,
+                    });
+
+                let end_number: Option<usize> =
+                    expr.end.as_ref().and_then(|start| match start.as_ref() {
+                        Expr::Lit(ExprLit {
+                            attrs: _,
+                            lit: Lit::Int(int),
+                        }) => int.base10_parse().ok(),
+                        _ => None,
+                    });
+
+                let start = match start_number {
+                    Some(value) => Bound::Included(value),
+                    None => Bound::Unbounded,
+                };
+
+                let end = match end_number {
+                    Some(value) if matches!(expr.limits, syn::RangeLimits::HalfOpen(_)) => {
+                        Bound::Excluded(value)
+                    }
+                    Some(value) => Bound::Included(value),
+                    None => Bound::Unbounded,
+                };
+
+                Some((start, end))
+            }
+            _ => None,
         }
     }
 }
