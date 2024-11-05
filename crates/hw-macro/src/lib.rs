@@ -1,11 +1,15 @@
 #![feature(proc_macro_diagnostic)]
 
 use proc_macro::TokenStream;
+use provider_parse::MacroStruct;
 use syn::parse_macro_input;
 
 pub(crate) mod hw_gen;
 pub(crate) mod hw_parse;
+
+mod macro_gen;
 pub(crate) mod make_hw_parse;
+pub(crate) mod provider_parse;
 
 #[proc_macro]
 pub fn hw_device(tokens: TokenStream) -> TokenStream {
@@ -16,9 +20,17 @@ pub fn hw_device(tokens: TokenStream) -> TokenStream {
 
 #[proc_macro_attribute]
 pub fn make_hw(args: TokenStream, input: TokenStream) -> TokenStream {
-    let _ = parse_macro_input!(args as make_hw_parse::MakeHwMacroInput);
+    let macro_fields = parse_macro_input!(args as make_hw_parse::MakeHwMacroInput);
+    let struct_inner = parse_macro_input!(input as syn::ItemStruct);
 
-    todo!()
+    let macro_struct = MacroStruct {
+        struct_inner,
+        macro_fields,
+    };
+
+    println!("{:#?}", macro_struct);
+
+    macro_gen::gen_struct(macro_struct).into()
 }
 
 /*

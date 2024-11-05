@@ -54,7 +54,6 @@ impl Parse for BitField {
 impl Parse for MakeHwMacroInput {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         let fields = input.parse_terminated(BitField::parse, Token![,])?;
-        println!("{:#?}", fields);
 
         Ok(Self { fields })
     }
