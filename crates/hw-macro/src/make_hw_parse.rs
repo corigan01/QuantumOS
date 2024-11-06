@@ -7,7 +7,7 @@ use syn::{
 
 #[derive(Debug)]
 pub struct MakeHwMacroInput {
-    fields: Punctuated<BitField, Token![,]>,
+    pub(crate) fields: Punctuated<BitField, Token![,]>,
 }
 
 mod keywords {
