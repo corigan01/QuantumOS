@@ -16,13 +16,13 @@ mod keywords {
 
 #[derive(Debug)]
 pub struct BitField {
-    attr: Vec<Attribute>,
-    keyword: keywords::field,
-    paren_token: Paren,
-    access: Access,
-    bits: Bits,
-    vis: Visibility,
-    ident: Ident,
+    pub(crate) attr: Vec<Attribute>,
+    pub(crate) keyword: keywords::field,
+    pub(crate) paren_token: Paren,
+    pub(crate) access: Access,
+    pub(crate) bits: Bits,
+    pub(crate) vis: Visibility,
+    pub(crate) ident: Ident,
 }
 
 impl Parse for BitField {
