@@ -25,6 +25,105 @@ pub struct BitField {
     pub(crate) ident: Ident,
 }
 
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum BitFieldType {
+    TypeBool,
+
+    Type8,
+    Type16,
+    Type32,
+    Type64,
+
+    InvalidType { start: usize, end: usize },
+}
+
+impl Into<usize> for BitFieldType {
+    fn into(self) -> usize {
+        match self {
+            Self::TypeBool => 1,
+            Self::Type8 => 8,
+            Self::Type16 => 16,
+            Self::Type32 => 32,
+            Self::Type64 => 64,
+            _ => 0,
+        }
+    }
+}
+
+impl BitField {
+    /// The type required to fit the amount of bits desired.
+    pub fn type_to_fit(&self, default_type: BitFieldType) -> BitFieldType {
+        match self.bits.into_range() {
+            Some((range_start, range_end)) => {
+                let start = match range_start {
+                    Bound::Included(included) | Bound::Excluded(included) => included,
+                    Bound::Unbounded => 0,
+                };
+
+                let end = match range_end {
+                    Bound::Included(included) => included + 1,
+                    Bound::Excluded(exclueded) => exclueded,
+                    Bound::Unbounded => return default_type,
+                };
+
+                if start >= end {
+                    return BitFieldType::InvalidType { start, end };
+                }
+
+                match end - start {
+                    1 => BitFieldType::TypeBool,
+                    ..=8 => BitFieldType::Type8,
+                    ..=16 => BitFieldType::Type16,
+                    ..=32 => BitFieldType::Type32,
+                    ..=64 => BitFieldType::Type64,
+                    _ => BitFieldType::InvalidType { start, end },
+                }
+            }
+            None => BitFieldType::TypeBool,
+        }
+    }
+
+    /// Get the offset of this bit from lsb.
+    pub fn bit_offset(&self) -> usize {
+        let Some((range_start, _)) = self.bits.into_range() else {
+            return match self.bits {
+                Bits::Single(ref single_bit) => single_bit.base10_parse().unwrap_or(0),
+                _ => 0,
+            };
+        };
+
+        match range_start {
+            Bound::Included(v) | Bound::Excluded(v) => v,
+            Bound::Unbounded => 0,
+        }
+    }
+
+    /// Get the amount of bits required to read/write this field.
+    pub fn bit_amount(&self, default_type: BitFieldType) -> usize {
+        match self.bits.into_range() {
+            None => 1,
+            Some((range_start, range_end)) => {
+                let start = match range_start {
+                    Bound::Included(included) | Bound::Excluded(included) => included,
+                    Bound::Unbounded => 0,
+                };
+
+                let end = match range_end {
+                    Bound::Included(included) => included + 1,
+                    Bound::Excluded(exclueded) => exclueded,
+                    Bound::Unbounded => default_type.into(),
+                };
+
+                if start >= end {
+                    0
+                } else {
+                    end - start
+                }
+            }
+        }
+    }
+}
+
 impl Parse for BitField {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         let attr = input.call(Attribute::parse_outer)?;
