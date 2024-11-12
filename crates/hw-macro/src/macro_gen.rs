@@ -215,13 +215,13 @@ impl<'a> Fields<'a> {
                 (Access::RW1O, Bits::Range(_)) => ("read_", "_active", "activate_", ""),
 
                 (Access::RW, Bits::Single(_)) => ("is_", "_set", "set_", "_flag"),
-                (Access::RW, Bits::Range(_)) => ("set_", "", "get_", ""),
+                (Access::RW, Bits::Range(_)) => ("get_", "", "set_", ""),
 
                 (Access::RO, Bits::Single(_)) => ("is_", "_set", "", ""),
                 (Access::RO, Bits::Range(_)) => ("read_", "", "", ""),
 
                 (Access::WO, Bits::Single(_)) => ("", "", "set_", "_flag"),
-                (Access::WO, Bits::Range(_)) => ("", "", "read_", ""),
+                (Access::WO, Bits::Range(_)) => ("", "", "set_", ""),
             };
 
         let default_type = self.default_type();

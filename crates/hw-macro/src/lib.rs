@@ -28,8 +28,6 @@ pub fn make_hw(args: TokenStream, input: TokenStream) -> TokenStream {
         macro_fields,
     };
 
-    println!("{:#?}", macro_struct);
-
     macro_gen::gen_struct(macro_struct).into()
 }
 

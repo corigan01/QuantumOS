@@ -1,6 +1,6 @@
 use proc_macro2::TokenStream;
 use quote::quote;
-use syn::{Attribute, Field, ItemStruct, Type};
+use syn::{Field, ItemStruct, Type};
 
 use crate::make_hw_parse::{BitFieldType, MakeHwMacroInput};
 
@@ -13,8 +13,6 @@ pub struct MacroStruct {
 pub struct GenMetadata {
     /// Is this a field, or is it a constant function?
     pub const_possible: bool,
-    /// Is this a function call?
-    pub is_function: bool,
     /// Reading/Writing from/to this function/field requires the need for
     ///
     /// - `None` => No self, independent function
@@ -56,7 +54,6 @@ impl GenRead for MacroStruct {
         if let Some(ty) = self.is_single_field_struct() {
             GenMetadata {
                 const_possible: true,
-                is_function: false,
                 need_mut: Some(false),
                 data_type: ty.into(),
                 carry_self: false,
@@ -81,7 +78,6 @@ impl GenWrite for MacroStruct {
         if let Some(ty) = self.is_single_field_struct() {
             GenMetadata {
                 const_possible: true,
-                is_function: false,
                 need_mut: Some(true),
                 data_type: ty.into(),
                 carry_self: self.is_copy(),

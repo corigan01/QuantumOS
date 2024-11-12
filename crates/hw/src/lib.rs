@@ -3,7 +3,10 @@
 pub use hw_macro::*;
 
 #[make_hw(
-    field(RW, 0..2, pub dingus),
+  /// First Bit Field
+  field(RW, 0..2, first),
+  /// Second Bit Field
+  field(RW, 2..5, second),
 )]
-#[derive(Copy, Clone)]
-struct Dingus(u32);
+#[derive(Clone, Copy)]
+struct ExampleMultiStruct(u8);

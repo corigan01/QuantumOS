@@ -84,33 +84,14 @@ impl Into<BitFieldType> for Type {
 impl BitField {
     /// The type required to fit the amount of bits desired.
     pub fn type_to_fit(&self, default_type: BitFieldType) -> BitFieldType {
-        match self.bits.into_range() {
-            Some((range_start, range_end)) => {
-                let start = match range_start {
-                    Bound::Included(included) | Bound::Excluded(included) => included,
-                    Bound::Unbounded => 0,
-                };
-
-                let end = match range_end {
-                    Bound::Included(included) => included + 1,
-                    Bound::Excluded(exclueded) => exclueded,
-                    Bound::Unbounded => return default_type,
-                };
-
-                if start >= end {
-                    return BitFieldType::InvalidType { start, end };
-                }
-
-                match end - start {
-                    1 => BitFieldType::TypeBool,
-                    ..=8 => BitFieldType::Type8,
-                    ..=16 => BitFieldType::Type16,
-                    ..=32 => BitFieldType::Type32,
-                    ..=64 => BitFieldType::Type64,
-                    _ => BitFieldType::InvalidType { start, end },
-                }
-            }
-            None => BitFieldType::TypeBool,
+        match self.bit_amount(default_type) {
+            1 => BitFieldType::TypeBool,
+            ..=8 => BitFieldType::Type8,
+            ..=16 => BitFieldType::Type16,
+            ..=32 => BitFieldType::Type32,
+            ..=64 => BitFieldType::Type64,
+            // FIXME
+            _ => BitFieldType::InvalidType { start: 0, end: 0 },
         }
     }
 
@@ -163,7 +144,7 @@ impl BitField {
     ///
     /// *`bool`'s are just `1`*
     pub fn bit_max(&self, default_type: BitFieldType) -> u64 {
-        2u64.pow(self.bit_amount(default_type) as u32)
+        2u64.pow(self.bit_amount(default_type) as u32) - 1
     }
 }
 

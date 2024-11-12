@@ -1,4 +1,6 @@
 mod test {
+    use hw::make_hw;
+
     // #[test]
     // fn compile_one_case() {
     //     let t = trybuild::TestCases::new();
@@ -83,5 +85,68 @@ mod test {
         assert_eq!(ex.0, 0b01);
         assert_eq!(ex.is_first_bit_set(), true);
         assert_eq!(ex.is_second_bit_set(), false);
+    }
+
+    #[make_hw(
+        /// First Bit Field
+        field(RW, 0..2, first),
+        /// Second Bit Field
+        field(RW, 2..5, second),
+    )]
+    #[derive(Clone, Copy)]
+    struct ExampleMultiStruct(u8);
+
+    #[test]
+    fn ensure_multi_bit_set() {
+        let mut ex = ExampleMultiStruct(0);
+
+        // All zero
+        assert_eq!(ex.0, 0b00);
+        assert_eq!(ex.get_first(), 0);
+        assert_eq!(ex.get_second(), 0);
+
+        // Only first set
+        ex.0 = 0b11;
+        assert_eq!(ex.get_first(), 0b11);
+        assert_eq!(ex.get_second(), 0);
+
+        // Only set second
+        ex.0 = 0b11100;
+        assert_eq!(ex.get_first(), 0b0);
+        assert_eq!(ex.get_second(), 0b111);
+
+        // Set None
+        ex.0 = 0b11100000;
+        assert_eq!(ex.get_first(), 0b0);
+        assert_eq!(ex.get_second(), 0b0);
+
+        // Check first
+        for i in 0..=3 {
+            ex.0 = 0b0;
+            ex.set_first(i);
+
+            assert_eq!(ex.0, i);
+            assert_eq!(ex.get_first(), i);
+            assert_eq!(ex.get_second(), 0b0);
+        }
+
+        // Check Second
+        for i in 0..=7 {
+            ex.0 = 0b0;
+            ex.set_second(i);
+
+            assert_eq!(ex.0 >> 2, i);
+            assert_eq!(ex.get_first(), 0);
+            assert_eq!(ex.get_second(), i);
+        }
+
+        // Check all bits zeroed
+        ex.0 = u8::MAX;
+        ex.set_first(0);
+        ex.set_second(0);
+
+        assert_eq!(ex.0, 0b11100000);
+        assert_eq!(ex.get_first(), 0);
+        assert_eq!(ex.get_second(), 0);
     }
 }
