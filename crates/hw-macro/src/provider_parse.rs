@@ -1,6 +1,6 @@
 use proc_macro2::TokenStream;
 use quote::quote;
-use syn::{Field, ItemStruct, Type};
+use syn::{Attribute, Field, ItemStruct, Type};
 
 use crate::make_hw_parse::{BitFieldType, MakeHwMacroInput};
 
@@ -59,7 +59,7 @@ impl GenRead for MacroStruct {
                 is_function: false,
                 need_mut: Some(false),
                 data_type: ty.into(),
-                carry_self: true,
+                carry_self: false,
                 is_unsafe: false,
             }
         } else {
@@ -84,7 +84,7 @@ impl GenWrite for MacroStruct {
                 is_function: false,
                 need_mut: Some(true),
                 data_type: ty.into(),
-                carry_self: true,
+                carry_self: self.is_copy(),
                 is_unsafe: false,
             }
         } else {
@@ -94,6 +94,30 @@ impl GenWrite for MacroStruct {
 }
 
 impl MacroStruct {
+    pub fn is_copy(&self) -> bool {
+        // FIXME: We cannot really figure out if the type impl Clone
+        //        other than looking at the derive macro. There could
+        //        be another way for the user to tell us if the type
+        //        can be carried or not.
+        self.struct_inner.attrs.iter().any(|attribute| {
+            let mut impl_clone = false;
+
+            if attribute.meta.path().is_ident("derive") {
+                attribute
+                    .parse_nested_meta(|meta| {
+                        if meta.path.is_ident("Clone") {
+                            impl_clone = true;
+                        }
+
+                        Ok(())
+                    })
+                    .unwrap();
+            }
+
+            impl_clone
+        })
+    }
+
     pub fn is_single_field_struct(&self) -> Option<Type> {
         match self.struct_inner.fields {
             syn::Fields::Unnamed(ref fields_unnamed) => {
