@@ -1,8 +1,10 @@
 use std::ops::Bound;
 
+use proc_macro2::TokenStream;
+use quote::quote;
 use syn::{
     parenthesized, parse::Parse, punctuated::Punctuated, token::Paren, Attribute, Expr, ExprLit,
-    ExprRange, Ident, Lit, LitInt, Token, Visibility,
+    ExprRange, Ident, Lit, LitInt, Token, Type, Visibility,
 };
 
 #[derive(Debug)]
@@ -46,6 +48,35 @@ impl Into<usize> for BitFieldType {
             Self::Type32 => 32,
             Self::Type64 => 64,
             _ => 0,
+        }
+    }
+}
+
+impl Into<TokenStream> for BitFieldType {
+    fn into(self) -> TokenStream {
+        match self {
+            BitFieldType::TypeBool => quote! {bool},
+            BitFieldType::Type8 => quote! {u8},
+            BitFieldType::Type16 => quote! {u16},
+            BitFieldType::Type32 => quote! {u32},
+            BitFieldType::Type64 => quote! {u64},
+            BitFieldType::InvalidType { .. } => quote! {_},
+        }
+    }
+}
+
+impl Into<BitFieldType> for Type {
+    fn into(self) -> BitFieldType {
+        match self {
+            Type::Path(type_path) => match () {
+                () if type_path.path.is_ident("bool") => BitFieldType::TypeBool,
+                () if type_path.path.is_ident("u8") => BitFieldType::Type8,
+                () if type_path.path.is_ident("u16") => BitFieldType::Type16,
+                () if type_path.path.is_ident("u32") => BitFieldType::Type32,
+                () if type_path.path.is_ident("u64") => BitFieldType::Type64,
+                _ => BitFieldType::InvalidType { start: 0, end: 0 },
+            },
+            _ => BitFieldType::InvalidType { start: 0, end: 0 },
         }
     }
 }
@@ -121,6 +152,18 @@ impl BitField {
                 }
             }
         }
+    }
+
+    /// Get the mask for the bit field
+    pub fn bit_mask(&self, default_type: BitFieldType) -> u64 {
+        self.bit_max(default_type) << self.bit_offset()
+    }
+
+    /// Maxium value allowed by this field
+    ///
+    /// *`bool`'s are just `1`*
+    pub fn bit_max(&self, default_type: BitFieldType) -> u64 {
+        2u64.pow(self.bit_amount(default_type) as u32)
     }
 }
 

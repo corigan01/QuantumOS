@@ -1,44 +1,11 @@
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
-use syn::{spanned::Spanned, Visibility};
+use syn::{spanned::Spanned, Ident, Visibility};
 
 use crate::{
     make_hw_parse::{Access, BitField, BitFieldType, Bits, MakeHwMacroInput},
-    provider_parse::MacroStruct,
+    provider_parse::{GenRead, GenWrite, MacroStruct},
 };
-
-pub struct GenMetadata {
-    /// Is this a field, or is it a constant function?
-    pub const_possible: bool,
-    /// Is this a function call?
-    pub is_function: bool,
-    /// Reading/Writing from/to this function/field requires the need for
-    ///
-    /// - `None` => No self, independent function
-    /// - `Some(false)` => `&self`
-    /// - `Some(true)` => `&mut self`
-    pub need_mut: Option<bool>,
-    /// Data type of input/output.
-    pub data_type: BitFieldType,
-    /// An option if we can carry ourself (aka. clone and return self on write).
-    pub carry_self: bool,
-    /// Does this function need to be unsafe?
-    pub is_unsafe: bool,
-}
-
-pub trait GenRead {
-    /// Generate the means to read from this field/function.
-    fn gen_read(&self) -> TokenStream;
-    /// Gather metadata about this generator.
-    fn metadata(&self) -> GenMetadata;
-}
-
-pub trait GenWrite {
-    /// Generate the means to write to this field/function.
-    fn gen_write(&self) -> TokenStream;
-    /// Gather metadata about this generator.
-    fn metadata(&self) -> GenMetadata;
-}
 
 pub struct GenInfo {
     pub gen_const: bool,
@@ -49,7 +16,7 @@ pub struct GenInfo {
     pub bit_amount: usize,
     pub bit_mask: u64,
     pub vis: Visibility,
-    pub function_ident: String,
+    pub function_ident: Ident,
     pub carry_self: bool,
     pub span: Span,
 }
@@ -185,9 +152,7 @@ impl<'a> Fields<'a> {
             None => quote! { () },
         });
 
-        if gen_info.carry_self {
-            tokens.push(quote! { -> #output_type });
-        }
+        tokens.push(quote! { -> #output_type });
 
         // This will make the 'read_value' variable
         let read_value = read_gen.gen_read();
@@ -219,6 +184,24 @@ impl<'a> Fields<'a> {
         }
     }
 
+    fn default_type(&self) -> BitFieldType {
+        let write = self
+            .write_gen
+            .map(|write_gen| write_gen.metadata().data_type);
+        let read = self.read_gen.map(|read_gen| read_gen.metadata().data_type);
+
+        if !write.is_some_and(|write_type| read.is_some_and(|read_type| write_type == read_type)) {
+            // TODO: Make the span better on this
+            Span::call_site()
+                .unwrap()
+                .error("'read' and 'write' function types do not match!")
+                .emit();
+        }
+
+        // TODO: We should figure out a better way to do this
+        write.unwrap_or(read.unwrap_or(BitFieldType::InvalidType { start: 0, end: 0 }))
+    }
+
     pub fn generate_field(&self, field: &BitField) -> TokenStream {
         let (read_header, read_footer, write_header, write_footer) =
             match (&field.access, &field.bits) {
@@ -238,12 +221,14 @@ impl<'a> Fields<'a> {
                 (Access::WO, Bits::Range(_)) => ("", "", "read_", ""),
             };
 
-        let function_type = todo!();
-        let bit_offset = todo!();
-        let bit_amount = todo!();
-        let bit_mask = todo!();
+        let default_type = self.default_type();
+        let function_type: TokenStream = field.type_to_fit(default_type).into();
 
-        let tokens: Vec<TokenStream> = Vec::new();
+        let bit_offset = field.bit_offset();
+        let bit_amount = field.bit_amount(default_type);
+        let bit_mask = field.bit_mask(default_type);
+
+        let mut tokens: Vec<TokenStream> = Vec::new();
 
         // Read
         if !matches!(field.access, Access::WO) {
@@ -259,18 +244,21 @@ impl<'a> Fields<'a> {
                 return quote! {};
             };
 
-            let read_ident = format!("{read_header}{}{read_footer}", field.ident);
+            let read_ident = Ident::new(
+                &format!("{read_header}{}{read_footer}", field.ident),
+                Span::call_site(),
+            );
             let read_meta = read_gen.metadata();
 
             let gen_info_read = GenInfo {
                 gen_const: read_meta.const_possible,
                 gen_unsafe: read_meta.is_unsafe,
                 function_self_mut: read_meta.need_mut,
-                function_type,
+                function_type: function_type.clone(),
                 bit_offset,
                 bit_amount,
                 bit_mask,
-                vis: field.vis,
+                vis: field.vis.clone(),
                 function_ident: read_ident,
                 carry_self: false,
                 span: field.keyword.span(),
@@ -292,7 +280,10 @@ impl<'a> Fields<'a> {
                 return quote! {};
             };
 
-            let write_ident = format!("{write_header}{}{write_footer}", field.ident);
+            let write_ident = Ident::new(
+                &format!("{write_header}{}{write_footer}", field.ident),
+                Span::call_site(),
+            );
             let read_meta = read_gen.metadata();
             let write_meta = write_gen.metadata();
 
@@ -306,7 +297,7 @@ impl<'a> Fields<'a> {
                 bit_offset,
                 bit_amount,
                 bit_mask,
-                vis: field.vis,
+                vis: field.vis.clone(),
                 function_ident: write_ident,
                 carry_self: write_meta.carry_self,
                 span: field.keyword.span(),
@@ -335,8 +326,23 @@ impl<'a> Fields<'a> {
 }
 
 pub fn gen_struct(macro_struct: MacroStruct) -> TokenStream {
-    let fields = Fields::new(&macro_struct.macro_fields, None, None);
+    let fields = Fields::new(
+        &macro_struct.macro_fields,
+        macro_struct.gen_reading(),
+        macro_struct.gen_writing(),
+    );
 
-    fields.generate_fields();
-    quote! {}
+    let struct_gen = &macro_struct.struct_inner;
+
+    let struct_ident = &macro_struct.struct_inner.ident;
+    let fields = fields.generate_fields();
+
+    quote! {
+        #struct_gen
+
+        #[automatically_derived]
+        impl #struct_ident {
+            #fields
+        }
+    }
 }
