@@ -12,6 +12,7 @@ pub struct GenInfo {
     pub gen_unsafe: bool,
     pub function_self_mut: Option<bool>,
     pub function_type: TokenStream,
+    pub inner_type: TokenStream,
     pub bit_offset: usize,
     pub bit_amount: usize,
     pub bit_mask: u64,
@@ -83,6 +84,7 @@ impl<'a> Fields<'a> {
 
         let bit_offset = gen_info.bit_offset;
         let bit_mask = gen_info.bit_mask;
+        let inner_type = gen_info.inner_type;
 
         if gen_info.bit_amount == 1 {
             tokens.push(quote! {{
@@ -109,7 +111,7 @@ impl<'a> Fields<'a> {
 
                 // Modify
                 let write_value =
-                    (read_value & !#bit_mask) | (value << #bit_offset);
+                    (read_value & !(#bit_mask as #inner_type)) | ((value as #inner_type) << (#bit_offset as #inner_type));
 
                 // Write
                 #write_value;
@@ -159,6 +161,7 @@ impl<'a> Fields<'a> {
 
         let bit_offset = gen_info.bit_offset;
         let bit_mask = gen_info.bit_mask;
+        let inner_type = gen_info.inner_type;
 
         if gen_info.bit_amount == 1 {
             tokens.push(quote! {{
@@ -175,7 +178,7 @@ impl<'a> Fields<'a> {
                 #read_value;
 
                 // Pull out value
-                (read_value & #bit_mask) >> #bit_offset
+                ((read_value & (#bit_mask as #inner_type)) >> (#bit_offset as #inner_type)) as #output_type
             }});
         }
 
@@ -262,6 +265,7 @@ impl<'a> Fields<'a> {
                 function_ident: read_ident,
                 carry_self: false,
                 span: field.keyword.span(),
+                inner_type: default_type.into(),
             };
 
             tokens.push(self.gen_read(gen_info_read));
@@ -301,6 +305,7 @@ impl<'a> Fields<'a> {
                 function_ident: write_ident,
                 carry_self: write_meta.carry_self,
                 span: field.keyword.span(),
+                inner_type: default_type.into(),
             };
 
             tokens.push(self.gen_write(gen_info_write));
