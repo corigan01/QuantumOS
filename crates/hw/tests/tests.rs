@@ -87,17 +87,17 @@ mod test {
         assert_eq!(ex.is_second_bit_set(), false);
     }
 
-    #[make_hw(
-        /// First Bit Field
-        field(RW, 0..2, first),
-        /// Second Bit Field
-        field(RW, 2..5, second),
-    )]
-    #[derive(Clone, Copy)]
-    struct ExampleMultiStruct(u8);
-
     #[test]
     fn ensure_multi_bit_set() {
+        #[make_hw(
+            /// First Bit Field
+            field(RW, 0..2, first),
+            /// Second Bit Field
+            field(RW, 2..5, second),
+        )]
+        #[derive(Clone, Copy)]
+        struct ExampleMultiStruct(u8);
+
         let mut ex = ExampleMultiStruct(0);
 
         // All zero
