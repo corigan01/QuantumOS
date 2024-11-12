@@ -22,6 +22,8 @@ pub struct GenMetadata {
     pub data_type: BitFieldType,
     /// An option if we can carry ourself (aka. clone and return self on write).
     pub carry_self: bool,
+    /// Does this function need to be unsafe?
+    pub is_unsafe: bool,
 }
 
 pub trait GenRead {
@@ -73,13 +75,6 @@ impl<'a> Fields<'a> {
     /// Generate the inner function contents for a write
     fn gen_write(&self, gen_info: GenInfo) -> TokenStream {
         let (Some(read_gen), Some(write_gen)) = (self.read_gen, self.write_gen) else {
-            gen_info
-                .span
-                .unwrap()
-                .error("Could not find a valid 'read' and 'write' functions")
-                .help("Define a field/function to read/write to this bit field.")
-                .emit();
-
             return quote! {};
         };
 
@@ -162,6 +157,68 @@ impl<'a> Fields<'a> {
         }
     }
 
+    pub fn gen_read(&self, gen_info: GenInfo) -> TokenStream {
+        let Some(read_gen) = self.read_gen else {
+            return quote! {};
+        };
+
+        let mut tokens: Vec<TokenStream> = Vec::new();
+
+        let vis = gen_info.vis;
+        tokens.push(quote! {#vis});
+
+        if gen_info.gen_const {
+            tokens.push(quote! { const });
+        }
+
+        if gen_info.gen_unsafe {
+            tokens.push(quote! { unsafe });
+        }
+
+        let ident = gen_info.function_ident;
+        tokens.push(quote! { fn #ident });
+        let output_type = gen_info.function_type;
+
+        tokens.push(match gen_info.function_self_mut {
+            Some(true) => quote! { (&mut self)},
+            Some(false) => quote! { (&self)},
+            None => quote! { () },
+        });
+
+        if gen_info.carry_self {
+            tokens.push(quote! { -> #output_type });
+        }
+
+        // This will make the 'read_value' variable
+        let read_value = read_gen.gen_read();
+
+        let bit_offset = gen_info.bit_offset;
+        let bit_mask = gen_info.bit_mask;
+
+        if gen_info.bit_amount == 1 {
+            tokens.push(quote! {{
+                // Read
+                #read_value;
+
+                // Pull out value
+                read_value & (1 << #bit_offset) != 0
+
+            }});
+        } else {
+            tokens.push(quote! {{
+                // Read
+                #read_value;
+
+                // Pull out value
+                (read_value & #bit_mask) >> #bit_offset
+            }});
+        }
+
+        quote! {
+            #(#tokens)*
+        }
+    }
+
     pub fn generate_field(&self, field: &BitField) -> TokenStream {
         let (read_header, read_footer, write_header, write_footer) =
             match (&field.access, &field.bits) {
@@ -181,7 +238,86 @@ impl<'a> Fields<'a> {
                 (Access::WO, Bits::Range(_)) => ("", "", "read_", ""),
             };
 
-        todo!()
+        let function_type = todo!();
+        let bit_offset = todo!();
+        let bit_amount = todo!();
+        let bit_mask = todo!();
+
+        let tokens: Vec<TokenStream> = Vec::new();
+
+        // Read
+        if !matches!(field.access, Access::WO) {
+            let Some(read_gen) = self.read_gen else {
+                field
+                    .keyword
+                    .span()
+                    .unwrap()
+                    .error("Could not find a valid read functions")
+                    .help("Define a field/function to read to this bit field.")
+                    .emit();
+
+                return quote! {};
+            };
+
+            let read_ident = format!("{read_header}{}{read_footer}", field.ident);
+            let read_meta = read_gen.metadata();
+
+            let gen_info_read = GenInfo {
+                gen_const: read_meta.const_possible,
+                gen_unsafe: read_meta.is_unsafe,
+                function_self_mut: read_meta.need_mut,
+                function_type,
+                bit_offset,
+                bit_amount,
+                bit_mask,
+                vis: field.vis,
+                function_ident: read_ident,
+                carry_self: false,
+                span: field.keyword.span(),
+            };
+
+            tokens.push(self.gen_read(gen_info_read));
+        }
+
+        if !matches!(field.access, Access::RO) {
+            let (Some(read_gen), Some(write_gen)) = (self.read_gen, self.write_gen) else {
+                field
+                    .keyword
+                    .span()
+                    .unwrap()
+                    .error("Could not find a valid read/write functions")
+                    .help("Define a field/function to read/write to this bit field.")
+                    .emit();
+
+                return quote! {};
+            };
+
+            let write_ident = format!("{write_header}{}{write_footer}", field.ident);
+            let read_meta = read_gen.metadata();
+            let write_meta = write_gen.metadata();
+
+            let gen_info_write = GenInfo {
+                gen_const: read_meta.const_possible && write_meta.const_possible,
+                gen_unsafe: read_meta.is_unsafe || write_meta.is_unsafe,
+                function_self_mut: read_meta.need_mut.or(write_meta.need_mut).map(|_| {
+                    read_meta.need_mut.unwrap_or(false) || write_meta.need_mut.unwrap_or(false)
+                }),
+                function_type,
+                bit_offset,
+                bit_amount,
+                bit_mask,
+                vis: field.vis,
+                function_ident: write_ident,
+                carry_self: write_meta.carry_self,
+                span: field.keyword.span(),
+            };
+
+            tokens.push(self.gen_write(gen_info_write));
+        }
+
+        quote! {
+            #(#tokens)*
+        }
     }
 
     pub fn generate_fields(&self) -> TokenStream {
