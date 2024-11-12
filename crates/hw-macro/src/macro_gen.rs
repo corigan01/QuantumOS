@@ -1,6 +1,6 @@
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
-use syn::spanned::Spanned;
+use syn::{spanned::Spanned, Visibility};
 
 use crate::{
     make_hw_parse::{Access, BitField, BitFieldType, Bits, MakeHwMacroInput},
@@ -38,6 +38,20 @@ pub trait GenWrite {
     fn metadata(&self) -> GenMetadata;
 }
 
+pub struct GenInfo {
+    pub gen_const: bool,
+    pub gen_unsafe: bool,
+    pub function_self_mut: Option<bool>,
+    pub function_type: TokenStream,
+    pub bit_offset: usize,
+    pub bit_amount: usize,
+    pub bit_mask: u64,
+    pub vis: Visibility,
+    pub function_ident: String,
+    pub carry_self: bool,
+    pub span: Span,
+}
+
 struct Fields<'a> {
     fields: &'a MakeHwMacroInput,
     read_gen: Option<&'a dyn GenRead>,
@@ -56,71 +70,95 @@ impl<'a> Fields<'a> {
             write_gen,
         }
     }
-
     /// Generate the inner function contents for a write
-    fn gen_inner_write(&self, field: &BitField) -> TokenStream {
-        let (Some(write_gen), Some(read_gen)) = (self.write_gen, self.read_gen) else {
-            field
-                .keyword
-                .span()
+    fn gen_write(&self, gen_info: GenInfo) -> TokenStream {
+        let (Some(read_gen), Some(write_gen)) = (self.read_gen, self.write_gen) else {
+            gen_info
+                .span
                 .unwrap()
-                .error("No read/write function found!")
-                .span_help(
-                    field.paren_token.span.span().unwrap(),
-                    "Define a 'write' and a 'read' function, or define a field to read/write into.",
-                )
+                .error("Could not find a valid 'read' and 'write' functions")
+                .help("Define a field/function to read/write to this bit field.")
                 .emit();
 
             return quote! {};
         };
 
-        let write_metadata = write_gen.metadata();
-        let read_metadata = read_gen.metadata();
+        let mut tokens: Vec<TokenStream> = Vec::new();
 
-        let write_means = write_gen.gen_write();
-        let read_means = read_gen.gen_read();
+        let vis = gen_info.vis;
+        tokens.push(quote! {#vis});
 
-        let smallest_type = write_metadata.data_type.min(read_metadata.data_type);
+        if gen_info.gen_const {
+            tokens.push(quote! { const });
+        }
 
-        println!(
-            "Read = {:?}, Write = {:?}, Smallest = {:?}",
-            read_metadata.data_type, write_metadata.data_type, smallest_type
-        );
+        if gen_info.gen_unsafe {
+            tokens.push(quote! { unsafe });
+        }
 
-        let mut token_vector: Vec<TokenStream> = Vec::new();
+        let ident = gen_info.function_ident;
+        tokens.push(quote! { fn #ident });
+        let input_type = gen_info.function_type;
 
-        token_vector.push(quote! {});
+        tokens.push(match gen_info.function_self_mut {
+            Some(true) => quote! { (&mut self, value: #input_type )},
+            Some(false) => quote! { (&self, value: #input_type )},
+            None => quote! { (value: #input_type )},
+        });
 
-        let offset_bit = field.bit_offset();
-        let bit_amount = field.bit_amount(smallest_type);
+        let post_gen_tokens = if gen_info.carry_self {
+            tokens.push(quote! { -> Self });
 
-        match field.type_to_fit(smallest_type) {
-            BitFieldType::InvalidType { start, end } => {
-                field
-                    .keyword
-                    .span()
-                    .unwrap()
-                    .error(format!("Invalid Bit Argument, Start={} End={}", start, end))
-                    .emit();
-            }
-            BitFieldType::TypeBool => {
-                token_vector.push(quote! {
-                    #write_means = if flag {
-                        read_value | (1 << offset_bit);
-                    } else {
-                        read_value & !(1 << offset_bit);
-                    };
-                });
-            }
-            // If no casting is required
-            multi_bit_type if write_metadata.data_type == read_metadata.data_type => {
-                token_vector.push(quote! {});
-            }
-            _ => (),
+            quote! {*self}
+        } else {
+            quote! {}
+        };
+
+        // This will make the 'read_value' variable
+        let read_value = read_gen.gen_read();
+        // This will take the 'write_value' variable
+        let write_value = write_gen.gen_write();
+
+        let bit_offset = gen_info.bit_offset;
+        let bit_mask = gen_info.bit_mask;
+
+        if gen_info.bit_amount == 1 {
+            tokens.push(quote! {{
+                // Read
+                #read_value;
+
+                // Modify
+                let write_value = if value {
+                    read_value | (1 << #bit_offset)
+                } else {
+                    read_value & !(1 << #bit_offset)
+                };
+
+                // Write
+                #write_value;
+
+                // Post Gen
+                #post_gen_tokens
+            }});
+        } else {
+            tokens.push(quote! {{
+                // Read
+                #read_value;
+
+                // Modify
+                let write_value =
+                    (read_value & !#bit_mask) | (value << #bit_offset);
+
+                // Write
+                #write_value;
+
+                // Post Gen
+                #post_gen_tokens
+            }});
         }
 
         quote! {
-            #(#token_vector)*
+            #(#tokens)*
         }
     }
 
