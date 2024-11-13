@@ -1,13 +1,13 @@
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
-use syn::{spanned::Spanned, Ident, Visibility};
+use syn::{spanned::Spanned, Attribute, Ident, Visibility};
 
 use crate::{
     make_hw_parse::{Access, BitField, BitFieldType, Bits, MakeHwMacroInput},
-    provider_parse::{GenRead, GenWrite, MacroStruct},
+    provider_parse::{GenRead, GenWrite, MacroMod, MacroStruct},
 };
 
-pub struct GenInfo {
+pub struct GenInfo<'a> {
     pub gen_const: bool,
     pub gen_unsafe: bool,
     pub function_self_mut: Option<bool>,
@@ -19,7 +19,7 @@ pub struct GenInfo {
     pub vis: Visibility,
     pub function_ident: Ident,
     pub carry_self: bool,
-    pub span: Span,
+    pub attributes: &'a [Attribute],
 }
 
 struct Fields<'a> {
@@ -47,6 +47,11 @@ impl<'a> Fields<'a> {
         };
 
         let mut tokens: Vec<TokenStream> = Vec::new();
+
+        let attributes = gen_info.attributes;
+        tokens.push(quote! {
+            #(#attributes)*
+        });
 
         let vis = gen_info.vis;
         tokens.push(quote! {#vis});
@@ -132,6 +137,11 @@ impl<'a> Fields<'a> {
         };
 
         let mut tokens: Vec<TokenStream> = Vec::new();
+
+        let attributes = gen_info.attributes;
+        tokens.push(quote! {
+            #(#attributes)*
+        });
 
         let vis = gen_info.vis;
         tokens.push(quote! {#vis});
@@ -264,8 +274,8 @@ impl<'a> Fields<'a> {
                 vis: field.vis.clone(),
                 function_ident: read_ident,
                 carry_self: false,
-                span: field.keyword.span(),
                 inner_type: default_type.into(),
+                attributes: &field.attr,
             };
 
             tokens.push(self.gen_read(gen_info_read));
@@ -304,8 +314,8 @@ impl<'a> Fields<'a> {
                 vis: field.vis.clone(),
                 function_ident: write_ident,
                 carry_self: write_meta.carry_self,
-                span: field.keyword.span(),
                 inner_type: default_type.into(),
+                attributes: &field.attr,
             };
 
             tokens.push(self.gen_write(gen_info_write));
@@ -347,6 +357,26 @@ pub fn gen_struct(macro_struct: MacroStruct) -> TokenStream {
 
         #[automatically_derived]
         impl #struct_ident {
+            #fields
+        }
+    }
+}
+
+pub fn gen_mod(macro_mod: MacroMod) -> TokenStream {
+    let fields = Fields::new(
+        &macro_mod.macro_fields,
+        macro_mod.gen_reading(),
+        macro_mod.gen_writing(),
+    );
+
+    let mod_gen = &macro_mod.mod_inner;
+    let fields = fields.generate_fields();
+
+    quote! {
+        #mod_gen
+
+        #[automatically_derived]
+        {
             #fields
         }
     }

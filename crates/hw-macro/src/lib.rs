@@ -1,8 +1,9 @@
 #![feature(proc_macro_diagnostic)]
 
 use proc_macro::TokenStream;
-use provider_parse::MacroStruct;
-use syn::parse_macro_input;
+use proc_macro2::Span;
+use provider_parse::{MacroImplWho, MacroMod, MacroStruct};
+use syn::{parse_macro_input, visit::Visit};
 
 pub(crate) mod hw_gen;
 pub(crate) mod hw_parse;
@@ -21,14 +22,39 @@ pub fn hw_device(tokens: TokenStream) -> TokenStream {
 #[proc_macro_attribute]
 pub fn make_hw(args: TokenStream, input: TokenStream) -> TokenStream {
     let macro_fields = parse_macro_input!(args as make_hw_parse::MakeHwMacroInput);
-    let struct_inner = parse_macro_input!(input as syn::ItemStruct);
 
-    let macro_struct = MacroStruct {
-        struct_inner,
-        macro_fields,
-    };
+    // Parse the Struct/Module
+    let mut self_visitor = MacroImplWho::Nothing;
+    let parsed = syn::parse(input).unwrap();
+    self_visitor.visit_file(&parsed);
 
-    macro_gen::gen_struct(macro_struct).into()
+    match self_visitor {
+        MacroImplWho::Nothing => {
+            Span::call_site()
+                .unwrap()
+                .error("Macro can only be applied to struct/mod")
+                .emit();
+
+            quote::quote! {}
+        }
+        MacroImplWho::IsStruct(struct_inner) => {
+            let macro_struct = MacroStruct {
+                struct_inner,
+                macro_fields,
+            };
+
+            macro_gen::gen_struct(macro_struct)
+        }
+        MacroImplWho::IsMod(mod_inner) => {
+            let macro_mod = MacroMod {
+                mod_inner,
+                macro_fields,
+            };
+
+            macro_gen::gen_mod(macro_mod)
+        }
+    }
+    .into()
 }
 
 /*

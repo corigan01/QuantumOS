@@ -1,12 +1,41 @@
 use proc_macro2::TokenStream;
 use quote::quote;
-use syn::{Field, ItemStruct, Type};
+use syn::{
+    parse::Parse,
+    visit::{self, Visit},
+    Field, ItemMod, ItemStruct, Type,
+};
 
 use crate::make_hw_parse::{BitFieldType, MakeHwMacroInput};
 
 #[derive(Debug)]
-pub struct MacroStruct {
-    pub(crate) struct_inner: ItemStruct,
+pub enum MacroImplWho<'ast> {
+    Nothing,
+    IsStruct(&'ast ItemStruct),
+    IsMod(&'ast ItemMod),
+}
+
+impl<'ast> Visit<'ast> for MacroImplWho<'ast> {
+    fn visit_item_mod(&mut self, i: &'ast syn::ItemMod) {
+        *self = Self::IsMod(i);
+        visit::visit_item_mod(self, i);
+    }
+
+    fn visit_item_struct(&mut self, i: &'ast syn::ItemStruct) {
+        *self = Self::IsStruct(i);
+        visit::visit_item_struct(self, i);
+    }
+}
+
+#[derive(Debug)]
+pub struct MacroStruct<'a> {
+    pub(crate) struct_inner: &'a ItemStruct,
+    pub(crate) macro_fields: MakeHwMacroInput,
+}
+
+#[derive(Debug)]
+pub struct MacroMod<'a> {
+    pub(crate) mod_inner: &'a ItemMod,
     pub(crate) macro_fields: MakeHwMacroInput,
 }
 
@@ -41,7 +70,7 @@ pub trait GenWrite {
     fn metadata(&self) -> GenMetadata;
 }
 
-impl GenRead for MacroStruct {
+impl<'a> GenRead for MacroStruct<'a> {
     fn gen_read(&self) -> TokenStream {
         if let Some(ty) = self.is_single_field_struct() {
             quote! { let read_value: #ty = self.0; }
@@ -65,7 +94,7 @@ impl GenRead for MacroStruct {
     }
 }
 
-impl GenWrite for MacroStruct {
+impl<'a> GenWrite for MacroStruct<'a> {
     fn gen_write(&self) -> TokenStream {
         if let Some(ty) = self.is_single_field_struct() {
             quote! { self.0 = (write_value) as #ty; }
@@ -89,7 +118,7 @@ impl GenWrite for MacroStruct {
     }
 }
 
-impl MacroStruct {
+impl<'b> MacroStruct<'b> {
     pub fn is_copy(&self) -> bool {
         // FIXME: We cannot really figure out if the type impl Clone
         //        other than looking at the derive macro. There could
