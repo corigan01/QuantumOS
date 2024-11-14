@@ -174,3 +174,33 @@ impl<'b> MacroStruct<'b> {
         }
     }
 }
+
+impl<'a> GenRead for MacroMod<'a> {
+    fn gen_read(&self) -> TokenStream {
+        todo!()
+    }
+
+    fn metadata(&self) -> GenMetadata {
+        todo!()
+    }
+}
+
+impl<'a> GenWrite for MacroMod<'a> {
+    fn gen_write(&self) -> TokenStream {
+        todo!()
+    }
+
+    fn metadata(&self) -> GenMetadata {
+        todo!()
+    }
+}
+
+impl<'b> MacroMod<'b> {
+    pub fn gen_reading<'a>(&'a self) -> Option<&'a dyn GenRead> {
+        Some(self)
+    }
+
+    pub fn gen_writing<'a>(&'a self) -> Option<&'a dyn GenWrite> {
+        Some(self)
+    }
+}
