@@ -397,11 +397,22 @@ pub fn gen_mod(macro_mod: MacroMod) -> TokenStream {
     let mod_gen = &macro_mod.mod_inner;
     let fields = fields.generate_fields();
 
-    quote! {
-        #mod_gen
+    let attr = &mod_gen.attrs;
+    let ident = &mod_gen.ident;
+    let vis = &mod_gen.vis;
+    let unsaftey = &mod_gen.unsafety;
 
-        #[automatically_derived]
-        {
+    let mod_inner = &mod_gen
+        .content
+        .as_ref()
+        .expect("Macro must contain content!")
+        .1;
+
+    quote! {
+        #(#attr)*
+        #vis #unsaftey mod #ident {
+            #(#mod_inner)*
+
             #fields
         }
     }

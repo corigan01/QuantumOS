@@ -33,5 +33,12 @@ pub use hw_macro::*;
     /// Second Bit Field
     field(RW, 2..5, second),
 )]
-#[derive(Clone, Copy)]
-struct ExampleMultiStruct(u8);
+mod dingus {
+    fn read(dingus: u32) {
+        todo!()
+    }
+
+    fn write() -> u32 {
+        todo!()
+    }
+}

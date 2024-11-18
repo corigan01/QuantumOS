@@ -106,6 +106,22 @@ impl Into<BitFieldType> for Type {
     }
 }
 
+impl<'a> Into<BitFieldType> for &'a Type {
+    fn into(self) -> BitFieldType {
+        match self {
+            Type::Path(type_path) => match () {
+                () if type_path.path.is_ident("bool") => BitFieldType::TypeBool,
+                () if type_path.path.is_ident("u8") => BitFieldType::Type8,
+                () if type_path.path.is_ident("u16") => BitFieldType::Type16,
+                () if type_path.path.is_ident("u32") => BitFieldType::Type32,
+                () if type_path.path.is_ident("u64") => BitFieldType::Type64,
+                _ => BitFieldType::InvalidType { start: 0, end: 0 },
+            },
+            _ => BitFieldType::InvalidType { start: 0, end: 0 },
+        }
+    }
+}
+
 impl BitField {
     /// The type required to fit the amount of bits desired.
     pub fn type_to_fit(&self, default_type: BitFieldType) -> BitFieldType {

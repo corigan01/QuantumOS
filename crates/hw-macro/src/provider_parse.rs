@@ -23,7 +23,9 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use proc_macro2::TokenStream;
+use core::panic;
+
+use proc_macro2::{Span, TokenStream};
 use quote::quote;
 use syn::{
     visit::{self, Visit},
@@ -201,31 +203,108 @@ impl<'b> MacroStruct<'b> {
 
 impl<'a> GenRead for MacroMod<'a> {
     fn gen_read(&self) -> TokenStream {
-        todo!()
+        let meta = GenRead::metadata(self);
+        let ty: TokenStream = meta.data_type.into();
+
+        quote! { let read_value: #ty = read(); }
     }
 
     fn metadata(&self) -> GenMetadata {
-        todo!()
+        let Some(read_fn) = self.get_read_function() else {
+            // TODO: Don't panic, make errors
+            panic!("No 'read' function defined!");
+        };
+
+        let sig = &read_fn.sig;
+        let input_type = match read_fn.sig.inputs.first() {
+            Some(syn::FnArg::Typed(arg)) => arg.ty.as_ref().into(),
+            _ => panic!("'read' function does not have a valid input type!"),
+        };
+
+        GenMetadata {
+            const_possible: sig.constness.is_some(),
+            need_mut: None,
+            data_type: input_type,
+            carry_self: false,
+            is_unsafe: sig.unsafety.is_some(),
+        }
     }
 }
 
 impl<'a> GenWrite for MacroMod<'a> {
     fn gen_write(&self) -> TokenStream {
-        todo!()
+        let meta = GenWrite::metadata(self);
+        let ty: TokenStream = meta.data_type.into();
+
+        quote! { write(write_value as #ty); }
     }
 
     fn metadata(&self) -> GenMetadata {
-        todo!()
+        let Some(write_fn) = self.get_write_function() else {
+            // TODO: Don't panic, make errors
+            panic!("No 'write' function defined!");
+        };
+
+        let sig = &write_fn.sig;
+        let return_type = match &sig.output {
+            syn::ReturnType::Default => {
+                panic!("'write' function does not have a valid return type!");
+            }
+            syn::ReturnType::Type(_, kind) => kind.as_ref().into(),
+        };
+
+        GenMetadata {
+            const_possible: sig.constness.is_some(),
+            need_mut: None,
+            data_type: return_type,
+            carry_self: false,
+            is_unsafe: sig.unsafety.is_some(),
+        }
+    }
+}
+
+#[derive(Debug)]
+struct RwFunctionVisitor<'ast> {
+    read_fn: Option<&'ast ItemFn>,
+    write_fn: Option<&'ast ItemFn>,
+}
+
+impl<'ast> RwFunctionVisitor<'ast> {
+    pub fn new() -> Self {
+        Self {
+            read_fn: None,
+            write_fn: None,
+        }
+    }
+}
+
+impl<'ast> Visit<'ast> for RwFunctionVisitor<'ast> {
+    fn visit_item_fn(&mut self, i: &'ast syn::ItemFn) {
+        if i.sig.ident == "read" {
+            self.read_fn = Some(i);
+        } else if i.sig.ident == "write" {
+            self.write_fn = Some(i);
+        }
+
+        syn::visit::visit_item_fn(self, i);
     }
 }
 
 impl<'b> MacroMod<'b> {
     pub fn get_read_function(&self) -> Option<&'b ItemFn> {
-        todo!()
+        // FIXME: We should figure out how to cache this at some point
+        let mut fn_visitor = RwFunctionVisitor::new();
+        fn_visitor.visit_item_mod(&self.mod_inner);
+
+        fn_visitor.read_fn
     }
 
     pub fn get_write_function(&self) -> Option<&'b ItemFn> {
-        todo!()
+        // FIXME: We should figure out how to cache this at some point
+        let mut fn_visitor = RwFunctionVisitor::new();
+        fn_visitor.visit_item_mod(&self.mod_inner);
+
+        fn_visitor.write_fn
     }
 
     pub fn gen_reading<'a>(&'a self) -> Option<&'a dyn GenRead> {
