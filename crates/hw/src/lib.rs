@@ -26,19 +26,3 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #![no_std]
 
 pub use hw_macro::*;
-
-#[make_hw(
-    /// First Bit Field
-    field(RW, 0..2, first),
-    /// Second Bit Field
-    field(RW, 2..5, second),
-)]
-mod dingus {
-    fn read(dingus: u32) {
-        todo!()
-    }
-
-    fn write() -> u32 {
-        todo!()
-    }
-}

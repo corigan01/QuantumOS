@@ -65,6 +65,7 @@ impl<'a> Fields<'a> {
             write_gen,
         }
     }
+
     /// Generate the inner function contents for a write
     fn gen_write(&self, gen_info: GenInfo) -> TokenStream {
         let (Some(read_gen), Some(write_gen)) = (self.read_gen, self.write_gen) else {
@@ -228,16 +229,17 @@ impl<'a> Fields<'a> {
             .map(|write_gen| write_gen.metadata().data_type);
         let read = self.read_gen.map(|read_gen| read_gen.metadata().data_type);
 
-        if !write.is_some_and(|write_type| read.is_some_and(|read_type| write_type == read_type)) {
-            // TODO: Make the span better on this
-            Span::call_site()
-                .unwrap()
-                .error("'read' and 'write' function types do not match!")
-                .emit();
+        match (read, write) {
+            (None, Some(write)) => write,
+            (Some(read), None) => read,
+            (Some(read), Some(write)) if read == write => write,
+            (None, None) => {
+                panic!("No function with type!");
+            }
+            _ => {
+                panic!("'read' and 'write' function types do not match!");
+            }
         }
-
-        // TODO: We should figure out a better way to do this
-        write.unwrap_or(read.unwrap_or(BitFieldType::InvalidType { start: 0, end: 0 }))
     }
 
     pub fn generate_field(&self, field: &BitField) -> TokenStream {

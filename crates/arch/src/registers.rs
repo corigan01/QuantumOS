@@ -23,7 +23,7 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use hw::hw_device;
+use hw::make_hw;
 
 use crate::CpuPrivilege;
 
@@ -123,154 +123,100 @@ impl SegmentRegisters {
     }
 }
 
-hw_device! {
-    pub mod cr0 {
-        #[inline(always)]
-        pub fn read() -> u64 {
-            #[cfg(target_pointer_width = "32")]
-            let mut flags: u32;
-            #[cfg(target_pointer_width = "64")]
-            let mut flags: u64;
+#[make_hw(
+    field(RW, 0, pub protected_mode),
+    field(RW, 1, pub monitor_co_processor),
+    field(RW, 2, pub x87_fpu_emulation),
+    field(RW, 3, pub task_switch),
+    field(RW, 4, pub extention_type),
+    field(RW, 5, pub numeric_error),
+    field(RW, 16, pub write_protect),
+    field(RW, 18, pub alignment_mask),
+    field(RW, 29, pub non_write_through),
+    field(RW, 30, pub cache_disable),
+    field(RW, 31, pub paging)
+)]
+pub mod cr0 {
+    #[inline(always)]
+    pub fn read() -> u64 {
+        #[cfg(target_pointer_width = "32")]
+        let mut flags: u32;
+        #[cfg(target_pointer_width = "64")]
+        let mut flags: u64;
 
-            #[cfg(target_pointer_width = "32")]
-            unsafe {
-                core::arch::asm!("
-                    mov eax, cr0
-                ",
-                    out("eax") flags
-                )
-            }
-
-            #[cfg(target_pointer_width = "64")]
-            unsafe {
-                core::arch::asm!("
-                    mov rax, cr0
-                ",
-                    out("rax") flags
-                )
-            }
-
-            #[cfg(target_pointer_width = "32")]
-            return flags as u64;
-
-            #[cfg(target_pointer_width = "64")]
-            flags
+        #[cfg(target_pointer_width = "32")]
+        unsafe {
+            core::arch::asm!("
+                mov eax, cr0
+            ",
+                out("eax") flags
+            )
         }
 
-        #[inline(always)]
-        pub unsafe fn write(value: u64) {
-            #[cfg(target_pointer_width = "32")]
-            core::arch::asm!(
-                "mov cr0, eax",
-                in("eax") (value as u32)
-            );
-
-            #[cfg(target_pointer_width = "64")]
-            core::arch::asm!(
-                "mov cr0, rax",
-                in("rax") value
-            );
+        #[cfg(target_pointer_width = "64")]
+        unsafe {
+            core::arch::asm!("
+                mov rax, cr0
+            ",
+                out("rax") flags
+            )
         }
+
+        #[cfg(target_pointer_width = "32")]
+        return flags as u64;
+
+        #[cfg(target_pointer_width = "64")]
+        flags
     }
 
-    #[field(RW, 0, cr0)]
-    pub protected_mode,
+    #[inline(always)]
+    pub unsafe fn write(value: u64) {
+        #[cfg(target_pointer_width = "32")]
+        core::arch::asm!(
+            "mov cr0, eax",
+            in("eax") (value as u32)
+        );
 
-    #[field(RW, 1, cr0)]
-    pub monitor_co_processor,
-
-    #[field(RW, 2, cr0)]
-    pub x87_fpu_emulation,
-
-    #[field(RW, 3, cr0)]
-    pub task_switched,
-
-    #[field(RW, 4, cr0)]
-    pub extension_type,
-
-    #[field(RW, 5, cr0)]
-    pub numeric_error,
-
-    #[field(RW, 16, cr0)]
-    pub write_protect,
-
-    #[field(RW, 18, cr0)]
-    pub alignmnet_mask,
-
-    #[field(RW, 29, cr0)]
-    pub non_write_through,
-
-    #[field(RW, 30, cr0)]
-    pub cache_disable,
-
-    #[field(RW, 31, cr0)]
-    pub paging,
+        #[cfg(target_pointer_width = "64")]
+        core::arch::asm!(
+            "mov cr0, rax",
+            in("rax") value
+        );
+    }
 }
 
-hw_device! {
-    pub mod eflags {
-        #[inline(never)]
-        pub fn read() -> u32 {
-            let mut flags;
+#[make_hw(
+    field(RO, 0, pub carry),
+    field(RO, 2, pub parity),
+    field(RO, 4, pub auxiliary),
+    field(RO, 6, pub zero),
+    field(RO, 7, pub sign),
+    field(RO, 8, pub trap),
+    field(RO, 9, pub interrupts_enable),
+    field(RO, 10, pub direction),
+    field(RO, 11, pub overflow),
+    field(RO, 14, pub nested_task),
+    field(RO, 16, pub resume),
+    field(RO, 17, pub v8086_mode),
+    field(RO, 18, pub alignment_check),
+    field(RO, 19, pub virt_interrupt),
+    field(RO, 20, pub virt_pending),
+    field(RO, 21, pub cpuid_available),
+)]
+pub mod eflags {
+    #[inline(never)]
+    pub fn read() -> u32 {
+        let mut flags;
 
-            unsafe {
-                core::arch::asm!("
-                    pushf
-                    pop {0:x}
-                ",
-                    out(reg) flags
-                )
-            }
-
-            flags
+        unsafe {
+            core::arch::asm!("
+                pushf
+                pop {0:x}
+            ",
+                out(reg) flags
+            )
         }
+
+        flags
     }
-
-    #[field(RO, 0, eflags)]
-    pub carry,
-
-    #[field(RO, 2, eflags)]
-    pub parity,
-
-    #[field(RO, 4, eflags)]
-    pub auxiliary,
-
-    #[field(RO, 6, eflags)]
-    pub zero,
-
-    #[field(RO, 7, eflags)]
-    pub sign,
-
-    #[field(RO, 8, eflags)]
-    pub trap,
-
-    #[field(RO, 9, eflags)]
-    pub interrupts_enable,
-
-    #[field(RO, 10, eflags)]
-    pub direction,
-
-    #[field(RO, 11, eflags)]
-    pub overflow,
-
-    #[field(RO, 14, eflags)]
-    pub nested_task,
-
-    #[field(RO, 16, eflags)]
-    pub resume,
-
-    #[field(RO, 17, eflags)]
-    pub v8086_mode,
-
-    #[field(RO, 18, eflags)]
-    pub alignment_check,
-
-    #[field(RO, 19, eflags)]
-    pub virt_interrupt,
-
-    #[field(RO, 20, eflags)]
-    pub virt_pending,
-
-    #[field(RO, 21, eflags)]
-    pub cpuid_available,
 }

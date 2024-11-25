@@ -24,6 +24,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 use bits::BitManipulation;
+use hw::make_hw;
 
 /// The max 'bits' of physical memory the system supports.
 pub const MAX_PHY_MEMORY_WIDTH: usize = 48;
@@ -306,3 +307,6 @@ impl_entry!(
     ///
     PageEntryLvl5; 5
 );
+
+#[make_hw(field(RW, 0, present))]
+pub struct PageEntryLl1(u32);

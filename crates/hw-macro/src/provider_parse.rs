@@ -216,15 +216,17 @@ impl<'a> GenRead for MacroMod<'a> {
         };
 
         let sig = &read_fn.sig;
-        let input_type = match read_fn.sig.inputs.first() {
-            Some(syn::FnArg::Typed(arg)) => arg.ty.as_ref().into(),
-            _ => panic!("'read' function does not have a valid input type!"),
+        let return_type = match &sig.output {
+            syn::ReturnType::Default => {
+                panic!("'read' function does not have a valid return type!");
+            }
+            syn::ReturnType::Type(_, kind) => kind.as_ref().into(),
         };
 
         GenMetadata {
             const_possible: sig.constness.is_some(),
             need_mut: None,
-            data_type: input_type,
+            data_type: return_type,
             carry_self: false,
             is_unsafe: sig.unsafety.is_some(),
         }
@@ -246,17 +248,15 @@ impl<'a> GenWrite for MacroMod<'a> {
         };
 
         let sig = &write_fn.sig;
-        let return_type = match &sig.output {
-            syn::ReturnType::Default => {
-                panic!("'write' function does not have a valid return type!");
-            }
-            syn::ReturnType::Type(_, kind) => kind.as_ref().into(),
+        let input_type = match sig.inputs.first() {
+            Some(syn::FnArg::Typed(arg)) => arg.ty.as_ref().into(),
+            _ => panic!("'write' function does not have a valid input type!"),
         };
 
         GenMetadata {
             const_possible: sig.constness.is_some(),
             need_mut: None,
-            data_type: return_type,
+            data_type: input_type,
             carry_self: false,
             is_unsafe: sig.unsafety.is_some(),
         }
