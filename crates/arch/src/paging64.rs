@@ -292,3 +292,104 @@ pub struct PageMapLvl3([u64; 512]);
 #[repr(align(4096))]
 #[derive(Clone, Copy)]
 pub struct PageMapLvl2([u64; 512]);
+
+// TODO: Make docs for these
+// Theses are the entires that can fit into the tables
+pub trait Lvl5Entry {
+    fn into_raw(self) -> u64;
+}
+
+impl Lvl5Entry for PageEntryLvl5 {
+    fn into_raw(self) -> u64 {
+        self.0
+    }
+}
+
+pub trait Lvl4Entry {
+    fn into_raw(self) -> u64;
+}
+
+impl Lvl4Entry for PageEntryLvl4 {
+    fn into_raw(self) -> u64 {
+        self.0
+    }
+} 
+
+impl Lvl4Entry for PageEntry1G {
+    fn into_raw(self) -> u64 {
+        self.0
+    }
+}
+
+pub trait Lvl3Entry {
+    fn into_raw(self) -> u64;
+}
+
+impl Lvl3Entry for PageEntryLvl3 {
+    fn into_raw(self) -> u64 {
+        self.0
+    }
+}
+
+impl Lvl3Entry for PageEntry2M {
+    fn into_raw(self) -> u64 {
+        self.0
+    }
+}
+
+pub trait Lvl2Entry {
+    fn into_raw(self) -> u64;
+}
+
+impl Lvl2Entry for PageEntryLvl2 {
+    fn into_raw(self) -> u64 {
+        self.0
+    }
+}
+
+impl Lvl2Entry for PageEntry4K {
+    fn into_raw(self) -> u64 {
+        self.0
+    }
+}
+
+impl PageMapLvl2 {
+    pub fn new() -> Self {
+        Self([0; 512])
+    }
+
+    pub fn store(&mut self, entry: impl Lvl2Entry, index: usize) {
+        self.0[index] = entry.into_raw();
+    }
+}
+
+impl PageMapLvl3 {
+    pub fn new() -> Self {
+        Self([0; 512])
+    }
+
+    pub fn store(&mut self, entry: impl Lvl3Entry, index: usize) {
+        self.0[index] = entry.into_raw();
+    }
+}
+
+impl PageMapLvl4 {
+    pub fn new() -> Self {
+        Self([0; 512])
+    }
+
+    pub fn store(&mut self, entry: impl Lvl4Entry, index: usize) {
+        self.0[index] = entry.into_raw();
+    }
+}
+
+impl PageMapLvl5 {
+    pub fn new() -> Self {
+        Self([0; 512])
+    }
+
+    pub fn store(&mut self, entry: impl Lvl5Entry, index: usize) {
+        self.0[index] = entry.into_raw();
+    }
+}
+
