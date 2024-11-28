@@ -348,3 +348,55 @@ pub mod eflags {
         flags
     }
 }
+
+#[inline(always)]
+pub unsafe fn read_msr(msr_number: u32) -> u64 {
+    let lo: u32;
+    let hi: u32;
+
+    unsafe {
+        core::arch::asm!("rdmsr",
+            in("ecx") msr_number,
+            out("eax") lo,
+            out("edx") hi
+        )
+    }
+
+    lo as u64 | ((hi as u64) << 32)
+}
+
+#[inline(always)]
+pub unsafe fn write_msr(msr_number: u32, value: u64) {
+    let lo = value as u32;
+    let hi = (value >> 32) as u32;
+
+    core::arch::asm!("wrmsr",
+        in("eax") lo,
+        in("edx") hi,
+        in("ecx") msr_number
+    )
+}
+
+#[make_hw(
+    field(RW, 0, pub syscall_extensions),
+    field(RW, 8, pub long_mode_enable),
+    field(RW, 10, pub long_mode_active),
+    field(RW, 11, pub no_execute),
+    field(RW, 12, pub secure_virtual_machine),
+    field(RW, 13, pub long_mode_segment_limit),
+    field(RW, 14, pub fast_fxsave),
+    field(RW, 15, pub translation_cache)
+)]
+pub mod ia32_efer {
+    use super::{read_msr, write_msr};
+
+    #[inline(always)]
+    pub fn read() -> u64 {
+        unsafe { read_msr(0xC0000080) }
+    }
+
+    #[inline(always)]
+    pub unsafe fn write(value: u64) {
+        write_msr(0xC0000080, value);
+    }
+}

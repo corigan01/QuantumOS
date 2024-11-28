@@ -25,9 +25,11 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 use arch::{
     paging64::{PageEntry1G, PageMapLvl4},
-    registers::cr3,
+    registers::{cr0, cr3, cr4, ia32_efer, Segment, SegmentRegisters},
+    CpuPrivilege,
 };
 use core::cell::SyncUnsafeCell;
+use lldebug::{print, println};
 use util::consts::GIB;
 
 /// Amount of Gib to identity map
@@ -56,4 +58,34 @@ pub unsafe fn set_page_base_reg() {
     let phy_addr = TABLE_LVL4.get() as u64;
 
     cr3::set_page_directory_base_register(phy_addr);
+}
+
+pub unsafe fn enable_paging() {
+    print!("Setting Paging Base Register...");
+    set_page_base_reg();
+    println!("OK");
+
+    print!("Disabling Paging...");
+    cr0::set_paging_flag(true);
+    println!("OK");
+
+    print!("Setting PAE...");
+    cr4::set_physical_address_extension_flag(true);
+    println!("OK");
+
+    print!("Setting Long Mode...");
+    ia32_efer::set_long_mode_enable_flag(true);
+    println!("OK");
+
+    print!("Enabling Protected Mode...");
+    cr0::set_protected_mode_flag(true);
+    println!("OK");
+
+    print!("Enabling Paging...");
+    cr0::set_paging_flag(true);
+    println!("OK");
+
+    print!("Reloading Segments...");
+    SegmentRegisters::set_data_segments(Segment::new(2, CpuPrivilege::Ring0));
+    println!("OK");
 }
