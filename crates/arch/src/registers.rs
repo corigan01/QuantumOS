@@ -186,6 +186,60 @@ pub mod cr0 {
 }
 
 #[make_hw(
+    field(RW, 3, page_level_write_through),
+    field(RW, 4, page_level_cache_disable),
+    field(RW, 12..=63, page_directory_base_register)
+)]
+pub mod cr3 {
+    #[inline(always)]
+    pub fn read() -> u64 {
+        #[cfg(target_pointer_width = "32")]
+        let mut flags: u32;
+        #[cfg(target_pointer_width = "64")]
+        let mut flags: u64;
+
+        #[cfg(target_pointer_width = "32")]
+        unsafe {
+            core::arch::asm!("
+                mov eax, cr3
+            ",
+                out("eax") flags
+            )
+        }
+
+        #[cfg(target_pointer_width = "64")]
+        unsafe {
+            core::arch::asm!("
+                mov rax, cr3
+            ",
+                out("rax") flags
+            )
+        }
+
+        #[cfg(target_pointer_width = "32")]
+        return flags as u64;
+
+        #[cfg(target_pointer_width = "64")]
+        flags
+    }
+
+    #[inline(always)]
+    pub unsafe fn write(value: u64) {
+        #[cfg(target_pointer_width = "32")]
+        core::arch::asm!(
+            "mov cr3, eax",
+            in("eax") (value as u32)
+        );
+
+        #[cfg(target_pointer_width = "64")]
+        core::arch::asm!(
+            "mov cr3, rax",
+            in("rax") value
+        );
+    }
+}
+
+#[make_hw(
     field(RW, 0, pub v8086),
     field(RW, 1, pub protected_mode_virtual_interrupts),
     field(RW, 2, pub time_stamp_disable),
