@@ -25,7 +25,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 use arch::{
     paging64::{PageEntry1G, PageMapLvl4},
-    registers::cr4,
+    registers::cr3,
 };
 use core::cell::SyncUnsafeCell;
 use util::consts::GIB;
@@ -52,6 +52,8 @@ pub fn identity_map() {
     }
 }
 
-unsafe fn enable_pae() {
-    cr4::set_physical_address_extension_flag(true);
+pub unsafe fn set_page_base_reg() {
+    let phy_addr = TABLE_LVL4.get() as u64;
+
+    cr3::set_page_directory_base_register(phy_addr);
 }
