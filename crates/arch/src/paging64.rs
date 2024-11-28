@@ -354,7 +354,7 @@ impl Lvl2Entry for PageEntry4K {
 }
 
 impl PageMapLvl2 {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self([0; 512])
     }
 
@@ -364,7 +364,7 @@ impl PageMapLvl2 {
 }
 
 impl PageMapLvl3 {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self([0; 512])
     }
 
@@ -374,7 +374,7 @@ impl PageMapLvl3 {
 }
 
 impl PageMapLvl4 {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self([0; 512])
     }
 
@@ -384,7 +384,7 @@ impl PageMapLvl4 {
 }
 
 impl PageMapLvl5 {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self([0; 512])
     }
 

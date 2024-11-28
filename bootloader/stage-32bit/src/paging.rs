@@ -22,3 +22,12 @@ NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FO
 DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+
+use core::cell::UnsafeCell;
+
+use arch::paging64::{PageMapLvl3, PageMapLvl4};
+
+static TABLE_LVL3: UnsafeCell<[PageMapLvl3; 5]> = UnsafeCell::new([PageMapLvl3::new(); 5]);
+static TABLE_LVL4: UnsafeCell<PageMapLvl4> = UnsafeCell::new(PageMapLvl4::new());
+
+pub fn identity_map() {}

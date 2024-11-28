@@ -17,7 +17,7 @@ members = [
   "crates/lldebug-macro", 
   "crates/hw", 
   "crates/hw-macro"
-]
+, "crates/util"]
 
 default-members = ["meta"]
 resolver = "2"
