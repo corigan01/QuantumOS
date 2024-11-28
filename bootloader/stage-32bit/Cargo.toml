@@ -12,3 +12,4 @@ bootgfx = {workspace = true}
 serial = {workspace = true}
 lldebug = {workspace = true}
 arch = {workspace = true}
+util = {workspace = true}
