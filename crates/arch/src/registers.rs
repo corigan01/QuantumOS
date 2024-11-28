@@ -186,6 +186,80 @@ pub mod cr0 {
 }
 
 #[make_hw(
+    field(RW, 0, pub v8086),
+    field(RW, 1, pub protected_mode_virtual_interrupts),
+    field(RW, 2, pub time_stamp_disable),
+    field(RW, 3, pub debugging_extensions),
+    field(RW, 4, pub page_size_extension),
+    field(RW, 5, pub physical_address_extension),
+    field(RO, 6, pub machine_check_exception),
+    field(RW, 7, pub page_global_enabled),
+    field(RW, 8, pub perf_mon_counter_enable),
+    field(RW, 9, pub os_supporting_fxsave_fxstor),
+    field(RW, 10, pub os_supporting_unmasked_simd_float),
+    field(RW, 11, pub user_mode_instruction_prevention),
+    field(RW, 12, pub lvl5_page_tables),
+    field(RW, 13, pub virtual_machine_extentions),
+    field(RW, 14, pub safer_mode_extensions),
+    field(RW, 16, pub fsgsbase),
+    field(RW, 17, pub pcid),
+    field(RW, 18, pub xsave),
+    field(RW, 20, pub supervisor_exe_protection),
+    field(RW, 21, pub supervisor_access_prevention),
+    field(RW, 22, pub protection_key),
+    field(RW, 23, pub force_control_flow),
+    field(RW, 24, pub protection_key_for_supervisor)
+)]
+pub mod cr4 {
+    #[inline(always)]
+    pub fn read() -> u64 {
+        #[cfg(target_pointer_width = "32")]
+        let mut flags: u32;
+        #[cfg(target_pointer_width = "64")]
+        let mut flags: u64;
+
+        #[cfg(target_pointer_width = "32")]
+        unsafe {
+            core::arch::asm!("
+                mov eax, cr4
+            ",
+                out("eax") flags
+            )
+        }
+
+        #[cfg(target_pointer_width = "64")]
+        unsafe {
+            core::arch::asm!("
+                mov rax, cr4
+            ",
+                out("rax") flags
+            )
+        }
+
+        #[cfg(target_pointer_width = "32")]
+        return flags as u64;
+
+        #[cfg(target_pointer_width = "64")]
+        flags
+    }
+
+    #[inline(always)]
+    pub unsafe fn write(value: u64) {
+        #[cfg(target_pointer_width = "32")]
+        core::arch::asm!(
+            "mov cr4, eax",
+            in("eax") (value as u32)
+        );
+
+        #[cfg(target_pointer_width = "64")]
+        core::arch::asm!(
+            "mov cr4, rax",
+            in("rax") value
+        );
+    }
+}
+
+#[make_hw(
     field(RO, 0, pub carry),
     field(RO, 2, pub parity),
     field(RO, 4, pub auxiliary),

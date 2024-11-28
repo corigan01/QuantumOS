@@ -23,11 +23,35 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use core::cell::UnsafeCell;
+use arch::{
+    paging64::{PageEntry1G, PageMapLvl4},
+    registers::cr4,
+};
+use core::cell::SyncUnsafeCell;
+use util::consts::GIB;
 
-use arch::paging64::{PageMapLvl3, PageMapLvl4};
+/// Amount of Gib to identity map
+const IDMAP_GIG_AMOUNT: usize = 8;
 
-static TABLE_LVL3: UnsafeCell<[PageMapLvl3; 5]> = UnsafeCell::new([PageMapLvl3::new(); 5]);
-static TABLE_LVL4: UnsafeCell<PageMapLvl4> = UnsafeCell::new(PageMapLvl4::new());
+static TABLE_LVL4: SyncUnsafeCell<PageMapLvl4> = SyncUnsafeCell::new(PageMapLvl4::new());
 
-pub fn identity_map() {}
+pub fn identity_map() {
+    for gig in 0..IDMAP_GIG_AMOUNT {
+        let v_addr = gig * GIB;
+
+        let lvl3 = PageEntry1G::new()
+            .set_present_flag(true)
+            .set_read_write_flag(true)
+            .set_execute_disable_flag(true)
+            .set_user_accessed_flag(false)
+            .set_virt_address(v_addr as u32);
+
+        unsafe {
+            (*TABLE_LVL4.get()).store(lvl3, gig);
+        }
+    }
+}
+
+unsafe fn enable_pae() {
+    cr4::set_physical_address_extension_flag(true);
+}

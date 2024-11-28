@@ -361,6 +361,10 @@ impl PageMapLvl2 {
     pub fn store(&mut self, entry: impl Lvl2Entry, index: usize) {
         self.0[index] = entry.into_raw();
     }
+
+    pub fn flood_table(&mut self, entry: impl Lvl2Entry) {
+        self.0 = [entry.into_raw(); 512];
+    }
 }
 
 impl PageMapLvl3 {
@@ -370,6 +374,10 @@ impl PageMapLvl3 {
 
     pub fn store(&mut self, entry: impl Lvl3Entry, index: usize) {
         self.0[index] = entry.into_raw();
+    }
+
+    pub fn flood_table(&mut self, entry: impl Lvl3Entry) {
+        self.0 = [entry.into_raw(); 512];
     }
 }
 
@@ -381,6 +389,10 @@ impl PageMapLvl4 {
     pub fn store(&mut self, entry: impl Lvl4Entry, index: usize) {
         self.0[index] = entry.into_raw();
     }
+
+    pub fn flood_table(&mut self, entry: impl Lvl4Entry) {
+        self.0 = [entry.into_raw(); 512];
+    }
 }
 
 impl PageMapLvl5 {
@@ -390,6 +402,10 @@ impl PageMapLvl5 {
 
     pub fn store(&mut self, entry: impl Lvl5Entry, index: usize) {
         self.0[index] = entry.into_raw();
+    }
+
+    pub fn flood_table(&mut self, entry: impl Lvl5Entry) {
+        self.0 = [entry.into_raw(); 512];
     }
 }
 

@@ -25,6 +25,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 #![no_main]
 #![no_std]
+#![feature(sync_unsafe_cell)]
 
 use bootgfx::{Color, Framebuffer};
 use bootloader::Stage16toStage32;
