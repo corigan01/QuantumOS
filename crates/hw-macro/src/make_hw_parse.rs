@@ -124,7 +124,11 @@ impl<'a> Into<BitFieldType> for &'a Type {
 
 impl BitField {
     /// The type required to fit the amount of bits desired.
-    pub fn type_to_fit(&self, default_type: BitFieldType) -> BitFieldType {
+    pub fn type_to_fit(&self, access: &Access, default_type: BitFieldType) -> BitFieldType {
+        if matches!(access, Access::RWNS) {
+            return default_type;
+        }
+
         match self.bit_amount(default_type) {
             1 => BitFieldType::TypeBool,
             ..=8 => BitFieldType::Type8,
@@ -230,6 +234,8 @@ pub enum Access {
     WO,
     RW1C,
     RW1O,
+    /// Read/Write No Shift
+    RWNS,
 }
 
 mod access {
@@ -238,6 +244,7 @@ mod access {
     syn::custom_keyword!(WO);
     syn::custom_keyword!(RW1C);
     syn::custom_keyword!(RW1O);
+    syn::custom_keyword!(RWNS);
 }
 
 impl Parse for Access {
@@ -259,6 +266,9 @@ impl Parse for Access {
         } else if lookahead.peek(access::RW1O) {
             input.parse::<access::RW1O>()?;
             Ok(Access::RW1O)
+        } else if lookahead.peek(access::RWNS) {
+            input.parse::<access::RWNS>()?;
+            Ok(Access::RWNS)
         } else {
             Err(lookahead.error())
         }

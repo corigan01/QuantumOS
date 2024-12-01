@@ -41,6 +41,7 @@ pub struct GenInfo<'a> {
     pub bit_offset: usize,
     pub bit_amount: usize,
     pub bit_mask: u64,
+    pub no_shift: bool,
     pub vis: Visibility,
     pub function_ident: Ident,
     pub carry_self: bool,
@@ -135,6 +136,23 @@ impl<'a> Fields<'a> {
                 // Post Gen
                 #post_gen_tokens
             }});
+        } else if gen_info.no_shift {
+            tokens.push(quote! {{
+                assert!(value & !(#bit_mask as #inner_type) == 0);
+
+                // Read
+                #read_value;
+
+                // Modify
+                let write_value =
+                    (read_value & !(#bit_mask as #inner_type)) | (value as #inner_type);
+
+                // Write
+                #write_value;
+
+                // Post Gen
+                #post_gen_tokens
+            }});
         } else {
             tokens.push(quote! {{
                 // Read
@@ -208,6 +226,14 @@ impl<'a> Fields<'a> {
                 read_value & (1 << #bit_offset) != 0
 
             }});
+        } else if gen_info.no_shift {
+            tokens.push(quote! {{
+                // Read
+                #read_value;
+
+                // Pull out value
+                (read_value & (#bit_mask as #inner_type)) as #output_type
+            }});
         } else {
             tokens.push(quote! {{
                 // Read
@@ -254,6 +280,11 @@ impl<'a> Fields<'a> {
                 (Access::RW, Bits::Single(_)) => ("is_", "_set", "set_", "_flag"),
                 (Access::RW, Bits::Range(_)) => ("get_", "", "set_", ""),
 
+                (Access::RWNS, Bits::Single(_)) => {
+                    panic!("RWNS is not supported for single bit operations")
+                }
+                (Access::RWNS, Bits::Range(_)) => ("get_", "", "set_", ""),
+
                 (Access::RO, Bits::Single(_)) => ("is_", "_set", "", ""),
                 (Access::RO, Bits::Range(_)) => ("read_", "", "", ""),
 
@@ -262,7 +293,7 @@ impl<'a> Fields<'a> {
             };
 
         let default_type = self.default_type();
-        let function_type: TokenStream = field.type_to_fit(default_type).into();
+        let function_type: TokenStream = field.type_to_fit(&field.access, default_type).into();
 
         let bit_offset = field.bit_offset();
         let bit_amount = field.bit_amount(default_type);
@@ -298,6 +329,7 @@ impl<'a> Fields<'a> {
                 bit_offset,
                 bit_amount,
                 bit_mask,
+                no_shift: matches!(&field.access, Access::RWNS),
                 vis: field.vis.clone(),
                 function_ident: read_ident,
                 carry_self: false,
@@ -338,6 +370,7 @@ impl<'a> Fields<'a> {
                 bit_offset,
                 bit_amount,
                 bit_mask,
+                no_shift: matches!(&field.access, Access::RWNS),
                 vis: field.vis.clone(),
                 function_ident: write_ident,
                 carry_self: write_meta.carry_self,

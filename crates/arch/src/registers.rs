@@ -188,7 +188,7 @@ pub mod cr0 {
 #[make_hw(
     field(RW, 3, pub page_level_write_through),
     field(RW, 4, pub page_level_cache_disable),
-    field(RW, 12..=63, pub page_directory_base_register)
+    field(RWNS, 12..=63, pub page_directory_base_register)
 )]
 pub mod cr3 {
     #[inline(always)]

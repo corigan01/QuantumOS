@@ -24,49 +24,74 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 use arch::{
-    paging64::{PageEntry1G, PageMapLvl4},
+    paging64::{
+        Lvl2Entry, PageEntry2M, PageEntryLvl3, PageEntryLvl4, PageMapLvl2, PageMapLvl3, PageMapLvl4,
+    },
     registers::{cr0, cr3, cr4, ia32_efer, Segment, SegmentRegisters},
     CpuPrivilege,
 };
 use core::cell::SyncUnsafeCell;
 use lldebug::{print, println};
-use util::consts::GIB;
+use util::consts::{GIB, MIB};
 
 /// Amount of Gib to identity map
-const IDMAP_GIG_AMOUNT: usize = 8;
+const IDMAP_GIG_AMOUNT: usize = 1;
 
 static TABLE_LVL4: SyncUnsafeCell<PageMapLvl4> = SyncUnsafeCell::new(PageMapLvl4::new());
+static TABLE_LVL3: SyncUnsafeCell<PageMapLvl3> = SyncUnsafeCell::new(PageMapLvl3::new());
+static TABLE_LVL2: SyncUnsafeCell<[PageMapLvl2; IDMAP_GIG_AMOUNT]> =
+    SyncUnsafeCell::new([PageMapLvl2::new(); IDMAP_GIG_AMOUNT]);
 
 pub fn identity_map() {
     for gig in 0..IDMAP_GIG_AMOUNT {
-        let v_addr = gig * GIB;
+        let table_ptr = unsafe { &raw mut (*TABLE_LVL2.get())[gig] };
 
-        let lvl3 = PageEntry1G::new()
+        for mb2 in 0..2 {
+            let phy_addr = (mb2 as u64 * 2 * (MIB as u64)) + (gig as u64 * (GIB as u64));
+
+            let lvl2_entry = PageEntry2M::new()
+                .set_present_flag(true)
+                .set_read_write_flag(true)
+                .set_phy_address(phy_addr);
+
+            println!("{:064b}", lvl2_entry.into_raw());
+
+            unsafe { (*table_ptr).store(lvl2_entry, mb2) };
+        }
+
+        let lvl3_entry = PageEntryLvl3::new()
             .set_present_flag(true)
             .set_read_write_flag(true)
-            .set_execute_disable_flag(true)
-            .set_user_accessed_flag(false)
-            .set_virt_address(v_addr as u32);
+            .set_next_entry_phy_address(unsafe { (*table_ptr).table_ptr() });
 
-        unsafe {
-            (*TABLE_LVL4.get()).store(lvl3, gig);
-        }
+        unsafe { (*TABLE_LVL3.get()).store(lvl3_entry, gig) };
     }
+
+    let lvl4_entry = PageEntryLvl4::new()
+        .set_present_flag(true)
+        .set_read_write_flag(true)
+        .set_next_entry_phy_address(unsafe { (*TABLE_LVL3.get()).table_ptr() });
+
+    unsafe { (*TABLE_LVL4.get()).store(lvl4_entry, 0) };
 }
 
 pub unsafe fn set_page_base_reg() {
-    let phy_addr = TABLE_LVL4.get() as u64;
+    let phy_addr = unsafe { (*TABLE_LVL4.get()).table_ptr() };
 
     cr3::set_page_directory_base_register(phy_addr);
 }
 
 pub unsafe fn enable_paging() {
+    print!("Identity Mapping Regions...");
+    identity_map();
+    println!("OK");
+
     print!("Setting Paging Base Register...");
     set_page_base_reg();
     println!("OK");
 
     print!("Disabling Paging...");
-    cr0::set_paging_flag(true);
+    cr0::set_paging_flag(false);
     println!("OK");
 
     print!("Setting PAE...");
