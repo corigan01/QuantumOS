@@ -138,7 +138,7 @@ impl PageEntry1G {
     field(RW, 5, pub accessed),
     /// In this mode `page_size` needs to be set to false!
     field(RW, 7, pub page_size),
-    field(RW, 12..48, pub next_entry_phy_address),
+    field(RWNS, 12..48, pub next_entry_phy_address),
     field(RW, 63, pub execute_disable),
 )]
 #[derive(Clone, Copy)]
@@ -179,7 +179,7 @@ impl PageEntryLvl2 {
     field(RW, 5, pub accessed),
     /// In this mode `page_size` needs to be set to false!
     field(RW, 7, pub page_size),
-    field(RW, 12..48, pub next_entry_phy_address),
+    field(RWNS, 12..48, pub next_entry_phy_address),
     field(RW, 63, pub execute_disable),
 )]
 #[derive(Clone, Copy)]
@@ -220,7 +220,7 @@ impl PageEntryLvl3 {
     field(RW, 5, pub accessed),
     /// In this mode `page_size` needs to be set to false!
     field(RW, 7, pub page_size),
-    field(RW, 12..48, pub next_entry_phy_address),
+    field(RWNS, 12..48, pub next_entry_phy_address),
     field(RW, 63, pub execute_disable),
 )]
 #[derive(Clone, Copy)]

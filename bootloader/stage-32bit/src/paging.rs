@@ -24,9 +24,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 use arch::{
-    paging64::{
-        Lvl2Entry, PageEntry2M, PageEntryLvl3, PageEntryLvl4, PageMapLvl2, PageMapLvl3, PageMapLvl4,
-    },
+    paging64::{PageEntry2M, PageEntryLvl3, PageEntryLvl4, PageMapLvl2, PageMapLvl3, PageMapLvl4},
     registers::{cr0, cr3, cr4, ia32_efer, Segment, SegmentRegisters},
     CpuPrivilege,
 };
@@ -46,15 +44,13 @@ pub fn identity_map() {
     for gig in 0..IDMAP_GIG_AMOUNT {
         let table_ptr = unsafe { &raw mut (*TABLE_LVL2.get())[gig] };
 
-        for mb2 in 0..2 {
+        for mb2 in 0..512 {
             let phy_addr = (mb2 as u64 * 2 * (MIB as u64)) + (gig as u64 * (GIB as u64));
 
             let lvl2_entry = PageEntry2M::new()
                 .set_present_flag(true)
                 .set_read_write_flag(true)
                 .set_phy_address(phy_addr);
-
-            println!("{:064b}", lvl2_entry.into_raw());
 
             unsafe { (*table_ptr).store(lvl2_entry, mb2) };
         }

@@ -371,9 +371,9 @@ pub unsafe fn write_msr(msr_number: u32, value: u64) {
     let hi = (value >> 32) as u32;
 
     core::arch::asm!("wrmsr",
+        in("ecx") msr_number,
         in("eax") lo,
-        in("edx") hi,
-        in("ecx") msr_number
+        in("edx") hi
     )
 }
 
