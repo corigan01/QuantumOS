@@ -25,6 +25,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 #![no_std]
 
+pub mod gdt64;
 pub mod io;
 pub mod paging64;
 pub mod registers;
