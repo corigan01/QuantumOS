@@ -71,7 +71,6 @@ pub struct DataSegmentDesc(u64);
     field(RW, 54, big),
     field(RW, 55, granularity),
     field(RW, 56..64, base_address_hi)
-    
 )]
 #[derive(Clone, Copy)]
 pub struct CodeSegmentDesc(u64);
