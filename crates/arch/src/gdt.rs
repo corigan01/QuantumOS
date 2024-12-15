@@ -46,6 +46,7 @@ impl<const TABLE_SIZE: usize> GlobalDescriptorTable<TABLE_SIZE> {
     field(RW, 47, present),
     field(RW, 47..52, segment_limit_hi),
     field(RW, 52, undef),
+    field(RW, 53, long_mode),
     field(RW, 54, big),
     field(RW, 55, granularity),
     field(RW, 56..64, base_address_hi)
@@ -68,6 +69,7 @@ pub struct DataSegmentDesc(u64);
     field(RW, 47, present),
     field(RW, 47..52, segment_limit_hi),
     field(RW, 52, undef),
+    field(RW, 53, long_mode),
     field(RW, 54, big),
     field(RW, 55, granularity),
     field(RW, 56..64, base_address_hi)
@@ -77,7 +79,7 @@ pub struct CodeSegmentDesc(u64);
 
 impl DataSegmentDesc {
     pub const fn new() -> Self {
-        Self(0).set_user_segment_flag(true)
+        Self(0).set_user_segment_flag(true).set_long_mode_flag(true)
     }
 }
 
@@ -86,5 +88,6 @@ impl CodeSegmentDesc {
         Self(0)
             .set_user_segment_flag(true)
             .set_code_segment_flag(true)
+            .set_long_mode_flag(true)
     }
 }
