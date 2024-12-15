@@ -34,45 +34,58 @@ impl<const TABLE_SIZE: usize> GlobalDescriptorTable<TABLE_SIZE> {
 }
 
 #[make_hw(
-    field(RW, 0..=15, limit_lo),
-    field(RW, 16..=39, base_lo),
-
+    field(RW, 0..16, segment_limit_lo),
+    field(RW, 16..32, base_address_lo),
+    field(RW, 32..40, base_address_mi),
     field(RW, 40, accessed),
-    field(RW, 41, writable),
-    /// Direction bit. If clear (0) the segment grows up. If set (1) the segment grows down, 
-    /// ie. the Offset has to be greater than the Limit.
-    ///
-    /// ### For data selectors only!
-    ///
-    /// - (https://osdev.wiki/wiki/Global_Descriptor_Table)
+    field(RW, 41, readable),
     field(RW, 42, direction),
-    /// Conforming bit.
-    ///
-    /// If clear (0) code in this segment can only be executed from the ring set in DPL.
-    /// If set (1) code in this segment can be executed from an equal or lower privilege level. For example, 
-    /// code in ring 3 can far-jump to conforming code in a ring 2 segment. The DPL field represent the 
-    /// highest privilege level that is allowed to execute the segment. For example, code in ring 0 cannot 
-    /// far-jump to a conforming code segment where DPL is 2, while code in ring 2 and 3 can. Note that 
-    /// the privilege level remains the same, ie. a far-jump from ring 3 to a segment with a DPL of 2 remains 
-    /// in ring 3 after the jump.
-    ///
-    /// ### For code selectors only!
-    ///
-    /// - (https://osdev.wiki/wiki/Global_Descriptor_Table)
-    field(RW, 42, conforming),
-    field(RW, 43, executable),
-    field(RW, 44, descriptor_type),
-    field(RW, 45..=46, dpl),
+    // default = true
+    field(RW, 44, user_segment),
+    field(RW, 45..47, privilege_level),
     field(RW, 47, present),
-
-    field(RW, 48..=51, limit_hi),
-    field(RW, 52..=55, flags),
-    field(RW, 56..=63, base_hi)
+    field(RW, 47..52, segment_limit_hi),
+    field(RW, 52, undef),
+    field(RW, 54, big),
+    field(RW, 55, granularity),
+    field(RW, 56..64, base_address_hi)
 )]
-pub struct SegmentDescriptor(u64);
+#[derive(Clone, Copy)]
+pub struct DataSegmentDesc(u64);
 
-impl SegmentDescriptor {
-    pub fn new() -> Self {
+#[make_hw(
+    field(RW, 0..16, segment_limit_lo),
+    field(RW, 16..32, base_address_lo),
+    field(RW, 32..40, base_address_mi),
+    field(RW, 40, accessed),
+    field(RW, 41, readable),
+    field(RW, 42, conforming),
+    // default = true
+    field(RW, 43, code_segment),
+    // default = true
+    field(RW, 44, user_segment),
+    field(RW, 45..47, privilege_level),
+    field(RW, 47, present),
+    field(RW, 47..52, segment_limit_hi),
+    field(RW, 52, undef),
+    field(RW, 54, big),
+    field(RW, 55, granularity),
+    field(RW, 56..64, base_address_hi)
+    
+)]
+#[derive(Clone, Copy)]
+pub struct CodeSegmentDesc(u64);
+
+impl DataSegmentDesc {
+    pub const fn new() -> Self {
+        Self(0).set_user_segment_flag(true)
+    }
+}
+
+impl CodeSegmentDesc {
+    pub const fn new() -> Self {
         Self(0)
+            .set_user_segment_flag(true)
+            .set_code_segment_flag(true)
     }
 }
