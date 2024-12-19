@@ -31,6 +31,10 @@ impl<const TABLE_SIZE: usize> GlobalDescriptorTable<TABLE_SIZE> {
     pub const fn new() -> Self {
         Self([0; TABLE_SIZE])
     }
+
+    pub fn store(&mut self, loc: usize, entry: impl SegmentEntry) {
+        self.0[loc] = entry.into_entry();
+    }
 }
 
 #[make_hw(
@@ -78,16 +82,32 @@ pub struct DataSegmentDesc(u64);
 pub struct CodeSegmentDesc(u64);
 
 impl DataSegmentDesc {
-    pub const fn new() -> Self {
+    pub const fn new64() -> Self {
         Self(0).set_user_segment_flag(true).set_long_mode_flag(true)
     }
 }
 
 impl CodeSegmentDesc {
-    pub const fn new() -> Self {
+    pub const fn new64() -> Self {
         Self(0)
             .set_user_segment_flag(true)
             .set_code_segment_flag(true)
             .set_long_mode_flag(true)
+    }
+}
+
+pub trait SegmentEntry {
+    fn into_entry(self) -> u64;
+}
+
+impl SegmentEntry for CodeSegmentDesc {
+    fn into_entry(self) -> u64 {
+        self.0
+    }
+}
+
+impl SegmentEntry for DataSegmentDesc {
+    fn into_entry(self) -> u64 {
+        self.0
     }
 }
