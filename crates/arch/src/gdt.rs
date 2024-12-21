@@ -26,6 +26,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 use core::arch::asm;
 use hw::make_hw;
 
+#[repr(C)]
 pub struct GlobalDescriptorTable<const TABLE_SIZE: usize>([u64; TABLE_SIZE]);
 
 impl<const TABLE_SIZE: usize> GlobalDescriptorTable<TABLE_SIZE> {
@@ -35,8 +36,8 @@ impl<const TABLE_SIZE: usize> GlobalDescriptorTable<TABLE_SIZE> {
 
     pub fn store(&mut self, loc: usize, entry: impl SegmentEntry) {
         assert!(
-            loc > 1,
-            "Cannot set zero entries! Bottom 2 entires must be always zero!"
+            loc > 0,
+            "Cannot set zero entry! Bottom entiry must be always zero!"
         );
         self.0[loc] = entry.into_entry();
     }
@@ -44,7 +45,7 @@ impl<const TABLE_SIZE: usize> GlobalDescriptorTable<TABLE_SIZE> {
     pub fn pack(&'static self) -> GdtPointer<TABLE_SIZE> {
         GdtPointer {
             limit: (TABLE_SIZE * size_of::<u64>() - 1) as u16,
-            base: &raw const *self,
+            base: self.0.as_ptr(),
         }
     }
 }
@@ -52,7 +53,7 @@ impl<const TABLE_SIZE: usize> GlobalDescriptorTable<TABLE_SIZE> {
 #[allow(unused)]
 pub struct GdtPointer<const TABLE_SIZE: usize> {
     limit: u16,
-    base: *const GlobalDescriptorTable<TABLE_SIZE>,
+    base: *const u64,
 }
 
 impl<const TABLE_SIZE: usize> GdtPointer<TABLE_SIZE> {

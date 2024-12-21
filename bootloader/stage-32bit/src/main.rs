@@ -27,13 +27,19 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #![no_std]
 #![feature(sync_unsafe_cell)]
 
+use core::cell::SyncUnsafeCell;
+
+use arch::gdt::{CodeSegmentDesc, DataSegmentDesc, GlobalDescriptorTable};
 use bootgfx::{Color, Framebuffer};
 use bootloader::Stage16toStage32;
-use lldebug::{debug_ready, make_debug};
+use lldebug::{debug_ready, make_debug, println};
 use serial::{baud::SerialBaud, Serial};
 
 mod paging;
 mod panic;
+
+static GDT: SyncUnsafeCell<GlobalDescriptorTable<3>> =
+    SyncUnsafeCell::new(GlobalDescriptorTable::new());
 
 make_debug! {
     "Serial": Option<Serial> = Serial::probe_first(SerialBaud::Baud115200);
@@ -70,4 +76,28 @@ fn main(stage_to_stage: &Stage16toStage32) {
     framebuffer.draw_glyph(30, 10, 'S', Color::WHITE);
 
     unsafe { paging::enable_paging() };
+
+    // load gdt
+    unsafe {
+        let gdt = &mut *GDT.get();
+
+        gdt.store(
+            1,
+            CodeSegmentDesc::new64()
+                .set_accessed_flag(true)
+                .set_present_flag(true)
+                .set_writable_flag(true),
+        );
+        gdt.store(
+            2,
+            DataSegmentDesc::new64()
+                .set_accessed_flag(true)
+                .set_present_flag(true)
+                .set_writable_flag(true),
+        );
+
+        // load
+        gdt.pack().load();
+        println!("Loaded long mode GDT!");
+    }
 }
