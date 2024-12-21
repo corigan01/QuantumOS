@@ -33,7 +33,7 @@ use lldebug::{print, println};
 use util::consts::{GIB, MIB};
 
 /// Amount of Gib to identity map
-const IDMAP_GIG_AMOUNT: usize = 5;
+const IDMAP_GIG_AMOUNT: usize = 1;
 
 static TABLE_LVL4: SyncUnsafeCell<PageMapLvl4> = SyncUnsafeCell::new(PageMapLvl4::new());
 static TABLE_LVL3: SyncUnsafeCell<PageMapLvl3> = SyncUnsafeCell::new(PageMapLvl3::new());

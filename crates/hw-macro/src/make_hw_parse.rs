@@ -45,7 +45,6 @@ mod keywords {
 pub struct BitField {
     pub(crate) attr: Vec<Attribute>,
     pub(crate) keyword: keywords::field,
-    pub(crate) paren_token: Paren,
     pub(crate) access: Access,
     pub(crate) bits: Bits,
     pub(crate) vis: Visibility,
@@ -199,7 +198,7 @@ impl Parse for BitField {
         let keyword = input.parse()?;
 
         let content;
-        let paren_token = parenthesized!(content in input);
+        let _: Paren = parenthesized!(content in input);
         let access = content.parse()?;
         content.parse::<Token![,]>()?;
         let bits = content.parse()?;
@@ -210,7 +209,6 @@ impl Parse for BitField {
         Ok(Self {
             attr,
             keyword,
-            paren_token,
             access,
             bits,
             vis,

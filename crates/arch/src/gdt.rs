@@ -23,6 +23,7 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use core::arch::asm;
 use hw::make_hw;
 
 pub struct GlobalDescriptorTable<const TABLE_SIZE: usize>([u64; TABLE_SIZE]);
@@ -33,7 +34,30 @@ impl<const TABLE_SIZE: usize> GlobalDescriptorTable<TABLE_SIZE> {
     }
 
     pub fn store(&mut self, loc: usize, entry: impl SegmentEntry) {
+        assert!(
+            loc > 1,
+            "Cannot set zero entries! Bottom 2 entires must be always zero!"
+        );
         self.0[loc] = entry.into_entry();
+    }
+
+    pub fn pack(&'static self) -> GdtPointer<TABLE_SIZE> {
+        GdtPointer {
+            limit: (TABLE_SIZE * size_of::<u64>() - 1) as u16,
+            base: &raw const *self,
+        }
+    }
+}
+
+#[allow(unused)]
+pub struct GdtPointer<const TABLE_SIZE: usize> {
+    limit: u16,
+    base: *const GlobalDescriptorTable<TABLE_SIZE>,
+}
+
+impl<const TABLE_SIZE: usize> GdtPointer<TABLE_SIZE> {
+    pub unsafe fn load(self) {
+        asm!("lgdt [{}]", in(reg) &self);
     }
 }
 
@@ -41,13 +65,13 @@ impl<const TABLE_SIZE: usize> GlobalDescriptorTable<TABLE_SIZE> {
     field(RW, 0..16, segment_limit_lo),
     field(RW, 16..32, base_address_lo),
     field(RW, 32..40, base_address_mi),
-    field(RW, 40, accessed),
-    field(RW, 41, readable),
-    field(RW, 42, direction),
+    field(RW, 40, pub accessed),
+    field(RW, 41, pub writable),
+    field(RW, 42, pub direction),
     // default = true
     field(RW, 44, user_segment),
     field(RW, 45..47, privilege_level),
-    field(RW, 47, present),
+    field(RW, 47, pub present),
     field(RW, 47..52, segment_limit_hi),
     field(RW, 52, undef),
     field(RW, 53, long_mode),
@@ -62,15 +86,16 @@ pub struct DataSegmentDesc(u64);
     field(RW, 0..16, segment_limit_lo),
     field(RW, 16..32, base_address_lo),
     field(RW, 32..40, base_address_mi),
-    field(RW, 40, accessed),
-    field(RW, 41, readable),
-    field(RW, 42, conforming),
+    field(RW, 40, pub accessed),
+    field(RW, 41, pub writable),
+    field(RW, 42, pub conforming),
     // default = true
+    // this is also the `executable` flag
     field(RW, 43, code_segment),
     // default = true
     field(RW, 44, user_segment),
-    field(RW, 45..47, privilege_level),
-    field(RW, 47, present),
+    field(RW, 45..47, pub privilege_level),
+    field(RW, 47, pub present),
     field(RW, 47..52, segment_limit_hi),
     field(RW, 52, undef),
     field(RW, 53, long_mode),
@@ -83,7 +108,7 @@ pub struct CodeSegmentDesc(u64);
 
 impl DataSegmentDesc {
     pub const fn new64() -> Self {
-        Self(0).set_user_segment_flag(true).set_long_mode_flag(true)
+        Self(0).set_user_segment_flag(true)
     }
 }
 
