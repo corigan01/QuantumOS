@@ -23,34 +23,28 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+#![no_main]
 #![no_std]
 
-use bios::{
-    memory::MemoryEntry,
-    video::{VesaMode, VesaModeId},
-};
+use bootloader::Stage32toStage64;
+use lldebug::{debug_ready, make_debug, println};
+use serial::{Serial, baud::SerialBaud};
 
-/// # Max Memory Map Entries
-/// This is the max number of entries that can fit in the Stage-to-Stage info block.
-///
-/// ONLY USED FOR `MemoryEntry`!
-pub const MAX_MEMORY_MAP_ENTRIES: usize = 16;
+mod panic;
 
-/// # `Stage16` to `Stage32` Info Block
-/// Used for sending data between these stages.
-#[repr(C)]
-pub struct Stage16toStage32 {
-    pub stage64_ptr: u64,
-    pub kernel_ptr: u64,
-    pub memory_map: [MemoryEntry; MAX_MEMORY_MAP_ENTRIES],
-    pub video_mode: (VesaModeId, VesaMode),
+make_debug! {
+    "Serial": Option<Serial> = Serial::probe_first(SerialBaud::Baud115200);
 }
 
-/// # `Stage32` to `Stage64` Info Block
-/// Used for sending data between these stages.
-#[repr(C)]
-pub struct Stage32toStage64 {
-    pub kernel_ptr: u64,
-    pub memory_map: [MemoryEntry; MAX_MEMORY_MAP_ENTRIES],
-    pub video_mode: (VesaModeId, VesaMode),
+#[unsafe(no_mangle)]
+#[unsafe(link_section = ".start")]
+extern "C" fn _start(stage_to_stage: u64) {
+    main(unsafe { &(*(stage_to_stage as *const Stage32toStage64)) });
+    panic!("Main should not return");
+}
+
+#[debug_ready]
+fn main(stage_to_stage: &Stage32toStage64) {
+    println!("Stage64!");
+    loop {}
 }

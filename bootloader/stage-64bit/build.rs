@@ -23,34 +23,16 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-#![no_std]
+use std::path::Path;
 
-use bios::{
-    memory::MemoryEntry,
-    video::{VesaMode, VesaModeId},
-};
-
-/// # Max Memory Map Entries
-/// This is the max number of entries that can fit in the Stage-to-Stage info block.
-///
-/// ONLY USED FOR `MemoryEntry`!
-pub const MAX_MEMORY_MAP_ENTRIES: usize = 16;
-
-/// # `Stage16` to `Stage32` Info Block
-/// Used for sending data between these stages.
-#[repr(C)]
-pub struct Stage16toStage32 {
-    pub stage64_ptr: u64,
-    pub kernel_ptr: u64,
-    pub memory_map: [MemoryEntry; MAX_MEMORY_MAP_ENTRIES],
-    pub video_mode: (VesaModeId, VesaMode),
-}
-
-/// # `Stage32` to `Stage64` Info Block
-/// Used for sending data between these stages.
-#[repr(C)]
-pub struct Stage32toStage64 {
-    pub kernel_ptr: u64,
-    pub memory_map: [MemoryEntry; MAX_MEMORY_MAP_ENTRIES],
-    pub video_mode: (VesaModeId, VesaMode),
+fn main() {
+    let local_path = Path::new(env!("CARGO_MANIFEST_DIR"));
+    println!("cargo:rerun-if-changed=build.rs");
+    println!("cargo:rerun-if-changed=../linkerscripts/x86-64-quantum_loader.ld");
+    println!(
+        "cargo:rustc-link-arg-bins=--script={}",
+        local_path
+            .join("../linkerscripts/x86-64-quantum_loader.ld")
+            .display()
+    )
 }

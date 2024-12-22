@@ -42,7 +42,7 @@ impl<const TABLE_SIZE: usize> GlobalDescriptorTable<TABLE_SIZE> {
         self.0[loc] = entry.into_entry();
     }
 
-    pub fn pack(&'static self) -> GdtPointer<TABLE_SIZE> {
+    pub fn pack(&'static self) -> GdtPointer {
         GdtPointer {
             limit: (TABLE_SIZE * size_of::<u64>() - 1) as u16,
             base: self.0.as_ptr(),
@@ -50,13 +50,14 @@ impl<const TABLE_SIZE: usize> GlobalDescriptorTable<TABLE_SIZE> {
     }
 }
 
+#[repr(C, packed(2))]
 #[allow(unused)]
-pub struct GdtPointer<const TABLE_SIZE: usize> {
+pub struct GdtPointer {
     limit: u16,
     base: *const u64,
 }
 
-impl<const TABLE_SIZE: usize> GdtPointer<TABLE_SIZE> {
+impl GdtPointer {
     pub unsafe fn load(self) {
         asm!("lgdt [{}]", in(reg) &self);
     }

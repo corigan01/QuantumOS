@@ -27,12 +27,16 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #![no_std]
 #![feature(sync_unsafe_cell)]
 
-use core::cell::SyncUnsafeCell;
+use core::{arch::asm, cell::SyncUnsafeCell};
 
-use arch::gdt::{CodeSegmentDesc, DataSegmentDesc, GlobalDescriptorTable};
+use arch::{
+    gdt::{CodeSegmentDesc, DataSegmentDesc, GlobalDescriptorTable},
+    registers::{Segment, SegmentRegisters},
+    stack::{align_stack, push_stack},
+};
 use bootgfx::{Color, Framebuffer};
-use bootloader::Stage16toStage32;
-use lldebug::{debug_ready, make_debug, println};
+use bootloader::{Stage16toStage32, Stage32toStage64};
+use lldebug::{debug_ready, hexdump::HexPrint, make_debug, println};
 use serial::{baud::SerialBaud, Serial};
 
 mod paging;
@@ -40,6 +44,8 @@ mod panic;
 
 static GDT: SyncUnsafeCell<GlobalDescriptorTable<3>> =
     SyncUnsafeCell::new(GlobalDescriptorTable::new());
+
+static S2S: SyncUnsafeCell<Stage32toStage64> = SyncUnsafeCell::new(unsafe { core::mem::zeroed() });
 
 make_debug! {
     "Serial": Option<Serial> = Serial::probe_first(SerialBaud::Baud115200);
@@ -100,4 +106,50 @@ fn main(stage_to_stage: &Stage16toStage32) {
         gdt.pack().load();
         println!("Loaded long mode GDT!");
     }
+
+    // build s2s
+    unsafe {
+        let s2s = &mut *S2S.get();
+
+        s2s.kernel_ptr = stage_to_stage.kernel_ptr;
+        s2s.memory_map = stage_to_stage.memory_map;
+        s2s.video_mode = stage_to_stage.video_mode.clone();
+
+        println!("Built Stage32to64!");
+    }
+
+    unsafe {
+        let debug_slice = core::slice::from_raw_parts(stage_to_stage.stage64_ptr as *const u8, 128);
+        println!("{}", debug_slice.hexdump());
+    }
+
+    // jump to stage64
+    println!(
+        "Jumping to stage64! -- 0x{:016x}",
+        stage_to_stage.stage64_ptr
+    );
+    unsafe { enter_stage3(stage_to_stage.stage64_ptr as *const (), S2S.get()) };
+}
+
+#[unsafe(no_mangle)]
+pub unsafe fn enter_stage3(entry_ptr: *const (), s2s: *const Stage32toStage64) {
+    SegmentRegisters::set_data_segments(Segment::new(2, arch::CpuPrivilege::Ring0));
+
+    align_stack();
+    println!("dingus");
+
+    asm!("ljmp $0x8, $2f", "2:", options(att_syntax));
+    asm!(
+        ".code64",
+
+        // "pop rax",
+        // "pop rdi",
+
+        "call rax",
+
+        "2:",
+        "jmp 2b",
+        in("rax") entry_ptr,
+        in("rdi") s2s
+    );
 }

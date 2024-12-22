@@ -151,10 +151,6 @@ fn main(disk_id: u16) -> ! {
             .as_mut_ptr() as *mut Stage16toStage32)
     };
 
-    // TODO: Load kernel and stage64 section
-    stage_to_stage.stage64_ptr = 0;
-    stage_to_stage.kernel_ptr = 0;
-
     unsafe {
         core::ptr::copy_nonoverlapping(
             memory_map.as_ptr(),
@@ -171,23 +167,43 @@ fn main(disk_id: u16) -> ! {
         .expect("Unable to find bootloader32");
 
     // Our bootloader needs to be at 0x00200000
-    let bootloader_entrypoint = 0x00200000 as *mut u8;
-    alloc.push_ptr_to(bootloader_entrypoint);
+    let bootloader32_entrypoint = 0x00200000 as *mut u8;
+    alloc.push_ptr_to(bootloader32_entrypoint);
 
     let bootloader32_buffer = unsafe { alloc.allocate(bootloader32.filesize()) }.unwrap();
     bootloader32
         .read(bootloader32_buffer)
         .expect("Unable to read bootloader32");
 
+    // - Bootloader64
+    let mut bootloader64 = fatfs
+        .open(qconfig.bootloader64)
+        .expect("Unable to find bootloader64");
+
+    // Our bootloader needs to be at 0x00400000
+    let bootloader64_entrypoint = 0x00400000 as *mut u8;
+    alloc.push_ptr_to(bootloader64_entrypoint);
+
+    let bootloader64_buffer = unsafe { alloc.allocate(bootloader64.filesize()) }.unwrap();
+    bootloader64
+        .read(bootloader64_buffer)
+        .expect("Unable to read bootloader32");
+
     closest_video_id.set().expect("Unable to set video mode");
+
+    stage_to_stage.stage64_ptr = bootloader64_entrypoint as u64;
+
+    // TODO: load the kernel
+    stage_to_stage.kernel_ptr = 0;
 
     println!(
         "Calling Stage32: PTR: {:?} -- S2S: {:?}",
-        bootloader_entrypoint, stage_to_stage as *const Stage16toStage32
+        bootloader32_entrypoint, stage_to_stage as *const Stage16toStage32
     );
+
     unsafe {
         unreal::enter_stage2(
-            bootloader_entrypoint,
+            bootloader32_entrypoint,
             stage_to_stage as *const Stage16toStage32,
         )
     };

@@ -1,0 +1,12 @@
+[package]
+name = "stage-64bit"
+edition = "2024"
+version.workspace = true
+authors.workspace = true
+description.workspace = true
+documentation.workspace = true
+
+[dependencies]
+bootloader = {workspace = true}
+serial = {workspace = true}
+lldebug = {workspace = true}

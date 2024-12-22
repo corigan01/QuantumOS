@@ -12,7 +12,8 @@ pub struct Artifacts {
     pub bootsector: PathBuf,
     pub stage_16: PathBuf,
     pub stage_32: PathBuf,
-    // stage_64: PathBuf,
+    pub stage_64: PathBuf,
+
     pub kernel: PathBuf,
     pub boot_cfg: PathBuf,
 }
@@ -92,8 +93,7 @@ async fn cargo_helper(profile: Option<&str>, package: &str, arch: ArchSelect) ->
 async fn convert_bin(path: &Path, arch: ArchSelect) -> Result<PathBuf> {
     let arch = match arch {
         ArchSelect::I386 => "elf32-i386",
-        ArchSelect::I686 => "elf64-x86-64",
-        _ => todo!("Add more objcopy arches"),
+        ArchSelect::I686 | ArchSelect::X64 => "elf64-x86-64",
     };
 
     let bin_path = path.with_extension("bin");
@@ -140,7 +140,7 @@ vbe-mode=1280x720
 }
 
 pub async fn build_project() -> Result<Artifacts> {
-    let (stage_bootsector, stage_16bit, stage_32bit, kernel, boot_cfg) = future::try_join5(
+    let (stage_bootsector, stage_16bit, stage_32bit, stage_64bit, kernel, boot_cfg) = tokio::try_join!(
         cargo_helper(
             Some("stage-bootsector"),
             "stage-bootsector",
@@ -148,15 +148,16 @@ pub async fn build_project() -> Result<Artifacts> {
         ),
         cargo_helper(Some("stage-16bit"), "stage-16bit", ArchSelect::I386),
         cargo_helper(Some("stage-32bit"), "stage-32bit", ArchSelect::I686),
+        cargo_helper(Some("stage-64bit"), "stage-64bit", ArchSelect::X64),
         cargo_helper(None, "kernel", ArchSelect::X64),
         build_bootloader_config(),
-    )
-    .await?;
+    )?;
 
-    let (bootsector, stage_16, stage_32) = future::try_join3(
+    let (bootsector, stage_16, stage_32, stage_64) = future::try_join4(
         convert_bin(&stage_bootsector, ArchSelect::I386),
         convert_bin(&stage_16bit, ArchSelect::I386),
         convert_bin(&stage_32bit, ArchSelect::I686),
+        convert_bin(&stage_64bit, ArchSelect::X64),
     )
     .await?;
 
@@ -164,6 +165,7 @@ pub async fn build_project() -> Result<Artifacts> {
         bootsector,
         stage_16,
         stage_32,
+        stage_64,
         kernel,
         boot_cfg,
     })

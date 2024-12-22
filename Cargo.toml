@@ -6,6 +6,7 @@ members = [
   "bootloader/stage-bootsector", 
   "bootloader/stage-16bit",
   "bootloader/stage-32bit", 
+  "bootloader/stage-64bit", 
   "crates/bios", 
   "crates/arch", 
   "crates/fs", 
@@ -65,6 +66,13 @@ debug = 0
 overflow-checks = false
 
 [profile.stage-32bit]
+inherits = "release"
+panic = "abort"
+strip = false
+debug = 1
+overflow-checks = true
+
+[profile.stage-64bit]
 inherits = "release"
 panic = "abort"
 strip = false

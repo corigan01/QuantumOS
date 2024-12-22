@@ -220,6 +220,7 @@ pub mod video {
     }
 
     #[repr(C, align(256))]
+    #[derive(Clone, Copy)]
     pub struct VesaMode {
         pub attributes: u16,
         pub window_a: u8,
