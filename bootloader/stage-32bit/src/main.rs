@@ -32,11 +32,10 @@ use core::{arch::asm, cell::SyncUnsafeCell};
 use arch::{
     gdt::{CodeSegmentDesc, DataSegmentDesc, GlobalDescriptorTable},
     registers::{Segment, SegmentRegisters},
-    stack::{align_stack, push_stack},
 };
 use bootgfx::{Color, Framebuffer};
 use bootloader::{Stage16toStage32, Stage32toStage64};
-use lldebug::{debug_ready, hexdump::HexPrint, make_debug, println};
+use lldebug::{debug_ready, make_debug, println};
 use serial::{baud::SerialBaud, Serial};
 
 mod paging;
