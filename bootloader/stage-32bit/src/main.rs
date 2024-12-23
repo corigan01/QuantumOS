@@ -118,11 +118,6 @@ fn main(stage_to_stage: &Stage16toStage32) {
         println!("Built Stage32to64!");
     }
 
-    unsafe {
-        let debug_slice = core::slice::from_raw_parts(stage_to_stage.stage64_ptr as *const u8, 128);
-        println!("{}", debug_slice.hexdump());
-    }
-
     // jump to stage64
     println!(
         "Jumping to stage64! -- 0x{:016x}",
@@ -135,20 +130,10 @@ fn main(stage_to_stage: &Stage16toStage32) {
 pub unsafe fn enter_stage3(entry_ptr: *const (), s2s: *const Stage32toStage64) {
     SegmentRegisters::set_data_segments(Segment::new(2, arch::CpuPrivilege::Ring0));
 
-    align_stack();
-    println!("dingus");
-
     asm!("ljmp $0x8, $2f", "2:", options(att_syntax));
     asm!(
         ".code64",
-
-        // "pop rax",
-        // "pop rdi",
-
         "call rax",
-
-        "2:",
-        "jmp 2b",
         in("rax") entry_ptr,
         in("rdi") s2s
     );

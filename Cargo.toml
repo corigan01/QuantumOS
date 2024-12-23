@@ -48,8 +48,8 @@ util = { path = "crates/util" }
 [profile.stage-bootsector]
 inherits = "release"
 panic = "abort"
-strip = true
 opt-level="z"
+strip = false
 lto = true
 codegen-units = 1
 debug = 0
@@ -58,8 +58,8 @@ overflow-checks = false
 [profile.stage-16bit]
 inherits = "release"
 panic = "abort"
-strip = true
 opt-level="z"
+strip = false
 lto = true
 codegen-units = 1
 debug = 0
@@ -68,8 +68,10 @@ overflow-checks = false
 [profile.stage-32bit]
 inherits = "release"
 panic = "abort"
+opt-level="z"
 strip = false
-debug = 1
+lto = true
+debug = 0
 overflow-checks = true
 
 [profile.stage-64bit]
