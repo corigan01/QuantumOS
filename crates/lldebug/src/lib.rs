@@ -29,6 +29,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 pub use lldebug_macro::debug_ready;
 pub use lldebug_macro::make_debug;
 
+pub mod color;
 pub mod hexdump;
 
 /// # Output Function Type
@@ -84,7 +85,7 @@ pub mod sync {
 #[macro_export]
 macro_rules! print {
     ($($arg:tt)*) => {{
-        $crate::_print(env!("CARGO_PKG_NAME"), format_args!($($arg)*));
+        $crate::_print(::core::module_path!(), format_args!($($arg)*));
     }};
 }
 
@@ -94,7 +95,7 @@ macro_rules! print {
 macro_rules! println {
     () => {{ $crate::print!("\n") }};
     ($($arg:tt)*) => {{
-        $crate::_print(env!("CARGO_PKG_NAME"), format_args!($($arg)*));
+        $crate::_print(::core::module_path!(), format_args!($($arg)*));
         $crate::print!("\n");
     }};
 }

@@ -157,7 +157,7 @@ pub fn generate_init_function(macro_input: &DebugMacroInput) -> proc_macro2::Tok
                         c => {
                             if *(NEXT_LINE_NEEDS_HEADER.get()) {
                                 *(NEXT_LINE_NEEDS_HEADER.get()) = false;
-                                all_print(format_args!("\n[{}]: ", self.crate_name));
+                                all_print(format_args!("\n[{:<24}]: ", self.crate_name));
                             }
 
                             all_print(format_args!("{}", c));
