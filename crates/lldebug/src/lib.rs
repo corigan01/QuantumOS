@@ -59,6 +59,24 @@ pub fn _print(crate_name: &'static str, args: core::fmt::Arguments) {
 // Re-exports for spin
 pub mod sync {
     pub use spin::Mutex;
+
+    pub struct SyncCell<T> {
+        inner: ::core::cell::UnsafeCell<T>,
+    }
+
+    unsafe impl<T> Sync for SyncCell<T> {}
+
+    impl<T> SyncCell<T> {
+        pub const fn new(inner: T) -> Self {
+            Self {
+                inner: ::core::cell::UnsafeCell::new(inner),
+            }
+        }
+
+        pub fn get(&self) -> *mut T {
+            self.inner.get()
+        }
+    }
 }
 
 /// # Print
