@@ -25,6 +25,8 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 #![no_std]
 
+use core::fmt::Write;
+
 // Re-export the macro
 pub use lldebug_macro::debug_ready;
 pub use lldebug_macro::make_debug;
@@ -32,70 +34,138 @@ pub use lldebug_macro::make_debug;
 pub mod color;
 pub mod hexdump;
 
-/// # Output Function Type
-/// The type that is required to be able to be set as an output function.
-pub type OutputFn = fn(&'static str, core::fmt::Arguments);
-
-/// # Global Output Stream Function
-/// Contains the `fn` `ptr` to the function responsible for displaying debug output's arguments.
-static mut GLOBAL_OUTPUT_STREAM_FUNCTION: Option<OutputFn> = None;
-
-/// # Set Global Debug Function
-/// Set the global debug `print` and `println` functions to direct their arguments to the
-/// function provided.
-pub fn set_global_debug_fn(output_function: OutputFn) {
-    unsafe { GLOBAL_OUTPUT_STREAM_FUNCTION = Some(output_function) };
-}
-
-#[doc(hidden)]
-pub fn _print(crate_name: &'static str, args: core::fmt::Arguments) {
-    unsafe {
-        match GLOBAL_OUTPUT_STREAM_FUNCTION {
-            Some(ref output_stream) => output_stream(crate_name, args),
-            _ => (),
-        }
-    }
-}
-
 // Re-exports for spin
 pub mod sync {
     pub use spin::Mutex;
+}
 
-    pub struct SyncCell<T> {
-        inner: ::core::cell::UnsafeCell<T>,
+pub enum LogKind {
+    Log,
+    Warn,
+    Error,
+}
+
+pub type OutputFn = fn(core::fmt::Arguments);
+
+static REQUIRES_HEADER_PRINT: sync::Mutex<bool> = sync::Mutex::new(true);
+static GLOBAL_PRINT_FN: sync::Mutex<Option<OutputFn>> = sync::Mutex::new(None);
+
+fn raw_print(args: core::fmt::Arguments) {
+    match GLOBAL_PRINT_FN.lock().as_ref() {
+        Some(output) => output(args),
+        None => (),
+    }
+}
+
+pub fn set_global_debug_fn(function: OutputFn) {
+    *GLOBAL_PRINT_FN.lock() = Some(function);
+}
+
+struct PrettyOutput<'a> {
+    kind: LogKind,
+    crate_name: &'a str,
+}
+
+impl core::fmt::Write for PrettyOutput<'_> {
+    fn write_str(&mut self, s: &str) -> core::fmt::Result {
+        for c in s.chars() {
+            self.write_char(c)?;
+        }
+
+        Ok(())
     }
 
-    unsafe impl<T> Sync for SyncCell<T> {}
+    fn write_char(&mut self, c: char) -> core::fmt::Result {
+        match c {
+            '\n' => *REQUIRES_HEADER_PRINT.lock() = true,
+            c => {
+                let mut req_header = REQUIRES_HEADER_PRINT.lock();
 
-    impl<T> SyncCell<T> {
-        pub const fn new(inner: T) -> Self {
-            Self {
-                inner: ::core::cell::UnsafeCell::new(inner),
+                if *req_header {
+                    *req_header = false;
+                    match self.kind {
+                        LogKind::Log => {
+                            raw_print(format_args!("\n{}+{}", color::LOG_STYLE, color::RESET))
+                        }
+                        LogKind::Warn => {
+                            raw_print(format_args!("\n{}-{}", color::WARN_STYLE, color::RESET))
+                        }
+                        LogKind::Error => {
+                            raw_print(format_args!("\n{}X{}", color::ERR_STYLE, color::RESET))
+                        }
+                    }
+
+                    raw_print(format_args!(
+                        "{}{:<30}{} : ",
+                        color::DIM_STYLE,
+                        self.crate_name,
+                        color::RESET
+                    ));
+                }
+
+                raw_print(format_args!("{}", c));
             }
         }
 
-        pub fn get(&self) -> *mut T {
-            self.inner.get()
-        }
+        Ok(())
     }
 }
 
-/// # Print
-/// Output to global output stream.
+#[doc(hidden)]
+pub fn priv_print(kind: LogKind, crate_name: &str, args: core::fmt::Arguments) {
+    let _ = PrettyOutput { kind, crate_name }.write_fmt(args);
+}
+
+/// Print a `log` message to attached console.
 #[macro_export]
-macro_rules! print {
+macro_rules! log {
     ($($arg:tt)*) => {{
-        $crate::_print(::core::module_path!(), format_args!($($arg)*));
+        $crate::priv_print(::lldebug::LogKind::Log, ::core::module_path!(), format_args!($($arg)*));
     }};
 }
 
-/// # `Println`
-/// Output to global output stream.
+/// Print a `log` message to attached console with newline.
 #[macro_export]
-macro_rules! println {
-    () => {{ $crate::print!("\n") }};
+macro_rules! logln {
+    () => {{ $crate::log!("\n") }};
     ($($arg:tt)*) => {{
-        $crate::_print(::core::module_path!(), format_args!($($arg)*));
-        $crate::print!("\n");
+        $crate::priv_print(::lldebug::LogKind::Log, ::core::module_path!(), format_args!($($arg)*));
+        $crate::log!("\n");
+    }};
+}
+
+/// Print a `warning` message to attached console.
+#[macro_export]
+macro_rules! warn {
+    ($($arg:tt)*) => {{
+        $crate::priv_print(::lldebug::LogKind::Warn, ::core::module_path!(), format_args!($($arg)*));
+    }};
+}
+
+/// Print a `warning` message to attached console with newline.
+#[macro_export]
+macro_rules! warnln {
+    () => {{ $crate::warn!("\n") }};
+    ($($arg:tt)*) => {{
+        $crate::priv_print(::lldebug::LogKind::Warn, ::core::module_path!(), format_args!($($arg)*));
+        $crate::warn!("\n");
+    }};
+}
+
+/// Print an `error` message to attached console.
+#[macro_export]
+macro_rules! error {
+    ($($arg:tt)*) => {{
+        $crate::priv_print(::lldebug::LogKind::Error, ::core::module_path!(), format_args!($($arg)*));
+    }};
+}
+
+/// Print an `error` message to attached console with newline.
+#[macro_export]
+macro_rules! errorln {
+    () => {{ $crate::error!("\n") }};
+    ($($arg:tt)*) => {{
+        $crate::priv_print(::lldebug::LogKind::Error, ::core::module_path!(), format_args!($($arg)*));
+        $crate::error!("\n");
     }};
 }

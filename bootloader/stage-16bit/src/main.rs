@@ -35,7 +35,7 @@ use config::BootloaderConfig;
 use fs::fatfs::Fat;
 use fs::io::Read;
 use lldebug::make_debug;
-use lldebug::{debug_ready, println};
+use lldebug::{debug_ready, logln};
 use serial::Serial;
 use unreal::enter_unreal;
 
@@ -56,13 +56,13 @@ make_debug! {
 extern "C" fn entry(disk_id: u16) {
     unsafe { enter_unreal() };
 
-    println!();
+    logln!();
     main(disk_id);
 }
 
 #[debug_ready]
 fn main(disk_id: u16) -> ! {
-    println!("Quantum Loader");
+    logln!("Quantum Loader");
 
     // - Memory Setup
     let memory_map = crate::memory::memory_map();
@@ -135,7 +135,7 @@ fn main(disk_id: u16) -> ! {
         })
         .expect("Failed to find a optimal video mode");
 
-    println!(
+    logln!(
         "Optimal Video Mode  = (0x{:00x}) {:?}",
         closest_video_id.get_id(),
         closest_video_info
@@ -196,9 +196,10 @@ fn main(disk_id: u16) -> ! {
     // TODO: load the kernel
     stage_to_stage.kernel_ptr = 0;
 
-    println!(
+    logln!(
         "Calling Stage32: PTR: {:?} -- S2S: {:?}",
-        bootloader32_entrypoint, stage_to_stage as *const Stage16toStage32
+        bootloader32_entrypoint,
+        stage_to_stage as *const Stage16toStage32
     );
 
     unsafe {

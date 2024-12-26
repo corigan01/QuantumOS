@@ -135,52 +135,13 @@ pub fn generate_init_function(macro_input: &DebugMacroInput) -> proc_macro2::Tok
         .collect();
 
     quote_spanned! {Span::call_site()=>
-        static NEXT_LINE_NEEDS_HEADER: ::lldebug::sync::SyncCell<bool> = ::lldebug::sync::SyncCell::new(true);
-
-        struct PrettyFormattedOutput<'a> {
-            crate_name: &'a str
-        }
-
-        impl<'a> ::core::fmt::Write for PrettyFormattedOutput<'a> {
-            fn write_str(&mut self, s: &str) -> ::core::fmt::Result {
-                for c in s.chars() {
-                    self.write_char(c)?;
-                }
-
-                Ok(())
-            }
-
-            fn write_char(&mut self, c: char) -> ::core::fmt::Result {
-                unsafe {
-                    match c {
-                        '\n' => *(NEXT_LINE_NEEDS_HEADER.get()) = true,
-                        c => {
-                            if *(NEXT_LINE_NEEDS_HEADER.get()) {
-                                *(NEXT_LINE_NEEDS_HEADER.get()) = false;
-                                all_print(format_args!("\n[{:<24}]: ", self.crate_name));
-                            }
-
-                            all_print(format_args!("{}", c));
-                        }
-                    }
-                }
-
-                Ok(())
-            }
-        }
-
         fn all_print(args: ::core::fmt::Arguments) {
             use ::core::fmt::Write;
             #(#stream_outputs)*
         }
 
-        fn debug_macro_print(crate_name: &'static str, args: ::core::fmt::Arguments) {
-            use ::core::fmt::Write;
-            let _ = PrettyFormattedOutput { crate_name }.write_fmt(args);
-        }
-
         pub(crate) fn debug_macro_init() {
-            ::lldebug::set_global_debug_fn(debug_macro_print);
+            ::lldebug::set_global_debug_fn(all_print);
         }
     }
 }

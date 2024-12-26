@@ -24,11 +24,10 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 use core::panic::PanicInfo;
-
-use lldebug::println;
+use lldebug::errorln;
 
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
-    println!("PANIC! -- {}", info);
+    errorln!("PANIC! -- {}", info);
     loop {}
 }

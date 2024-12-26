@@ -29,7 +29,7 @@ use arch::{
     CpuPrivilege,
 };
 use core::cell::SyncUnsafeCell;
-use lldebug::{print, println};
+use lldebug::{log, logln};
 use util::consts::{GIB, MIB};
 
 /// Amount of Gib to identity map
@@ -78,35 +78,35 @@ pub unsafe fn set_page_base_reg() {
 }
 
 pub unsafe fn enable_paging() {
-    print!("Identity Mapping Regions...");
+    log!("Identity Mapping Regions...");
     identity_map();
-    println!("OK");
+    logln!("OK");
 
-    print!("Setting Paging Base Register...");
+    log!("Setting Paging Base Register...");
     set_page_base_reg();
-    println!("OK");
+    logln!("OK");
 
-    print!("Disabling Paging...");
+    log!("Disabling Paging...");
     cr0::set_paging_flag(false);
-    println!("OK");
+    logln!("OK");
 
-    print!("Setting PAE...");
+    log!("Setting PAE...");
     cr4::set_physical_address_extension_flag(true);
-    println!("OK");
+    logln!("OK");
 
-    print!("Setting Long Mode...");
+    log!("Setting Long Mode...");
     ia32_efer::set_long_mode_enable_flag(true);
-    println!("OK");
+    logln!("OK");
 
-    print!("Enabling Protected Mode...");
+    log!("Enabling Protected Mode...");
     cr0::set_protected_mode_flag(true);
-    println!("OK");
+    logln!("OK");
 
-    print!("Enabling Paging...");
+    log!("Enabling Paging...");
     cr0::set_paging_flag(true);
-    println!("OK");
+    logln!("OK");
 
-    print!("Reloading Segments...");
+    log!("Reloading Segments...");
     SegmentRegisters::set_data_segments(Segment::new(2, CpuPrivilege::Ring0));
-    println!("OK");
+    logln!("OK");
 }

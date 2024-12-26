@@ -27,7 +27,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #![no_std]
 
 use bootloader::Stage32toStage64;
-use lldebug::{debug_ready, make_debug, println};
+use lldebug::{debug_ready, logln, make_debug};
 use serial::{Serial, baud::SerialBaud};
 
 mod panic;
@@ -45,5 +45,5 @@ extern "C" fn _start(stage_to_stage: u64) {
 
 #[debug_ready]
 fn main(stage_to_stage: &Stage32toStage64) {
-    println!("Stage64!");
+    logln!("Stage64!");
 }

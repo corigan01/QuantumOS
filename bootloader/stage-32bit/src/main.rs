@@ -35,7 +35,7 @@ use arch::{
 };
 use bootgfx::{Color, Framebuffer};
 use bootloader::{Stage16toStage32, Stage32toStage64};
-use lldebug::{debug_ready, make_debug, println};
+use lldebug::{debug_ready, logln, make_debug};
 use serial::{baud::SerialBaud, Serial};
 
 mod paging;
@@ -103,7 +103,7 @@ fn main(stage_to_stage: &Stage16toStage32) {
 
         // load
         gdt.pack().load();
-        println!("Loaded long mode GDT!");
+        logln!("Loaded long mode GDT!");
     }
 
     // build s2s
@@ -114,11 +114,11 @@ fn main(stage_to_stage: &Stage16toStage32) {
         s2s.memory_map = stage_to_stage.memory_map;
         s2s.video_mode = stage_to_stage.video_mode.clone();
 
-        println!("Built Stage32to64!");
+        logln!("Built Stage32to64!");
     }
 
     // jump to stage64
-    println!(
+    logln!(
         "Jumping to stage64! -- 0x{:016x}",
         stage_to_stage.stage64_ptr
     );
