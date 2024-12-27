@@ -1,8 +1,8 @@
 /*
-  ____                 __               __                __
- / __ \__ _____ ____  / /___ ____ _    / /  ___  ___ ____/ /__ ____
-/ /_/ / // / _ `/ _ \/ __/ // /  ' \  / /__/ _ \/ _ `/ _  / -_) __/
-\___\_\_,_/\_,_/_//_/\__/\_,_/_/_/_/ /____/\___/\_,_/\_,_/\__/_/
+  ____                 __               __   _ __
+ / __ \__ _____ ____  / /___ ____ _    / /  (_) /
+/ /_/ / // / _ `/ _ \/ __/ // /  ' \  / /__/ / _ \
+\___\_\_,_/\_,_/_//_/\__/\_,_/_/_/_/ /____/_/_.__/
     Part of the Quantum OS Project
 
 Copyright 2024 Gavin Kellam
@@ -23,31 +23,34 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-#![no_main]
 #![no_std]
 
-use bootloader::Stage32toStage64;
-use elf::Elf;
-use lldebug::{debug_ready, logln, make_debug};
-use serial::{Serial, baud::SerialBaud};
+mod tables;
 
-mod panic;
+// TODO: Add 'loader' trait for calling code when a section needs to be loaded
 
-make_debug! {
-    "Serial": Option<Serial> = Serial::probe_first(SerialBaud::Baud115200);
+pub struct Elf<'a> {
+    elf_file: &'a [u8],
 }
 
-#[unsafe(no_mangle)]
-#[unsafe(link_section = ".start")]
-extern "C" fn _start(stage_to_stage: u64) {
-    main(unsafe { &(*(stage_to_stage as *const Stage32toStage64)) });
-    panic!("Main should not return");
+impl<'a> Elf<'a> {
+    pub fn new(elf_file: &'a [u8]) -> Self {
+        Self { elf_file }
+    }
+
+    pub fn test(&self) {
+        let header: &tables::Elf64Header = self.elf_file.try_into().unwrap();
+        lldebug::logln!("{:#?}", header);
+    }
+
+    pub unsafe fn load_simple_into_ram(&self) {
+        todo!()
+    }
 }
 
-#[debug_ready]
-fn main(stage_to_stage: &Stage32toStage64) {
-    logln!("Stage64! -- {:#016x}", stage_to_stage.kernel_ptr);
-
-    Elf::new(unsafe { core::slice::from_raw_parts(stage_to_stage.kernel_ptr as *const u8, 1024) })
-        .test();
+impl core::fmt::Debug for Elf<'_> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        // TODO: Add debugging info for struct
+        f.debug_struct("Elf").finish()
+    }
 }

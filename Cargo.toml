@@ -18,7 +18,8 @@ members = [
   "crates/lldebug-macro", 
   "crates/hw", 
   "crates/hw-macro", 
-  "crates/util"
+  "crates/util", 
+  "crates/elf"
 ]
 
 default-members = ["meta"]
@@ -44,6 +45,7 @@ lldebug-macro = { path = "crates/lldebug-macro" }
 hw = { path = "crates/hw" }
 hw-macro = { path = "crates/hw-macro" }
 util = { path = "crates/util" }
+elf = { path = "crates/elf" }
 
 [profile.stage-bootsector]
 inherits = "release"
