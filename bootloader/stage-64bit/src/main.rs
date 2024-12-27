@@ -45,5 +45,5 @@ extern "C" fn _start(stage_to_stage: u64) {
 
 #[debug_ready]
 fn main(stage_to_stage: &Stage32toStage64) {
-    logln!("Stage64!");
+    logln!("Stage64! -- {:#016x}", stage_to_stage.kernel_ptr);
 }

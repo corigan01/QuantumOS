@@ -170,6 +170,7 @@ fn main(disk_id: u16) -> ! {
     let bootloader32_entrypoint = 0x00200000 as *mut u8;
     alloc.push_ptr_to(bootloader32_entrypoint);
 
+    logln!("stage32 size = {} Bytes", bootloader32.filesize());
     let bootloader32_buffer = unsafe { alloc.allocate(bootloader32.filesize()) }.unwrap();
     bootloader32
         .read(bootloader32_buffer)
@@ -184,27 +185,35 @@ fn main(disk_id: u16) -> ! {
     let bootloader64_entrypoint = 0x00400000 as *mut u8;
     alloc.push_ptr_to(bootloader64_entrypoint);
 
+    logln!("stage64 size = {} Bytes", bootloader64.filesize());
     let bootloader64_buffer = unsafe { alloc.allocate(bootloader64.filesize()) }.unwrap();
     bootloader64
         .read(bootloader64_buffer)
-        .expect("Unable to read bootloader32");
+        .expect("Unable to read bootloader64");
+
+    // kernel elf file
+    let kernel_offset = 0x00500000 as *mut u8;
+    alloc.push_ptr_to(kernel_offset);
+
+    let mut kernel_file = fatfs.open(qconfig.kernel).expect("Unable to find kernel");
+
+    logln!("kernel size = {} Bytes", kernel_file.filesize());
+    let kernel_buffer = unsafe { alloc.allocate(kernel_file.filesize()) }.unwrap();
+    kernel_file
+        .read(kernel_buffer)
+        .expect("Unable to read kernel");
+
+    let stack_region = unsafe { alloc.allocate(1024 * 1024) }.unwrap();
 
     closest_video_id.set().expect("Unable to set video mode");
 
     stage_to_stage.stage64_ptr = bootloader64_entrypoint as u64;
-
-    // TODO: load the kernel
-    stage_to_stage.kernel_ptr = 0;
-
-    logln!(
-        "Calling Stage32: PTR: {:?} -- S2S: {:?}",
-        bootloader32_entrypoint,
-        stage_to_stage as *const Stage16toStage32
-    );
+    stage_to_stage.kernel_ptr = kernel_buffer.as_ptr() as u64;
 
     unsafe {
         unreal::enter_stage2(
             bootloader32_entrypoint,
+            stack_region.as_ptr().add(1024 * 1024),
             stage_to_stage as *const Stage16toStage32,
         )
     };

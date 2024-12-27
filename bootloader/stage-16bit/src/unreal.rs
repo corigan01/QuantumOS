@@ -115,13 +115,21 @@ pub unsafe fn enter_unreal() {
 }
 
 #[inline(never)]
-pub unsafe fn enter_stage2(entry_point: *const u8, stage_to_stage: *const Stage16toStage32) -> ! {
+pub unsafe fn enter_stage2(
+    entry_point: *const u8,
+    stack_ptr: *const u8,
+    stage_to_stage: *const Stage16toStage32,
+) -> ! {
     disable_interrupts();
     cr0::set_protected_mode_flag(true);
 
     SegmentRegisters::set_data_segments(Segment::new(2, arch::CpuPrivilege::Ring0));
 
-    align_stack();
+    asm!(
+        "mov esp, eax",
+        in("eax") stack_ptr
+    );
+
     push_stack(stage_to_stage as usize);
     push_stack(entry_point as usize);
 
