@@ -23,27 +23,14 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-#![no_main]
-#![no_std]
+use std::path::Path;
 
-mod panic;
-
-use bootloader::Stage32toStage64;
-use lldebug::{debug_ready, logln, make_debug};
-use serial::{Serial, baud::SerialBaud};
-
-make_debug! {
-    "Serial": Option<Serial> = Serial::probe_first(SerialBaud::Baud115200);
-}
-
-#[unsafe(no_mangle)]
-#[unsafe(link_section = ".start")]
-extern "C" fn _start(stage_to_stage: u64) {
-    main(unsafe { &(*(stage_to_stage as *const Stage32toStage64)) });
-    panic!("Main should not return");
-}
-
-#[debug_ready]
-fn main(stage_to_stage: &Stage32toStage64) {
-    logln!("Kernel!");
+fn main() {
+    let local_path = Path::new(env!("CARGO_MANIFEST_DIR"));
+    println!("cargo:rerun-if-changed=build.rs");
+    println!("cargo:rerun-if-changed=x86-64-quantum_kernel.ld");
+    println!(
+        "cargo:rustc-link-arg-bins=--script={}",
+        local_path.join("x86-64-quantum_kernel.ld").display()
+    )
 }
