@@ -25,7 +25,19 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 #![no_std]
 
-mod tables;
+use lldebug::logln;
+
+pub mod tables;
+
+#[derive(Clone, Copy, Debug)]
+pub enum ElfErrorKind {
+    NotEnoughBytes,
+    NotAligned,
+    IncorrectBitMode,
+    Invalid,
+}
+
+pub type Result<T> = core::result::Result<T, ElfErrorKind>;
 
 // TODO: Add 'loader' trait for calling code when a section needs to be loaded
 
@@ -39,12 +51,59 @@ impl<'a> Elf<'a> {
     }
 
     pub fn test(&self) {
-        let header: &tables::Elf64Header = self.elf_file.try_into().unwrap();
-        lldebug::logln!("{:#?}", header);
+        let header = self.header().unwrap();
+        let ph = self.program_headers().unwrap();
+
+        logln!("{:#x?}\n{:#?}", header, ph);
     }
 
-    pub unsafe fn load_simple_into_ram(&self) {
-        todo!()
+    pub fn header(&self) -> Result<tables::ElfHeader<'a>> {
+        let pre_header = self
+            .elf_file
+            .try_into()
+            .and_then(|h: &tables::ElfInitHeader| {
+                if h.is_valid() {
+                    Ok(h)
+                } else {
+                    Err(ElfErrorKind::Invalid)
+                }
+            })?;
+
+        if pre_header.is_64bit() {
+            let header: &tables::Elf64Header = self.elf_file.try_into()?;
+            Ok(tables::ElfHeader::Header64(header))
+        } else {
+            let header: &tables::Elf32Header = self.elf_file.try_into()?;
+            Ok(tables::ElfHeader::Header32(header))
+        }
+    }
+
+    pub fn program_headers(&self) -> Result<tables::ElfProgramHeaders<'a>> {
+        let header = self.header()?;
+
+        let (offset, n_entries, entry_size) = match header {
+            tables::ElfHeader::Header64(header) => (
+                header.program_header_offset() as usize,
+                header.program_header_count(),
+                header.program_header_size(),
+            ),
+            tables::ElfHeader::Header32(header) => (
+                header.program_header_offset() as usize,
+                header.program_header_count(),
+                header.program_header_size(),
+            ),
+        };
+
+        let program_header_slice = &self.elf_file[offset..(offset + (n_entries * entry_size))];
+
+        match header {
+            tables::ElfHeader::Header64(_) => Ok(tables::ElfProgramHeaders::ProgHeader64(unsafe {
+                core::slice::from_raw_parts(program_header_slice.as_ptr().cast(), n_entries)
+            })),
+            tables::ElfHeader::Header32(_) => Ok(tables::ElfProgramHeaders::ProgHeader32(unsafe {
+                core::slice::from_raw_parts(program_header_slice.as_ptr().cast(), n_entries)
+            })),
+        }
     }
 }
 

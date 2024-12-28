@@ -23,7 +23,7 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-#[repr(C, packed)]
+#[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct ElfInitHeader {
     magic: [u8; 4],
@@ -37,19 +37,44 @@ pub struct ElfInitHeader {
     elf_version: u32,
 }
 
+impl ElfInitHeader {
+    pub fn is_valid(&self) -> bool {
+        self.magic == [0x7F, b'E', b'L', b'F']
+    }
+
+    pub const fn is_32bit(&self) -> bool {
+        self.bits == 1
+    }
+
+    pub const fn is_64bit(&self) -> bool {
+        self.bits == 2
+    }
+
+    pub const fn is_le(&self) -> bool {
+        self.endian == 1
+    }
+
+    pub const fn is_be(&self) -> bool {
+        self.endian == 2
+    }
+}
+
 impl<'a> TryFrom<&'a [u8]> for &'a ElfInitHeader {
-    type Error = ();
+    type Error = crate::ElfErrorKind;
 
     fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
+        if value.as_ptr() as usize % align_of::<ElfInitHeader>() != 0 {
+            return Err(crate::ElfErrorKind::NotAligned);
+        }
         if value.len() < size_of::<ElfInitHeader>() {
-            return Err(());
+            return Err(crate::ElfErrorKind::NotEnoughBytes);
         }
 
         Ok(unsafe { &*value.as_ptr().cast() })
     }
 }
 
-#[repr(C, packed)]
+#[repr(C)]
 #[derive(Debug)]
 pub struct Elf64Header {
     head: ElfInitHeader,
@@ -65,19 +90,37 @@ pub struct Elf64Header {
     string_table_offset: u16,
 }
 
+impl Elf64Header {
+    pub const fn program_header_offset(&self) -> u64 {
+        self.program_header_offset
+    }
+
+    pub const fn program_header_count(&self) -> usize {
+        self.program_header_entries as usize
+    }
+
+    pub const fn program_header_size(&self) -> usize {
+        self.program_header_entry_size as usize
+    }
+}
+
 impl<'a> TryFrom<&'a [u8]> for &'a Elf64Header {
-    type Error = ();
+    type Error = crate::ElfErrorKind;
 
     fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
+        if value.as_ptr() as usize % align_of::<Elf64Header>() != 0 {
+            return Err(crate::ElfErrorKind::NotAligned);
+        }
         if value.len() < size_of::<Elf64Header>() {
-            return Err(());
+            return Err(crate::ElfErrorKind::NotEnoughBytes);
         }
 
         Ok(unsafe { &*value.as_ptr().cast() })
     }
 }
 
-#[repr(C, packed)]
+#[repr(C)]
+#[derive(Debug)]
 pub struct Elf32Header {
     head: ElfInitHeader,
     entry_offset: u32,
@@ -92,12 +135,29 @@ pub struct Elf32Header {
     string_table_offset: u16,
 }
 
+impl Elf32Header {
+    pub const fn program_header_offset(&self) -> u32 {
+        self.program_header_offset
+    }
+
+    pub const fn program_header_count(&self) -> usize {
+        self.program_header_entries as usize
+    }
+
+    pub const fn program_header_size(&self) -> usize {
+        self.program_header_entry_size as usize
+    }
+}
+
 impl<'a> TryFrom<&'a [u8]> for &'a Elf32Header {
-    type Error = ();
+    type Error = crate::ElfErrorKind;
 
     fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
+        if value.as_ptr() as usize % align_of::<Elf32Header>() != 0 {
+            return Err(crate::ElfErrorKind::NotAligned);
+        }
         if value.len() < size_of::<Elf32Header>() {
-            return Err(());
+            return Err(crate::ElfErrorKind::NotEnoughBytes);
         }
 
         Ok(unsafe { &*value.as_ptr().cast() })
@@ -140,7 +200,8 @@ impl TryFrom<u16> for ArchKind {
     }
 }
 
-#[repr(C, packed)]
+#[repr(C)]
+#[derive(Debug)]
 pub struct ProgramHeader32 {
     segment_kind: u32,
     p_offset: u32,
@@ -153,18 +214,22 @@ pub struct ProgramHeader32 {
 }
 
 impl<'a> TryFrom<&'a [u8]> for &'a ProgramHeader32 {
-    type Error = ();
+    type Error = crate::ElfErrorKind;
 
     fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
+        if value.as_ptr() as usize % align_of::<ProgramHeader32>() != 0 {
+            return Err(crate::ElfErrorKind::NotAligned);
+        }
         if value.len() < size_of::<ProgramHeader32>() {
-            return Err(());
+            return Err(crate::ElfErrorKind::NotEnoughBytes);
         }
 
         Ok(unsafe { &*value.as_ptr().cast() })
     }
 }
 
-#[repr(C, packed)]
+#[repr(C)]
+#[derive(Debug)]
 pub struct ProgramHeader64 {
     segment_kind: u32,
     flags: u32,
@@ -177,11 +242,14 @@ pub struct ProgramHeader64 {
 }
 
 impl<'a> TryFrom<&'a [u8]> for &'a ProgramHeader64 {
-    type Error = ();
+    type Error = crate::ElfErrorKind;
 
     fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
+        if value.as_ptr() as usize % align_of::<ProgramHeader64>() != 0 {
+            return Err(crate::ElfErrorKind::NotAligned);
+        }
         if value.len() < size_of::<ProgramHeader64>() {
-            return Err(());
+            return Err(crate::ElfErrorKind::NotEnoughBytes);
         }
 
         Ok(unsafe { &*value.as_ptr().cast() })
@@ -195,19 +263,30 @@ pub enum SegmentKind {
     Dynamic,
     Interp,
     Note,
+    Unknown(u32),
 }
 
-impl TryFrom<u32> for SegmentKind {
-    type Error = ();
-
-    fn try_from(value: u32) -> Result<Self, Self::Error> {
+impl From<u32> for SegmentKind {
+    fn from(value: u32) -> Self {
         match value {
-            0 => Ok(Self::Ignore),
-            1 => Ok(Self::Load),
-            2 => Ok(Self::Dynamic),
-            3 => Ok(Self::Interp),
-            4 => Ok(Self::Note),
-            _ => Err(()),
+            0 => Self::Ignore,
+            1 => Self::Load,
+            2 => Self::Dynamic,
+            3 => Self::Interp,
+            4 => Self::Note,
+            v => Self::Unknown(v),
         }
     }
+}
+
+#[derive(Debug)]
+pub enum ElfHeader<'a> {
+    Header64(&'a Elf64Header),
+    Header32(&'a Elf32Header),
+}
+
+#[derive(Debug)]
+pub enum ElfProgramHeaders<'a> {
+    ProgHeader64(&'a [ProgramHeader64]),
+    ProgHeader32(&'a [ProgramHeader32]),
 }
