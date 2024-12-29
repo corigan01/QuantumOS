@@ -50,11 +50,59 @@ impl<'a> Elf<'a> {
         Self { elf_file }
     }
 
-    pub fn test(&self) {
-        let header = self.header().unwrap();
-        let ph = self.program_headers().unwrap();
+    pub fn load_into<F>(&self, mut loader_fn: F) -> Result<*const u8>
+    where
+        F: FnMut(&tables::ElfGenProgramHeader) -> Option<&'static mut [u8]>,
+    {
+        match self.program_headers()? {
+            tables::ElfProgramHeaders::ProgHeader64(header) => header
+                .iter()
+                .map(|h| tables::ElfGenProgramHeader::from(h))
+                .try_for_each(|h| {
+                    if let Some(mem_buffer) = loader_fn(&h) {
+                        let elf_buffer = self
+                            .elf_file
+                            .get(h.in_elf_offset()..h.in_elf_offset() + h.in_elf_size())
+                            .ok_or(ElfErrorKind::NotEnoughBytes)?;
 
-        logln!("{:#x?}\n{:#?}", header, ph);
+                        if h.in_elf_size() > mem_buffer.len() {
+                            return Err(ElfErrorKind::Invalid);
+                        }
+
+                        mem_buffer[..h.in_elf_size()].copy_from_slice(elf_buffer);
+                    }
+
+                    Ok(())
+                })?,
+            tables::ElfProgramHeaders::ProgHeader32(header) => header
+                .iter()
+                .map(|h| tables::ElfGenProgramHeader::from(h))
+                .try_for_each(|h| {
+                    if let Some(mem_buffer) = loader_fn(&h) {
+                        let elf_buffer = self
+                            .elf_file
+                            .get(h.in_elf_offset()..h.in_elf_offset() + h.in_elf_size())
+                            .ok_or(ElfErrorKind::NotEnoughBytes)?;
+
+                        if h.in_elf_size() > mem_buffer.len() {
+                            return Err(ElfErrorKind::Invalid);
+                        }
+
+                        mem_buffer[..h.in_elf_size()].copy_from_slice(elf_buffer);
+                    }
+
+                    Ok(())
+                })?,
+        }
+
+        self.entry_point()
+    }
+
+    pub fn entry_point(&self) -> Result<*const u8> {
+        Ok(match self.header()? {
+            tables::ElfHeader::Header64(h) => h.entry_point() as *const u8,
+            tables::ElfHeader::Header32(h) => h.entry_point() as *const u8,
+        })
     }
 
     pub fn header(&self) -> Result<tables::ElfHeader<'a>> {

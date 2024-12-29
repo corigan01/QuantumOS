@@ -57,6 +57,10 @@ impl ElfInitHeader {
     pub const fn is_be(&self) -> bool {
         self.endian == 2
     }
+
+    pub fn arch(&self) -> ArchKind {
+        self.arch.into()
+    }
 }
 
 impl<'a> TryFrom<&'a [u8]> for &'a ElfInitHeader {
@@ -91,6 +95,30 @@ pub struct Elf64Header {
 }
 
 impl Elf64Header {
+    pub fn is_valid(&self) -> bool {
+        self.head.magic == [0x7F, b'E', b'L', b'F']
+    }
+
+    pub const fn is_32bit(&self) -> bool {
+        self.head.bits == 1
+    }
+
+    pub const fn is_64bit(&self) -> bool {
+        self.head.bits == 2
+    }
+
+    pub const fn is_le(&self) -> bool {
+        self.head.endian == 1
+    }
+
+    pub const fn is_be(&self) -> bool {
+        self.head.endian == 2
+    }
+
+    pub fn arch(&self) -> ArchKind {
+        self.head.arch.into()
+    }
+
     pub const fn program_header_offset(&self) -> u64 {
         self.program_header_offset
     }
@@ -101,6 +129,10 @@ impl Elf64Header {
 
     pub const fn program_header_size(&self) -> usize {
         self.program_header_entry_size as usize
+    }
+
+    pub const fn entry_point(&self) -> u64 {
+        self.entry_offset
     }
 }
 
@@ -147,6 +179,10 @@ impl Elf32Header {
     pub const fn program_header_size(&self) -> usize {
         self.program_header_entry_size as usize
     }
+
+    pub const fn entry_point(&self) -> u32 {
+        self.entry_offset
+    }
 }
 
 impl<'a> TryFrom<&'a [u8]> for &'a Elf32Header {
@@ -177,25 +213,24 @@ pub enum ArchKind {
     X64,
     Aarch64,
     RiscV,
+    Unknown(u16),
 }
 
-impl TryFrom<u16> for ArchKind {
-    type Error = ();
-
-    fn try_from(value: u16) -> Result<Self, Self::Error> {
+impl From<u16> for ArchKind {
+    fn from(value: u16) -> Self {
         match value {
-            0x00 => Ok(Self::None),
-            0x02 => Ok(Self::Sparc),
-            0x03 => Ok(Self::X86),
-            0x08 => Ok(Self::Mips),
-            0x14 => Ok(Self::PowerPC),
-            0x28 => Ok(Self::Arm),
-            0x2a => Ok(Self::SuperH),
-            0x32 => Ok(Self::Ia64),
-            0x3e => Ok(Self::X64),
-            0xb7 => Ok(Self::Aarch64),
-            0xf3 => Ok(Self::RiscV),
-            _ => Err(()),
+            0x00 => Self::None,
+            0x02 => Self::Sparc,
+            0x03 => Self::X86,
+            0x08 => Self::Mips,
+            0x14 => Self::PowerPC,
+            0x28 => Self::Arm,
+            0x2a => Self::SuperH,
+            0x32 => Self::Ia64,
+            0x3e => Self::X64,
+            0xb7 => Self::Aarch64,
+            0xf3 => Self::RiscV,
+            v => Self::Unknown(v),
         }
     }
 }
@@ -228,6 +263,48 @@ impl<'a> TryFrom<&'a [u8]> for &'a ProgramHeader32 {
     }
 }
 
+impl ProgramHeader32 {
+    pub fn segment_kind(&self) -> SegmentKind {
+        self.segment_kind.into()
+    }
+
+    pub const fn is_executable(&self) -> bool {
+        self.flags & 1 != 0
+    }
+
+    pub const fn is_writable(&self) -> bool {
+        self.flags & 2 != 0
+    }
+
+    pub const fn is_readable(&self) -> bool {
+        self.flags & 4 != 0
+    }
+
+    pub const fn in_elf_offset(&self) -> usize {
+        self.p_offset as usize
+    }
+
+    pub const fn expected_vaddr(&self) -> u32 {
+        self.p_vaddr
+    }
+
+    pub const fn expected_paddr(&self) -> u32 {
+        self.p_paddr
+    }
+
+    pub const fn in_elf_size(&self) -> usize {
+        self.p_filesz as usize
+    }
+
+    pub const fn in_mem_size(&self) -> usize {
+        self.p_memsz as usize
+    }
+
+    pub const fn alignment(&self) -> u32 {
+        self.alignment
+    }
+}
+
 #[repr(C)]
 #[derive(Debug)]
 pub struct ProgramHeader64 {
@@ -256,7 +333,49 @@ impl<'a> TryFrom<&'a [u8]> for &'a ProgramHeader64 {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+impl ProgramHeader64 {
+    pub fn segment_kind(&self) -> SegmentKind {
+        self.segment_kind.into()
+    }
+
+    pub const fn is_executable(&self) -> bool {
+        self.flags & 1 != 0
+    }
+
+    pub const fn is_writable(&self) -> bool {
+        self.flags & 2 != 0
+    }
+
+    pub const fn is_readable(&self) -> bool {
+        self.flags & 4 != 0
+    }
+
+    pub const fn in_elf_offset(&self) -> usize {
+        self.p_offset as usize
+    }
+
+    pub const fn expected_vaddr(&self) -> u64 {
+        self.p_vaddr
+    }
+
+    pub const fn expected_paddr(&self) -> u64 {
+        self.p_paddr
+    }
+
+    pub const fn in_elf_size(&self) -> usize {
+        self.p_filesz as usize
+    }
+
+    pub const fn in_mem_size(&self) -> usize {
+        self.p_memsz as usize
+    }
+
+    pub const fn alignment(&self) -> u64 {
+        self.alignment
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SegmentKind {
     Ignore,
     Load,
@@ -289,4 +408,99 @@ pub enum ElfHeader<'a> {
 pub enum ElfProgramHeaders<'a> {
     ProgHeader64(&'a [ProgramHeader64]),
     ProgHeader32(&'a [ProgramHeader32]),
+}
+
+#[derive(Debug)]
+pub struct ElfGenProgramHeader {
+    bits: u8,
+    segment_kind: u32,
+    flags: u32,
+    p_offset: u64,
+    p_vaddr: u64,
+    p_paddr: u64,
+    p_filesz: u64,
+    p_memsz: u64,
+    alignment: u64,
+}
+
+impl From<&ProgramHeader64> for ElfGenProgramHeader {
+    fn from(value: &ProgramHeader64) -> Self {
+        Self {
+            bits: 2,
+            segment_kind: value.segment_kind,
+            flags: value.flags,
+            p_offset: value.p_offset,
+            p_vaddr: value.p_vaddr,
+            p_paddr: value.p_paddr,
+            p_filesz: value.p_filesz,
+            p_memsz: value.p_memsz,
+            alignment: value.alignment,
+        }
+    }
+}
+
+impl From<&ProgramHeader32> for ElfGenProgramHeader {
+    fn from(value: &ProgramHeader32) -> Self {
+        Self {
+            bits: 1,
+            segment_kind: value.segment_kind,
+            flags: value.flags,
+            p_offset: value.p_offset as u64,
+            p_vaddr: value.p_vaddr as u64,
+            p_paddr: value.p_paddr as u64,
+            p_filesz: value.p_filesz as u64,
+            p_memsz: value.p_memsz as u64,
+            alignment: value.alignment as u64,
+        }
+    }
+}
+
+impl ElfGenProgramHeader {
+    pub const fn is_64bit(&self) -> bool {
+        self.bits == 2
+    }
+
+    pub const fn is_32bit(&self) -> bool {
+        self.bits == 1
+    }
+
+    pub fn segment_kind(&self) -> SegmentKind {
+        self.segment_kind.into()
+    }
+
+    pub const fn is_executable(&self) -> bool {
+        self.flags & 1 != 0
+    }
+
+    pub const fn is_writable(&self) -> bool {
+        self.flags & 2 != 0
+    }
+
+    pub const fn is_readable(&self) -> bool {
+        self.flags & 4 != 0
+    }
+
+    pub const fn in_elf_offset(&self) -> usize {
+        self.p_offset as usize
+    }
+
+    pub const fn expected_vaddr(&self) -> u64 {
+        self.p_vaddr
+    }
+
+    pub const fn expected_paddr(&self) -> u64 {
+        self.p_paddr
+    }
+
+    pub const fn in_elf_size(&self) -> usize {
+        self.p_filesz as usize
+    }
+
+    pub const fn in_mem_size(&self) -> usize {
+        self.p_memsz as usize
+    }
+
+    pub const fn alignment(&self) -> u64 {
+        self.alignment
+    }
 }

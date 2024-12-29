@@ -27,7 +27,10 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #![no_std]
 
 use bootloader::Stage32toStage64;
-use elf::Elf;
+use elf::{
+    Elf,
+    tables::{ArchKind, SegmentKind},
+};
 use lldebug::{debug_ready, logln, make_debug};
 use serial::{Serial, baud::SerialBaud};
 
@@ -46,8 +49,24 @@ extern "C" fn _start(stage_to_stage: u64) {
 
 #[debug_ready]
 fn main(stage_to_stage: &Stage32toStage64) {
-    logln!("Stage64! -- {:#016x}", stage_to_stage.kernel_ptr);
+    logln!("Stage64!");
+    let (kernel_ptr, kernel_size) = stage_to_stage.kernel_ptr;
 
-    Elf::new(unsafe { core::slice::from_raw_parts(stage_to_stage.kernel_ptr as *const u8, 1024) })
-        .test();
+    let elf = Elf::new(unsafe {
+        core::slice::from_raw_parts(kernel_ptr as *const u8, kernel_size as usize)
+    });
+
+    let elf_header = match elf.header() {
+        Ok(elf::tables::ElfHeader::Header64(h)) if h.arch() == ArchKind::X64 && h.is_le() => h,
+        _ => panic!("Kernel's elf is not valid!"),
+    };
+
+    elf.load_into(|h| {
+        if h.segment_kind() != SegmentKind::Load {
+            return None;
+        }
+
+        Some(&mut [])
+    })
+    .unwrap();
 }
