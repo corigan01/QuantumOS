@@ -19,8 +19,9 @@ members = [
   "crates/hw", 
   "crates/hw-macro", 
   "crates/util", 
-  "crates/elf"
-, "crates/mem"]
+  "crates/elf", 
+  "crates/mem"
+]
 
 default-members = ["meta"]
 resolver = "2"
