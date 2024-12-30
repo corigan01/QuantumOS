@@ -50,10 +50,11 @@ extern "C" fn _start(stage_to_stage: u64) {
 #[debug_ready]
 fn main(stage_to_stage: &Stage32toStage64) {
     logln!("Stage64!");
-    let (kernel_ptr, kernel_size) = stage_to_stage.kernel_ptr;
+    let (kernel_elf_ptr, kernel_elf_size) = stage_to_stage.kernel_ptr;
+    logln!("Memory Map {:#?}", stage_to_stage.memory_map);
 
     let elf = Elf::new(unsafe {
-        core::slice::from_raw_parts(kernel_ptr as *const u8, kernel_size as usize)
+        core::slice::from_raw_parts(kernel_elf_ptr as *const u8, kernel_elf_size as usize)
     });
 
     let elf_header = match elf.header() {
@@ -66,7 +67,7 @@ fn main(stage_to_stage: &Stage32toStage64) {
             return None;
         }
 
-        Some(&mut [])
+        None
     })
     .unwrap();
 }
