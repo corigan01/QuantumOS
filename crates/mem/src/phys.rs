@@ -56,6 +56,20 @@ pub struct PhysMemoryEntry {
     end: u64,
 }
 
+impl MemoryDesc for PhysMemoryEntry {
+    fn memory_kind(&self) -> PhysMemoryKind {
+        self.kind
+    }
+
+    fn memory_start(&self) -> u64 {
+        self.start
+    }
+
+    fn memory_end(&self) -> u64 {
+        self.end
+    }
+}
+
 impl PhysMemoryEntry {
     pub const fn empty() -> Self {
         Self {
@@ -199,14 +213,14 @@ impl<const N: usize> PhysMemoryMap<N> {
         }
 
         // 4. If we didn't push down our end segment, we need to insert one.
-        if !self.borders.get(end_i).is_some_and(|bor| bor.address < end) {
+        if !self.borders.get(end_i).is_some_and(|bor| bor.address < end) || end_i == start_i {
             logln!(
                 "Didn't push down end segment, so inserting a new one (idx={}, kind={:?}, address={})",
                 end_i,
                 end_segment_kind,
                 end
             );
-            self.insert_raw(end_i, PhysMemoryBorder {
+            self.insert_raw(end_i + 1, PhysMemoryBorder {
                 kind: end_segment_kind,
                 address: end,
             })?;
@@ -251,13 +265,13 @@ impl<const N: usize> PhysMemoryMap<N> {
             return Err(crate::MemoryError::ArrayTooSmall);
         }
 
-        if index + 1 > self.len {
+        if index > self.len {
             return Err(crate::MemoryError::InvalidSize);
         }
 
         // if the index is at the end of the array, we don't need to move any
         // of the elements.
-        if index + 1 == self.len {
+        if index == self.len {
             self.borders[index] = border;
             self.len += 1;
             return Ok(());
@@ -286,7 +300,7 @@ impl<const N: usize> PhysMemoryMap<N> {
         }
 
         let border_len = self.borders.len();
-        self.borders.copy_within(index..border_len, index - 1);
+        self.borders.copy_within(index + 1..border_len, index);
         self.len -= 1;
 
         Ok(())
@@ -449,6 +463,194 @@ mod test {
             PhysMemoryBorder {
                 kind: PhysMemoryKind::Reserved,
                 address: 1
+            },
+            PhysMemoryBorder {
+                kind: PhysMemoryKind::None,
+                address: 0
+            }
+        ]);
+    }
+
+    #[test]
+    fn test_remove_last_element() {
+        let mut mm = PhysMemoryMap::<4>::new();
+
+        assert_eq!(
+            mm.insert_raw(0, PhysMemoryBorder {
+                kind: PhysMemoryKind::Free,
+                address: 0
+            }),
+            Ok(())
+        );
+
+        assert_eq!(
+            mm.insert_raw(1, PhysMemoryBorder {
+                kind: PhysMemoryKind::Reserved,
+                address: 1
+            }),
+            Ok(())
+        );
+
+        assert_eq!(
+            mm.insert_raw(2, PhysMemoryBorder {
+                kind: PhysMemoryKind::None,
+                address: 2
+            }),
+            Ok(())
+        );
+
+        assert_eq!(mm.remove_raw(2), Ok(()));
+
+        assert_eq!(mm.len, 2);
+        assert_eq!(mm.borders, [
+            PhysMemoryBorder {
+                kind: PhysMemoryKind::Free,
+                address: 0
+            },
+            PhysMemoryBorder {
+                kind: PhysMemoryKind::Reserved,
+                address: 1
+            },
+            PhysMemoryBorder {
+                kind: PhysMemoryKind::None,
+                address: 0
+            },
+            PhysMemoryBorder {
+                kind: PhysMemoryKind::None,
+                address: 0
+            }
+        ]);
+    }
+
+    #[test]
+    fn test_remove_middle_element() {
+        let mut mm = PhysMemoryMap::<4>::new();
+
+        assert_eq!(
+            mm.insert_raw(0, PhysMemoryBorder {
+                kind: PhysMemoryKind::Free,
+                address: 0
+            }),
+            Ok(())
+        );
+
+        assert_eq!(
+            mm.insert_raw(1, PhysMemoryBorder {
+                kind: PhysMemoryKind::Reserved,
+                address: 1
+            }),
+            Ok(())
+        );
+
+        assert_eq!(
+            mm.insert_raw(2, PhysMemoryBorder {
+                kind: PhysMemoryKind::None,
+                address: 2
+            }),
+            Ok(())
+        );
+
+        assert_eq!(mm.remove_raw(1), Ok(()));
+
+        assert_eq!(mm.len, 2);
+        assert_eq!(mm.borders, [
+            PhysMemoryBorder {
+                kind: PhysMemoryKind::Free,
+                address: 0
+            },
+            PhysMemoryBorder {
+                kind: PhysMemoryKind::None,
+                address: 2
+            },
+            PhysMemoryBorder {
+                kind: PhysMemoryKind::None,
+                address: 0
+            },
+            PhysMemoryBorder {
+                kind: PhysMemoryKind::None,
+                address: 0
+            }
+        ]);
+    }
+
+    #[test]
+    fn test_remove_first_element() {
+        let mut mm = PhysMemoryMap::<4>::new();
+
+        assert_eq!(
+            mm.insert_raw(0, PhysMemoryBorder {
+                kind: PhysMemoryKind::Free,
+                address: 0
+            }),
+            Ok(())
+        );
+
+        assert_eq!(
+            mm.insert_raw(1, PhysMemoryBorder {
+                kind: PhysMemoryKind::Reserved,
+                address: 1
+            }),
+            Ok(())
+        );
+
+        assert_eq!(
+            mm.insert_raw(2, PhysMemoryBorder {
+                kind: PhysMemoryKind::None,
+                address: 2
+            }),
+            Ok(())
+        );
+
+        assert_eq!(mm.remove_raw(0), Ok(()));
+
+        assert_eq!(mm.len, 2);
+        assert_eq!(mm.borders, [
+            PhysMemoryBorder {
+                kind: PhysMemoryKind::Reserved,
+                address: 1
+            },
+            PhysMemoryBorder {
+                kind: PhysMemoryKind::None,
+                address: 2
+            },
+            PhysMemoryBorder {
+                kind: PhysMemoryKind::None,
+                address: 0
+            },
+            PhysMemoryBorder {
+                kind: PhysMemoryKind::None,
+                address: 0
+            }
+        ]);
+    }
+
+    #[test]
+    fn test_add_one_region() {
+        lldebug::testing_stdout!();
+        let mut mm = PhysMemoryMap::<4>::new();
+
+        assert_eq!(
+            mm.add_region(PhysMemoryEntry {
+                kind: PhysMemoryKind::Free,
+                start: 0,
+                end: 10
+            }),
+            Ok(())
+        );
+
+        assert_eq!(mm.len, 2, "Array len didnt match! {:#?}", mm.borders);
+        assert_eq!(mm.borders, [
+            PhysMemoryBorder {
+                kind: PhysMemoryKind::Free,
+                address: 0
+            },
+            PhysMemoryBorder {
+                kind: PhysMemoryKind::None,
+                address: 10
+            },
+            PhysMemoryBorder {
+                kind: PhysMemoryKind::None,
+                address: 0
             },
             PhysMemoryBorder {
                 kind: PhysMemoryKind::None,

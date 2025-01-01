@@ -5,7 +5,7 @@
 \___\_\_,_/\_,_/_//_/\__/\_,_/_/_/_/ /____/_/_.__/
     Part of the Quantum OS Project
 
-Copyright 2024 Gavin Kellam
+Copyright 2025 Gavin Kellam
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
 associated documentation files (the "Software"), to deal in the Software without restriction,
@@ -168,4 +168,22 @@ macro_rules! errorln {
         $crate::priv_print(::lldebug::LogKind::Error, ::core::module_path!(), format_args!($($arg)*));
         $crate::error!("\n");
     }};
+}
+
+/// Setup lldebug for stdout only in testing mode.
+#[macro_export]
+macro_rules! testing_stdout {
+    () => {
+        #[cfg(test)]
+        {
+            fn all_print(args: ::core::fmt::Arguments) {
+                extern crate std;
+                use std::io::stdout;
+                use std::io::Write;
+                let _ = stdout().write_fmt(args);
+            }
+
+            ::lldebug::set_global_debug_fn(all_print);
+        }
+    };
 }
