@@ -101,6 +101,31 @@ impl<const N: usize> PhysMemoryMap<N> {
         }
     }
 
+    fn find_start_index(&self, kind: PhysMemoryKind, start: u64, end: u64) -> Option<usize> {
+        let mut ret = None;
+
+        for (i, bor) in self
+            .borders
+            .iter()
+            .enumerate()
+            .take_while(|(_, bor)| bor.address < end)
+            .filter(|(_, bor)| bor.kind <= kind)
+            .take_while(|(i, _)| *i <= self.len)
+        {
+            if bor.address == start && bor.kind <= kind {
+                return Some(i);
+            }
+
+            if bor.address < start && self.borders.get(i + 1).is_some_and(|a| a.address >= end) {
+                return Some(i + 1);
+            }
+
+            ret = Some(i);
+        }
+
+        ret
+    }
+
     pub fn add_region(&mut self, region: impl MemoryDesc) -> Result<(), crate::MemoryError> {
         let kind = region.memory_kind();
         let start = region.memory_start();
@@ -126,146 +151,68 @@ impl<const N: usize> PhysMemoryMap<N> {
         // ```
 
         logln!(
-            "Trying to insert segment(kind={:?}, start={}, end={}) into the following array:\n  {:?}",
+            "ADD (kind={:?}, start={}, end={}) -- {:#?}",
             kind,
             start,
             end,
             &self.borders[..self.len]
         );
-        let mut end_segment_kind = PhysMemoryKind::None;
-        let mut start_i = 0;
 
-        // 1. We need iter until we find a border with a higher address,
-        //    or until we find reach a border with a higher address then our
-        //    end address.
-        //
-        //    We also need to keep going if the segment is of a higher type.
-        while start_i < self.len
-            && self
-                .borders
+        let Some(start_i) = self.find_start_index(kind, start, end) else {
+            // Region is being overriden by others with higher precedence.
+            return Ok(());
+        };
+
+        let want_insert_start = PhysMemoryBorder {
+            kind,
+            address: self.borders[..self.len]
                 .get(start_i)
-                .is_some_and(|bor| bor.address < start || bor.kind > kind)
-        {
-            // 1.1. If this segment contains a larger address than our end, we
-            //      cannot place our new segment into the array.
-            if self
-                .borders
-                .get(start_i)
-                .is_some_and(|bor| bor.address >= end)
-            {
-                logln!("Pushed start further then end, cannot insert segment!");
-                return Ok(());
-            }
+                .map(|b| b.address.max(start))
+                .unwrap_or(start),
+        };
 
-            // 1.2. We need to inc our index.
-            start_i += 1;
-        }
+        let mut larger_region = false;
+        let mut i = start_i;
 
-        logln!("Start = {} -- \n{:#?}", start_i, self.borders);
-
-        // 2. If we pushed our start segment up, we don't need to insert.
-        if start_i > 0
-            && self
-                .borders
-                .get(start_i - 1)
-                .is_some_and(|bor| bor.address >= start)
-        {
-            logln!("Segment was pushed up due to lower precedence.");
-            // 2.1. If our end segment is lower then the next border
-            //      we change the type of our end border to the type
-            //      of the old segment.
-            if self.len > start_i + 1 && self.borders[start_i + 1].address > end {
-                logln!("No border changes until end segment, saving old segment kind...");
-                end_segment_kind = self.borders[start_i].kind;
-            }
-
-            logln!(
-                "Changing border (at idx={}) to kind={:?} (old_kind={:?})",
-                start_i,
-                kind,
-                self.borders[start_i]
-            );
-
-            // 2.2. We change the old segment to our segment kind.
-            self.borders[start_i].kind = kind;
-        }
-        // 3. If we didn't push our start segment up, we can insert one now.
-        else {
-            logln!(
-                "Didn't push start border up, inserting new! (kind={:?}, address={})",
-                kind,
-                start
-            );
-            self.insert_raw(start_i, PhysMemoryBorder {
-                kind,
-                address: start,
-            })?;
-        }
-
-        let mut end_i = self.len;
-
-        // 3. We need to iter until we find a border that is of a lower or
-        //    equal type to our segment kind.
-        //
-        //    We also need to find where the end segment should go based
-        //    on address.
-        while end_i > start_i
-            && self
-                .borders
-                .get(end_i)
-                .is_some_and(|bor| bor.kind > kind || bor.address > end)
-        {
-            end_i -= 1;
-        }
-
-        logln!("End = {} -- \n{:#?}", end_i, self.borders);
-
-        // 4. If we didn't push down our end segment, we need to insert one.
-        if self.len == end_i
-            || self
-                .borders
-                .get(end_i + 1)
-                .is_some_and(|bor| bor.address < end)
-        {
-            logln!(
-                "Didn't push down end segment, so inserting a new one (idx={}, kind={:?}, address={})",
-                end_i,
-                end_segment_kind,
-                end
-            );
-            self.insert_raw(end_i, PhysMemoryBorder {
-                kind: end_segment_kind,
-                address: end,
-            })?;
-        }
-
-        let mut inner = start_i + 1;
-        let mut have_hit_higher = false;
-
-        // 5. We need to remove all segments inbetween that is of a lower
-        //    type.
-        //
-        //    If we find a higher border type, the next border (of a lower type)
-        //    needs to be changed to our type.
-        //
-        while inner < end_i {
-            if self.borders.get(inner).is_some_and(|bor| bor.kind > kind) {
-                logln!("Have hit a border with a higher type! (idx={})", inner);
-                have_hit_higher = true;
-                inner += 1;
+        while i < self.len {
+            if self.borders[i].kind > kind {
+                larger_region = true;
+                i += 1;
                 continue;
             }
 
-            if have_hit_higher {
-                logln!("Changing border (at idx={}) to kind={:?}", inner, kind);
-                self.borders[inner].kind = kind;
-                inner += 1;
+            if larger_region {
+                larger_region = false;
+                self.borders[i].kind = kind;
+                i += 1;
                 continue;
             }
 
-            logln!("Removing (idx={}) {:?}", inner, self.borders[inner]);
-            self.remove_raw(inner)?;
-            end_i -= 1;
+            logln!("REMOVE i={} bor={:?}", i, self.borders[i]);
+            self.remove_raw(i)?;
+        }
+
+        logln!("AFTER {:#?}", self.borders);
+
+        self.insert_raw(start_i, want_insert_start)?;
+
+        if let Some((end_index, old_end)) = self
+            .borders
+            .iter()
+            .enumerate()
+            .skip(start_i + 1)
+            .take(self.len)
+            .take_while(|(_, bor)| bor.address <= end)
+            .filter(|(_, bor)| bor.kind < kind)
+            .last()
+        {
+            self.insert_raw(end_index, PhysMemoryBorder {
+                kind: old_end.kind,
+                address: self.borders[..self.len]
+                    .get(end_index)
+                    .map(|b| b.address.min(end))
+                    .unwrap_or(end),
+            })?;
         }
 
         Ok(())
@@ -276,6 +223,7 @@ impl<const N: usize> PhysMemoryMap<N> {
         index: usize,
         border: PhysMemoryBorder,
     ) -> Result<(), crate::MemoryError> {
+        logln!("INSERT: idx={index} bor={border:?}");
         if self.len == self.borders.len() {
             return Err(crate::MemoryError::ArrayTooSmall);
         }
@@ -652,6 +600,7 @@ mod test {
 
     #[test]
     fn test_add_one_region() {
+        lldebug::testing_stdout!();
         let mut mm = PhysMemoryMap::<4>::new();
 
         assert_eq!(
@@ -777,5 +726,151 @@ mod test {
                 address: 0
             }
         ]);
+    }
+
+    #[test]
+    fn test_complex_overlap_region() {
+        let mut mm = PhysMemoryMap::<10>::new();
+
+        mm.add_region(PhysMemoryEntry {
+            kind: PhysMemoryKind::Free,
+            start: 5,
+            end: 14,
+        })
+        .unwrap();
+        mm.add_region(PhysMemoryEntry {
+            kind: PhysMemoryKind::Reserved,
+            start: 0,
+            end: 6,
+        })
+        .unwrap();
+        mm.add_region(PhysMemoryEntry {
+            kind: PhysMemoryKind::Special,
+            start: 3,
+            end: 10,
+        })
+        .unwrap();
+        mm.add_region(PhysMemoryEntry {
+            kind: PhysMemoryKind::Bootloader,
+            start: 14,
+            end: 18,
+        })
+        .unwrap();
+
+        assert_eq!(mm.len, 5, "Array len didnt match! {:#?}", mm.borders);
+        assert_eq!(
+            mm.borders,
+            [
+                PhysMemoryBorder {
+                    kind: PhysMemoryKind::Reserved,
+                    address: 0
+                },
+                PhysMemoryBorder {
+                    kind: PhysMemoryKind::Special,
+                    address: 3
+                },
+                PhysMemoryBorder {
+                    kind: PhysMemoryKind::Free,
+                    address: 10
+                },
+                PhysMemoryBorder {
+                    kind: PhysMemoryKind::Bootloader,
+                    address: 14
+                },
+                PhysMemoryBorder {
+                    kind: PhysMemoryKind::None,
+                    address: 18
+                },
+                PhysMemoryBorder {
+                    kind: PhysMemoryKind::None,
+                    address: 0
+                },
+                PhysMemoryBorder {
+                    kind: PhysMemoryKind::None,
+                    address: 0
+                },
+                PhysMemoryBorder {
+                    kind: PhysMemoryKind::None,
+                    address: 0
+                },
+                PhysMemoryBorder {
+                    kind: PhysMemoryKind::None,
+                    address: 0
+                },
+                PhysMemoryBorder {
+                    kind: PhysMemoryKind::None,
+                    address: 0
+                },
+            ],
+            "{:#?}",
+            mm.borders
+        );
+    }
+
+    #[test]
+    fn test_find_s_index() {
+        let mut mm = PhysMemoryMap::<10>::new();
+
+        assert_eq!(mm.find_start_index(PhysMemoryKind::Free, 0, 10), Some(0));
+        assert_eq!(
+            mm.find_start_index(PhysMemoryKind::Reserved, 0, 10),
+            Some(0)
+        );
+
+        // 0    1                   2          3              4
+        // X    X                   $+1
+        // 2    3                   0          2              0
+        // |    |                   |          |              |
+        // +----+-------------------+          +--------------+
+        //    2           3                            2
+        //                            ^^^^^^^^^^
+        //                                1
+        mm.len = 5;
+        mm.borders[0] = PhysMemoryBorder {
+            kind: PhysMemoryKind::Reserved,
+            address: 0,
+        };
+        mm.borders[1] = PhysMemoryBorder {
+            kind: PhysMemoryKind::Special,
+            address: 3,
+        };
+        mm.borders[2] = PhysMemoryBorder {
+            kind: PhysMemoryKind::None,
+            address: 10,
+        };
+        mm.borders[3] = PhysMemoryBorder {
+            kind: PhysMemoryKind::Reserved,
+            address: 20,
+        };
+        mm.borders[4] = PhysMemoryBorder {
+            kind: PhysMemoryKind::None,
+            address: 30,
+        };
+
+        assert_eq!(mm.find_start_index(PhysMemoryKind::Free, 5, 14), Some(2));
+        assert_eq!(
+            mm.find_start_index(PhysMemoryKind::Bootloader, 3, 14),
+            Some(1)
+        );
+        assert_eq!(mm.find_start_index(PhysMemoryKind::Free, 0, 10), None);
+        assert_eq!(mm.find_start_index(PhysMemoryKind::Special, 3, 10), Some(1));
+        assert_eq!(mm.find_start_index(PhysMemoryKind::Free, 11, 20), Some(3));
+        assert_eq!(mm.find_start_index(PhysMemoryKind::Kernel, 11, 20), Some(3));
+        assert_eq!(mm.find_start_index(PhysMemoryKind::Kernel, 20, 25), Some(3));
+
+        mm.len = 2;
+        mm.borders[0] = PhysMemoryBorder {
+            kind: PhysMemoryKind::Free,
+            address: 0,
+        };
+        mm.borders[1] = PhysMemoryBorder {
+            kind: PhysMemoryKind::None,
+            address: 10,
+        };
+
+        assert_eq!(
+            mm.find_start_index(PhysMemoryKind::Reserved, 5, 14),
+            Some(1)
+        );
     }
 }

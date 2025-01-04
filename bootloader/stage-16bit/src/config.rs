@@ -5,7 +5,7 @@
 \___\_\_,_/\_,_/_//_/\__/\_,_/_/_/_/ /____/\___/\_,_/\_,_/\__/_/
     Part of the Quantum OS Project
 
-Copyright 2024 Gavin Kellam
+Copyright 2025 Gavin Kellam
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
 associated documentation files (the "Software"), to deal in the Software without restriction,
@@ -38,7 +38,6 @@ impl<'a> BootloaderConfig<'a> {
 
         for (first_option, second_option) in file
             .split('\n')
-            .into_iter()
             .filter(|line| !line.is_empty() && line.is_ascii())
             .filter_map(|line| {
                 let mut option_split = line.split('=');
