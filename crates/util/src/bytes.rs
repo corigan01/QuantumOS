@@ -23,7 +23,9 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use core::fmt::{Display, Formatter};
+use core::fmt::{Alignment, Display, Formatter};
+
+use crate::align_to;
 
 /// A type that represents a size in bytes, and can convert it to a human-readable string.
 ///
@@ -95,39 +97,40 @@ impl<T: Into<u64>> FromGib<T> for HumanBytes {}
 impl Display for HumanBytes {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         let (bytes, symb) = if self.0 >= Self::GIB_U64 {
-            (self.0 / Self::GIB_U64, "Gib")
+            (self.0 / Self::GIB_U64, " Gib")
         } else if self.0 >= Self::MIB_U64 {
-            (self.0 / Self::MIB_U64, "Mib")
+            (self.0 / Self::MIB_U64, " Mib")
         } else if self.0 >= Self::KIB_U64 {
-            (self.0 / Self::KIB_U64, "Kib")
+            (self.0 / Self::KIB_U64, " Kib")
         } else {
-            (self.0, "bytes")
+            (self.0, " Bytes")
         };
 
-        write!(f, "{} {}", bytes, symb)?;
+        let alignment_width = f.width().unwrap_or(0);
 
-        let Some(width) = f.width() else {
-            return Ok(());
-        };
+        match f.align() {
+            _ if alignment_width == 0 => write!(f, "{}{}", bytes, symb)?,
+            Some(Alignment::Right) | None => {
+                let al = alignment_width - symb.chars().count();
+                write!(f, "{:al$} {}", bytes, symb)?;
+            }
+            Some(Alignment::Left) => {
+                let al = alignment_width - bytes.ilog10() as usize;
+                write!(f, "{} {:al$}", bytes, symb)?;
+            }
+            Some(Alignment::Center) => {
+                let al_s = symb.chars().count();
+                let al_b = bytes.ilog10() as usize + 1;
 
-        let digit_chars = match bytes {
-            i if i < 10 => 1,
-            i if i < 100 => 2,
-            i if i < 1000 => 3,
-            i if i < 10000 => 4,
-            _ => 0,
-        };
-        let symb_chars = symb.chars().count();
+                let al_by = (alignment_width - al_s) / 2;
+                let mut al_sy = (alignment_width - al_b) / 2;
 
-        let total_chars = digit_chars + symb_chars + 1;
-        if total_chars > width {
-            return Ok(());
-        }
+                if (al_s % 2 != 0 || al_b % 2 != 0) && bytes >= 10 {
+                    al_sy += 1;
+                }
 
-        let padding = width - total_chars;
-
-        for _ in 0..padding {
-            write!(f, " ")?;
+                write!(f, "{:al_sy$}{:al_by$}", bytes, symb)?;
+            }
         }
 
         Ok(())
