@@ -431,7 +431,7 @@ pub mod memory {
         pub acpi_attributes: u32,
     }
 
-    impl mem::phys::MemoryDesc for MemoryEntry {
+    impl mem::phys::MemoryDesc for &MemoryEntry {
         fn memory_kind(&self) -> mem::phys::PhysMemoryKind {
             match self.region_type {
                 0 => mem::phys::PhysMemoryKind::None,

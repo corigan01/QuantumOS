@@ -32,4 +32,5 @@ pub enum MemoryError {
     ArrayTooSmall,
     EmptySegment,
     InvalidSize,
+    EntrySizeIsNegative,
 }

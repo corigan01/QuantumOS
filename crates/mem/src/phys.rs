@@ -49,9 +49,9 @@ struct PhysMemoryBorder {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct PhysMemoryEntry {
-    kind: PhysMemoryKind,
-    start: u64,
-    end: u64,
+    pub kind: PhysMemoryKind,
+    pub start: u64,
+    pub end: u64,
 }
 
 impl MemoryDesc for PhysMemoryEntry {
@@ -82,6 +82,42 @@ impl PhysMemoryEntry {
     }
 }
 
+pub struct PhysMemoryIter<'a, const N: usize> {
+    mm: &'a PhysMemoryMap<N>,
+    index: usize,
+}
+
+impl<'a, const N: usize> Iterator for PhysMemoryIter<'a, N> {
+    type Item = PhysMemoryEntry;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        loop {
+            if self.index >= self.mm.len {
+                break None;
+            }
+
+            let first = self.mm.borders.get(self.index)?;
+            let second = self.mm.borders.get(self.index + 1)?;
+
+            self.index += 1;
+
+            if first.kind == PhysMemoryKind::None {
+                continue;
+            }
+
+            break Some(PhysMemoryEntry {
+                kind: first.kind,
+                start: first.address,
+                end: if second.kind == PhysMemoryKind::None {
+                    second.address
+                } else {
+                    second.address - 1
+                },
+            });
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 pub struct PhysMemoryMap<const N: usize> {
     borders: [PhysMemoryBorder; N],
@@ -89,7 +125,7 @@ pub struct PhysMemoryMap<const N: usize> {
 }
 
 impl<const N: usize> PhysMemoryMap<N> {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             borders: [PhysMemoryBorder {
                 kind: PhysMemoryKind::None,
@@ -99,18 +135,31 @@ impl<const N: usize> PhysMemoryMap<N> {
         }
     }
 
+    pub fn iter(&self) -> PhysMemoryIter<'_, N> {
+        PhysMemoryIter { mm: self, index: 0 }
+    }
+
+    pub fn bytes_of(&self, kind: PhysMemoryKind) -> usize {
+        let mut bytes = 0;
+        self.iter()
+            .filter(|r| r.kind == kind)
+            .for_each(|region| bytes += region.end - region.start);
+
+        bytes as usize
+    }
+
     pub fn add_region(&mut self, region: impl MemoryDesc) -> Result<(), crate::MemoryError> {
         let kind = region.memory_kind();
         let start = region.memory_start();
         let end = region.memory_end();
 
-        if start >= end {
-            return Err(crate::MemoryError::InvalidSize);
-        }
-
         // If its a None, we don't need to do any work
         if kind == PhysMemoryKind::None {
             return Ok(());
+        }
+
+        if start >= end {
+            return Err(crate::MemoryError::EntrySizeIsNegative);
         }
 
         let Some(s_index) = self.borders[..self.len]
@@ -842,5 +891,45 @@ mod test {
         }
 
         assert_eq!(mm.len, 11);
+    }
+
+    #[test]
+    fn test_iter() {
+        let mut mm = PhysMemoryMap::<10>::new();
+
+        mm.add_region(PhysMemoryEntry {
+            kind: PhysMemoryKind::Free,
+            start: 0,
+            end: 10,
+        })
+        .unwrap();
+
+        mm.add_region(PhysMemoryEntry {
+            kind: PhysMemoryKind::Reserved,
+            start: 5,
+            end: 20,
+        })
+        .unwrap();
+
+        let mut iter = mm.iter();
+
+        assert_eq!(
+            iter.next(),
+            Some(PhysMemoryEntry {
+                kind: PhysMemoryKind::Free,
+                start: 0,
+                end: 4
+            })
+        );
+        assert_eq!(
+            iter.next(),
+            Some(PhysMemoryEntry {
+                kind: PhysMemoryKind::Reserved,
+                start: 5,
+                end: 20
+            })
+        );
+
+        assert_eq!(iter.next(), None);
     }
 }

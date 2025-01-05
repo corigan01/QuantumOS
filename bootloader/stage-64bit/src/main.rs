@@ -25,13 +25,16 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 #![no_main]
 #![no_std]
+#![feature(sync_unsafe_cell)]
 
 use bootloader::Stage32toStage64;
+use core::cell::SyncUnsafeCell;
 use elf::{
     Elf,
     tables::{ArchKind, SegmentKind},
 };
 use lldebug::{debug_ready, logln, make_debug};
+use mem::phys::PhysMemoryMap;
 use serial::{Serial, baud::SerialBaud};
 
 mod panic;
@@ -39,6 +42,8 @@ mod panic;
 make_debug! {
     "Serial": Option<Serial> = Serial::probe_first(SerialBaud::Baud115200);
 }
+
+static MEMORY_MAP: SyncUnsafeCell<PhysMemoryMap<64>> = SyncUnsafeCell::new(PhysMemoryMap::new());
 
 #[unsafe(no_mangle)]
 #[unsafe(link_section = ".start")]
@@ -51,7 +56,24 @@ extern "C" fn _start(stage_to_stage: u64) {
 fn main(stage_to_stage: &Stage32toStage64) {
     logln!("Stage64!");
     let (kernel_elf_ptr, kernel_elf_size) = stage_to_stage.kernel_ptr;
-    logln!("Memory Map {:#?}", stage_to_stage.memory_map);
+
+    unsafe {
+        let mm = &mut *MEMORY_MAP.get();
+
+        for memory_region in stage_to_stage.memory_map.iter() {
+            mm.add_region(memory_region)
+                .expect("Unable to build kernel's memory map!");
+        }
+
+        logln!(
+            "Free Memory : {} Mib",
+            mm.bytes_of(mem::phys::PhysMemoryKind::Free) / util::consts::MIB
+        );
+        logln!(
+            "Reserved Memory : {} Mib",
+            mm.bytes_of(mem::phys::PhysMemoryKind::Reserved) / util::consts::MIB
+        );
+    }
 
     let elf = Elf::new(unsafe {
         core::slice::from_raw_parts(kernel_elf_ptr as *const u8, kernel_elf_size as usize)

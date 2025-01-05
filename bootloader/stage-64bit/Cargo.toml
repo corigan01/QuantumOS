@@ -12,3 +12,4 @@ serial = {workspace = true}
 lldebug = {workspace = true}
 elf = {workspace = true}
 mem = {workspace = true}
+util = {workspace = true}
