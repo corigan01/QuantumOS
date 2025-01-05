@@ -101,31 +101,6 @@ impl<const N: usize> PhysMemoryMap<N> {
         }
     }
 
-    fn find_start_index(&self, kind: PhysMemoryKind, start: u64, end: u64) -> Option<usize> {
-        let mut ret = None;
-
-        for (i, bor) in self
-            .borders
-            .iter()
-            .enumerate()
-            .take_while(|(_, bor)| bor.address < end)
-            .filter(|(_, bor)| bor.kind <= kind)
-            .take_while(|(i, _)| *i <= self.len)
-        {
-            if bor.address == start && bor.kind <= kind {
-                return Some(i);
-            }
-
-            if bor.address < start && self.borders.get(i + 1).is_some_and(|a| a.address >= end) {
-                return Some(i + 1);
-            }
-
-            ret = Some(i);
-        }
-
-        ret
-    }
-
     pub fn add_region(&mut self, region: impl MemoryDesc) -> Result<(), crate::MemoryError> {
         let kind = region.memory_kind();
         let start = region.memory_start();
@@ -140,80 +115,118 @@ impl<const N: usize> PhysMemoryMap<N> {
             return Ok(());
         }
 
-        // Our structure looks like this:
-        // ```no_rust
-        //IDX:    0          1     2     3
-        //TYP:    F          U     F     N
-        //        |          |     |     |
-        //  F:    +----------+     +-----+
-        //  U:          F    +-----+  F
-        //                      U
-        // ```
-
         logln!(
-            "ADD (kind={:?}, start={}, end={}) -- {:#?}",
+            "START {:#?}\nADD (kind={:?}, start={}, end={})",
+            &self.borders[..self.len],
             kind,
             start,
             end,
-            &self.borders[..self.len]
         );
 
-        let Some(start_i) = self.find_start_index(kind, start, end) else {
-            // Region is being overriden by others with higher precedence.
+        let Some(s_index) = self.borders[..self.len]
+            .iter()
+            .enumerate()
+            .inspect(|i| logln!("T {i:?}"))
+            .take_while(|(_, bor)| bor.address < end)
+            .filter(|(i, bor)| {
+                (*i == 0 && bor.address >= start)
+                    || (*i != 0
+                        && self.borders[*i].address >= start
+                        && self.borders.get(i - 1).is_some_and(|b| b.address < start))
+            })
+            .inspect(|i| logln!("E {i:?}"))
+            .last()
+            .map(|(i, _)| i)
+            .and_then(|ideal| {
+                self.borders
+                    .iter()
+                    .enumerate()
+                    .skip(ideal)
+                    .take_while(|(_, bor)| bor.address < end)
+                    .inspect(|i| logln!("A {i:?}"))
+                    .find(|(_, bor)| bor.kind <= kind)
+                    .map(|(i, _)| i)
+            })
+            .or_else(|| {
+                if self.len == 0 {
+                    Some(0)
+                } else if self.borders[self.len - 1].address < start
+                    && self.borders[self.len - 1].kind < kind
+                {
+                    Some(self.len)
+                } else {
+                    None
+                }
+            })
+        else {
+            logln!("Region not possible!");
             return Ok(());
         };
 
-        let want_insert_start = PhysMemoryBorder {
-            kind,
-            address: self.borders[..self.len]
-                .get(start_i)
-                .map(|b| b.address.max(start))
-                .unwrap_or(start),
-        };
+        logln!("START = {}", s_index);
 
-        let mut larger_region = false;
-        let mut i = start_i;
-
-        while i < self.len {
-            if self.borders[i].kind > kind {
-                larger_region = true;
-                i += 1;
-                continue;
-            }
-
-            if larger_region {
-                larger_region = false;
-                self.borders[i].kind = kind;
-                i += 1;
-                continue;
-            }
-
-            logln!("REMOVE i={} bor={:?}", i, self.borders[i]);
-            self.remove_raw(i)?;
-        }
-
-        logln!("AFTER {:#?}", self.borders);
-
-        self.insert_raw(start_i, want_insert_start)?;
-
-        if let Some((end_index, old_end)) = self
-            .borders
-            .iter()
-            .enumerate()
-            .skip(start_i + 1)
-            .take(self.len)
-            .take_while(|(_, bor)| bor.address <= end)
-            .filter(|(_, bor)| bor.kind < kind)
-            .last()
-        {
-            self.insert_raw(end_index, PhysMemoryBorder {
-                kind: old_end.kind,
-                address: self.borders[..self.len]
-                    .get(end_index)
-                    .map(|b| b.address.min(end))
-                    .unwrap_or(end),
+        if s_index >= self.len {
+            logln!("1");
+            self.borders[s_index].kind = kind;
+            self.borders[s_index].address = start;
+            self.len += 1;
+        } else {
+            logln!("3");
+            self.insert_raw(s_index, PhysMemoryBorder {
+                kind,
+                address: start,
             })?;
         }
+
+        logln!("AFTER S {:#?}", &self.borders[..self.len]);
+
+        let mut should_insert = false;
+        let mut last_remove_kind = PhysMemoryKind::None;
+        let mut last_larger = false;
+        let mut i = s_index + 1;
+
+        while i < self.borders.len() {
+            if i >= self.len {
+                logln!("8 - {i}");
+                should_insert = true;
+                break;
+            }
+
+            if self.borders[i].address > end {
+                logln!("7 - {i}");
+                break;
+            }
+
+            if self.borders[i].kind > kind {
+                logln!("4 - {i}");
+                last_larger = true;
+                i += 1;
+                continue;
+            }
+
+            if last_larger {
+                logln!("5 - {i}");
+                self.borders[i].kind = kind;
+                should_insert = false;
+                i += 1;
+                continue;
+            }
+
+            logln!("6 - {i}");
+            last_remove_kind = self.borders[i].kind;
+            self.remove_raw(i)?;
+            should_insert = true;
+        }
+
+        if should_insert {
+            logln!("8");
+            self.insert_raw(i, PhysMemoryBorder {
+                kind: last_remove_kind,
+                address: end,
+            })?;
+        }
+
+        logln!("END {:#?}", &self.borders[..self.len]);
 
         Ok(())
     }
@@ -730,6 +743,7 @@ mod test {
 
     #[test]
     fn test_complex_overlap_region() {
+        lldebug::testing_stdout!();
         let mut mm = PhysMemoryMap::<10>::new();
 
         mm.add_region(PhysMemoryEntry {
@@ -804,73 +818,6 @@ mod test {
             ],
             "{:#?}",
             mm.borders
-        );
-    }
-
-    #[test]
-    fn test_find_s_index() {
-        let mut mm = PhysMemoryMap::<10>::new();
-
-        assert_eq!(mm.find_start_index(PhysMemoryKind::Free, 0, 10), Some(0));
-        assert_eq!(
-            mm.find_start_index(PhysMemoryKind::Reserved, 0, 10),
-            Some(0)
-        );
-
-        // 0    1                   2          3              4
-        // X    X                   $+1
-        // 2    3                   0          2              0
-        // |    |                   |          |              |
-        // +----+-------------------+          +--------------+
-        //    2           3                            2
-        //                            ^^^^^^^^^^
-        //                                1
-        mm.len = 5;
-        mm.borders[0] = PhysMemoryBorder {
-            kind: PhysMemoryKind::Reserved,
-            address: 0,
-        };
-        mm.borders[1] = PhysMemoryBorder {
-            kind: PhysMemoryKind::Special,
-            address: 3,
-        };
-        mm.borders[2] = PhysMemoryBorder {
-            kind: PhysMemoryKind::None,
-            address: 10,
-        };
-        mm.borders[3] = PhysMemoryBorder {
-            kind: PhysMemoryKind::Reserved,
-            address: 20,
-        };
-        mm.borders[4] = PhysMemoryBorder {
-            kind: PhysMemoryKind::None,
-            address: 30,
-        };
-
-        assert_eq!(mm.find_start_index(PhysMemoryKind::Free, 5, 14), Some(2));
-        assert_eq!(
-            mm.find_start_index(PhysMemoryKind::Bootloader, 3, 14),
-            Some(1)
-        );
-        assert_eq!(mm.find_start_index(PhysMemoryKind::Free, 0, 10), None);
-        assert_eq!(mm.find_start_index(PhysMemoryKind::Special, 3, 10), Some(1));
-        assert_eq!(mm.find_start_index(PhysMemoryKind::Free, 11, 20), Some(3));
-        assert_eq!(mm.find_start_index(PhysMemoryKind::Kernel, 11, 20), Some(3));
-        assert_eq!(mm.find_start_index(PhysMemoryKind::Kernel, 20, 25), Some(3));
-
-        mm.len = 2;
-        mm.borders[0] = PhysMemoryBorder {
-            kind: PhysMemoryKind::Free,
-            address: 0,
-        };
-        mm.borders[1] = PhysMemoryBorder {
-            kind: PhysMemoryKind::None,
-            address: 10,
-        };
-
-        assert_eq!(
-            mm.find_start_index(PhysMemoryKind::Reserved, 5, 14),
-            Some(1)
         );
     }
 }
