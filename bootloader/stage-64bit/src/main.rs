@@ -39,7 +39,7 @@ use serial::{Serial, baud::SerialBaud};
 use util::{
     align_to,
     bytes::HumanBytes,
-    consts::{MIB, PAGE_4K},
+    consts::{MIB, PAGE_2M, PAGE_4K},
 };
 
 mod paging;
@@ -144,6 +144,15 @@ fn build_memory_map(s2s: &Stage32toStage64, kernel_exe_len: usize) {
             })
             .expect("Unable to find region for kernel pages");
         mm.add_region(kernels_pages).unwrap();
+
+        let kernels_stack_pages = mm
+            .find_continuous_of(PhysMemoryKind::Free, PAGE_2M, PAGE_4K, 1 * MIB as u64)
+            .map(|p| PhysMemoryEntry {
+                kind: PhysMemoryKind::Kernel,
+                ..p
+            })
+            .expect("Unable to find region for kernel's stack pages");
+        mm.add_region(kernels_stack_pages).unwrap();
 
         logln!("{}", mm);
     }
