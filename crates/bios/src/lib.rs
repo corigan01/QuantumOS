@@ -431,6 +431,25 @@ pub mod memory {
         pub acpi_attributes: u32,
     }
 
+    impl mem::phys::MemoryDesc for MemoryEntry {
+        fn memory_kind(&self) -> mem::phys::PhysMemoryKind {
+            match self.region_type {
+                0 => mem::phys::PhysMemoryKind::None,
+                1 => mem::phys::PhysMemoryKind::Free,
+                2 => mem::phys::PhysMemoryKind::Reserved,
+                _ => mem::phys::PhysMemoryKind::Broken,
+            }
+        }
+
+        fn memory_start(&self) -> u64 {
+            self.base_address
+        }
+
+        fn memory_end(&self) -> u64 {
+            self.base_address + self.region_length
+        }
+    }
+
     impl MemoryEntry {
         pub const REGION_RESERVED: u32 = 0x2;
         pub const REGION_FREE: u32 = 0x1;

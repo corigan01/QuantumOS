@@ -47,6 +47,7 @@ hw = { path = "crates/hw" }
 hw-macro = { path = "crates/hw-macro" }
 util = { path = "crates/util" }
 elf = { path = "crates/elf" }
+mem = { path = "crates/mem" }
 
 [profile.stage-bootsector]
 inherits = "release"

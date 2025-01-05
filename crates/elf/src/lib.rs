@@ -25,8 +25,6 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 #![no_std]
 
-use lldebug::logln;
-
 pub mod tables;
 
 #[derive(Clone, Copy, Debug)]

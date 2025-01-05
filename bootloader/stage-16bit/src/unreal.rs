@@ -28,7 +28,7 @@ use core::{arch::asm, mem::size_of};
 use arch::{
     interrupts::disable_interrupts,
     registers::{cr0, Segment, SegmentRegisters},
-    stack::{align_stack, push_stack},
+    stack::push_stack,
 };
 use bootloader::Stage16toStage32;
 

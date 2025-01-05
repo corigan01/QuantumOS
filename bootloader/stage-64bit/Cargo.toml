@@ -11,3 +11,4 @@ bootloader = {workspace = true}
 serial = {workspace = true}
 lldebug = {workspace = true}
 elf = {workspace = true}
+mem = {workspace = true}
