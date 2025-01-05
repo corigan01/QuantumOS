@@ -25,8 +25,6 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 use core::fmt::{Alignment, Display, Formatter};
 
-use crate::align_to;
-
 /// A type that represents a size in bytes, and can convert it to a human-readable string.
 ///
 /// # Example

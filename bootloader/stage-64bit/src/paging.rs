@@ -1,11 +1,11 @@
 /*
-  ____                 __               __   _ __
- / __ \__ _____ ____  / /___ ____ _    / /  (_) /
-/ /_/ / // / _ `/ _ \/ __/ // /  ' \  / /__/ / _ \
-\___\_\_,_/\_,_/_//_/\__/\_,_/_/_/_/ /____/_/_.__/
+  ____                 __               __                __
+ / __ \__ _____ ____  / /___ ____ _    / /  ___  ___ ____/ /__ ____
+/ /_/ / // / _ `/ _ \/ __/ // /  ' \  / /__/ _ \/ _ `/ _  / -_) __/
+\___\_\_,_/\_,_/_//_/\__/\_,_/_/_/_/ /____/\___/\_,_/\_,_/\__/_/
     Part of the Quantum OS Project
 
-Copyright 2024 Gavin Kellam
+Copyright 2025 Gavin Kellam
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
 associated documentation files (the "Software"), to deal in the Software without restriction,
@@ -22,11 +22,3 @@ NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FO
 DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
-
-pub const KIB: usize = 1024;
-pub const MIB: usize = 1024 * KIB;
-pub const GIB: usize = 1024 * MIB;
-
-pub const PAGE_4K: usize = 4 * KIB;
-pub const PAGE_2M: usize = 2 * MIB;
-pub const PAGE_1G: usize = 1 * GIB;

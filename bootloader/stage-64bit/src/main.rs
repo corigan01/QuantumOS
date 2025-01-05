@@ -5,7 +5,7 @@
 \___\_\_,_/\_,_/_//_/\__/\_,_/_/_/_/ /____/\___/\_,_/\_,_/\__/_/
     Part of the Quantum OS Project
 
-Copyright 2024 Gavin Kellam
+Copyright 2025 Gavin Kellam
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
 associated documentation files (the "Software"), to deal in the Software without restriction,
@@ -34,9 +34,15 @@ use elf::{
     tables::{ArchKind, SegmentKind},
 };
 use lldebug::{debug_ready, logln, make_debug};
-use mem::phys::{PhysMemoryEntry, PhysMemoryMap};
+use mem::phys::{PhysMemoryEntry, PhysMemoryKind, PhysMemoryMap};
 use serial::{Serial, baud::SerialBaud};
+use util::{
+    align_to,
+    bytes::HumanBytes,
+    consts::{MIB, PAGE_4K},
+};
 
+mod paging;
 mod panic;
 
 make_debug! {
@@ -57,45 +63,16 @@ fn main(stage_to_stage: &Stage32toStage64) {
     logln!("Stage64!");
     let (kernel_elf_ptr, kernel_elf_size) = stage_to_stage.kernel_ptr;
 
-    unsafe {
-        let mm = &mut *MEMORY_MAP.get();
-
-        for memory_region in stage_to_stage.memory_map.iter() {
-            mm.add_region(memory_region)
-                .expect("Unable to build kernel's memory map!");
-        }
-
-        logln!(
-            "Free Memory : {} Mib",
-            mm.bytes_of(mem::phys::PhysMemoryKind::Free) / util::consts::MIB
-        );
-        logln!(
-            "Reserved Memory : {} Mib",
-            mm.bytes_of(mem::phys::PhysMemoryKind::Reserved) / util::consts::MIB
-        );
-
-        let (s32_start, s32_len) = stage_to_stage.stage32_ptr;
-        mm.add_region(PhysMemoryEntry {
-            kind: mem::phys::PhysMemoryKind::Bootloader,
-            start: s32_start,
-            end: s32_start + s32_len,
-        })
-        .expect("Unable to add stage32 to memory map");
-
-        let (s64_start, s64_len) = stage_to_stage.stage64_ptr;
-        mm.add_region(PhysMemoryEntry {
-            kind: mem::phys::PhysMemoryKind::Bootloader,
-            start: s64_start,
-            end: s64_start + s64_len,
-        })
-        .expect("Unable to add stage64 to memory map");
-
-        logln!("{}", mm);
-    }
-
     let elf = Elf::new(unsafe {
         core::slice::from_raw_parts(kernel_elf_ptr as *const u8, kernel_elf_size as usize)
     });
+
+    let kernel_exe_len = elf
+        .exe_size()
+        .expect("Unable to determine the size of the Kernel's exe!");
+
+    logln!("Kernel Size: {}", HumanBytes::from(kernel_exe_len));
+    build_memory_map(stage_to_stage, kernel_exe_len);
 
     let elf_header = match elf.header() {
         Ok(elf::tables::ElfHeader::Header64(h)) if h.arch() == ArchKind::X64 && h.is_le() => h,
@@ -110,4 +87,56 @@ fn main(stage_to_stage: &Stage32toStage64) {
         None
     })
     .unwrap();
+}
+
+fn build_memory_map(s2s: &Stage32toStage64, kernel_exe_len: usize) {
+    unsafe {
+        let mm = &mut *MEMORY_MAP.get();
+
+        for memory_region in s2s.memory_map.iter() {
+            mm.add_region(memory_region)
+                .expect("Unable to build kernel's memory map!");
+        }
+
+        logln!(
+            "Free Memory : {} Mib",
+            mm.bytes_of(PhysMemoryKind::Free) / MIB
+        );
+        logln!(
+            "Reserved Memory : {} Mib",
+            mm.bytes_of(PhysMemoryKind::Reserved) / MIB
+        );
+
+        let (s32_start, s32_len) = s2s.stage32_ptr;
+        mm.add_region(PhysMemoryEntry {
+            kind: PhysMemoryKind::Bootloader,
+            start: s32_start,
+            end: s32_start + s32_len,
+        })
+        .expect("Unable to add stage32 to memory map");
+
+        let (s64_start, s64_len) = s2s.stage64_ptr;
+        mm.add_region(PhysMemoryEntry {
+            kind: PhysMemoryKind::Bootloader,
+            start: s64_start,
+            end: s64_start + s64_len,
+        })
+        .expect("Unable to add stage64 to memory map");
+
+        let kernels_pages = mm
+            .find_continuous_of(
+                PhysMemoryKind::Free,
+                align_to(kernel_exe_len as u64, PAGE_4K) as usize,
+                PAGE_4K,
+                1 * MIB as u64,
+            )
+            .map(|p| PhysMemoryEntry {
+                kind: PhysMemoryKind::Kernel,
+                ..p
+            })
+            .expect("Unable to find region for kernel pages");
+        mm.add_region(kernels_pages).unwrap();
+
+        logln!("{}", mm);
+    }
 }

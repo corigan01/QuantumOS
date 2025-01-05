@@ -96,6 +96,36 @@ impl<'a> Elf<'a> {
         self.entry_point()
     }
 
+    pub fn exe_size(&self) -> Result<usize> {
+        let mut lowest_addr = u64::MAX;
+        let mut highest_addr = 0;
+
+        match self.program_headers()? {
+            tables::ElfProgramHeaders::ProgHeader64(header) => header
+                .iter()
+                .map(|h| tables::ElfGenProgramHeader::from(h))
+                .filter(|h| h.segment_kind() == tables::SegmentKind::Load)
+                .for_each(|h| {
+                    lowest_addr = lowest_addr.min(h.expected_vaddr());
+                    highest_addr = highest_addr.max(h.expected_vaddr() + h.in_mem_size() as u64);
+                }),
+            tables::ElfProgramHeaders::ProgHeader32(header) => header
+                .iter()
+                .map(|h| tables::ElfGenProgramHeader::from(h))
+                .filter(|h| h.segment_kind() == tables::SegmentKind::Load)
+                .for_each(|h| {
+                    lowest_addr = lowest_addr.min(h.expected_vaddr());
+                    highest_addr = highest_addr.max(h.expected_vaddr() + h.in_mem_size() as u64);
+                }),
+        }
+
+        if lowest_addr >= highest_addr {
+            Ok(0)
+        } else {
+            Ok((highest_addr - lowest_addr) as usize)
+        }
+    }
+
     pub fn entry_point(&self) -> Result<*const u8> {
         Ok(match self.header()? {
             tables::ElfHeader::Header64(h) => h.entry_point() as *const u8,
