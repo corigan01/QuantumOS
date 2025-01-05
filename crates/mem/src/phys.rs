@@ -23,6 +23,8 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use util::bytes::HumanBytes;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum PhysMemoryKind {
     None,
@@ -355,6 +357,27 @@ impl<const N: usize> PhysMemoryMap<N> {
         self.borders[self.len].address = 0;
 
         Ok(())
+    }
+}
+
+impl<const N: usize> core::fmt::Display for PhysMemoryMap<N> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str(
+            "|     Kind     |       Start      |        End       |        Size       |\n",
+        )?;
+        f.write_str(
+            "+--------------+------------------+------------------+-------------------+\n",
+        )?;
+        for region in self.iter() {
+            f.write_fmt(format_args!(
+                "| {:?}\t | {:#016x} | {:#016x} | {:>16} |\n",
+                region.kind,
+                region.start,
+                region.end,
+                HumanBytes::from(region.end - region.start)
+            ))?;
+        }
+        f.write_str("+--------------+------------------+------------------+-------------------+\n")
     }
 }
 

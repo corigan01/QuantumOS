@@ -90,7 +90,7 @@ fn main(stage_to_stage: &Stage32toStage64) {
         })
         .expect("Unable to add stage64 to memory map");
 
-        mm.iter().for_each(|region| logln!("{:x?}", region));
+        logln!("{}", mm);
     }
 
     let elf = Elf::new(unsafe {
