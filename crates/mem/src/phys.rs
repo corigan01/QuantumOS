@@ -23,8 +23,6 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use lldebug::logln;
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum PhysMemoryKind {
     None,
@@ -115,18 +113,9 @@ impl<const N: usize> PhysMemoryMap<N> {
             return Ok(());
         }
 
-        logln!(
-            "START {:#?}\nADD (kind={:?}, start={}, end={})",
-            &self.borders[..self.len],
-            kind,
-            start,
-            end,
-        );
-
         let Some(s_index) = self.borders[..self.len]
             .iter()
             .enumerate()
-            .inspect(|i| logln!("T {i:?}"))
             .take_while(|(_, bor)| bor.address < end)
             .filter(|(i, bor)| {
                 (*i == 0 && bor.address >= start)
@@ -134,7 +123,6 @@ impl<const N: usize> PhysMemoryMap<N> {
                         && self.borders[*i].address >= start
                         && self.borders.get(i - 1).is_some_and(|b| b.address < start))
             })
-            .inspect(|i| logln!("E {i:?}"))
             .last()
             .map(|(i, _)| i)
             .and_then(|ideal| {
@@ -143,7 +131,6 @@ impl<const N: usize> PhysMemoryMap<N> {
                     .enumerate()
                     .skip(ideal)
                     .take_while(|(_, bor)| bor.address < end)
-                    .inspect(|i| logln!("A {i:?}"))
                     .find(|(_, bor)| bor.kind <= kind)
                     .map(|(i, _)| i)
             })
@@ -159,26 +146,19 @@ impl<const N: usize> PhysMemoryMap<N> {
                 }
             })
         else {
-            logln!("Region not possible!");
             return Ok(());
         };
 
-        logln!("START = {}", s_index);
-
         if s_index >= self.len {
-            logln!("1");
             self.borders[s_index].kind = kind;
             self.borders[s_index].address = start;
             self.len += 1;
         } else {
-            logln!("3");
             self.insert_raw(s_index, PhysMemoryBorder {
                 kind,
                 address: start,
             })?;
         }
-
-        logln!("AFTER S {:#?}", &self.borders[..self.len]);
 
         let mut should_insert = false;
         let mut last_remove_kind = PhysMemoryKind::None;
@@ -187,46 +167,38 @@ impl<const N: usize> PhysMemoryMap<N> {
 
         while i < self.borders.len() {
             if i >= self.len {
-                logln!("8 - {i}");
                 should_insert = true;
                 break;
             }
 
             if self.borders[i].address > end {
-                logln!("7 - {i}");
                 break;
             }
 
             if self.borders[i].kind > kind {
-                logln!("4 - {i}");
                 last_larger = true;
                 i += 1;
                 continue;
             }
 
             if last_larger {
-                logln!("5 - {i}");
                 self.borders[i].kind = kind;
                 should_insert = false;
                 i += 1;
                 continue;
             }
 
-            logln!("6 - {i}");
             last_remove_kind = self.borders[i].kind;
             self.remove_raw(i)?;
             should_insert = true;
         }
 
         if should_insert {
-            logln!("8");
             self.insert_raw(i, PhysMemoryBorder {
                 kind: last_remove_kind,
                 address: end,
             })?;
         }
-
-        logln!("END {:#?}", &self.borders[..self.len]);
 
         Ok(())
     }
@@ -236,13 +208,11 @@ impl<const N: usize> PhysMemoryMap<N> {
         index: usize,
         border: PhysMemoryBorder,
     ) -> Result<(), crate::MemoryError> {
-        logln!("INSERT: idx={index} bor={border:?}");
         if self.len == self.borders.len() {
             return Err(crate::MemoryError::ArrayTooSmall);
         }
 
         if index > self.len {
-            logln!("1: invalid -- {index} <- {border:?}");
             return Err(crate::MemoryError::InvalidSize);
         }
 
@@ -264,7 +234,6 @@ impl<const N: usize> PhysMemoryMap<N> {
 
     fn remove_raw(&mut self, index: usize) -> Result<(), crate::MemoryError> {
         if index >= self.len {
-            logln!("2: invalid");
             return Err(crate::MemoryError::InvalidSize);
         }
 
@@ -695,7 +664,6 @@ mod test {
 
     #[test]
     fn test_add_two_region_middle_overlap_change_last() {
-        lldebug::testing_stdout!();
         let mut mm = PhysMemoryMap::<4>::new();
 
         assert_eq!(
@@ -770,6 +738,12 @@ mod test {
             end: 18,
         })
         .unwrap();
+        mm.add_region(PhysMemoryEntry {
+            kind: PhysMemoryKind::Free,
+            start: 14,
+            end: 18,
+        })
+        .unwrap();
 
         assert_eq!(mm.len, 5, "Array len didnt match! {:#?}", mm.borders);
         assert_eq!(
@@ -819,5 +793,54 @@ mod test {
             "{:#?}",
             mm.borders
         );
+    }
+
+    #[test]
+    fn test_real_world() {
+        let real_mem_map = [
+            PhysMemoryEntry {
+                kind: PhysMemoryKind::Free,
+                start: 0,
+                end: 654336,
+            },
+            PhysMemoryEntry {
+                kind: PhysMemoryKind::Reserved,
+                start: 654336,
+                end: 654336 + 1024,
+            },
+            PhysMemoryEntry {
+                kind: PhysMemoryKind::Reserved,
+                start: 983040,
+                end: 983040 + 65536,
+            },
+            PhysMemoryEntry {
+                kind: PhysMemoryKind::Free,
+                start: 1048576,
+                end: 1048576 + 267255808,
+            },
+            PhysMemoryEntry {
+                kind: PhysMemoryKind::Reserved,
+                start: 268304384,
+                end: 268304384 + 131072,
+            },
+            PhysMemoryEntry {
+                kind: PhysMemoryKind::Reserved,
+                start: 4294705152,
+                end: 4294705152 + 262144,
+            },
+            PhysMemoryEntry {
+                kind: PhysMemoryKind::Reserved,
+                start: 1086626725888,
+                end: 1086626725888 + 12884901888,
+            },
+        ];
+
+        let mut mm = PhysMemoryMap::<20>::new();
+
+        for entry in real_mem_map.iter() {
+            mm.add_region(entry.clone()).unwrap();
+        }
+
+        assert_eq!(mm.len, 11);
     }
 }
