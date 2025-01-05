@@ -110,6 +110,7 @@ fn main(stage_to_stage: &Stage16toStage32) {
     unsafe {
         let s2s = &mut *S2S.get();
 
+        s2s.bootloader_stack_ptr = stage_to_stage.bootloader_stack_ptr;
         s2s.stage32_ptr = stage_to_stage.stage32_ptr;
         s2s.stage64_ptr = stage_to_stage.stage64_ptr;
         s2s.kernel_ptr = stage_to_stage.kernel_ptr;

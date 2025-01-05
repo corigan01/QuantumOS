@@ -40,6 +40,7 @@ pub const MAX_MEMORY_MAP_ENTRIES: usize = 16;
 /// Used for sending data between these stages.
 #[repr(C)]
 pub struct Stage16toStage32 {
+    pub bootloader_stack_ptr: (u64, u64),
     pub stage32_ptr: (u64, u64),
     pub stage64_ptr: (u64, u64),
     pub kernel_ptr: (u64, u64),
@@ -51,6 +52,7 @@ pub struct Stage16toStage32 {
 /// Used for sending data between these stages.
 #[repr(C)]
 pub struct Stage32toStage64 {
+    pub bootloader_stack_ptr: (u64, u64),
     pub stage32_ptr: (u64, u64),
     pub stage64_ptr: (u64, u64),
     pub kernel_ptr: (u64, u64),

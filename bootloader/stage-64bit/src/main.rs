@@ -123,6 +123,14 @@ fn build_memory_map(s2s: &Stage32toStage64, kernel_exe_len: usize) {
         })
         .expect("Unable to add stage64 to memory map");
 
+        let (stack_start, stack_len) = s2s.bootloader_stack_ptr;
+        mm.add_region(PhysMemoryEntry {
+            kind: PhysMemoryKind::Bootloader,
+            start: stack_start,
+            end: stack_start + stack_len,
+        })
+        .expect("Unable to add bootloader's stack to memory map");
+
         let kernels_pages = mm
             .find_continuous_of(
                 PhysMemoryKind::Free,

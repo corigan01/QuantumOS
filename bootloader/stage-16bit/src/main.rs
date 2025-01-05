@@ -207,6 +207,7 @@ fn main(disk_id: u16) -> ! {
 
     closest_video_id.set().expect("Unable to set video mode");
 
+    stage_to_stage.bootloader_stack_ptr = (stack_region.as_ptr() as u64, 1024 * 1024);
     stage_to_stage.stage32_ptr = (
         bootloader32_entrypoint as u64,
         bootloader32_buffer.len() as u64,
