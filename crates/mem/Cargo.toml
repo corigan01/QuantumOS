@@ -8,3 +8,4 @@ documentation.workspace = true
 
 [dependencies]
 lldebug = {workspace = true}
+util = {workspace = true}

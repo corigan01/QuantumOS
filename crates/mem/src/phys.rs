@@ -108,11 +108,7 @@ impl<'a, const N: usize> Iterator for PhysMemoryIter<'a, N> {
             break Some(PhysMemoryEntry {
                 kind: first.kind,
                 start: first.address,
-                end: if second.kind == PhysMemoryKind::None {
-                    second.address
-                } else {
-                    second.address - 1
-                },
+                end: second.address,
             });
         }
     }
@@ -150,12 +146,26 @@ impl<const N: usize> PhysMemoryMap<N> {
 
     pub fn find_continuous_of(
         &mut self,
-        kind: PhysMemoryKind,
+        from_kind: PhysMemoryKind,
         bytes: usize,
         alignment: usize,
-        min_address: usize,
+        min_address: u64,
     ) -> Option<PhysMemoryEntry> {
-        todo!()
+        self.iter()
+            .filter(|region| region.kind == from_kind)
+            .find_map(|region| {
+                let new_start = util::align_to(region.start.max(min_address), alignment);
+
+                if region.end > new_start && (region.end - new_start) >= bytes as u64 {
+                    Some(PhysMemoryEntry {
+                        kind: region.kind,
+                        start: new_start,
+                        end: new_start + bytes as u64,
+                    })
+                } else {
+                    None
+                }
+            })
     }
 
     pub fn add_region(&mut self, region: impl MemoryDesc) -> Result<(), crate::MemoryError> {
@@ -928,7 +938,7 @@ mod test {
             Some(PhysMemoryEntry {
                 kind: PhysMemoryKind::Free,
                 start: 0,
-                end: 4
+                end: 5
             })
         );
         assert_eq!(
@@ -941,5 +951,41 @@ mod test {
         );
 
         assert_eq!(iter.next(), None);
+    }
+
+    #[test]
+    fn test_find_cont_of() {
+        let mut mm = PhysMemoryMap::<10>::new();
+
+        mm.add_region(PhysMemoryEntry {
+            kind: PhysMemoryKind::Free,
+            start: 1,
+            end: 64,
+        })
+        .unwrap();
+
+        mm.add_region(PhysMemoryEntry {
+            kind: PhysMemoryKind::Reserved,
+            start: 32,
+            end: 64,
+        })
+        .unwrap();
+
+        assert_eq!(
+            mm.find_continuous_of(PhysMemoryKind::Free, 16, 8, 0),
+            Some(PhysMemoryEntry {
+                kind: PhysMemoryKind::Free,
+                start: 8,
+                end: 24
+            })
+        );
+        assert_eq!(
+            mm.find_continuous_of(PhysMemoryKind::Free, 8, 8, 10),
+            Some(PhysMemoryEntry {
+                kind: PhysMemoryKind::Free,
+                start: 16,
+                end: 24
+            })
+        );
     }
 }

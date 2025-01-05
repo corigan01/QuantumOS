@@ -26,3 +26,30 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #![no_std]
 
 pub mod consts;
+
+/// Align `addr` to `alignment`
+///
+/// Pushes `addr` up until it reaches an address that satisfies `alignment`.
+pub const fn align_to(addr: u64, alignment: usize) -> u64 {
+    let rmd = addr % (alignment as u64);
+
+    if rmd != 0 {
+        ((alignment as u64) - rmd) + addr
+    } else {
+        addr
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_align_to() {
+        assert_eq!(align_to(10, 8), 16);
+        assert_eq!(align_to(16, 8), 16);
+        assert_eq!(align_to(0, 8), 0);
+        assert_eq!(align_to(64, 8), 64);
+        assert_eq!(align_to(63, 8), 64);
+    }
+}
