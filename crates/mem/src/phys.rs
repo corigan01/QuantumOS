@@ -68,6 +68,20 @@ impl MemoryDesc for PhysMemoryEntry {
     }
 }
 
+impl MemoryDesc for &PhysMemoryEntry {
+    fn memory_kind(&self) -> PhysMemoryKind {
+        self.kind
+    }
+
+    fn memory_start(&self) -> u64 {
+        self.start
+    }
+
+    fn memory_end(&self) -> u64 {
+        self.end
+    }
+}
+
 impl PhysMemoryEntry {
     pub const fn empty() -> Self {
         Self {
@@ -185,9 +199,8 @@ impl<const N: usize> PhysMemoryMap<N> {
         let Some(s_index) = self.borders[..self.len]
             .iter()
             .enumerate()
-            .take_while(|(_, bor)| bor.address < end)
             .filter(|(i, bor)| {
-                (*i == 0 && bor.address >= start)
+                (*i == 0 && bor.address >= start && bor.address < end)
                     || (*i != 0
                         && self.borders[*i].address >= start
                         && self.borders.get(i - 1).is_some_and(|b| b.address < start))
@@ -199,7 +212,14 @@ impl<const N: usize> PhysMemoryMap<N> {
                     .iter()
                     .enumerate()
                     .skip(ideal)
-                    .take_while(|(_, bor)| bor.address < end)
+                    .take_while(|(i, bor)| {
+                        bor.address < end
+                            || (*i != 0
+                                && self
+                                    .borders
+                                    .get(i - 1)
+                                    .is_some_and(|b| b.address < start && b.kind < kind))
+                    })
                     .find(|(_, bor)| bor.kind <= kind)
                     .map(|(i, _)| i)
             })
@@ -229,8 +249,20 @@ impl<const N: usize> PhysMemoryMap<N> {
             })?;
         }
 
-        let mut should_insert = false;
-        let mut last_remove_kind = PhysMemoryKind::None;
+        let (mut should_insert, mut last_remove_kind) = if s_index > 0 {
+            self.borders
+                .get(s_index - 1)
+                .and_then(|bor| {
+                    if bor.kind < kind {
+                        Some((true, bor.kind))
+                    } else {
+                        None
+                    }
+                })
+                .unwrap_or((false, PhysMemoryKind::None))
+        } else {
+            (false, PhysMemoryKind::None)
+        };
         let mut last_larger = false;
         let mut i = s_index + 1;
 
@@ -987,5 +1019,133 @@ mod test {
                 end: 24
             })
         );
+    }
+
+    #[test]
+    fn test_real_add_ss_regions_to_mm() {
+        let mut mm = PhysMemoryMap::<16>::new();
+
+        const EXAMPLE_MM: [PhysMemoryEntry; 7] = [
+            PhysMemoryEntry {
+                kind: PhysMemoryKind::Free,
+                start: 0,
+                end: 654336,
+            },
+            PhysMemoryEntry {
+                kind: PhysMemoryKind::Reserved,
+                start: 654336,
+                end: 655360,
+            },
+            PhysMemoryEntry {
+                kind: PhysMemoryKind::Reserved,
+                start: 983040,
+                end: 1048576,
+            },
+            PhysMemoryEntry {
+                kind: PhysMemoryKind::Free,
+                start: 1048576,
+                end: 268304384,
+            },
+            PhysMemoryEntry {
+                kind: PhysMemoryKind::Reserved,
+                start: 268304384,
+                end: 268435456,
+            },
+            PhysMemoryEntry {
+                kind: PhysMemoryKind::Reserved,
+                start: 4294705152,
+                end: 4294967296,
+            },
+            PhysMemoryEntry {
+                kind: PhysMemoryKind::Reserved,
+                start: 1086626725888,
+                end: 1099511627776,
+            },
+        ];
+
+        for example in EXAMPLE_MM.iter() {
+            mm.add_region(example).unwrap();
+        }
+
+        mm.add_region(PhysMemoryEntry {
+            kind: PhysMemoryKind::Bootloader,
+            start: 2097152,
+            end: 2124304,
+        })
+        .unwrap();
+        mm.add_region(PhysMemoryEntry {
+            kind: PhysMemoryKind::Bootloader,
+            start: 4194304,
+            end: 4218432,
+        })
+        .unwrap();
+
+        assert_eq!(mm.len, 15, "{:#?}", mm.borders);
+        assert_eq!(mm.borders, [
+            PhysMemoryBorder {
+                kind: PhysMemoryKind::Free,
+                address: 0,
+            },
+            PhysMemoryBorder {
+                kind: PhysMemoryKind::Reserved,
+                address: 654336,
+            },
+            PhysMemoryBorder {
+                kind: PhysMemoryKind::None,
+                address: 655360,
+            },
+            PhysMemoryBorder {
+                kind: PhysMemoryKind::Reserved,
+                address: 983040,
+            },
+            PhysMemoryBorder {
+                kind: PhysMemoryKind::Free,
+                address: 1048576,
+            },
+            PhysMemoryBorder {
+                kind: PhysMemoryKind::Bootloader,
+                address: 2097152,
+            },
+            PhysMemoryBorder {
+                kind: PhysMemoryKind::Free,
+                address: 2124304,
+            },
+            PhysMemoryBorder {
+                kind: PhysMemoryKind::Bootloader,
+                address: 0x400000,
+            },
+            PhysMemoryBorder {
+                kind: PhysMemoryKind::Free,
+                address: 0x405e40,
+            },
+            PhysMemoryBorder {
+                kind: PhysMemoryKind::Reserved,
+                address: 268304384,
+            },
+            PhysMemoryBorder {
+                kind: PhysMemoryKind::None,
+                address: 268435456,
+            },
+            PhysMemoryBorder {
+                kind: PhysMemoryKind::Reserved,
+                address: 4294705152,
+            },
+            PhysMemoryBorder {
+                kind: PhysMemoryKind::None,
+                address: 4294967296,
+            },
+            PhysMemoryBorder {
+                kind: PhysMemoryKind::Reserved,
+                address: 1086626725888,
+            },
+            PhysMemoryBorder {
+                kind: PhysMemoryKind::None,
+                address: 1099511627776,
+            },
+            PhysMemoryBorder {
+                kind: PhysMemoryKind::None,
+                address: 0,
+            },
+        ],);
     }
 }

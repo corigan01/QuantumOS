@@ -34,7 +34,7 @@ use elf::{
     tables::{ArchKind, SegmentKind},
 };
 use lldebug::{debug_ready, logln, make_debug};
-use mem::phys::PhysMemoryMap;
+use mem::phys::{PhysMemoryEntry, PhysMemoryMap};
 use serial::{Serial, baud::SerialBaud};
 
 mod panic;
@@ -73,6 +73,24 @@ fn main(stage_to_stage: &Stage32toStage64) {
             "Reserved Memory : {} Mib",
             mm.bytes_of(mem::phys::PhysMemoryKind::Reserved) / util::consts::MIB
         );
+
+        let (s32_start, s32_len) = stage_to_stage.stage32_ptr;
+        mm.add_region(PhysMemoryEntry {
+            kind: mem::phys::PhysMemoryKind::Bootloader,
+            start: s32_start,
+            end: s32_start + s32_len,
+        })
+        .expect("Unable to add stage32 to memory map");
+
+        let (s64_start, s64_len) = stage_to_stage.stage64_ptr;
+        mm.add_region(PhysMemoryEntry {
+            kind: mem::phys::PhysMemoryKind::Bootloader,
+            start: s64_start,
+            end: s64_start + s64_len,
+        })
+        .expect("Unable to add stage64 to memory map");
+
+        mm.iter().for_each(|region| logln!("{:x?}", region));
     }
 
     let elf = Elf::new(unsafe {
