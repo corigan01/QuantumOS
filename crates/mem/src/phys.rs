@@ -148,6 +148,16 @@ impl<const N: usize> PhysMemoryMap<N> {
         bytes as usize
     }
 
+    pub fn find_continuous_of(
+        &mut self,
+        kind: PhysMemoryKind,
+        bytes: usize,
+        alignment: usize,
+        min_address: usize,
+    ) -> Option<PhysMemoryEntry> {
+        todo!()
+    }
+
     pub fn add_region(&mut self, region: impl MemoryDesc) -> Result<(), crate::MemoryError> {
         let kind = region.memory_kind();
         let start = region.memory_start();

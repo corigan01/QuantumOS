@@ -207,7 +207,14 @@ fn main(disk_id: u16) -> ! {
 
     closest_video_id.set().expect("Unable to set video mode");
 
-    stage_to_stage.stage64_ptr = bootloader64_entrypoint as u64;
+    stage_to_stage.stage32_ptr = (
+        bootloader32_entrypoint as u64,
+        bootloader32_buffer.len() as u64,
+    );
+    stage_to_stage.stage64_ptr = (
+        bootloader64_entrypoint as u64,
+        bootloader64_buffer.len() as u64,
+    );
     stage_to_stage.kernel_ptr = (kernel_buffer.as_ptr() as u64, kernel_buffer.len() as u64);
 
     unsafe {

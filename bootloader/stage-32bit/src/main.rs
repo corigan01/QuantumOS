@@ -110,6 +110,8 @@ fn main(stage_to_stage: &Stage16toStage32) {
     unsafe {
         let s2s = &mut *S2S.get();
 
+        s2s.stage32_ptr = stage_to_stage.stage32_ptr;
+        s2s.stage64_ptr = stage_to_stage.stage64_ptr;
         s2s.kernel_ptr = stage_to_stage.kernel_ptr;
         s2s.memory_map = stage_to_stage.memory_map;
         s2s.video_mode = stage_to_stage.video_mode.clone();
@@ -120,9 +122,9 @@ fn main(stage_to_stage: &Stage16toStage32) {
     // jump to stage64
     logln!(
         "Jumping to stage64! -- 0x{:016x}",
-        stage_to_stage.stage64_ptr
+        stage_to_stage.stage64_ptr.0
     );
-    unsafe { enter_stage3(stage_to_stage.stage64_ptr as *const (), S2S.get()) };
+    unsafe { enter_stage3(stage_to_stage.stage64_ptr.0 as *const (), S2S.get()) };
 }
 
 #[unsafe(no_mangle)]
