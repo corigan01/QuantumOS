@@ -49,19 +49,19 @@ static TABLE_LVL2_ID: SyncUnsafeCell<[PageMapLvl2; IDMAP_GIG_AMOUNT]> =
 static TABLE_LVL3_KERN: SyncUnsafeCell<PageMapLvl3> = SyncUnsafeCell::new(PageMapLvl3::new());
 static TABLE_LVL2_KERN: SyncUnsafeCell<PageMapLvl2> = SyncUnsafeCell::new(PageMapLvl2::new());
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 pub struct PageTableConfig {
     pub kernel_exe_phys: (u64, usize),
     pub kernel_stack_phys: (u64, usize),
     pub kernel_virt: u64,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 pub struct KernelVirtInfo {
     pub exe_start_virt: u64,
     pub exe_end_virt: u64,
-    pub stack_start_virt: u64,
-    pub _stack_end_virt: u64,
+    pub _stack_start_virt: u64,
+    pub stack_end_virt: u64,
 }
 
 impl KernelVirtInfo {
@@ -77,8 +77,8 @@ impl KernelVirtInfo {
     pub fn _stack_slice(&mut self) -> &'static mut [u8] {
         unsafe {
             core::slice::from_raw_parts_mut(
-                self.stack_start_virt as *mut u8,
-                (self._stack_end_virt - self.stack_start_virt) as usize,
+                self._stack_start_virt as *mut u8,
+                (self.stack_end_virt - self._stack_start_virt) as usize,
             )
         }
     }
@@ -168,15 +168,15 @@ pub fn build_page_tables(c: PageTableConfig) -> KernelVirtInfo {
     let lvl4_entry = PageEntryLvl4::new()
         .set_present_flag(true)
         .set_read_write_flag(true)
-        .set_next_entry_phy_address(unsafe { (*TABLE_LVL3_ID.get()).table_ptr() });
+        .set_next_entry_phy_address(unsafe { (*TABLE_LVL3_KERN.get()).table_ptr() });
 
     unsafe { (*TABLE_LVL4.get()).store(lvl4_entry, tbl4_offset) };
 
     KernelVirtInfo {
         exe_start_virt: c.kernel_virt,
         exe_end_virt: c.kernel_virt + (exe_pages * PAGE_2M) as u64,
-        stack_start_virt: c.kernel_virt + ((exe_pages + 1) * PAGE_2M) as u64,
-        _stack_end_virt: c.kernel_virt + ((exe_pages + stack_pages + 1) * PAGE_2M) as u64,
+        _stack_start_virt: c.kernel_virt + ((exe_pages + 1) * PAGE_2M) as u64,
+        stack_end_virt: c.kernel_virt + ((exe_pages + stack_pages + 1) * PAGE_2M) as u64,
     }
 }
 

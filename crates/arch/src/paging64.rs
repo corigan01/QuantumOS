@@ -377,7 +377,7 @@ impl PageMapLvl1 {
         if addr > Self::SIZE_FOR_TABLE {
             None
         } else {
-            Some(((addr.saturating_sub(1)) / Self::SIZE_PER_INDEX) as usize + 1)
+            Some((addr / Self::SIZE_PER_INDEX) as usize)
         }
     }
 
@@ -410,7 +410,7 @@ impl PageMapLvl2 {
         if addr > Self::SIZE_FOR_TABLE {
             None
         } else {
-            Some(((addr.saturating_sub(1)) / Self::SIZE_PER_INDEX) as usize + 1)
+            Some((addr / Self::SIZE_PER_INDEX) as usize)
         }
     }
 
@@ -443,7 +443,7 @@ impl PageMapLvl3 {
         if addr > Self::SIZE_FOR_TABLE {
             None
         } else {
-            Some(((addr.saturating_sub(1)) / Self::SIZE_PER_INDEX) as usize + 1)
+            Some((addr / Self::SIZE_PER_INDEX) as usize)
         }
     }
 
@@ -476,7 +476,7 @@ impl PageMapLvl4 {
         if addr > Self::SIZE_FOR_TABLE {
             None
         } else {
-            Some(((addr.saturating_sub(1)) / Self::SIZE_PER_INDEX) as usize + 1)
+            Some((addr / Self::SIZE_PER_INDEX) as usize)
         }
     }
 
@@ -505,7 +505,7 @@ impl PageMapLvl5 {
         if addr > Self::SIZE_FOR_TABLE {
             None
         } else {
-            Some(((addr.saturating_sub(1)) / Self::SIZE_PER_INDEX) as usize + 1)
+            Some((addr / Self::SIZE_PER_INDEX) as usize)
         }
     }
 

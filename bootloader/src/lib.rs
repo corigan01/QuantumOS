@@ -35,7 +35,7 @@ use mem::phys::PhysMemoryMap;
 pub const MEMORY_REGIONS: usize = 64;
 
 /// Kernel fn ptr
-pub type KernelEntryFn = fn(u64) -> !;
+pub type KernelEntryFn = extern "C" fn(u64) -> !;
 
 /// # Max Memory Map Entries
 /// This is the max number of entries that can fit in the Stage-to-Stage info block.
@@ -68,7 +68,7 @@ pub struct Stage32toStage64 {
 }
 
 /// # `Stage64` to `Kernel` Info Block
-#[repr(C)]
+#[derive(Debug)]
 pub struct KernelBootHeader {
     pub phys_mem_map: &'static PhysMemoryMap<MEMORY_REGIONS>,
     pub video_mode: (VesaModeId, VesaMode),

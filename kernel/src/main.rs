@@ -5,7 +5,7 @@
 \___\_\_,_/\_,_/_//_/\__/\_,_/_/_/_/ /_/|_|\__/_/ /_//_/\__/_/
   Part of the Quantum OS Kernel
 
-Copyright 2024 Gavin Kellam
+Copyright 2025 Gavin Kellam
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
 associated documentation files (the "Software"), to deal in the Software without restriction,
@@ -23,8 +23,9 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-#![no_main]
 #![no_std]
+#![no_main]
+#![feature(sync_unsafe_cell)]
 
 mod panic;
 
@@ -38,13 +39,13 @@ make_debug! {
 
 #[unsafe(no_mangle)]
 #[unsafe(link_section = ".start")]
-extern "C" fn _start(stage_to_stage: u64) {
-    main(unsafe { &(*(stage_to_stage as *const KernelBootHeader)) });
+extern "C" fn _start(stage_to_stage: u64) -> ! {
+    main(unsafe { &*(stage_to_stage as *const KernelBootHeader) });
     panic!("Main should not return");
 }
 
 #[debug_ready]
-fn main(_stage_to_stage: &KernelBootHeader) {
-    logln!("Kernel!");
+fn main(stage_to_stage: &KernelBootHeader) {
+    logln!("{:#?}", stage_to_stage);
     loop {}
 }

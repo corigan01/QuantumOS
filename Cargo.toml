@@ -81,6 +81,15 @@ overflow-checks = true
 [profile.stage-64bit]
 inherits = "release"
 panic = "abort"
+opt-level="z"
 strip = false
+lto = true
+debug = 0
+overflow-checks = true
+
+[profile.kernel]
+inherits = "release"
+panic = "abort"
+strip = true
 debug = 1
 overflow-checks = true

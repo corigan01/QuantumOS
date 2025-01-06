@@ -88,6 +88,7 @@ fn main(stage_to_stage: &Stage32toStage64) {
     log!("Loading ELF (");
     elf.load_into(|h| {
         if h.segment_kind() != SegmentKind::Load {
+            log!("X");
             return None;
         }
         log!(".");
@@ -109,14 +110,14 @@ fn main(stage_to_stage: &Stage32toStage64) {
         let mm = &mut *MEMORY_MAP.get();
         let s2k = &mut *KERNEL_INFO.get();
 
-        s2k.replace(KernelBootHeader {
+        *s2k = Some(KernelBootHeader {
             phys_mem_map: mm,
             video_mode: stage_to_stage.video_mode,
         });
 
         jmp_to_kernel(
             virt_info.exe_start_virt as *const KernelEntryFn,
-            virt_info.stack_start_virt,
+            virt_info.stack_end_virt,
             s2k.as_ref().unwrap(),
         );
     }
@@ -127,11 +128,17 @@ unsafe fn jmp_to_kernel(
     kernel_stack_ptr: u64,
     s2k: &'static KernelBootHeader,
 ) -> ! {
+    logln!(
+        "Kernel \n - EXE   : {:#016x}\n - STACK : {:#016x}\n - S2K   : {:#016x}",
+        fn_ptr as u64,
+        kernel_stack_ptr,
+        s2k as *const _ as u64
+    );
     unsafe {
         asm!(
             "mov rsp, {stack}",
-            "jmp {kern:r}",
-            in("rdi") &raw const s2k,
+            "call {kern:r}",
+            in("rdi") s2k,
             kern = in(reg) fn_ptr,
             stack = in(reg) kernel_stack_ptr
         );

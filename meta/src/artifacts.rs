@@ -26,6 +26,8 @@ enum ArchSelect {
     I686,
     /// # Intel IA-32A (64bit mode)
     X64,
+    /// # Intel IA-32A (64bit mode)
+    Kernel,
 }
 
 impl Display for ArchSelect {
@@ -48,6 +50,12 @@ impl Display for ArchSelect {
                 "{}",
                 current_dir
                     .join("linkerscripts/x86-64-quantum_loader.json")
+                    .to_string_lossy(),
+            )),
+            Self::Kernel => f.write_fmt(format_args!(
+                "{}",
+                current_dir
+                    .join("../kernel/x86-64-quantum_kernel.json")
                     .to_string_lossy(),
             )),
         }
@@ -93,7 +101,7 @@ async fn cargo_helper(profile: Option<&str>, package: &str, arch: ArchSelect) ->
 async fn convert_bin(path: &Path, arch: ArchSelect) -> Result<PathBuf> {
     let arch = match arch {
         ArchSelect::I386 => "elf32-i386",
-        ArchSelect::I686 | ArchSelect::X64 => "elf64-x86-64",
+        ArchSelect::I686 | ArchSelect::X64 | ArchSelect::Kernel => "elf64-x86-64",
     };
 
     let bin_path = path.with_extension("bin");
@@ -149,7 +157,7 @@ pub async fn build_project() -> Result<Artifacts> {
         cargo_helper(Some("stage-16bit"), "stage-16bit", ArchSelect::I386),
         cargo_helper(Some("stage-32bit"), "stage-32bit", ArchSelect::I686),
         cargo_helper(Some("stage-64bit"), "stage-64bit", ArchSelect::X64),
-        cargo_helper(None, "kernel", ArchSelect::X64),
+        cargo_helper(Some("kernel"), "kernel", ArchSelect::Kernel),
         build_bootloader_config(),
     )?;
 
