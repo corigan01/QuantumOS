@@ -10,3 +10,4 @@ edition = "2021"
 
 [dependencies]
 bios = {workspace = true}
+mem = {workspace = true}

@@ -27,8 +27,8 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #![no_std]
 #![feature(sync_unsafe_cell)]
 
-use bootloader::Stage32toStage64;
-use core::cell::SyncUnsafeCell;
+use bootloader::{KernelBootHeader, KernelEntryFn, MEMORY_REGIONS, Stage32toStage64};
+use core::{arch::asm, cell::SyncUnsafeCell};
 use elf::{
     Elf,
     tables::{ArchKind, SegmentKind},
@@ -48,8 +48,9 @@ mod panic;
 make_debug! {
     "Serial": Option<Serial> = Serial::probe_first(SerialBaud::Baud115200);
 }
-
-static MEMORY_MAP: SyncUnsafeCell<PhysMemoryMap<64>> = SyncUnsafeCell::new(PhysMemoryMap::new());
+static MEMORY_MAP: SyncUnsafeCell<PhysMemoryMap<MEMORY_REGIONS>> =
+    SyncUnsafeCell::new(PhysMemoryMap::new());
+static KERNEL_INFO: SyncUnsafeCell<Option<KernelBootHeader>> = SyncUnsafeCell::new(None);
 
 #[unsafe(no_mangle)]
 #[unsafe(link_section = ".start")]
@@ -106,6 +107,39 @@ fn main(stage_to_stage: &Stage32toStage64) {
 
     let kernel_exe_slice = virt_info.exe_slice();
     logln!("{}", (&kernel_exe_slice[..1024]).hexdump());
+
+    unsafe {
+        let mm = &mut *MEMORY_MAP.get();
+        let s2k = &mut *KERNEL_INFO.get();
+
+        s2k.replace(KernelBootHeader {
+            phys_mem_map: mm,
+            video_mode: stage_to_stage.video_mode,
+        });
+
+        jmp_to_kernel(
+            virt_info.exe_start_virt as *const KernelEntryFn,
+            virt_info.stack_start_virt,
+            s2k.as_ref().unwrap(),
+        );
+    }
+}
+
+unsafe fn jmp_to_kernel(
+    fn_ptr: *const KernelEntryFn,
+    kernel_stack_ptr: u64,
+    s2k: &'static KernelBootHeader,
+) -> ! {
+    unsafe {
+        asm!(
+            "mov rsp, {stack}",
+            "jmp {kern:r}",
+            in("rdi") &raw const s2k,
+            kern = in(reg) fn_ptr,
+            stack = in(reg) kernel_stack_ptr
+        );
+    }
+    unreachable!("Kernel should never return back to the bootloader!");
 }
 
 fn build_memory_map(s2s: &Stage32toStage64, kernel_exe_len: usize) -> paging::PageTableConfig {

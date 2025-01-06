@@ -29,6 +29,13 @@ use bios::{
     memory::MemoryEntry,
     video::{VesaMode, VesaModeId},
 };
+use mem::phys::PhysMemoryMap;
+
+/// Amount of regions contained in the inital phys memory map.
+pub const MEMORY_REGIONS: usize = 64;
+
+/// Kernel fn ptr
+pub type KernelEntryFn = fn(u64) -> !;
 
 /// # Max Memory Map Entries
 /// This is the max number of entries that can fit in the Stage-to-Stage info block.
@@ -57,5 +64,12 @@ pub struct Stage32toStage64 {
     pub stage64_ptr: (u64, u64),
     pub kernel_ptr: (u64, u64),
     pub memory_map: [MemoryEntry; MAX_MEMORY_MAP_ENTRIES],
+    pub video_mode: (VesaModeId, VesaMode),
+}
+
+/// # `Stage64` to `Kernel` Info Block
+#[repr(C)]
+pub struct KernelBootHeader {
+    pub phys_mem_map: &'static PhysMemoryMap<MEMORY_REGIONS>,
     pub video_mode: (VesaModeId, VesaMode),
 }

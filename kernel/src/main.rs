@@ -28,7 +28,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 mod panic;
 
-use bootloader::Stage32toStage64;
+use bootloader::KernelBootHeader;
 use lldebug::{debug_ready, logln, make_debug};
 use serial::{Serial, baud::SerialBaud};
 
@@ -39,11 +39,12 @@ make_debug! {
 #[unsafe(no_mangle)]
 #[unsafe(link_section = ".start")]
 extern "C" fn _start(stage_to_stage: u64) {
-    main(unsafe { &(*(stage_to_stage as *const Stage32toStage64)) });
+    main(unsafe { &(*(stage_to_stage as *const KernelBootHeader)) });
     panic!("Main should not return");
 }
 
 #[debug_ready]
-fn main(_stage_to_stage: &Stage32toStage64) {
+fn main(_stage_to_stage: &KernelBootHeader) {
     logln!("Kernel!");
+    loop {}
 }
