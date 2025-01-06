@@ -33,13 +33,13 @@ use elf::{
     Elf,
     tables::{ArchKind, SegmentKind},
 };
-use lldebug::{debug_ready, hexdump::HexPrint, log, logln, make_debug};
+use lldebug::{debug_ready, log, logln, make_debug};
 use mem::phys::{PhysMemoryEntry, PhysMemoryKind, PhysMemoryMap};
 use serial::{Serial, baud::SerialBaud};
 use util::{
     align_to,
     bytes::HumanBytes,
-    consts::{MIB, PAGE_2M, PAGE_4K},
+    consts::{MIB, PAGE_2M},
 };
 
 mod paging;
@@ -74,7 +74,7 @@ fn main(stage_to_stage: &Stage32toStage64) {
 
     logln!("Kernel Size     : {}", HumanBytes::from(kernel_exe_len));
     let page_info = build_memory_map(stage_to_stage, kernel_exe_len);
-    let mut virt_info = paging::build_page_tables(page_info);
+    let virt_info = paging::build_page_tables(page_info);
 
     log!("Loading new page tables...");
     unsafe { paging::load_page_tables() };
@@ -104,9 +104,6 @@ fn main(stage_to_stage: &Stage32toStage64) {
     })
     .unwrap();
     logln!(") -- OK");
-
-    let kernel_exe_slice = virt_info.exe_slice();
-    logln!("{}", (&kernel_exe_slice[..1024]).hexdump());
 
     unsafe {
         let mm = &mut *MEMORY_MAP.get();
