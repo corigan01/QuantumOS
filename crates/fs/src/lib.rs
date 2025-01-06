@@ -24,6 +24,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 #![no_std]
+#![feature(sync_unsafe_cell)]
 
 #[cfg(feature = "fatfs")]
 pub mod fatfs;

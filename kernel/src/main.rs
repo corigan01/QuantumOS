@@ -32,6 +32,7 @@ mod panic;
 use bootloader::KernelBootHeader;
 use lldebug::{debug_ready, logln, make_debug};
 use serial::{Serial, baud::SerialBaud};
+use util::bytes::HumanBytes;
 
 make_debug! {
     "Serial": Option<Serial> = Serial::probe_first(SerialBaud::Baud115200);
@@ -39,13 +40,16 @@ make_debug! {
 
 #[unsafe(no_mangle)]
 #[unsafe(link_section = ".start")]
-extern "C" fn _start(stage_to_stage: u64) -> ! {
-    main(unsafe { &*(stage_to_stage as *const KernelBootHeader) });
+extern "C" fn _start(kbh: u64) -> ! {
+    main(unsafe { &*(kbh as *const KernelBootHeader) });
     panic!("Main should not return");
 }
 
 #[debug_ready]
-fn main(stage_to_stage: &KernelBootHeader) {
-    logln!("{:#?}", stage_to_stage);
-    loop {}
+fn main(kbh: &KernelBootHeader) {
+    logln!("Welcome to the Quantum Kernel!");
+    logln!(
+        "Free Memory : {}",
+        HumanBytes::from(kbh.phys_mem_map.bytes_of(mem::phys::PhysMemoryKind::Free))
+    );
 }

@@ -172,6 +172,14 @@ fn build_memory_map(s2s: &Stage32toStage64, kernel_exe_len: usize) -> paging::Pa
         })
         .expect("Unable to add stage32 to memory map");
 
+        let (elf_start, elf_len) = s2s.kernel_ptr;
+        mm.add_region(PhysMemoryEntry {
+            kind: PhysMemoryKind::Bootloader,
+            start: elf_start,
+            end: elf_start + elf_len,
+        })
+        .expect("Unable to add elf to memory map");
+
         let (s64_start, s64_len) = s2s.stage64_ptr;
         mm.add_region(PhysMemoryEntry {
             kind: PhysMemoryKind::Bootloader,

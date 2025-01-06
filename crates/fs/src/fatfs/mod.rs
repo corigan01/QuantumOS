@@ -32,7 +32,7 @@ use crate::{
     fatfs::inode::{DirectoryEntry, Inode},
     io::{Read, Seek},
 };
-use core::{fmt::Debug, mem::size_of};
+use core::{cell::SyncUnsafeCell, fmt::Debug, mem::size_of};
 
 mod bpb;
 mod inode;
@@ -101,6 +101,7 @@ impl FatEntry {
 pub struct FatFile<'a, Part: ReadSeek> {
     filesize: usize,
     start_cluster: ClusterId,
+    last_cluster: Option<(ClusterId, u64)>,
     fatfs: &'a mut Fat<Part>,
     seek: u64,
 }
@@ -139,9 +140,15 @@ where
         let mut bytes_read = 0;
 
         loop {
-            let cluster_info = self
-                .fatfs
-                .cluster_of_offset(self.start_cluster, self.seek)?;
+            let (cluster_id, offset) = match self.last_cluster {
+                Some((last_cluster, last_seek)) if last_seek <= self.seek => {
+                    (last_cluster, self.seek - last_seek)
+                }
+                _ => (self.start_cluster, self.seek),
+            };
+
+            let cluster_info = self.fatfs.cluster_of_offset(cluster_id, offset)?;
+            self.last_cluster = Some((cluster_info.0, self.seek));
 
             let disk_loc = self.fatfs.bpb.cluster_physical_loc(cluster_info.0) + cluster_info.1;
 
@@ -158,7 +165,9 @@ where
 
             assert!(
                 bytes_read <= buf.len(),
-                "It should not be possible to read more bytes ({}) than the buffer has capacity for ({})!", bytes_read, buf.len()
+                "Attemped to more bytes ({}) than buffer's capacity ({})!",
+                bytes_read,
+                buf.len()
             );
 
             if bytes_read == buf.len() {
@@ -167,6 +176,8 @@ where
         }
     }
 }
+
+static FAT_BLOCK_RESERVE: SyncUnsafeCell<(u64, [u8; 512])> = SyncUnsafeCell::new((0, [0; 512]));
 
 impl<Part: ReadSeek> Fat<Part> {
     pub fn new(mut disk: Part) -> Result<Self> {
@@ -186,19 +197,32 @@ impl<Part: ReadSeek> Fat<Part> {
             return Err(FsError::InvalidInput);
         }
 
-        let mut sector_array = [0u8; 512];
-        self.disk.seek(SeekFrom::Start(
-            entry_sector * self.bpb.sector_size() as u64,
-        ))?;
-        self.disk.read(&mut sector_array)?;
+        if entry_sector != unsafe { (&*FAT_BLOCK_RESERVE.get()).0 } {
+            self.disk.seek(SeekFrom::Start(
+                entry_sector * self.bpb.sector_size() as u64,
+            ))?;
+            unsafe {
+                self.disk
+                    .read(&mut (&mut *FAT_BLOCK_RESERVE.get()).1.as_mut())?;
+                (&mut *FAT_BLOCK_RESERVE.get()).0 = entry_sector;
+            }
+        }
 
         Ok(match self.bpb.kind() {
-            FatKind::Fat16 => FatEntry::from_fat16(unsafe {
-                core::ptr::read_unaligned(sector_array.as_ptr().add(entry_offset * 2))
-            } as ClusterId),
-            FatKind::Fat32 => FatEntry::from_fat32(unsafe {
-                core::ptr::read_unaligned(sector_array.as_ptr().add(entry_offset * 4))
-            } as ClusterId),
+            FatKind::Fat16 => unsafe {
+                let arr = core::slice::from_raw_parts(
+                    (&*FAT_BLOCK_RESERVE.get()).1.as_ptr() as *const u16,
+                    256,
+                );
+                FatEntry::from_fat16(arr[entry_offset] as u32)
+            },
+            FatKind::Fat32 => unsafe {
+                let arr = core::slice::from_raw_parts(
+                    (&*FAT_BLOCK_RESERVE.get()).1.as_ptr() as *const u32,
+                    128,
+                );
+                FatEntry::from_fat32(arr[entry_offset])
+            },
             FatKind::Fat12 => todo!("Support reading FAT12"),
         })
     }
@@ -210,7 +234,7 @@ impl<Part: ReadSeek> Fat<Part> {
     ) -> Result<(ClusterId, u64)> {
         let mut search_cluster = cluster_start;
         let mut total_offset = 0;
-        let cluster_size_bytes = (self.bpb.cluster_sectors() * self.bpb.sector_size()) as u64;
+        let cluster_size_bytes = self.bpb.cluster_sectors() as u64 * self.bpb.sector_size() as u64;
 
         loop {
             if offset - total_offset < cluster_size_bytes {
@@ -240,6 +264,7 @@ impl<Part: ReadSeek> Fat<Part> {
             start_cluster: entry_info.cluster_id(),
             fatfs: self,
             seek: 0,
+            last_cluster: None,
         })
     }
 
