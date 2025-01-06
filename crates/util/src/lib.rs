@@ -41,6 +41,11 @@ pub const fn align_to(addr: u64, alignment: usize) -> u64 {
     }
 }
 
+/// Check the alignment of `addr` and `alignment`
+pub const fn is_align_to(addr: u64, alignment: usize) -> bool {
+    addr % (alignment as u64) == 0
+}
+
 #[cfg(test)]
 mod test {
     use super::*;

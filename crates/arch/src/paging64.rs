@@ -362,8 +362,23 @@ impl Lvl1Entry for PageEntry4K {
 }
 
 impl PageMapLvl1 {
+    pub const SIZE_PER_INDEX: u64 = util::consts::PAGE_4K as u64;
+    pub const SIZE_FOR_TABLE: u64 = util::consts::PAGE_4K as u64 * 512;
+
     pub const fn new() -> Self {
         Self([0; 512])
+    }
+
+    /// Convert an address to a table offset.
+    ///
+    /// If the given `addr` is larger than the page table,
+    /// it will return `None`.
+    pub const fn addr2index(addr: u64) -> Option<usize> {
+        if addr > Self::SIZE_FOR_TABLE {
+            None
+        } else {
+            Some(((addr.saturating_sub(1)) / Self::SIZE_PER_INDEX) as usize + 1)
+        }
     }
 
     pub fn store(&mut self, entry: impl Lvl1Entry, index: usize) {
@@ -380,8 +395,23 @@ impl PageMapLvl1 {
 }
 
 impl PageMapLvl2 {
+    pub const SIZE_PER_INDEX: u64 = util::consts::PAGE_2M as u64;
+    pub const SIZE_FOR_TABLE: u64 = util::consts::PAGE_2M as u64 * 512;
+
     pub const fn new() -> Self {
         Self([0; 512])
+    }
+
+    /// Convert an address to a table offset.
+    ///
+    /// If the given `addr` is larger than the page table,
+    /// it will return `None`.
+    pub const fn addr2index(addr: u64) -> Option<usize> {
+        if addr > Self::SIZE_FOR_TABLE {
+            None
+        } else {
+            Some(((addr.saturating_sub(1)) / Self::SIZE_PER_INDEX) as usize + 1)
+        }
     }
 
     pub fn store(&mut self, entry: impl Lvl2Entry, index: usize) {
@@ -398,8 +428,23 @@ impl PageMapLvl2 {
 }
 
 impl PageMapLvl3 {
+    pub const SIZE_PER_INDEX: u64 = util::consts::PAGE_1G as u64 ;
+    pub const SIZE_FOR_TABLE: u64 = util::consts::PAGE_1G as u64 * 512 ;
+
     pub const fn new() -> Self {
         Self([0; 512])
+    }
+    
+    /// Convert an address to a table offset.
+    ///
+    /// If the given `addr` is larger than the page table,
+    /// it will return `None`.
+    pub const fn addr2index(addr: u64) -> Option<usize> {
+        if addr > Self::SIZE_FOR_TABLE {
+            None
+        } else {
+            Some(((addr.saturating_sub(1)) / Self::SIZE_PER_INDEX) as usize + 1)
+        }
     }
 
     pub fn store(&mut self, entry: impl Lvl3Entry, index: usize) {
@@ -416,8 +461,23 @@ impl PageMapLvl3 {
 }
 
 impl PageMapLvl4 {
+    pub const SIZE_PER_INDEX: u64 = util::consts::PAGE_1G as u64 * 512;
+    pub const SIZE_FOR_TABLE: u64 = util::consts::PAGE_1G as u64 * 512 * 512;
+
     pub const fn new() -> Self {
         Self([0; 512])
+    }
+
+    /// Convert an address to a table offset.
+    ///
+    /// If the given `addr` is larger than the page table,
+    /// it will return `None`.
+    pub const fn addr2index(addr: u64) -> Option<usize> {
+        if addr > Self::SIZE_FOR_TABLE {
+            None
+        } else {
+            Some(((addr.saturating_sub(1)) / Self::SIZE_PER_INDEX) as usize + 1)
+        }
     }
 
     pub fn store(&mut self, entry: impl Lvl4Entry, index: usize) {
@@ -434,6 +494,21 @@ impl PageMapLvl4 {
 }
 
 impl PageMapLvl5 {
+    pub const SIZE_PER_INDEX: u64 = util::consts::PAGE_1G as u64 * 512 * 512;
+    pub const SIZE_FOR_TABLE: u64 = util::consts::PAGE_1G as u64 * 512 * 512 * 512;
+
+    /// Convert an address to a table offset.
+    ///
+    /// If the given `addr` is larger than the page table,
+    /// it will return `None`.
+    pub const fn addr2index(addr: u64) -> Option<usize> {
+        if addr > Self::SIZE_FOR_TABLE {
+            None
+        } else {
+            Some(((addr.saturating_sub(1)) / Self::SIZE_PER_INDEX) as usize + 1)
+        }
+    }
+
     pub const fn new() -> Self {
         Self([0; 512])
     }

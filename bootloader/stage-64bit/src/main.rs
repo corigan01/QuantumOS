@@ -33,7 +33,7 @@ use elf::{
     Elf,
     tables::{ArchKind, SegmentKind},
 };
-use lldebug::{debug_ready, logln, make_debug};
+use lldebug::{debug_ready, hexdump::HexPrint, log, logln, make_debug};
 use mem::phys::{PhysMemoryEntry, PhysMemoryKind, PhysMemoryMap};
 use serial::{Serial, baud::SerialBaud};
 use util::{
@@ -71,25 +71,44 @@ fn main(stage_to_stage: &Stage32toStage64) {
         .exe_size()
         .expect("Unable to determine the size of the Kernel's exe!");
 
-    logln!("Kernel Size: {}", HumanBytes::from(kernel_exe_len));
-    build_memory_map(stage_to_stage, kernel_exe_len);
+    logln!("Kernel Size     : {}", HumanBytes::from(kernel_exe_len));
+    let page_info = build_memory_map(stage_to_stage, kernel_exe_len);
+    let mut virt_info = paging::build_page_tables(page_info);
 
-    let elf_header = match elf.header() {
+    log!("Loading new page tables...");
+    unsafe { paging::load_page_tables() };
+    logln!("OK");
+
+    let _elf_header = match elf.header() {
         Ok(elf::tables::ElfHeader::Header64(h)) if h.arch() == ArchKind::X64 && h.is_le() => h,
         _ => panic!("Kernel's elf is not valid!"),
     };
 
+    log!("Loading ELF (");
     elf.load_into(|h| {
         if h.segment_kind() != SegmentKind::Load {
             return None;
         }
+        log!(".");
 
-        None
+        let vaddr = h.expected_vaddr();
+        let len = h.in_mem_size() as u64;
+
+        assert!(
+            vaddr >= virt_info.exe_start_virt && (vaddr + len) <= virt_info.exe_end_virt,
+            "Cannot fit section into mapped area"
+        );
+
+        Some(unsafe { core::slice::from_raw_parts_mut(vaddr as *mut u8, len as usize) })
     })
     .unwrap();
+    logln!(") -- OK");
+
+    let kernel_exe_slice = virt_info.exe_slice();
+    logln!("{}", (&kernel_exe_slice[..1024]).hexdump());
 }
 
-fn build_memory_map(s2s: &Stage32toStage64, kernel_exe_len: usize) {
+fn build_memory_map(s2s: &Stage32toStage64, kernel_exe_len: usize) -> paging::PageTableConfig {
     unsafe {
         let mm = &mut *MEMORY_MAP.get();
 
@@ -99,7 +118,7 @@ fn build_memory_map(s2s: &Stage32toStage64, kernel_exe_len: usize) {
         }
 
         logln!(
-            "Free Memory : {} Mib",
+            "Free Memory     : {} Mib",
             mm.bytes_of(PhysMemoryKind::Free) / MIB
         );
         logln!(
@@ -134,8 +153,8 @@ fn build_memory_map(s2s: &Stage32toStage64, kernel_exe_len: usize) {
         let kernels_pages = mm
             .find_continuous_of(
                 PhysMemoryKind::Free,
-                align_to(kernel_exe_len as u64, PAGE_4K) as usize,
-                PAGE_4K,
+                align_to(kernel_exe_len as u64, PAGE_2M) as usize,
+                PAGE_2M,
                 1 * MIB as u64,
             )
             .map(|p| PhysMemoryEntry {
@@ -146,7 +165,7 @@ fn build_memory_map(s2s: &Stage32toStage64, kernel_exe_len: usize) {
         mm.add_region(kernels_pages).unwrap();
 
         let kernels_stack_pages = mm
-            .find_continuous_of(PhysMemoryKind::Free, PAGE_2M, PAGE_4K, 1 * MIB as u64)
+            .find_continuous_of(PhysMemoryKind::Free, PAGE_2M, PAGE_2M, 1 * MIB as u64)
             .map(|p| PhysMemoryEntry {
                 kind: PhysMemoryKind::Kernel,
                 ..p
@@ -155,5 +174,14 @@ fn build_memory_map(s2s: &Stage32toStage64, kernel_exe_len: usize) {
         mm.add_region(kernels_stack_pages).unwrap();
 
         logln!("{}", mm);
+
+        paging::PageTableConfig {
+            kernel_exe_phys: (kernels_pages.start, kernels_pages.len() as usize),
+            kernel_stack_phys: (
+                kernels_stack_pages.start,
+                kernels_stack_pages.len() as usize,
+            ),
+            kernel_virt: 0x100000000000,
+        }
     }
 }

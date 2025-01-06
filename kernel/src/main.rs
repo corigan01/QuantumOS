@@ -44,6 +44,6 @@ extern "C" fn _start(stage_to_stage: u64) {
 }
 
 #[debug_ready]
-fn main(stage_to_stage: &Stage32toStage64) {
+fn main(_stage_to_stage: &Stage32toStage64) {
     logln!("Kernel!");
 }

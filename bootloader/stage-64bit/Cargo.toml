@@ -13,3 +13,4 @@ lldebug = {workspace = true}
 elf = {workspace = true}
 mem = {workspace = true}
 util = {workspace = true}
+arch = {workspace = true}
