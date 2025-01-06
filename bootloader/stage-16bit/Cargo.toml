@@ -13,3 +13,4 @@ arch = { workspace = true }
 bootloader = {workspace = true}
 lldebug = {workspace = true}
 serial = {workspace = true}
+util ={workspace = true}

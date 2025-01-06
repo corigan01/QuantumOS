@@ -38,6 +38,7 @@ use lldebug::make_debug;
 use lldebug::{debug_ready, logln};
 use serial::Serial;
 use unreal::enter_unreal;
+use util::bytes::HumanBytes;
 
 mod bump_alloc;
 mod config;
@@ -170,7 +171,10 @@ fn main(disk_id: u16) -> ! {
     let bootloader32_entrypoint = 0x00200000 as *mut u8;
     alloc.push_ptr_to(bootloader32_entrypoint);
 
-    logln!("stage32 size = {} Bytes", bootloader32.filesize());
+    logln!(
+        "Loading stage32 ({})",
+        HumanBytes::from(bootloader32.filesize())
+    );
     let bootloader32_buffer = unsafe { alloc.allocate(bootloader32.filesize()) }.unwrap();
     bootloader32
         .read(bootloader32_buffer)
@@ -185,7 +189,10 @@ fn main(disk_id: u16) -> ! {
     let bootloader64_entrypoint = 0x00400000 as *mut u8;
     alloc.push_ptr_to(bootloader64_entrypoint);
 
-    logln!("stage64 size = {} Bytes", bootloader64.filesize());
+    logln!(
+        "Loading stage64 ({})",
+        HumanBytes::from(bootloader64.filesize())
+    );
     let bootloader64_buffer = unsafe { alloc.allocate(bootloader64.filesize()) }.unwrap();
     bootloader64
         .read(bootloader64_buffer)
@@ -197,7 +204,10 @@ fn main(disk_id: u16) -> ! {
 
     let mut kernel_file = fatfs.open(qconfig.kernel).expect("Unable to find kernel");
 
-    logln!("kernel size = {} Bytes", kernel_file.filesize());
+    logln!(
+        "Loading kernel elf ({})",
+        HumanBytes::from(kernel_file.filesize())
+    );
     let kernel_buffer = unsafe { alloc.allocate(kernel_file.filesize()) }.unwrap();
     kernel_file
         .read(kernel_buffer)
