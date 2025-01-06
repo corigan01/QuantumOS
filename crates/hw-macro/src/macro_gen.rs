@@ -23,6 +23,8 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use std::str::FromStr;
+
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
 use syn::{spanned::Spanned, Attribute, Ident, Visibility};
@@ -40,7 +42,7 @@ pub struct GenInfo<'a> {
     pub inner_type: TokenStream,
     pub bit_offset: usize,
     pub bit_amount: usize,
-    pub bit_mask: u64,
+    pub bit_mask: u128,
     pub no_shift: bool,
     pub vis: Visibility,
     pub function_ident: Ident,
@@ -114,9 +116,9 @@ impl<'a> Fields<'a> {
         // This will take the 'write_value' variable
         let write_value = write_gen.gen_write();
 
-        let bit_offset = gen_info.bit_offset;
-        let bit_mask = gen_info.bit_mask;
-        let inner_type = gen_info.inner_type;
+        let bit_offset = TokenStream::from_str(&format!("{}", gen_info.bit_offset)).unwrap();
+        let bit_mask = TokenStream::from_str(&format!("{}", gen_info.bit_mask)).unwrap();
+        let inner = gen_info.inner_type;
 
         if gen_info.bit_amount == 1 {
             tokens.push(quote! {{
@@ -138,14 +140,14 @@ impl<'a> Fields<'a> {
             }});
         } else if gen_info.no_shift {
             tokens.push(quote! {{
-                assert!(value & !(#bit_mask as #inner_type) == 0);
+                assert!(value & !#bit_mask == 0);
 
                 // Read
                 #read_value;
 
                 // Modify
                 let write_value =
-                    (read_value & !(#bit_mask as #inner_type)) | (value as #inner_type);
+                    (read_value & !#bit_mask) | (value as #inner);
 
                 // Write
                 #write_value;
@@ -160,7 +162,7 @@ impl<'a> Fields<'a> {
 
                 // Modify
                 let write_value =
-                    (read_value & !(#bit_mask as #inner_type)) | ((value as #inner_type) << (#bit_offset as #inner_type));
+                    (read_value & !#bit_mask) | ((value as #inner) << #bit_offset);
 
                 // Write
                 #write_value;
@@ -213,9 +215,8 @@ impl<'a> Fields<'a> {
         // This will make the 'read_value' variable
         let read_value = read_gen.gen_read();
 
-        let bit_offset = gen_info.bit_offset;
-        let bit_mask = gen_info.bit_mask;
-        let inner_type = gen_info.inner_type;
+        let bit_offset = TokenStream::from_str(&format!("{}", gen_info.bit_offset)).unwrap();
+        let bit_mask = TokenStream::from_str(&format!("{}", gen_info.bit_mask)).unwrap();
 
         if gen_info.bit_amount == 1 {
             tokens.push(quote! {{
@@ -232,7 +233,7 @@ impl<'a> Fields<'a> {
                 #read_value;
 
                 // Pull out value
-                (read_value & (#bit_mask as #inner_type)) as #output_type
+                (read_value & #bit_mask) as #output_type
             }});
         } else {
             tokens.push(quote! {{
@@ -240,7 +241,7 @@ impl<'a> Fields<'a> {
                 #read_value;
 
                 // Pull out value
-                ((read_value & (#bit_mask as #inner_type)) >> (#bit_offset as #inner_type)) as #output_type
+                ((read_value & #bit_mask) >> #bit_offset) as #output_type
             }});
         }
 

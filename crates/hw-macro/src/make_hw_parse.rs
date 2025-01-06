@@ -59,6 +59,7 @@ pub enum BitFieldType {
     Type16,
     Type32,
     Type64,
+    Type128,
 
     InvalidType { start: usize, end: usize },
 }
@@ -71,6 +72,7 @@ impl Into<usize> for BitFieldType {
             Self::Type16 => 16,
             Self::Type32 => 32,
             Self::Type64 => 64,
+            Self::Type128 => 128,
             _ => 0,
         }
     }
@@ -84,6 +86,7 @@ impl Into<TokenStream> for BitFieldType {
             BitFieldType::Type16 => quote! {u16},
             BitFieldType::Type32 => quote! {u32},
             BitFieldType::Type64 => quote! {u64},
+            BitFieldType::Type128 => quote! {u128},
             BitFieldType::InvalidType { .. } => quote! {_},
         }
     }
@@ -98,6 +101,7 @@ impl Into<BitFieldType> for Type {
                 () if type_path.path.is_ident("u16") => BitFieldType::Type16,
                 () if type_path.path.is_ident("u32") => BitFieldType::Type32,
                 () if type_path.path.is_ident("u64") => BitFieldType::Type64,
+                () if type_path.path.is_ident("u128") => BitFieldType::Type128,
                 _ => BitFieldType::InvalidType { start: 0, end: 0 },
             },
             _ => BitFieldType::InvalidType { start: 0, end: 0 },
@@ -114,6 +118,7 @@ impl<'a> Into<BitFieldType> for &'a Type {
                 () if type_path.path.is_ident("u16") => BitFieldType::Type16,
                 () if type_path.path.is_ident("u32") => BitFieldType::Type32,
                 () if type_path.path.is_ident("u64") => BitFieldType::Type64,
+                () if type_path.path.is_ident("u128") => BitFieldType::Type128,
                 _ => BitFieldType::InvalidType { start: 0, end: 0 },
             },
             _ => BitFieldType::InvalidType { start: 0, end: 0 },
@@ -134,6 +139,7 @@ impl BitField {
             ..=16 => BitFieldType::Type16,
             ..=32 => BitFieldType::Type32,
             ..=64 => BitFieldType::Type64,
+            ..=128 => BitFieldType::Type128,
             // FIXME
             _ => BitFieldType::InvalidType { start: 0, end: 0 },
         }
@@ -180,15 +186,15 @@ impl BitField {
     }
 
     /// Get the mask for the bit field
-    pub fn bit_mask(&self, default_type: BitFieldType) -> u64 {
+    pub fn bit_mask(&self, default_type: BitFieldType) -> u128 {
         self.bit_max(default_type) << self.bit_offset()
     }
 
     /// Maxium value allowed by this field
     ///
     /// *`bool`'s are just `1`*
-    pub fn bit_max(&self, default_type: BitFieldType) -> u64 {
-        2u64.pow(self.bit_amount(default_type) as u32) - 1
+    pub fn bit_max(&self, default_type: BitFieldType) -> u128 {
+        2_u128.pow(self.bit_amount(default_type) as u32) - 1
     }
 }
 
