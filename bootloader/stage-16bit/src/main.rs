@@ -71,17 +71,14 @@ fn main(disk_id: u16) -> ! {
     let ideal_region = memory_map
         .iter()
         .find(|region| {
-            region.region_type != MemoryEntry::REGION_RESERVED
+            region.region_type == MemoryEntry::REGION_FREE
                 && region.base_address >= (1024 * 1024)
+                && region.region_length >= (1024 * 1024 * 16)
         })
         .expect("Cannot find high memory above 1MB!");
 
-    let mut alloc = unsafe {
-        BumpAlloc::new(
-            ideal_region.base_address as *mut u8,
-            ideal_region.region_length as usize,
-        )
-    };
+    let mut alloc =
+        unsafe { BumpAlloc::new(ideal_region.base_address, ideal_region.region_length) };
 
     // - Filesystem Enumeration
 

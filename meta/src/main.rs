@@ -65,7 +65,11 @@ fn run_qemu(
     log_interrupts: bool,
     slow_emu: bool,
 ) -> Result<()> {
-    let kvm: &[&str] = if enable_kvm { &["--enable-kvm"] } else { &[] };
+    let kvm: &[&str] = if enable_kvm {
+        &["--enable-kvm", "--cpu", "host"]
+    } else {
+        &[]
+    };
     let no_graphic: &[&str] = if enable_no_graphic {
         &["-nographic", "-serial", "mon:stdio"]
     } else {

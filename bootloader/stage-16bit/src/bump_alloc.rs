@@ -24,20 +24,20 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 pub struct BumpAlloc {
-    current_ptr: *mut u8,
-    end: *mut u8,
+    current_ptr: u64,
+    end: u64,
 }
 
 impl BumpAlloc {
-    pub unsafe fn new(current_ptr: *mut u8, size: usize) -> Self {
+    pub unsafe fn new(current_ptr: u64, size: u64) -> Self {
         Self {
             current_ptr,
-            end: current_ptr.add(size),
+            end: current_ptr + size,
         }
     }
 
     pub unsafe fn allocate(&mut self, size: usize) -> Option<&'static mut [u8]> {
-        let bumped_ptr = self.current_ptr.add(size);
+        let bumped_ptr = self.current_ptr + (size as u64);
         if bumped_ptr > self.end {
             return None;
         }
@@ -45,22 +45,25 @@ impl BumpAlloc {
         let allocation_start = self.current_ptr;
         self.current_ptr = bumped_ptr;
 
-        Some(core::slice::from_raw_parts_mut(allocation_start, size))
+        Some(core::slice::from_raw_parts_mut(
+            allocation_start as *mut u8,
+            size,
+        ))
     }
 
     pub fn push_ptr_to(&mut self, new_ptr: *mut u8) {
-        if new_ptr > self.end {
+        if new_ptr as u64 > self.end {
             panic!("Cannot push ptr past end of allocation area!");
         }
 
-        self.current_ptr = new_ptr;
+        self.current_ptr = new_ptr as u64;
     }
 
     pub fn align_ptr_to(&mut self, alignment: usize) {
         unsafe {
-            self.current_ptr = self
-                .current_ptr
-                .add(self.current_ptr.align_offset(alignment))
+            self.current_ptr = (self.current_ptr as *const u8)
+                .add((self.current_ptr as *const u8).align_offset(alignment))
+                as u64
         };
     }
 }
