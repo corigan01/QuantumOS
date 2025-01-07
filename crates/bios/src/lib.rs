@@ -437,6 +437,7 @@ pub mod memory {
                 0 => mem::phys::PhysMemoryKind::None,
                 1 => mem::phys::PhysMemoryKind::Free,
                 2 => mem::phys::PhysMemoryKind::Reserved,
+                3 => mem::phys::PhysMemoryKind::AcpiReclaimable,
                 _ => mem::phys::PhysMemoryKind::Broken,
             }
         }

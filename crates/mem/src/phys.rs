@@ -31,6 +31,7 @@ pub enum PhysMemoryKind {
     Free,
     Reserved,
     Special,
+    AcpiReclaimable,
     Bootloader,
     Kernel,
     PageTables,

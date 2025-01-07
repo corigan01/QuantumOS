@@ -116,6 +116,7 @@ fn run_qemu(
 async fn run_bochs(img_file: &Path) -> Result<()> {
     Command::new("bochs")
         .arg("-n")
+        .arg("-q")
         .arg("boot:disk")
         .arg("megs: 512")
         .arg("ata0: enabled=1")
