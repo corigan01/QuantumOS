@@ -10,3 +10,4 @@ documentation.workspace = true
 bits = {workspace = true}
 hw = {workspace = true}
 util = {workspace = true}
+arch-macro = {workspace = true}

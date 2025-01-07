@@ -25,7 +25,10 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 use hw::make_hw;
 
-use crate::{registers::Segment, CpuPrivilege};
+use crate::{
+    registers::{cr2, Segment},
+    CpuPrivilege,
+};
 
 #[derive(Clone, Copy, Debug)]
 pub enum GateKind {
@@ -134,14 +137,24 @@ pub struct InterruptFrame {
     pub stack_segment: u16,
 }
 
-type RawHandlerFuncNe = extern "x86-interrupt" fn(InterruptFrame);
-type RawHandlerFuncE = extern "x86-interrupt" fn(InterruptFrame, u64);
+pub type RawHandlerFuncNe = extern "x86-interrupt" fn(InterruptFrame);
+pub type RawHandlerFuncE = extern "x86-interrupt" fn(InterruptFrame, u64);
 
 #[derive(Debug, Clone, Copy)]
 pub enum TableSelector {
     Gdt,
     Idt,
     Ldt,
+}
+
+impl TableSelector {
+    pub fn from_cpu_err(err_code: u64) -> Self {
+        match (err_code >> 1) & 0b11 {
+            0 => Self::Gdt,
+            1 => Self::Idt,
+            _ => Self::Ldt,
+        }
+    }
 }
 
 // This is part of the `nice` user facing interrupt info
@@ -240,11 +253,82 @@ impl InterruptFlags {
             Self::Irq(_) => ExceptionKind::Interrupt,
         }
     }
+
+    fn convert_from_interrupt(irq_id: u8, frame: &InterruptFrame, error: u64) -> Self {
+        match irq_id {
+            0 => Self::DivisionError,
+            1 => Self::Debug,
+            2 => Self::NonMaskableInterrupt,
+            3 => Self::Breakpoint,
+            4 => Self::Overflow,
+            5 => Self::BoundRangeExceeded,
+            6 => Self::InvalidOpcode,
+            7 => Self::DeviceNotAvailable,
+            8 => Self::DoubleFault,
+            9 => Self::CoprocessorSegmentOverrun,
+            10 => Self::InvalidTSS {
+                external: error & 1 != 0,
+                table: TableSelector::from_cpu_err(error),
+                table_index: ((error & (u16::MAX as u64)) >> 3) as u16,
+            },
+            11 => Self::SegmentNotPresent {
+                external: error & 1 != 0,
+                table: TableSelector::from_cpu_err(error),
+                table_index: ((error & (u16::MAX as u64)) >> 3) as u16,
+            },
+            12 => Self::StackSegmentFault {
+                external: error & 1 != 0,
+                table: TableSelector::from_cpu_err(error),
+                table_index: ((error & (u16::MAX as u64)) >> 3) as u16,
+            },
+            13 => Self::GeneralProtectionFault,
+            14 => Self::PageFault {
+                present: error & (1 << 0) != 0,
+                write: error & (1 << 1) != 0,
+                user: error & (1 << 2) != 0,
+                reserved_write: error & (1 << 3) != 0,
+                instruction_fetch: error & (1 << 4) != 0,
+                protection_key: error & (1 << 5) != 0,
+                shadow_stack: error & (1 << 6) != 0,
+                software_guard: error & (1 << 15) != 0,
+                virt_addr: cr2::read(),
+            },
+            16 => Self::X87FloatingPointException,
+            17 => Self::AlignmentCheck,
+            18 => Self::MachineCheck,
+            19 => Self::SIMDFloatingPointException,
+            20 => Self::VirtualizationException,
+            21 => Self::ControlProtectionException,
+            28 => Self::HypervisorInjectionException,
+            29 => Self::VMMCommunicationException,
+            30 => Self::SecurityException,
+            15 | 22..=27 | 31 => Self::Reserved,
+            _ => Self::Irq(irq_id),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
 pub struct InterruptInfo {
-    frame: InterruptFrame,
-    flags: InterruptFlags,
-    gate_kind: GateKind,
+    pub frame: InterruptFrame,
+    pub flags: InterruptFlags,
 }
+
+impl InterruptInfo {
+    pub fn convert_from_ne(irq_id: u8, frame: InterruptFrame) -> Self {
+        Self {
+            frame,
+            flags: InterruptFlags::convert_from_interrupt(irq_id, &frame, 0),
+        }
+    }
+
+    pub fn convert_from_e(irq_id: u8, frame: InterruptFrame, error: u64) -> Self {
+        Self {
+            frame,
+            flags: InterruptFlags::convert_from_interrupt(irq_id, &frame, error),
+        }
+    }
+}
+
+#[arch_macro::interrupt(0..256)]
+pub fn main_handler(info: InterruptInfo) {}

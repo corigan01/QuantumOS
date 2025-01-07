@@ -35,7 +35,7 @@ documentation = "https://github.com/corigan01/QuantumOS"
 
 [workspace.dependencies]
 arch = { path = "crates/arch" }
-arch-macro = { path = "crate/arch-macro" }
+arch-macro = { path = "crates/arch-macro" }
 bios = { path = "crates/bios" }
 fs = { path = "crates/fs" }
 bits = { path = "crates/bits" }
