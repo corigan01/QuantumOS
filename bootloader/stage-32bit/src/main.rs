@@ -59,26 +59,28 @@ extern "C" fn _start(stage_to_stage: u32) {
 
 #[debug_ready]
 fn main(stage_to_stage: &Stage16toStage32) {
-    let mut framebuffer = unsafe {
-        Framebuffer::new_linear(
-            stage_to_stage.video_mode.1.framebuffer as *mut u32,
-            32,
-            stage_to_stage.video_mode.1.height as usize,
-            stage_to_stage.video_mode.1.width as usize,
-        )
-    };
+    if let Some(video_mode) = stage_to_stage.video_mode {
+        let mut framebuffer = unsafe {
+            Framebuffer::new_linear(
+                video_mode.1.framebuffer as *mut u32,
+                32,
+                video_mode.1.height as usize,
+                video_mode.1.width as usize,
+            )
+        };
 
-    framebuffer.draw_rec(
-        1,
-        1,
-        framebuffer.width(),
-        framebuffer.height(),
-        Color::QUANTUM_BACKGROUND,
-    );
+        framebuffer.draw_rec(
+            1,
+            1,
+            framebuffer.width(),
+            framebuffer.height(),
+            Color::QUANTUM_BACKGROUND,
+        );
 
-    framebuffer.draw_glyph(10, 10, 'Q', Color::WHITE);
-    framebuffer.draw_glyph(20, 10, 'O', Color::WHITE);
-    framebuffer.draw_glyph(30, 10, 'S', Color::WHITE);
+        framebuffer.draw_glyph(10, 10, 'Q', Color::WHITE);
+        framebuffer.draw_glyph(20, 10, 'O', Color::WHITE);
+        framebuffer.draw_glyph(30, 10, 'S', Color::WHITE);
+    }
 
     unsafe { paging::enable_paging() };
 

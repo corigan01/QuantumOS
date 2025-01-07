@@ -120,27 +120,7 @@ fn main(disk_id: u16) -> ! {
     // - Video Mode Config
     let (want_x, want_y) = qconfig.expected_vbe_mode.unwrap_or((800, 600));
 
-    let vesa = Vesa::quarry().unwrap();
-    let (closest_video_id, closest_video_info) = vesa
-        .modes()
-        .filter_map(|id| id.querry().ok().map(|mode| (id, mode)))
-        .filter(|(_, mode)| mode.bpp == 32)
-        .reduce(|closest_mode, (id, mode)| {
-            if closest_mode.1.width.abs_diff(want_x) > mode.width.abs_diff(want_x)
-                && closest_mode.1.height.abs_diff(want_y) > mode.height.abs_diff(want_y)
-            {
-                (id, mode)
-            } else {
-                closest_mode
-            }
-        })
-        .expect("Failed to find a optimal video mode");
-
-    logln!(
-        "Optimal Video Mode  = (0x{:00x}) {:?}",
-        closest_video_id.get_id(),
-        closest_video_info
-    );
+    let vesa = Vesa::quarry().ok();
 
     // - Stage-to-Stage
     alloc.align_ptr_to(align_of::<Stage16toStage32>());
@@ -160,7 +140,34 @@ fn main(disk_id: u16) -> ! {
         )
     };
 
-    stage_to_stage.video_mode = (closest_video_id, closest_video_info);
+    if let Some((closest_video_id, closest_video_info)) = vesa
+        .and_then(|vesa| {
+            vesa.modes()
+                .filter_map(|id| id.querry().ok().map(|mode| (id, mode)))
+                .filter(|(_, mode)| mode.bpp == 32)
+                .reduce(|closest_mode, (id, mode)| {
+                    if closest_mode.1.width.abs_diff(want_x) > mode.width.abs_diff(want_x)
+                        && closest_mode.1.height.abs_diff(want_y) > mode.height.abs_diff(want_y)
+                    {
+                        (id, mode)
+                    } else {
+                        closest_mode
+                    }
+                })
+        })
+        .and_then(|(video_id, video_info)| video_id.set().ok().map(|_| (video_id, video_info)))
+    {
+        stage_to_stage.video_mode = Some((closest_video_id, closest_video_info));
+
+        logln!(
+            "Optimal Video Mode  = (0x{:00x}) {:?}",
+            closest_video_id.get_id(),
+            closest_video_info
+        );
+    } else {
+        stage_to_stage.video_mode = None;
+        logln!("Video mode failed!");
+    }
 
     // - Bootloader32
     let mut bootloader32 = fatfs
@@ -214,8 +221,6 @@ fn main(disk_id: u16) -> ! {
         .expect("Unable to read kernel");
 
     let stack_region = unsafe { alloc.allocate(1024 * 1024) }.unwrap();
-
-    closest_video_id.set().expect("Unable to set video mode");
 
     stage_to_stage.bootloader_stack_ptr = (stack_region.as_ptr() as u64, 1024 * 1024);
     stage_to_stage.stage32_ptr = (

@@ -19,6 +19,14 @@ pub struct CommandLine {
     /// Print std out to command-line
     #[arg(long = "nographic", default_value_t = false)]
     pub no_graphic: bool,
+
+    /// Slow down the emulator
+    #[arg(long = "slow", default_value_t = false)]
+    pub slow_emulator: bool,
+
+    /// Use the bochs emulator
+    #[arg(long = "bochs", default_value_t = false)]
+    pub use_bochs: bool,
 }
 
 #[derive(Subcommand, Debug, Clone)]
@@ -29,4 +37,6 @@ pub enum TaskOption {
     Run,
     /// Clean up all build artifacts
     Clean,
+    /// Build QMK Disk Image
+    BuildDisk,
 }

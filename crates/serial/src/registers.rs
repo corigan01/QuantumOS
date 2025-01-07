@@ -73,7 +73,7 @@ mod offsets {
     pub const RW_MODEM_CONTROL: u16 = 4;
 
     /// # (Read) Line Status Register Offset
-    pub const R_LINE_STATUS: u16 = 6;
+    pub const R_LINE_STATUS: u16 = 5;
 
     /// # (Read/Write) Scratch Register Offset
     pub const RW_SCRATCH: u16 = 7;

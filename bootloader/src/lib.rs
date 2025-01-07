@@ -52,7 +52,7 @@ pub struct Stage16toStage32 {
     pub stage64_ptr: (u64, u64),
     pub kernel_ptr: (u64, u64),
     pub memory_map: [MemoryEntry; MAX_MEMORY_MAP_ENTRIES],
-    pub video_mode: (VesaModeId, VesaMode),
+    pub video_mode: Option<(VesaModeId, VesaMode)>,
 }
 
 /// # `Stage32` to `Stage64` Info Block
@@ -64,12 +64,12 @@ pub struct Stage32toStage64 {
     pub stage64_ptr: (u64, u64),
     pub kernel_ptr: (u64, u64),
     pub memory_map: [MemoryEntry; MAX_MEMORY_MAP_ENTRIES],
-    pub video_mode: (VesaModeId, VesaMode),
+    pub video_mode: Option<(VesaModeId, VesaMode)>,
 }
 
 /// # `Stage64` to `Kernel` Info Block
 #[derive(Debug)]
 pub struct KernelBootHeader {
     pub phys_mem_map: &'static PhysMemoryMap<MEMORY_REGIONS>,
-    pub video_mode: (VesaModeId, VesaMode),
+    pub video_mode: Option<(VesaModeId, VesaMode)>,
 }

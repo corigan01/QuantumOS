@@ -80,9 +80,11 @@ impl Serial {
     /// (When using an Emulator this is the best option to find which
     ///  serial port the emulator is connected to.)
     pub fn probe_first(baud: baud::SerialBaud) -> Option<Self> {
-        for port in registers::ports::COMMS_ARRAY {
-            if unsafe { init_serial_device(baud, port) } {
-                return Some(Self { baud, port });
+        for _ in 0..5 {
+            for port in registers::ports::COMMS_ARRAY {
+                if unsafe { init_serial_device(baud, port) } {
+                    return Some(Self { baud, port });
+                }
             }
         }
 
@@ -93,7 +95,10 @@ impl Serial {
     /// This will send a byte over serial.
     #[inline]
     pub fn transmit_byte(&self, byte: u8) {
-        unsafe { registers::write_transmit_buffer(self.port, byte) };
+        unsafe {
+            while registers::read_line_status(self.port) & 0x20 == 0 {}
+            registers::write_transmit_buffer(self.port, byte);
+        }
     }
 
     /// # Get Baud

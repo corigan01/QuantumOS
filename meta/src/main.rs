@@ -63,6 +63,7 @@ fn run_qemu(
     enable_kvm: bool,
     enable_no_graphic: bool,
     log_interrupts: bool,
+    slow_emu: bool,
 ) -> Result<()> {
     let kvm: &[&str] = if enable_kvm { &["--enable-kvm"] } else { &[] };
     let no_graphic: &[&str] = if enable_no_graphic {
@@ -74,6 +75,11 @@ fn run_qemu(
         &["-d", "int"]
     } else {
         &["-d", "cpu_reset"]
+    };
+    let slow_emulator: &[&str] = if slow_emu {
+        &["-icount", "10,align=on"]
+    } else {
+        &[]
     };
 
     Command::new("qemu-system-x86_64")
@@ -91,6 +97,7 @@ fn run_qemu(
         .arg("en-us")
         .arg("-nic")
         .arg("none")
+        .args(slow_emulator)
         .arg("-drive")
         .arg(format!(
             "format=raw,file={}",
@@ -106,6 +113,48 @@ fn run_qemu(
     Ok(())
 }
 
+async fn run_bochs(img_file: &Path) -> Result<()> {
+    Command::new("bochs")
+        .arg("-n")
+        .arg("boot:disk")
+        .arg("megs: 512")
+        .arg("ata0: enabled=1")
+        .arg(format!(
+            "ata0-master: type=disk, path={}, mode=flat, translation=auto",
+            img_file.to_str().unwrap()
+        ))
+        .arg("cpuid: x86_64=1, level=6")
+        .arg("display_library: sdl2")
+        .arg("com1: enabled=1, mode=file, dev=./log.log")
+        .stdout(std::process::Stdio::inherit())
+        .status()
+        .context(anyhow!("Could not start bochs!"))?
+        .success()
+        .then_some(())
+        .ok_or(anyhow!("bochs Failed"))?;
+
+    Ok(())
+}
+
+async fn run_mk_image(img_file: &Path) -> Result<()> {
+    Command::new("qemu-img")
+        .arg("convert")
+        .arg("-f")
+        .arg("raw")
+        .arg("-O")
+        .arg("qcow2")
+        .arg(img_file)
+        .arg("quantum_os.qcow2")
+        .stdout(std::process::Stdio::inherit())
+        .status()
+        .context(anyhow!("Could not start qemu-img!"))?
+        .success()
+        .then_some(())
+        .ok_or(anyhow!("qemu-img Failed"))?;
+
+    Ok(())
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     let args = cmdline::CommandLine::parse();
@@ -115,12 +164,20 @@ async fn main() -> Result<()> {
             build().await?;
         }
         cmdline::TaskOption::Run => {
-            run_qemu(
-                &build().await?,
-                args.enable_kvm,
-                args.no_graphic,
-                args.log_interrupts,
-            )?;
+            if !args.use_bochs {
+                run_qemu(
+                    &build().await?,
+                    args.enable_kvm,
+                    args.no_graphic,
+                    args.log_interrupts,
+                    args.slow_emulator,
+                )?;
+            } else {
+                run_bochs(&build().await?).await?;
+            }
+        }
+        cmdline::TaskOption::BuildDisk => {
+            run_mk_image(&build().await?).await?;
         }
         cmdline::TaskOption::Clean => {
             todo!("clean")
