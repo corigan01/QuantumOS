@@ -20,7 +20,8 @@ members = [
   "crates/hw-macro", 
   "crates/util", 
   "crates/elf", 
-  "crates/mem"
+  "crates/mem",
+  "crates/arch-macro"
 ]
 
 default-members = ["meta"]
@@ -34,6 +35,7 @@ documentation = "https://github.com/corigan01/QuantumOS"
 
 [workspace.dependencies]
 arch = { path = "crates/arch" }
+arch-macro = { path = "crate/arch-macro" }
 bios = { path = "crates/bios" }
 fs = { path = "crates/fs" }
 bits = { path = "crates/bits" }

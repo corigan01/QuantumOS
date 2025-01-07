@@ -244,7 +244,7 @@ impl InterruptFlags {
 
 #[derive(Debug, Clone, Copy)]
 pub struct InterruptInfo {
-    interrupt_frame: InterruptFrame,
-    interrupt_kind: InterruptFlags,
+    frame: InterruptFrame,
+    flags: InterruptFlags,
     gate_kind: GateKind,
 }
