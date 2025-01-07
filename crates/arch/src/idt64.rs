@@ -43,6 +43,16 @@ pub enum GateKind {
 #[derive(Clone, Copy)]
 pub struct InterruptDescTable([GateDescriptor; 256]);
 
+impl InterruptDescTable {
+    pub const fn new() -> Self {
+        Self([GateDescriptor::zero(); 256])
+    }
+
+    pub const fn attach_raw(&mut self, irq: u8, gate: GateDescriptor) {
+        self.0[irq as usize] = gate;
+    }
+}
+
 #[make_hw(
     field(RW, 0..=15, offset_1),
     field(RW, 16..=31, segment_selector),
@@ -330,5 +340,42 @@ impl InterruptInfo {
     }
 }
 
-#[arch_macro::interrupt(0..256)]
-pub fn main_handler(info: InterruptInfo) {}
+#[macro_export]
+macro_rules! attach_irq {
+    ($idt: ident, $irq: ident) => {{
+        for (irq_num, handler_ptr) in $irq::IRQ_FUNCTION_E_PTRS {
+            // FIXME: We need to allow the caller to define what these should be
+            let mut gate = GateDescriptor::zero();
+            gate.set_offset(handler_ptr as u64);
+            gate.set_code_segment(Segment::new(1, CpuPrivilege::Ring0));
+            gate.set_privilege(CpuPrivilege::Ring0);
+            gate.set_gate_kind(GateKind::InterruptGate);
+            gate.set_present_flag(true);
+
+            $idt.attach_raw(irq_num, gate);
+        }
+
+        for (irq_num, handler_ptr) in $irq::IRQ_FUNCTION_NE_PTRS {
+            // FIXME: We need to allow the caller to define what these should be
+            let mut gate = GateDescriptor::zero();
+            gate.set_offset(handler_ptr as u64);
+            gate.set_code_segment(Segment::new(1, CpuPrivilege::Ring0));
+            gate.set_privilege(CpuPrivilege::Ring0);
+            gate.set_gate_kind(GateKind::InterruptGate);
+            gate.set_present_flag(true);
+
+            $idt.attach_raw(irq_num, gate);
+        }
+
+        for (irq_num, handler_ptr) in $irq::IRQ_FUNCTION_RESERVED_PTRS {
+            let mut gate = GateDescriptor::zero();
+            gate.set_offset(handler_ptr as u64);
+            gate.set_code_segment(Segment::new(1, CpuPrivilege::Ring0));
+            gate.set_privilege(CpuPrivilege::Ring0);
+            gate.set_gate_kind(GateKind::InterruptGate);
+            gate.set_present_flag(true);
+
+            $idt.attach_raw(irq_num, gate);
+        }
+    }};
+}

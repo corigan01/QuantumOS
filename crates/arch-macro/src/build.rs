@@ -82,11 +82,9 @@ fn gen_consts(
         .map(|(irq, ident)| quote! {(#irq, #ident)});
 
     quote_spanned! {fn_range.span()=>
-        // pub const IRQ_FUNCTION_NE_PTRS: [::arch::idt64::RawHandlerFuncNe; #ne_amount] = [#(#no_error_fn_idents,)*];
-        // pub const IRQ_FUNCTION_E_PTRS: [::arch::idt64::RawHandlerFuncE; #e_amount] = [#(#error_fn_idents,)*];
-        pub const IRQ_FUNCTION_NE_PTRS: [(u8, crate::idt64::RawHandlerFuncNe); #ne_amount] = [#(#no_error_fns,)*];
-        pub const IRQ_FUNCTION_E_PTRS: [(u8, crate::idt64::RawHandlerFuncE); #e_amount] = [#(#error_fns,)*];
-        pub const IRQ_FUNCTION_RESERVED_PTRS: [(u8, crate::idt64::RawHandlerFuncNe); #r_amount] = [#(#reserved_fns,)*];
+        pub const IRQ_FUNCTION_NE_PTRS: [(u8, ::arch::idt64::RawHandlerFuncNe); #ne_amount] = [#(#no_error_fns,)*];
+        pub const IRQ_FUNCTION_E_PTRS: [(u8, ::arch::idt64::RawHandlerFuncE); #e_amount] = [#(#error_fns,)*];
+        pub const IRQ_FUNCTION_RESERVED_PTRS: [(u8, ::arch::idt64::RawHandlerFuncNe); #r_amount] = [#(#reserved_fns,)*];
     }
 }
 
@@ -106,9 +104,6 @@ fn gen_macro_functions(
     let mut error = Vec::new();
     let mut reserved = Vec::new();
 
-    // pub type RawHandlerFuncNe = extern "x86-interrupt" fn(InterruptFrame);
-    // pub type RawHandlerFuncE = extern "x86-interrupt" fn(InterruptFrame, u64);
-
     for irq_id in irq_s as u8..=(irq_e as u8) {
         match irq_id {
             // No Error
@@ -117,8 +112,8 @@ fn gen_macro_functions(
                 no_error.push((irq_id, ident.clone()));
 
                 tokens.push(quote_spanned! {fn_range.span()=>
-                    extern "x86-interrupt" fn #ident(frame: crate::idt64::InterruptFrame) {
-                        let int_info = crate::idt64::InterruptInfo::convert_from_ne(#irq_id, frame);
+                    extern "x86-interrupt" fn #ident(frame: ::arch::idt64::InterruptFrame) {
+                        let int_info = ::arch::idt64::InterruptInfo::convert_from_ne(#irq_id, frame);
                         #call_ident(int_info);
                     }
                 });
@@ -129,8 +124,8 @@ fn gen_macro_functions(
                 error.push((irq_id, ident.clone()));
 
                 tokens.push(quote_spanned! {fn_range.span()=>
-                    extern "x86-interrupt" fn #ident(frame: crate::idt64::InterruptFrame, error: u64) {
-                        let int_info = crate::idt64::InterruptInfo::convert_from_e(#irq_id, frame, error);
+                    extern "x86-interrupt" fn #ident(frame: ::arch::idt64::InterruptFrame, error: u64) {
+                        let int_info = ::arch::idt64::InterruptInfo::convert_from_e(#irq_id, frame, error);
                         #call_ident(int_info);
                     }
                 });
@@ -141,7 +136,7 @@ fn gen_macro_functions(
                 reserved.push((irq_id, ident.clone()));
 
                 tokens.push(quote_spanned! {fn_range.span()=>
-                    extern "x86-interrupt" fn #ident(frame: crate::idt64::InterruptFrame) {
+                    extern "x86-interrupt" fn #ident(frame: ::arch::idt64::InterruptFrame) {
                         panic!("Reserved interrupt (IRQ{}) called! -- {:#?}", #irq_id, frame);
                     }
                 });

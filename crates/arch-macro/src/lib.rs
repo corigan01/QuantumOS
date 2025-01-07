@@ -40,28 +40,3 @@ pub fn interrupt(
 
     build::gen_interrupt(arg_tokens, input_tokens).into()
 }
-
-// #[interrupt(0..32)]
-// fn interrupt_handler() {
-//     todo!()
-// }
-//
-// mod interrupt_handler {
-//     const INTERRUPT_HANDLE_START: usize = 0;
-//     const INTERRUPT_HANDLE_END: usize = 31;
-//
-//     extern "x86-interrupt" fn irq_0(args, args) {
-//        prelog();
-//        call interrupt_handler
-//        epilog();
-//     }
-//    ...
-//
-//     fn handler_fn() {
-//        todo!()
-//     }
-// }
-//
-//
-//
-// attach_irq!(idt, interrupt_handler);
