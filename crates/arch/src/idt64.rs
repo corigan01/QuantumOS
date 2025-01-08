@@ -23,6 +23,8 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use core::fmt::Debug;
+
 use hw::make_hw;
 
 use crate::{
@@ -41,7 +43,7 @@ pub enum GateKind {
 }
 
 #[repr(C, align(4096))]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct InterruptDescTable([GateDescriptor; 256]);
 
 impl InterruptDescTable {
@@ -55,7 +57,7 @@ impl InterruptDescTable {
 
     pub fn submit_table(&self) -> IdtPointer {
         IdtPointer {
-            limit: 255,
+            limit: 255 * 16 - 1,
             offset: self.0.as_ptr() as u64,
         }
     }
@@ -87,6 +89,19 @@ impl IdtPointer {
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct GateDescriptor(u128);
+
+impl Debug for GateDescriptor {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("GateDescriptor")
+            .field("offset", &self.get_offset())
+            .field("segment", &self.get_segment_selector())
+            .field("ist", &self.get_ist())
+            .field("gate_type", &self.get_gate_kind())
+            .field("dpl", &self.get_privilege())
+            .field("present", &self.is_present_set())
+            .finish()
+    }
+}
 
 impl GateDescriptor {
     pub const fn zero() -> Self {
