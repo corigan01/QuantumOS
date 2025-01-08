@@ -28,12 +28,9 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #![feature(sync_unsafe_cell)]
 #![feature(abi_x86_interrupt)]
 
+mod idt;
 mod panic;
 
-use arch::{
-    attach_irq,
-    idt64::{ExceptionKind, InterruptDescTable, InterruptInfo, interrupt},
-};
 use bootloader::KernelBootHeader;
 use lldebug::{debug_ready, logln, make_debug};
 use serial::{Serial, baud::SerialBaud};
@@ -50,15 +47,6 @@ extern "C" fn _start(kbh: u64) -> ! {
     panic!("Main should not return");
 }
 
-#[interrupt(0..256)]
-fn main_handler(args: InterruptInfo) {
-    logln!("Handler == {:#?}", args);
-
-    if args.flags.exception_kind() == ExceptionKind::Abort {
-        panic!("Interrupt -- {:?}", args.flags);
-    }
-}
-
 #[debug_ready]
 fn main(kbh: &KernelBootHeader) {
     logln!("Welcome to the Quantum Kernel!");
@@ -67,8 +55,5 @@ fn main(kbh: &KernelBootHeader) {
         HumanBytes::from(kbh.phys_mem_map.bytes_of(mem::phys::PhysMemoryKind::Free))
     );
 
-    let mut idt = InterruptDescTable::new();
-    attach_irq!(idt, main_handler);
-
-    logln!("Attached Interrupts!");
+    idt::attach_interrupts();
 }

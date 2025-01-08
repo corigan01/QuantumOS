@@ -5,7 +5,7 @@
 \___\_\_,_/\_,_/_//_/\__/\_,_/_/_/_/ /_/|_|\__/_/ /_//_/\__/_/
   Part of the Quantum OS Kernel
 
-Copyright 2024 Gavin Kellam
+Copyright 2025 Gavin Kellam
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
 associated documentation files (the "Software"), to deal in the Software without restriction,
@@ -22,3 +22,32 @@ NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FO
 DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+
+use arch::{
+    attach_irq,
+    idt64::{ExceptionKind, InterruptDescTable, InterruptInfo, fire_debug_int, interrupt},
+};
+use lldebug::{logln, sync::Mutex};
+
+static INTERRUPT_TABLE: Mutex<InterruptDescTable> = Mutex::new(InterruptDescTable::new());
+
+#[interrupt(0..256)]
+fn main_handler(args: InterruptInfo) {
+    logln!("Handler == {:#016x?}", args);
+
+    if args.flags.exception_kind() == ExceptionKind::Abort {
+        panic!("Interrupt -- {:?}", args.flags);
+    }
+}
+
+pub fn attach_interrupts() {
+    let mut idt = INTERRUPT_TABLE.lock();
+    attach_irq!(idt, main_handler);
+    unsafe { idt.submit_table().load() };
+
+    logln!("Attached Interrupts!");
+
+    logln!("Checking Interrupts...");
+    fire_debug_int();
+    logln!("Interrupts Working!");
+}

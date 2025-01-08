@@ -40,7 +40,7 @@ pub enum GateKind {
     TrapGate,
 }
 
-#[repr(C)]
+#[repr(C, align(4096))]
 #[derive(Clone, Copy)]
 pub struct InterruptDescTable([GateDescriptor; 256]);
 
@@ -53,7 +53,7 @@ impl InterruptDescTable {
         self.0[irq as usize] = gate;
     }
 
-    pub fn submit_table(&'static self) -> IdtPointer {
+    pub fn submit_table(&self) -> IdtPointer {
         IdtPointer {
             limit: 255,
             offset: self.0.as_ptr() as u64,
@@ -61,8 +61,8 @@ impl InterruptDescTable {
     }
 }
 
-#[repr(C)]
-#[derive(Clone, Copy)]
+#[repr(C, packed)]
+#[derive(Clone, Copy, Debug)]
 pub struct IdtPointer {
     limit: u16,
     offset: u64,
@@ -408,4 +408,8 @@ macro_rules! attach_irq {
             $idt.attach_raw(irq_num, gate);
         }
     }};
+}
+
+pub fn fire_debug_int() {
+    unsafe { core::arch::asm!("int 0x01") };
 }
