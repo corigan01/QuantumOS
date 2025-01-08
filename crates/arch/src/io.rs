@@ -32,6 +32,12 @@ use core::{
 #[repr(transparent)]
 pub struct IOPort(u16);
 
+pub fn io_wait() {
+    for _ in 0..4 {
+        unsafe { IOPort::new(0x80).write_byte(0) };
+    }
+}
+
 impl IOPort {
     /// # New
     /// Crate a new x86 IO port struct.

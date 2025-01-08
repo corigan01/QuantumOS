@@ -30,6 +30,7 @@ pub mod gdt;
 pub mod idt64;
 pub mod io;
 pub mod paging64;
+pub mod pic8259;
 pub mod registers;
 
 pub mod interrupts {
