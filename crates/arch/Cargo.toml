@@ -11,3 +11,4 @@ bits = {workspace = true}
 hw = {workspace = true}
 util = {workspace = true}
 arch-macro = {workspace = true}
+lldebug = {workspace = true}

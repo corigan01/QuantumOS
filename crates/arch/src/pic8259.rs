@@ -87,7 +87,7 @@ pub unsafe fn pic_remap(vector_offset_1: u8, vector_offset_2: u8) {
 
 pub unsafe fn pic_eoi(irq: u8) {
     assert!(irq < 16, "Cannot have a IRQ larger then 16!");
-    if irq >= 8 {
+    if irq > 8 {
         PIC_2_COMMAND.write_byte(OCW_EOI);
     }
     PIC_1_COMMAND.write_byte(OCW_EOI);

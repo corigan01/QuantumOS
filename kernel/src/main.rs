@@ -28,7 +28,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #![feature(sync_unsafe_cell)]
 #![feature(abi_x86_interrupt)]
 
-mod idt;
+mod int;
 mod panic;
 
 use bootloader::KernelBootHeader;
@@ -55,5 +55,8 @@ fn main(kbh: &KernelBootHeader) {
         HumanBytes::from(kbh.phys_mem_map.bytes_of(mem::phys::PhysMemoryKind::Free))
     );
 
-    idt::attach_interrupts();
+    int::attach_interrupts();
+    int::enable_pic();
+
+    loop {}
 }

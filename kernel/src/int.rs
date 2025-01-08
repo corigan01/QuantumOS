@@ -25,7 +25,11 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 use arch::{
     attach_irq,
-    idt64::{ExceptionKind, InterruptDescTable, InterruptInfo, fire_debug_int, interrupt},
+    idt64::{
+        ExceptionKind, InterruptDescTable, InterruptFlags, InterruptInfo, fire_debug_int, interrupt,
+    },
+    interrupts::enable_interrupts,
+    pic8259::{pic_eoi, pic_remap},
 };
 use lldebug::{logln, sync::Mutex};
 
@@ -37,6 +41,16 @@ fn main_handler(args: InterruptInfo) {
 
     if args.flags.exception_kind() == ExceptionKind::Abort {
         panic!("Interrupt -- {:?}", args.flags);
+    }
+
+    match args.flags {
+        InterruptFlags::GeneralProtectionFault => panic!("GPF"),
+        // IRQ
+        InterruptFlags::Irq(irq_num) if irq_num - PIC_IRQ_OFFSET <= 16 => {
+            logln!("EOI -- {}", irq_num - PIC_IRQ_OFFSET);
+            unsafe { pic_eoi(irq_num - PIC_IRQ_OFFSET) };
+        }
+        _ => (),
     }
 }
 
@@ -50,4 +64,13 @@ pub fn attach_interrupts() {
     logln!("Checking Interrupts...");
     fire_debug_int();
     logln!("Interrupts Working!");
+}
+
+const PIC_IRQ_OFFSET: u8 = 0x20;
+
+pub fn enable_pic() {
+    unsafe {
+        pic_remap(PIC_IRQ_OFFSET, PIC_IRQ_OFFSET + 8);
+        enable_interrupts();
+    }
 }
