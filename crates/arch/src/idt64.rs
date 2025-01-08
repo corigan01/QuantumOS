@@ -29,6 +29,7 @@ use crate::{
     registers::{cr2, Segment},
     CpuPrivilege,
 };
+pub use arch_macro::interrupt;
 
 #[derive(Clone, Copy, Debug)]
 pub enum GateKind {
@@ -50,6 +51,26 @@ impl InterruptDescTable {
 
     pub const fn attach_raw(&mut self, irq: u8, gate: GateDescriptor) {
         self.0[irq as usize] = gate;
+    }
+
+    pub fn submit_table(&'static self) -> IdtPointer {
+        IdtPointer {
+            limit: 255,
+            offset: self.0.as_ptr() as u64,
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct IdtPointer {
+    limit: u16,
+    offset: u64,
+}
+
+impl IdtPointer {
+    pub unsafe fn load(self) {
+        unsafe { core::arch::asm!("lidt [{}]", in(reg) &self) }
     }
 }
 
@@ -223,7 +244,7 @@ pub enum InterruptFlags {
     Irq(u8),
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ExceptionKind {
     Interrupt,
     Fault,
@@ -264,7 +285,7 @@ impl InterruptFlags {
         }
     }
 
-    fn convert_from_interrupt(irq_id: u8, frame: &InterruptFrame, error: u64) -> Self {
+    fn convert_from_interrupt(irq_id: u8, error: u64) -> Self {
         match irq_id {
             0 => Self::DivisionError,
             1 => Self::Debug,
@@ -328,14 +349,14 @@ impl InterruptInfo {
     pub fn convert_from_ne(irq_id: u8, frame: InterruptFrame) -> Self {
         Self {
             frame,
-            flags: InterruptFlags::convert_from_interrupt(irq_id, &frame, 0),
+            flags: InterruptFlags::convert_from_interrupt(irq_id, 0),
         }
     }
 
     pub fn convert_from_e(irq_id: u8, frame: InterruptFrame, error: u64) -> Self {
         Self {
             frame,
-            flags: InterruptFlags::convert_from_interrupt(irq_id, &frame, error),
+            flags: InterruptFlags::convert_from_interrupt(irq_id, error),
         }
     }
 }
@@ -345,11 +366,14 @@ macro_rules! attach_irq {
     ($idt: ident, $irq: ident) => {{
         for (irq_num, handler_ptr) in $irq::IRQ_FUNCTION_E_PTRS {
             // FIXME: We need to allow the caller to define what these should be
-            let mut gate = GateDescriptor::zero();
+            let mut gate = ::arch::idt64::GateDescriptor::zero();
             gate.set_offset(handler_ptr as u64);
-            gate.set_code_segment(Segment::new(1, CpuPrivilege::Ring0));
-            gate.set_privilege(CpuPrivilege::Ring0);
-            gate.set_gate_kind(GateKind::InterruptGate);
+            gate.set_code_segment(::arch::registers::Segment::new(
+                1,
+                ::arch::CpuPrivilege::Ring0,
+            ));
+            gate.set_privilege(::arch::CpuPrivilege::Ring0);
+            gate.set_gate_kind(::arch::idt64::GateKind::InterruptGate);
             gate.set_present_flag(true);
 
             $idt.attach_raw(irq_num, gate);
@@ -357,22 +381,28 @@ macro_rules! attach_irq {
 
         for (irq_num, handler_ptr) in $irq::IRQ_FUNCTION_NE_PTRS {
             // FIXME: We need to allow the caller to define what these should be
-            let mut gate = GateDescriptor::zero();
+            let mut gate = ::arch::idt64::GateDescriptor::zero();
             gate.set_offset(handler_ptr as u64);
-            gate.set_code_segment(Segment::new(1, CpuPrivilege::Ring0));
-            gate.set_privilege(CpuPrivilege::Ring0);
-            gate.set_gate_kind(GateKind::InterruptGate);
+            gate.set_code_segment(::arch::registers::Segment::new(
+                1,
+                ::arch::CpuPrivilege::Ring0,
+            ));
+            gate.set_privilege(::arch::CpuPrivilege::Ring0);
+            gate.set_gate_kind(::arch::idt64::GateKind::InterruptGate);
             gate.set_present_flag(true);
 
             $idt.attach_raw(irq_num, gate);
         }
 
         for (irq_num, handler_ptr) in $irq::IRQ_FUNCTION_RESERVED_PTRS {
-            let mut gate = GateDescriptor::zero();
+            let mut gate = ::arch::idt64::GateDescriptor::zero();
             gate.set_offset(handler_ptr as u64);
-            gate.set_code_segment(Segment::new(1, CpuPrivilege::Ring0));
-            gate.set_privilege(CpuPrivilege::Ring0);
-            gate.set_gate_kind(GateKind::InterruptGate);
+            gate.set_code_segment(::arch::registers::Segment::new(
+                1,
+                ::arch::CpuPrivilege::Ring0,
+            ));
+            gate.set_privilege(::arch::CpuPrivilege::Ring0);
+            gate.set_gate_kind(::arch::idt64::GateKind::InterruptGate);
             gate.set_present_flag(true);
 
             $idt.attach_raw(irq_num, gate);

@@ -12,3 +12,4 @@ lldebug = { workspace = true }
 serial = { workspace = true }
 util = {workspace = true}
 mem = {workspace = true}
+arch = {workspace = true}
