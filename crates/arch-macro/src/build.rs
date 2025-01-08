@@ -56,7 +56,6 @@ pub fn gen_interrupt(
 fn gen_main_fn(input: &ParsedInterrupt) -> proc_macro2::TokenStream {
     let fn_body = &input.fn_tokens;
     quote_spanned! {input.fn_tokens.span()=>
-        #[inline]
         #fn_body
     }
 }
