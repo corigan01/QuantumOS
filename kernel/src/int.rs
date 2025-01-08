@@ -37,20 +37,19 @@ static INTERRUPT_TABLE: Mutex<InterruptDescTable> = Mutex::new(InterruptDescTabl
 
 #[interrupt(0..256)]
 fn main_handler(args: InterruptInfo) {
-    logln!("Handler == {:#016x?}", args);
+    match args.flags {
+        // IRQ
+        InterruptFlags::Irq(irq_num) if irq_num - PIC_IRQ_OFFSET <= 16 => {
+            unsafe { pic_eoi(irq_num - PIC_IRQ_OFFSET) };
+        }
+        exception => {
+            logln!("{:#?}", exception)
+        }
+        _ => (),
+    }
 
     if args.flags.exception_kind() == ExceptionKind::Abort {
         panic!("Interrupt -- {:?}", args.flags);
-    }
-
-    match args.flags {
-        InterruptFlags::GeneralProtectionFault => panic!("GPF"),
-        // IRQ
-        InterruptFlags::Irq(irq_num) if irq_num - PIC_IRQ_OFFSET <= 16 => {
-            logln!("EOI -- {}", irq_num - PIC_IRQ_OFFSET);
-            unsafe { pic_eoi(irq_num - PIC_IRQ_OFFSET) };
-        }
-        _ => (),
     }
 }
 

@@ -65,6 +65,12 @@ impl Display for ArchSelect {
 async fn cargo_helper(profile: Option<&str>, package: &str, arch: ArchSelect) -> Result<PathBuf> {
     let compile_mode = profile.unwrap_or("release");
 
+    let build_std_options: &[&str] = if package == "kernel" {
+        &["-Zbuild-std=core,alloc"]
+    } else {
+        &["-Zbuild-std=core"]
+    };
+
     Command::new("cargo")
         .env_remove("RUSTFLAGS")
         .env_remove("CARGO_ENCODED_RUSTFLAGS")
@@ -80,10 +86,10 @@ async fn cargo_helper(profile: Option<&str>, package: &str, arch: ArchSelect) ->
             arch.to_string().as_str(),
             "--artifact-dir",
             "./target/bin",
-            "-Zbuild-std=core",
             "-Zbuild-std-features=compiler-builtins-mem",
             "-Zunstable-options",
         ])
+        .args(build_std_options)
         .stdout(Stdio::null())
         .stderr(Stdio::inherit())
         .status()

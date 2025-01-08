@@ -27,14 +27,32 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #![no_main]
 #![feature(sync_unsafe_cell)]
 #![feature(abi_x86_interrupt)]
+#![feature(allocator_api)]
 
 mod int;
 mod panic;
+extern crate alloc;
+
+use core::alloc::GlobalAlloc;
 
 use bootloader::KernelBootHeader;
 use lldebug::{debug_ready, logln, make_debug};
 use serial::{Serial, baud::SerialBaud};
 use util::bytes::HumanBytes;
+
+pub struct Dingus {}
+unsafe impl GlobalAlloc for Dingus {
+    unsafe fn alloc(&self, layout: core::alloc::Layout) -> *mut u8 {
+        todo!()
+    }
+
+    unsafe fn dealloc(&self, ptr: *mut u8, layout: core::alloc::Layout) {
+        todo!()
+    }
+}
+
+#[global_allocator]
+static DINGUS: Dingus = Dingus {};
 
 make_debug! {
     "Serial": Option<Serial> = Serial::probe_first(SerialBaud::Baud115200);

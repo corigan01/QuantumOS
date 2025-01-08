@@ -11,5 +11,5 @@ bootloader = { workspace = true }
 lldebug = { workspace = true }
 serial = { workspace = true }
 util = {workspace = true}
-mem = {workspace = true}
+mem = {workspace = true, features = ["alloc"]}
 arch = {workspace = true}

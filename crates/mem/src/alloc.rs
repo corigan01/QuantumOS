@@ -23,15 +23,6 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-#![no_std]
-#[cfg(feature = "alloc")]
-pub mod alloc;
-pub mod phys;
+extern crate alloc;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum MemoryError {
-    ArrayTooSmall,
-    EmptySegment,
-    InvalidSize,
-    EntrySizeIsNegative,
-}
+pub fn test() {}
