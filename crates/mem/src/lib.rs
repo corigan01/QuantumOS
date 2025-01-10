@@ -24,9 +24,12 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 #![no_std]
+
 #[cfg(feature = "alloc")]
 pub mod alloc;
 pub mod phys;
+#[cfg(feature = "alloc")]
+pub mod pmm;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MemoryError {
@@ -34,4 +37,8 @@ pub enum MemoryError {
     EmptySegment,
     InvalidSize,
     EntrySizeIsNegative,
+    NotPageAligned,
+    AlreadyUsed,
+    TableNotSupported,
+    PtrWasNull,
 }

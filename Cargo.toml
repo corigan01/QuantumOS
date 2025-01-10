@@ -21,7 +21,8 @@ members = [
   "crates/util", 
   "crates/elf", 
   "crates/mem",
-  "crates/arch-macro"
+  "crates/arch-macro",
+  "crates/boolvec"
 ]
 
 default-members = ["meta"]
@@ -50,6 +51,7 @@ hw-macro = { path = "crates/hw-macro" }
 util = { path = "crates/util" }
 elf = { path = "crates/elf" }
 mem = { path = "crates/mem" }
+boolvec = { path = "crates/boolvec" }
 
 [profile.stage-bootsector]
 inherits = "release"

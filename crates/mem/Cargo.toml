@@ -9,7 +9,8 @@ documentation.workspace = true
 [dependencies]
 lldebug = {workspace = true}
 util = {workspace = true}
+boolvec = {workspace = true, optional = true}
 
 [features]
-alloc = []
+alloc = ["dep:boolvec"]
 default = []
