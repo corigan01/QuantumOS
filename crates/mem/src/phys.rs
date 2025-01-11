@@ -161,6 +161,22 @@ impl<const N: usize> PhysMemoryMap<N> {
         bytes as usize
     }
 
+    pub fn sdram_bytes(&self) -> usize {
+        let mut bytes = 0;
+        self.iter()
+            .filter(|r| match r.kind {
+                PhysMemoryKind::Free
+                | PhysMemoryKind::AcpiReclaimable
+                | PhysMemoryKind::Bootloader
+                | PhysMemoryKind::Kernel
+                | PhysMemoryKind::PageTables => true,
+                _ => false,
+            })
+            .for_each(|region| bytes += region.end - region.start);
+
+        bytes as usize
+    }
+
     pub fn find_continuous_of(
         &mut self,
         from_kind: PhysMemoryKind,

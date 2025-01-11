@@ -30,6 +30,7 @@ use alloc::vec::Vec;
 
 type BackingType = u64;
 
+#[derive(Clone)]
 pub struct BoolVec(Vec<BackingType>);
 
 impl BoolVec {

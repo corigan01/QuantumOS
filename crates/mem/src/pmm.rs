@@ -23,6 +23,11 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use crate::{
+    MemoryError,
+    phys::{PhysMemoryKind, PhysMemoryMap},
+};
+
 extern crate alloc;
 
 mod backing;
@@ -31,4 +36,36 @@ mod backing;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct PhysPage(pub u64);
 
-pub struct Pmm {}
+pub struct Pmm {
+    table: backing::MemoryTable<backing::TableBits>,
+}
+
+impl Pmm {
+    pub fn new<const SIZE: usize>(memory_map: &PhysMemoryMap<SIZE>) -> Result<Self, MemoryError> {
+        let total_real_memory = memory_map.sdram_bytes() as u64;
+
+        let mut opt_table = *backing::OPT_TABLES.last().unwrap();
+        for table_size in backing::OPT_TABLES {
+            if total_real_memory < (table_size * backing::TABLE_SIZE as u64) {
+                opt_table = table_size;
+            }
+        }
+
+        let mut table = backing::MemoryTable::new(opt_table);
+
+        memory_map
+            .iter()
+            .filter(|entry| entry.kind == PhysMemoryKind::Free)
+            .try_for_each(|entry| table.populate_with(entry.start, entry.end).map(|_| ()))?;
+
+        Ok(Self { table })
+    }
+
+    pub fn allocate_page(&mut self) -> Result<PhysPage, MemoryError> {
+        self.table.request_page()
+    }
+
+    pub fn free_page(&mut self, page: PhysPage) -> Result<(), MemoryError> {
+        self.table.free_page(page)
+    }
+}

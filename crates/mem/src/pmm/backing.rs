@@ -31,10 +31,10 @@ use alloc::boxed::Box;
 use boolvec::BoolVec;
 use core::ptr::NonNull;
 
-pub const TABLE_SIZE: usize = 4096;
+pub const TABLE_SIZE: usize = 512;
 
 // Single 4 Kib Page
-const PAGE_SIZE: u64 = 4096;
+pub const PAGE_SIZE: u64 = 4096;
 
 pub const LVL0_TABLE: u64 = PAGE_SIZE;
 pub const LVL1_TABLE: u64 = LVL0_TABLE * (TABLE_SIZE as u64);
@@ -42,68 +42,47 @@ pub const LVL2_TABLE: u64 = LVL1_TABLE * (TABLE_SIZE as u64);
 pub const LVL3_TABLE: u64 = LVL2_TABLE * (TABLE_SIZE as u64);
 pub const LVL4_TABLE: u64 = LVL3_TABLE * (TABLE_SIZE as u64);
 
+pub const OPT_TABLES: [u64; 4] = [LVL1_TABLE, LVL2_TABLE, LVL3_TABLE, LVL4_TABLE];
+
 #[derive(Clone, Copy)]
-pub struct MemoryAtom(u64, usize);
-
-impl MemoryAtom {
-    pub const fn empty() -> Self {
-        Self(0, 0)
-    }
-
-    pub const fn set_size(&mut self, size: usize) {
-        self.1 = size;
-    }
-
-    pub const fn size(&self) -> usize {
-        self.1
-    }
-
-    pub fn put_ptr<T: TableImpl>(&mut self, ptr: NonNull<MemoryTable<T>>) {
-        self.0 = ptr.addr().get() as u64;
-    }
-
-    pub const fn set_present(&mut self) {
-        if !self.is_present() {
-            self.0 |= 1;
-        }
-    }
-
-    pub const fn is_present(&self) -> bool {
-        self.0 != 0
-    }
-
-    pub const fn is_allocated(&self) -> bool {
-        self.0 > 1
-    }
-
-    fn get_ptr<T>(&self) -> Option<NonNull<T>> {
-        NonNull::new((self.0) as *mut _)
-    }
-
-    pub fn get<T: TableImpl>(&self) -> Option<&MemoryTable<T>> {
-        if self.is_allocated() {
-            Some(unsafe { &*(self.get_ptr()?.as_ptr()) })
-        } else {
-            None
-        }
-    }
-
-    pub fn get_mut<T: TableImpl>(&mut self) -> Option<&mut MemoryTable<T>> {
-        if self.is_allocated() {
-            Some(unsafe { &mut *(self.get_ptr()?.as_ptr()) })
-        } else {
-            None
-        }
-    }
+enum TableElementKind {
+    NotAllocated,
+    Present,
+    TableFlat {
+        ptr: NonNull<MemoryTable<TableFlat>>,
+        atom: usize,
+    },
+    TableBits {
+        ptr: NonNull<MemoryTable<TableBits>>,
+        atom: usize,
+    },
 }
 
-struct TableFlat {
-    table: [MemoryAtom; TABLE_SIZE],
+pub struct TableFlat {
+    table: [TableElementKind; TABLE_SIZE],
+    available: BoolVec,
     healthy_tables: usize,
     dirty_tables: usize,
 }
 
-struct TableBits {
+impl Drop for TableFlat {
+    fn drop(&mut self) {
+        for atom in self.table {
+            match atom {
+                TableElementKind::NotAllocated => (),
+                TableElementKind::Present => (),
+                TableElementKind::TableFlat { ptr, .. } => {
+                    let _ = unsafe { Box::from_raw(ptr.as_ptr()) };
+                }
+                TableElementKind::TableBits { ptr, .. } => {
+                    let _ = unsafe { Box::from_raw(ptr.as_ptr()) };
+                }
+            }
+        }
+    }
+}
+
+pub struct TableBits {
     table: BoolVec,
     real_pages: BoolVec,
     atom_size: usize,
@@ -130,6 +109,7 @@ pub trait TableImpl: Sized {
     fn free_page(&mut self, page: u64, el_size: u64) -> Result<AllocationResult, MemoryError>;
 }
 
+#[derive(Clone)]
 pub struct MemoryTable<Table: TableImpl> {
     table: Table,
     element_size: u64,
@@ -172,9 +152,10 @@ impl<Table: TableImpl> MemoryTable<Table> {
 impl TableImpl for TableFlat {
     fn empty() -> Self {
         Self {
-            table: [MemoryAtom::empty(); TABLE_SIZE],
+            table: [TableElementKind::NotAllocated; TABLE_SIZE],
             healthy_tables: 0,
             dirty_tables: 0,
+            available: BoolVec::new(),
         }
     }
 
@@ -193,26 +174,34 @@ impl TableImpl for TableFlat {
             let rel_start = start_ptr % el_size;
             let rel_end = end_ptr.min(el_size);
             let elements = ((rel_end - rel_start) / (el_size / TABLE_SIZE as u64)) as usize;
+            self.available.set((start_ptr / el_size) as usize, true);
 
-            if !self.table[(start_ptr / el_size) as usize].is_present() {
-                let atom = &mut self.table[(start_ptr / el_size) as usize];
-                if el_size <= LVL1_TABLE {
-                    let bref = Box::leak(Box::new(MemoryTable::<TableBits>::new(
-                        el_size / TABLE_SIZE as u64,
-                    )));
+            match self.table[(start_ptr / el_size) as usize] {
+                TableElementKind::Present
+                | TableElementKind::TableFlat { .. }
+                | TableElementKind::TableBits { .. } => (),
+                TableElementKind::NotAllocated if el_size <= LVL1_TABLE => {
+                    let atom = &mut self.table[(start_ptr / el_size) as usize];
+                    let bref = Box::leak(Box::new(MemoryTable::new(el_size / TABLE_SIZE as u64)));
                     bref.populate_with(rel_start, rel_end)?;
-                    atom.put_ptr(bref.into());
-                    atom.set_size(elements);
-                } else {
-                    let bref = Box::leak(Box::new(MemoryTable::<TableFlat>::new(
-                        el_size / TABLE_SIZE as u64,
-                    )));
-                    bref.populate_with(rel_start, rel_end)?;
-                    atom.put_ptr(bref.into());
-                    atom.set_size(elements);
+
+                    *atom = TableElementKind::TableBits {
+                        ptr: bref.into(),
+                        atom: elements,
+                    };
+                    self.dirty_tables += 1;
                 }
+                TableElementKind::NotAllocated => {
+                    let atom = &mut self.table[(start_ptr / el_size) as usize];
+                    let bref = Box::leak(Box::new(MemoryTable::new(el_size / TABLE_SIZE as u64)));
+                    bref.populate_with(rel_start, rel_end)?;
 
-                self.dirty_tables += 1;
+                    *atom = TableElementKind::TableFlat {
+                        ptr: bref.into(),
+                        atom: elements,
+                    };
+                    self.dirty_tables += 1;
+                }
             }
         }
 
@@ -220,26 +209,34 @@ impl TableImpl for TableFlat {
             let rel_start = 0;
             let rel_end = end_ptr % el_size;
             let elements = ((rel_end - rel_start) / (el_size / TABLE_SIZE as u64)) as usize;
+            self.available.set((end_ptr / el_size) as usize, true);
 
-            if !self.table[(end_ptr / el_size) as usize].is_present() {
-                let atom = &mut self.table[(end_ptr / el_size) as usize];
-                if el_size <= LVL1_TABLE {
-                    let bref = Box::leak(Box::new(MemoryTable::<TableBits>::new(
-                        el_size / TABLE_SIZE as u64,
-                    )));
+            match self.table[(end_ptr / el_size) as usize] {
+                TableElementKind::Present
+                | TableElementKind::TableFlat { .. }
+                | TableElementKind::TableBits { .. } => (),
+                TableElementKind::NotAllocated if el_size <= LVL1_TABLE => {
+                    let atom = &mut self.table[(end_ptr / el_size) as usize];
+                    let bref = Box::leak(Box::new(MemoryTable::new(el_size / TABLE_SIZE as u64)));
                     bref.populate_with(rel_start, rel_end)?;
-                    atom.put_ptr(bref.into());
-                    atom.set_size(elements);
-                } else {
-                    let bref = Box::leak(Box::new(MemoryTable::<TableFlat>::new(
-                        el_size / TABLE_SIZE as u64,
-                    )));
-                    bref.populate_with(rel_start, rel_end)?;
-                    atom.put_ptr(bref.into());
-                    atom.set_size(elements);
+
+                    *atom = TableElementKind::TableBits {
+                        ptr: bref.into(),
+                        atom: elements,
+                    };
+                    self.dirty_tables += 1;
                 }
+                TableElementKind::NotAllocated => {
+                    let atom = &mut self.table[(end_ptr / el_size) as usize];
+                    let bref = Box::leak(Box::new(MemoryTable::new(el_size / TABLE_SIZE as u64)));
+                    bref.populate_with(rel_start, rel_end)?;
 
-                self.dirty_tables += 1;
+                    *atom = TableElementKind::TableFlat {
+                        ptr: bref.into(),
+                        atom: elements,
+                    };
+                    self.dirty_tables += 1;
+                }
             }
         }
 
@@ -252,9 +249,8 @@ impl TableImpl for TableFlat {
         self.healthy_tables += (atom_end - atom_start) as usize;
 
         for atom_idx in atom_start..atom_end {
-            let atom = &mut self.table[atom_idx as usize];
-            atom.set_present();
-            atom.set_size(TABLE_SIZE);
+            self.available.set(atom_idx as usize, true);
+            self.table[atom_idx as usize] = TableElementKind::Present;
         }
 
         Ok(self.healthy_tables.max(self.dirty_tables.min(1)))
@@ -265,63 +261,64 @@ impl TableImpl for TableFlat {
             return Err(MemoryError::OutOfMemory);
         }
 
-        let optimal_index = self
-            .table
-            .iter()
-            .enumerate()
-            .filter(|(_, atom)| atom.is_present() && atom.size() > 0)
-            .min_by(|(_, lhs), (_, rhs)| lhs.size().cmp(&rhs.size()))
-            .map(|(i, _)| i)
+        let atom_index = self
+            .available
+            .find_first_of(true)
             .ok_or(MemoryError::OutOfMemory)?;
+        let atom = &mut self.table[atom_index];
 
-        let atom = &mut self.table[optimal_index];
-        let page = if atom.is_allocated() {
-            let AllocationResult { page, new_size } = if el_size <= LVL1_TABLE {
-                atom.get_mut::<TableBits>()
-                    .unwrap()
-                    .request_page_from_higher()
-            } else {
-                atom.get_mut::<TableFlat>()
-                    .unwrap()
-                    .request_page_from_higher()
-            }?;
+        let alloc_result = match atom {
+            TableElementKind::Present if el_size <= LVL1_TABLE => {
+                let bref = Box::leak(Box::new(MemoryTable::new(el_size / TABLE_SIZE as u64)));
+                bref.populate_with(0, el_size)?;
+                *atom = TableElementKind::TableBits {
+                    ptr: bref.into(),
+                    atom: TABLE_SIZE,
+                };
 
-            if new_size == 0 {
-                self.dirty_tables -= 1;
+                self.healthy_tables -= 1;
+                self.dirty_tables += 1;
+
+                bref.request_page_from_higher()
             }
-            atom.set_size(new_size);
-
-            page
-        } else {
-            let AllocationResult { page, .. } = if el_size <= LVL1_TABLE {
-                let bref = Box::leak(Box::new(MemoryTable::<TableBits>::new(
-                    el_size / TABLE_SIZE as u64,
-                )));
+            TableElementKind::Present => {
+                let bref = Box::leak(Box::new(MemoryTable::new(el_size / TABLE_SIZE as u64)));
                 bref.populate_with(0, el_size)?;
-                atom.put_ptr(bref.into());
-                atom.set_size(TABLE_SIZE);
+                *atom = TableElementKind::TableFlat {
+                    ptr: bref.into(),
+                    atom: TABLE_SIZE,
+                };
+
+                self.healthy_tables -= 1;
+                self.dirty_tables += 1;
 
                 bref.request_page_from_higher()
-            } else {
-                let bref = Box::leak(Box::new(MemoryTable::<TableFlat>::new(
-                    el_size / TABLE_SIZE as u64,
-                )));
-                bref.populate_with(0, el_size)?;
-                atom.put_ptr(bref.into());
-                atom.set_size(TABLE_SIZE);
+            }
+            TableElementKind::TableFlat { ptr, .. } => {
+                let inner = unsafe { ptr.as_mut() };
+                inner.request_page_from_higher()
+            }
+            TableElementKind::TableBits { ptr, .. } => {
+                let inner = unsafe { ptr.as_mut() };
+                inner.request_page_from_higher()
+            }
+            _ => return Err(MemoryError::OutOfMemory),
+        }?;
 
-                bref.request_page_from_higher()
-            }?;
+        match atom {
+            TableElementKind::TableFlat { atom, .. } | TableElementKind::TableBits { atom, .. } => {
+                *atom = alloc_result.new_size;
+            }
+            _ => unreachable!(),
+        }
 
-            // Since we downgraded a table, we remove one from our healthy table list
-            self.healthy_tables -= 1;
-            self.dirty_tables += 1;
-
-            page
-        };
+        if alloc_result.new_size == 0 {
+            self.dirty_tables -= 1;
+            self.available.set(atom_index, false);
+        }
 
         Ok(AllocationResult {
-            page: PhysPage(page.0 + ((optimal_index as u64 * el_size) / PAGE_SIZE)),
+            page: PhysPage(alloc_result.page.0 + ((atom_index as u64 * el_size) / PAGE_SIZE)),
             new_size: self.healthy_tables.max(self.dirty_tables.min(1)),
         })
     }
@@ -330,23 +327,25 @@ impl TableImpl for TableFlat {
         let table_index = ((page * PAGE_SIZE) / el_size) as usize;
         let inner_index = ((page * PAGE_SIZE) % el_size) / PAGE_SIZE;
 
-        let previous_size = self.table[table_index].size();
+        let (previous_size, alloc_result) = match &mut self.table[table_index] {
+            TableElementKind::NotAllocated => return Err(MemoryError::NotPhysicalPage),
+            TableElementKind::Present => return Err(MemoryError::DoubleFree),
+            TableElementKind::TableFlat { ptr, atom } => (
+                *atom,
+                unsafe { ptr.as_mut() }.free_page_from_higher(PhysPage(inner_index))?,
+            ),
+            TableElementKind::TableBits { ptr, atom } => (
+                *atom,
+                unsafe { ptr.as_mut() }.free_page_from_higher(PhysPage(inner_index))?,
+            ),
+        };
 
-        let alloc_result = if el_size <= LVL1_TABLE {
-            let Some(lower_table) = self.table[table_index].get_mut::<TableBits>() else {
-                return Err(MemoryError::NotPhysicalPage);
-            };
-
-            lower_table.free_page_from_higher(PhysPage(inner_index))
-        } else {
-            let Some(lower_table) = self.table[table_index].get_mut::<TableFlat>() else {
-                return Err(MemoryError::NotPhysicalPage);
-            };
-
-            lower_table.free_page_from_higher(PhysPage(inner_index))
-        }?;
-
-        self.table[table_index].set_size(alloc_result.new_size);
+        match &mut self.table[table_index] {
+            TableElementKind::TableFlat { atom, .. } | TableElementKind::TableBits { atom, .. } => {
+                *atom = alloc_result.new_size;
+            }
+            _ => unreachable!(),
+        }
 
         if alloc_result.new_size >= TABLE_SIZE {
             self.healthy_tables += 1;
@@ -440,6 +439,7 @@ impl TableImpl for TableBits {
 
 #[cfg(test)]
 mod test {
+
     use super::*;
 
     #[test]
@@ -489,7 +489,6 @@ mod test {
     #[ignore = "Slow test"]
     #[test]
     fn test_build_layer_three_table() {
-        lldebug::testing_stdout!();
         let mut mt = MemoryTable::<TableFlat>::new(LVL2_TABLE);
 
         // Table relative
@@ -574,7 +573,6 @@ mod test {
 
     #[test]
     fn test_build_and_free_tables() {
-        lldebug::testing_stdout!();
         let mut mt = MemoryTable::<TableFlat>::new(LVL2_TABLE);
 
         let start = 0;
