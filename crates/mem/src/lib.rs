@@ -44,4 +44,5 @@ pub enum MemoryError {
     OutOfMemory,
     NotPhysicalPage,
     DoubleFree,
+    NotFound,
 }
