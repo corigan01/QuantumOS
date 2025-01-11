@@ -41,4 +41,5 @@ pub enum MemoryError {
     AlreadyUsed,
     TableNotSupported,
     PtrWasNull,
+    OutOfMemory,
 }
