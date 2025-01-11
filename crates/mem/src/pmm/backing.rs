@@ -32,59 +32,53 @@ use boolvec::BoolVec;
 use core::ptr::NonNull;
 use lldebug::logln;
 
-const TABLE_SIZE: usize = 256;
-const KERNEL_PTR: u64 = 0x100000000000;
+pub const TABLE_SIZE: usize = 256;
 
 // Single 4 Kib Page
 const PAGE_SIZE: u64 = 4096;
 
-// Lvl0 4 Kib   -- 256 sections [PAGE_SIZE; 256]
-const LVL0_TABLE: u64 = PAGE_SIZE;
-// Lvl1 1 Mib   -- 256 sections [LVL0_TABLE; 256]
-const LVL1_TABLE: u64 = LVL0_TABLE * (TABLE_SIZE as u64);
-// Lvl2 256 Mib -- 256 sections [LVL1_TABLE; 256]
-const LVL2_TABLE: u64 = LVL1_TABLE * (TABLE_SIZE as u64);
-// Lvl3 64 Gib  -- 256 sections [LVL2_TABLE; 256]
-const LVL3_TABLE: u64 = LVL2_TABLE * (TABLE_SIZE as u64);
-// Lvl4 16 Tib  -- 256 sections [LVL3_TABLE; 256]
-const LVL4_TABLE: u64 = LVL3_TABLE * (TABLE_SIZE as u64);
+pub const LVL0_TABLE: u64 = PAGE_SIZE;
+pub const LVL1_TABLE: u64 = LVL0_TABLE * (TABLE_SIZE as u64);
+pub const LVL2_TABLE: u64 = LVL1_TABLE * (TABLE_SIZE as u64);
+pub const LVL3_TABLE: u64 = LVL2_TABLE * (TABLE_SIZE as u64);
+pub const LVL4_TABLE: u64 = LVL3_TABLE * (TABLE_SIZE as u64);
 
 #[derive(Clone, Copy)]
-pub struct MemoryAtom(u64);
+pub struct MemoryAtom(u64, usize);
 
 impl MemoryAtom {
     pub const fn empty() -> Self {
-        Self(0)
+        Self(0, 0)
     }
 
-    pub const fn set_size(&mut self, size: u8) {
-        self.0 = (self.0 & !0xFF) | (size as u64);
+    pub const fn set_size(&mut self, size: usize) {
+        self.1 = size;
     }
 
-    pub const fn size(&self) -> u8 {
-        (self.0 & 0xFF) as u8
+    pub const fn size(&self) -> usize {
+        self.1
     }
 
     pub fn put_ptr<T: TableImpl>(&mut self, ptr: NonNull<MemoryTable<T>>) {
-        self.0 = ((ptr.addr().get() as u64 & (!KERNEL_PTR)) << 8) | self.0 & 0xFF;
+        self.0 = ptr.addr().get() as u64;
     }
 
     pub const fn set_present(&mut self) {
         if !self.is_present() {
-            self.0 |= 1 << 8;
+            self.0 |= 1;
         }
     }
 
     pub const fn is_present(&self) -> bool {
-        self.0 >> 8 != 0
+        self.0 != 0
     }
 
     pub const fn is_allocated(&self) -> bool {
-        self.0 >> 8 > 1
+        self.0 > 1
     }
 
     fn get_ptr<T>(&self) -> Option<NonNull<T>> {
-        NonNull::new((self.0 >> 8 | KERNEL_PTR) as *mut _)
+        NonNull::new((self.0) as *mut _)
     }
 
     pub fn get<T: TableImpl>(&self) -> Option<&MemoryTable<T>> {
@@ -116,7 +110,7 @@ struct TableBits {
 }
 
 #[derive(Clone, Copy, Debug)]
-struct AllocationResult {
+pub struct AllocationResult {
     page: PhysPage,
     new_size: usize,
 }
@@ -130,7 +124,7 @@ pub trait TableImpl: Sized {
         el_size: u64,
         start_ptr: u64,
         end_ptr: u64,
-    ) -> Result<u8, MemoryError>;
+    ) -> Result<usize, MemoryError>;
 
     fn request_page(&mut self, el_size: u64) -> Result<AllocationResult, MemoryError>;
     fn free_page(&mut self, page: PhysPage) -> Result<(), MemoryError>;
@@ -149,7 +143,7 @@ impl<Table: TableImpl> MemoryTable<Table> {
         }
     }
 
-    pub fn populate_with(&mut self, start_ptr: u64, end_ptr: u64) -> Result<u8, MemoryError> {
+    pub fn populate_with(&mut self, start_ptr: u64, end_ptr: u64) -> Result<usize, MemoryError> {
         self.table
             .populate_with(self.element_size, start_ptr, end_ptr)
     }
@@ -183,10 +177,8 @@ impl TableImpl for TableFlat {
         el_size: u64,
         start_ptr: u64,
         end_ptr: u64,
-    ) -> Result<u8, MemoryError> {
-        logln!("TF -- {}", el_size / PAGE_SIZE);
+    ) -> Result<usize, MemoryError> {
         if start_ptr & (PAGE_SIZE - 1) != 0 || end_ptr & (PAGE_SIZE - 1) != 0 {
-            logln!("TF {:#016x} {:#016x} -- {el_size}", start_ptr, end_ptr);
             return Err(MemoryError::NotPageAligned);
         }
 
@@ -194,8 +186,7 @@ impl TableImpl for TableFlat {
         if start_ptr % el_size != 0 {
             let rel_start = start_ptr % el_size;
             let rel_end = end_ptr.min(el_size);
-            let elements = ((rel_end - rel_start) / (el_size / TABLE_SIZE as u64)) as u8;
-            assert!((rel_end - rel_start) / (el_size / TABLE_SIZE as u64) <= 255);
+            let elements = ((rel_end - rel_start) / (el_size / TABLE_SIZE as u64)) as usize;
 
             if !self.table[(start_ptr / el_size) as usize].is_present() {
                 let atom = &mut self.table[(start_ptr / el_size) as usize];
@@ -222,8 +213,7 @@ impl TableImpl for TableFlat {
         if end_ptr % el_size != 0 {
             let rel_start = 0;
             let rel_end = end_ptr % el_size;
-            let elements = ((rel_end - rel_start) / (el_size / TABLE_SIZE as u64)) as u8;
-            assert!((rel_end - rel_start) / (el_size / TABLE_SIZE as u64) <= 255);
+            let elements = ((rel_end - rel_start) / (el_size / TABLE_SIZE as u64)) as usize;
 
             if !self.table[(end_ptr / el_size) as usize].is_present() {
                 let atom = &mut self.table[(end_ptr / el_size) as usize];
@@ -258,38 +248,14 @@ impl TableImpl for TableFlat {
         for atom_idx in atom_start..atom_end {
             let atom = &mut self.table[atom_idx as usize];
             atom.set_present();
-            atom.set_size(255);
+            atom.set_size(TABLE_SIZE);
         }
 
-        logln!(
-            "Healthy = {} Dirty = {} ({})",
-            self.healthy_tables,
-            self.dirty_tables,
-            el_size / PAGE_SIZE
-        );
-
-        Ok(self
-            .healthy_tables
-            .max(self.dirty_tables.min(1))
-            .min(255)
-            .try_into()
-            .unwrap())
+        Ok(self.healthy_tables.max(self.dirty_tables.min(1)))
     }
 
     fn request_page(&mut self, el_size: u64) -> Result<AllocationResult, MemoryError> {
-        logln!(
-            "TF indexes remaining : {} ({})",
-            self.healthy_tables.max(self.dirty_tables.min(1)),
-            el_size / PAGE_SIZE
-        );
-
         if self.healthy_tables == 0 && self.dirty_tables == 0 {
-            logln!("NO TABLES REMAINING - {}", el_size / PAGE_SIZE);
-            self.table.iter().enumerate().for_each(|(i, e)| {
-                if e.size() > 0 {
-                    logln!("LIES!!! {i} SIZE={}", e.size());
-                }
-            });
             return Err(MemoryError::OutOfMemory);
         }
 
@@ -315,15 +281,9 @@ impl TableImpl for TableFlat {
             }?;
 
             if new_size == 0 {
-                logln!(
-                    "TABLE FULL -- {} ({})",
-                    optimal_index,
-                    el_size / PAGE_SIZE as u64
-                );
-
                 self.dirty_tables -= 1;
             }
-            atom.set_size(new_size.min(255) as u8);
+            atom.set_size(new_size);
 
             page
         } else {
@@ -333,7 +293,7 @@ impl TableImpl for TableFlat {
                 )));
                 bref.populate_with(0, el_size)?;
                 atom.put_ptr(bref.into());
-                atom.set_size(255);
+                atom.set_size(TABLE_SIZE);
 
                 bref.request_page_from_higher()
             } else {
@@ -342,7 +302,7 @@ impl TableImpl for TableFlat {
                 )));
                 bref.populate_with(0, el_size)?;
                 atom.put_ptr(bref.into());
-                atom.set_size(255);
+                atom.set_size(TABLE_SIZE);
 
                 bref.request_page_from_higher()
             }?;
@@ -351,17 +311,8 @@ impl TableImpl for TableFlat {
             self.healthy_tables -= 1;
             self.dirty_tables += 1;
 
-            logln!("DOWNGRADE");
-
             page
         };
-
-        logln!(
-            "Healthy = {}, Dirty = {} ({})",
-            self.healthy_tables,
-            self.dirty_tables,
-            el_size / PAGE_SIZE
-        );
 
         Ok(AllocationResult {
             page: PhysPage(page.0 + ((optimal_index as u64 * el_size) / PAGE_SIZE)),
@@ -387,13 +338,7 @@ impl TableImpl for TableBits {
         el_size: u64,
         start_ptr: u64,
         end_ptr: u64,
-    ) -> Result<u8, MemoryError> {
-        logln!(
-            "TB {:#016x} {:#016x} -- {}",
-            start_ptr,
-            end_ptr,
-            el_size / PAGE_SIZE
-        );
+    ) -> Result<usize, MemoryError> {
         if start_ptr & (el_size - 1) != 0 || end_ptr & (el_size - 1) != 0 {
             return Err(MemoryError::NotPageAligned);
         }
@@ -414,11 +359,10 @@ impl TableImpl for TableBits {
             self.table.set(page, true);
         }
 
-        Ok((end - start) as u8)
+        Ok(end - start)
     }
 
     fn request_page(&mut self, _el_size: u64) -> Result<AllocationResult, MemoryError> {
-        logln!("TB indexes remaining : {}", self.atom_size);
         if self.atom_size == 0 {
             return Err(MemoryError::OutOfMemory);
         }
@@ -506,8 +450,66 @@ mod test {
             own_pages.set(page as usize, true);
         }
 
-        for i in start..end {
-            logln!("{}", end - i);
+        for _ in start..end {
+            let page_id = mt.request_page().unwrap().0 as usize;
+
+            assert!(own_pages.get(page_id));
+            own_pages.set(page_id, false);
+        }
+        assert_eq!(mt.request_page(), Err(MemoryError::OutOfMemory));
+        assert_eq!(own_pages.find_first_of(true), None);
+    }
+
+    #[ignore = "Slow test"]
+    #[test]
+    fn test_build_layer_four_table() {
+        let mut mt = MemoryTable::<TableFlat>::new(LVL3_TABLE);
+
+        // Table relative
+        let start = (TABLE_SIZE as u64) + 1;
+        let end = ((TABLE_SIZE * TABLE_SIZE * TABLE_SIZE) as u64 * 1)
+            + ((TABLE_SIZE * TABLE_SIZE) as u64 * 4)
+            + (TABLE_SIZE as u64 * 3)
+            + 12;
+
+        assert_eq!(mt.populate_with(PAGE_SIZE * start, PAGE_SIZE * end), Ok(1));
+
+        let mut own_pages = BoolVec::new();
+        for page in start..end {
+            own_pages.set(page as usize, true);
+        }
+
+        for _ in start as usize..end as usize {
+            let page_id = mt.request_page().unwrap().0 as usize;
+
+            assert!(own_pages.get(page_id));
+            own_pages.set(page_id, false);
+        }
+        assert_eq!(mt.request_page(), Err(MemoryError::OutOfMemory));
+        assert_eq!(own_pages.find_first_of(true), None);
+    }
+
+    #[ignore = "Slow test"]
+    #[test]
+    fn test_build_layer_five_table() {
+        let mut mt = MemoryTable::<TableFlat>::new(LVL4_TABLE);
+
+        // Table relative
+        let start = (TABLE_SIZE as u64) + 1;
+        let end = (TABLE_SIZE.pow(4) as u64 * 1)
+            + ((TABLE_SIZE * TABLE_SIZE * TABLE_SIZE) as u64 * 1)
+            + ((TABLE_SIZE * TABLE_SIZE) as u64 * 4)
+            + (TABLE_SIZE as u64 * 3)
+            + 12;
+
+        assert_eq!(mt.populate_with(PAGE_SIZE * start, PAGE_SIZE * end), Ok(1));
+
+        let mut own_pages = BoolVec::new();
+        for page in start..end {
+            own_pages.set(page as usize, true);
+        }
+
+        for _ in start as usize..end as usize {
             let page_id = mt.request_page().unwrap().0 as usize;
 
             assert!(own_pages.get(page_id));
