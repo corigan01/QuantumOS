@@ -42,4 +42,6 @@ pub enum MemoryError {
     TableNotSupported,
     PtrWasNull,
     OutOfMemory,
+    NotPhysicalPage,
+    DoubleFree,
 }

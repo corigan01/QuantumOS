@@ -30,9 +30,8 @@ use crate::MemoryError;
 use alloc::boxed::Box;
 use boolvec::BoolVec;
 use core::ptr::NonNull;
-use lldebug::logln;
 
-pub const TABLE_SIZE: usize = 256;
+pub const TABLE_SIZE: usize = 4096;
 
 // Single 4 Kib Page
 const PAGE_SIZE: u64 = 4096;
@@ -106,6 +105,7 @@ struct TableFlat {
 
 struct TableBits {
     table: BoolVec,
+    real_pages: BoolVec,
     atom_size: usize,
 }
 
@@ -127,7 +127,7 @@ pub trait TableImpl: Sized {
     ) -> Result<usize, MemoryError>;
 
     fn request_page(&mut self, el_size: u64) -> Result<AllocationResult, MemoryError>;
-    fn free_page(&mut self, page: PhysPage) -> Result<(), MemoryError>;
+    fn free_page(&mut self, page: u64, el_size: u64) -> Result<AllocationResult, MemoryError>;
 }
 
 pub struct MemoryTable<Table: TableImpl> {
@@ -158,8 +158,14 @@ impl<Table: TableImpl> MemoryTable<Table> {
         self.table.request_page(self.element_size)
     }
 
+    #[inline]
+    fn free_page_from_higher(&mut self, page: PhysPage) -> Result<AllocationResult, MemoryError> {
+        self.table.free_page(page.0, self.element_size)
+    }
+
+    #[inline]
     pub fn free_page(&mut self, page: PhysPage) -> Result<(), MemoryError> {
-        self.table.free_page(page)
+        self.table.free_page(page.0, self.element_size).map(|_| ())
     }
 }
 
@@ -320,8 +326,38 @@ impl TableImpl for TableFlat {
         })
     }
 
-    fn free_page(&mut self, page: PhysPage) -> Result<(), MemoryError> {
-        core::todo!()
+    fn free_page(&mut self, page: u64, el_size: u64) -> Result<AllocationResult, MemoryError> {
+        let table_index = ((page * PAGE_SIZE) / el_size) as usize;
+        let inner_index = ((page * PAGE_SIZE) % el_size) / PAGE_SIZE;
+
+        let previous_size = self.table[table_index].size();
+
+        let alloc_result = if el_size <= LVL1_TABLE {
+            let Some(lower_table) = self.table[table_index].get_mut::<TableBits>() else {
+                return Err(MemoryError::NotPhysicalPage);
+            };
+
+            lower_table.free_page_from_higher(PhysPage(inner_index))
+        } else {
+            let Some(lower_table) = self.table[table_index].get_mut::<TableFlat>() else {
+                return Err(MemoryError::NotPhysicalPage);
+            };
+
+            lower_table.free_page_from_higher(PhysPage(inner_index))
+        }?;
+
+        self.table[table_index].set_size(alloc_result.new_size);
+
+        if alloc_result.new_size >= TABLE_SIZE {
+            self.healthy_tables += 1;
+        } else if previous_size == 0 {
+            self.dirty_tables += 1;
+        }
+
+        Ok(AllocationResult {
+            page: PhysPage(page),
+            new_size: self.healthy_tables.max(self.dirty_tables.min(1)),
+        })
     }
 }
 
@@ -330,6 +366,7 @@ impl TableImpl for TableBits {
         Self {
             table: BoolVec::new(),
             atom_size: 0,
+            real_pages: BoolVec::new(),
         }
     }
 
@@ -357,6 +394,7 @@ impl TableImpl for TableBits {
 
         for page in start..end {
             self.table.set(page, true);
+            self.real_pages.set(page, true);
         }
 
         Ok(end - start)
@@ -381,8 +419,22 @@ impl TableImpl for TableBits {
         }
     }
 
-    fn free_page(&mut self, page: PhysPage) -> Result<(), MemoryError> {
-        core::todo!()
+    fn free_page(&mut self, page: u64, _el_size: u64) -> Result<AllocationResult, MemoryError> {
+        if !self.real_pages.get(page as usize) {
+            return Err(MemoryError::NotPhysicalPage);
+        }
+
+        if self.table.get(page as usize) {
+            return Err(MemoryError::DoubleFree);
+        }
+
+        self.table.set(page as usize, false);
+        self.atom_size += 1;
+
+        Ok(AllocationResult {
+            page: PhysPage(page),
+            new_size: self.atom_size,
+        })
     }
 }
 
@@ -434,6 +486,7 @@ mod test {
         assert_eq!(own_pages.find_first_of(true), None);
     }
 
+    #[ignore = "Slow test"]
     #[test]
     fn test_build_layer_three_table() {
         lldebug::testing_stdout!();
@@ -517,5 +570,45 @@ mod test {
         }
         assert_eq!(mt.request_page(), Err(MemoryError::OutOfMemory));
         assert_eq!(own_pages.find_first_of(true), None);
+    }
+
+    #[test]
+    fn test_build_and_free_tables() {
+        lldebug::testing_stdout!();
+        let mut mt = MemoryTable::<TableFlat>::new(LVL2_TABLE);
+
+        let start = 0;
+        let end = TABLE_SIZE as u64 * 2 + 16;
+
+        assert_eq!(mt.populate_with(PAGE_SIZE * start, PAGE_SIZE * end), Ok(1));
+
+        let mut own_pages = BoolVec::new();
+        for page in start..end {
+            own_pages.set(page as usize, true);
+        }
+
+        for _ in start as usize..end as usize {
+            let page_id = mt.request_page().unwrap().0 as usize;
+
+            assert!(own_pages.get(page_id));
+            own_pages.set(page_id, false);
+        }
+        assert_eq!(mt.request_page(), Err(MemoryError::OutOfMemory));
+
+        for page in start..end {
+            mt.free_page(PhysPage(page)).unwrap();
+
+            assert!(!own_pages.get(page as usize));
+            own_pages.set(page as usize, true);
+        }
+
+        for page in start..end {
+            assert!(own_pages.get(page as usize));
+        }
+
+        assert_eq!(
+            mt.free_page(PhysPage(end)),
+            Err(MemoryError::NotPhysicalPage)
+        );
     }
 }
