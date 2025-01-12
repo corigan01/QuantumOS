@@ -23,7 +23,9 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use core::{alloc::Layout, ptr::NonNull};
+use core::{alloc::Layout, fmt::Debug, ptr::NonNull};
+
+use util::align_to;
 
 use crate::MemoryError;
 
@@ -42,21 +44,26 @@ pub struct BootStrapAlloc {
 }
 
 impl BootStrapAlloc {
-    pub fn new(memory_region: &'static mut [u8]) -> Self {
-        assert!(memory_region.len() > size_of::<Buddy>());
+    pub fn new(memory_region: &mut [u8]) -> Self {
+        assert!(memory_region.len() > size_of::<Buddy>() * 2);
 
-        let mut buddy = NonNull::new(memory_region.as_mut_ptr().cast()).unwrap();
+        let buddy = NonNull::new(memory_region.as_mut_ptr().cast()).unwrap();
+        let alignment = buddy.align_offset(align_of::<Buddy>());
+        let mut aligned_buddy = unsafe { buddy.byte_add(alignment) };
 
         unsafe {
-            *buddy.as_mut() = Buddy {
+            *aligned_buddy.as_mut() = Buddy {
                 free: true,
-                ptr: buddy,
-                len: memory_region.len(),
+                ptr: aligned_buddy,
+                len: memory_region.len() - alignment,
                 next: None,
             };
         }
 
-        Self { buddy, len: 1 }
+        Self {
+            buddy: aligned_buddy,
+            len: 1,
+        }
     }
 
     unsafe fn melt_right(&mut self, mut buddy: NonNull<Buddy>) {
@@ -78,12 +85,8 @@ impl BootStrapAlloc {
             let mut buddy = self.buddy;
             loop {
                 let buddy_mut = buddy.as_mut();
-                let min_len = layout.size()
-                    + util::align_to(
-                        (buddy_mut.ptr.addr().get() + size_of::<Buddy>()) as u64,
-                        layout.align(),
-                    ) as usize
-                    + size_of::<Buddy>();
+                let min_len =
+                    layout.size() + buddy.add(1).align_offset(layout.align()) + size_of::<Buddy>();
 
                 if !buddy_mut.free || buddy_mut.len < min_len {
                     let Some(buddy_next) = buddy_mut.next else {
@@ -97,11 +100,9 @@ impl BootStrapAlloc {
                 // Split
                 if buddy_mut.len > min_len + (size_of::<Buddy>() * 2) {
                     let previous_next = buddy_mut.next;
-                    let len = min_len
-                        + util::align_to(
-                            (buddy_mut.ptr.addr().get() + min_len) as u64,
-                            align_of::<Buddy>(),
-                        ) as usize;
+                    let len = align_to((buddy.addr().get() + min_len) as u64, align_of::<Buddy>())
+                        as usize
+                        - buddy.addr().get();
 
                     let next_buddy = buddy.byte_add(len);
                     *next_buddy.as_ptr() = Buddy {
@@ -114,6 +115,7 @@ impl BootStrapAlloc {
                     buddy_mut.free = false;
                     buddy_mut.len = len;
                     buddy_mut.next = Some(next_buddy);
+                    self.len += 1;
 
                     return Ok(buddy_mut.ptr.as_ptr().byte_add(size_of::<Buddy>()).cast());
                 } else {
@@ -130,12 +132,14 @@ impl BootStrapAlloc {
 
         unsafe {
             let mut previous_buddy = self.buddy;
-            loop {
-                let Some(mut buddy) = previous_buddy.as_ref().next else {
-                    let previous_mut = previous_buddy.as_mut();
-                    let previous_ptr = previous_mut.ptr.addr().get() + size_of::<Buddy>();
-                    let previous_end = previous_mut.ptr.addr().get() + previous_mut.len;
+            let mut index = 0;
 
+            loop {
+                let previous_mut = previous_buddy.as_mut();
+                let previous_ptr = previous_mut.ptr.addr().get() + size_of::<Buddy>();
+                let previous_end = previous_mut.ptr.addr().get() + previous_mut.len;
+
+                let Some(mut buddy) = previous_buddy.as_ref().next else {
                     if previous_ptr < (ptr as usize) || previous_end < ptr_end {
                         return Err(MemoryError::NotFound);
                     }
@@ -148,7 +152,19 @@ impl BootStrapAlloc {
                 let buddy_ptr = buddy_mut.ptr.addr().get() + size_of::<Buddy>();
                 let buddy_end = buddy_mut.ptr.addr().get() + buddy_mut.len;
 
+                if index == 0 && previous_ptr >= (ptr as usize) && previous_end >= ptr_end {
+                    previous_mut.free = true;
+
+                    if buddy_mut.free {
+                        self.melt_right(previous_buddy);
+                    }
+
+                    return Ok(());
+                }
+
                 if buddy_ptr < (ptr as usize) || buddy_end < ptr_end {
+                    previous_buddy = buddy;
+                    index += 1;
                     continue;
                 }
 
@@ -166,6 +182,87 @@ impl BootStrapAlloc {
 
                 return Ok(());
             }
+        }
+    }
+}
+
+impl Debug for BootStrapAlloc {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("BootStrapAlloc")
+            .field("len", &self.len)
+            .field("buddy", unsafe { self.buddy.as_ref() })
+            .finish()
+    }
+}
+
+impl Debug for Buddy {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        #[allow(unused)]
+        #[derive(Debug)]
+        struct BuddyItem {
+            free: bool,
+            ptr: NonNull<Buddy>,
+            len: usize,
+            next: Option<NonNull<Buddy>>,
+        }
+
+        let mut list = f.debug_list();
+        unsafe {
+            let mut buddy = self.ptr;
+            loop {
+                let buddy_ref = buddy.as_ref();
+
+                list.entry(&BuddyItem {
+                    free: buddy_ref.free,
+                    ptr: buddy_ref.ptr,
+                    len: buddy_ref.len,
+                    next: buddy_ref.next,
+                });
+
+                let Some(next_buddy) = buddy_ref.next else {
+                    break;
+                };
+
+                buddy = next_buddy;
+            }
+        }
+
+        list.finish()
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    use core::alloc::Layout;
+    extern crate std;
+
+    #[test]
+    fn test_buddy_new() {
+        lldebug::testing_stdout!();
+        let len = 10 * util::consts::KIB;
+        let mem_region = unsafe {
+            core::slice::from_raw_parts_mut(
+                std::alloc::alloc_zeroed(Layout::from_size_align(len, 1).unwrap()),
+                len,
+            )
+        };
+
+        let mut ptrs = std::vec::Vec::new();
+        let mut alloc = BootStrapAlloc::new(mem_region);
+
+        for i in 0..10 {
+            let ptr = unsafe { alloc.alloc(Layout::new::<u8>()).unwrap() };
+            unsafe { *ptr = i };
+            assert_eq!(unsafe { *ptr }, i);
+            ptrs.push(ptr);
+        }
+
+        for i in 0..10 {
+            let ptr = ptrs[i as usize];
+            assert_eq!(unsafe { *ptr }, i);
+            unsafe { alloc.free(ptr, Layout::new::<u8>()).unwrap() };
         }
     }
 }
