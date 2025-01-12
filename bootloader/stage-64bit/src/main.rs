@@ -113,6 +113,10 @@ fn main(stage_to_stage: &Stage32toStage64) {
         *s2k = Some(KernelBootHeader {
             phys_mem_map: mm,
             video_mode: stage_to_stage.video_mode,
+            init_alloc_region: core::slice::from_raw_parts_mut(
+                virt_info.init_start_virt as *mut u8,
+                (virt_info.init_end_virt - virt_info.init_start_virt) as usize,
+            ),
         });
 
         jmp_to_kernel(
@@ -219,6 +223,15 @@ fn build_memory_map(s2s: &Stage32toStage64, kernel_exe_len: usize) -> paging::Pa
             .expect("Unable to find region for kernel's stack pages");
         mm.add_region(kernels_stack_pages).unwrap();
 
+        let kernels_init_pages = mm
+            .find_continuous_of(PhysMemoryKind::Free, PAGE_2M, PAGE_2M, 1 * MIB as u64)
+            .map(|p| PhysMemoryEntry {
+                kind: PhysMemoryKind::Kernel,
+                ..p
+            })
+            .expect("Unable to find region for kernel's stack pages");
+        mm.add_region(kernels_init_pages).unwrap();
+
         logln!("{}", mm);
 
         paging::PageTableConfig {
@@ -228,6 +241,7 @@ fn build_memory_map(s2s: &Stage32toStage64, kernel_exe_len: usize) -> paging::Pa
                 kernels_stack_pages.len() as usize,
             ),
             kernel_virt: 0x100000000000,
+            kernel_init_phys: (kernels_init_pages.start, kernels_init_pages.len() as usize),
         }
     }
 }

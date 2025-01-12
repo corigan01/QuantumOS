@@ -53,6 +53,7 @@ static TABLE_LVL2_KERN: SyncUnsafeCell<PageMapLvl2> = SyncUnsafeCell::new(PageMa
 pub struct PageTableConfig {
     pub kernel_exe_phys: (u64, usize),
     pub kernel_stack_phys: (u64, usize),
+    pub kernel_init_phys: (u64, usize),
     pub kernel_virt: u64,
 }
 
@@ -62,6 +63,8 @@ pub struct KernelVirtInfo {
     pub exe_end_virt: u64,
     pub _stack_start_virt: u64,
     pub stack_end_virt: u64,
+    pub init_start_virt: u64,
+    pub init_end_virt: u64,
 }
 
 impl KernelVirtInfo {
@@ -134,6 +137,7 @@ pub fn build_page_tables(c: PageTableConfig) -> KernelVirtInfo {
 
     let exe_pages = ((c.kernel_exe_phys.1 - 1) / PAGE_2M) + 1;
     let stack_pages = ((c.kernel_stack_phys.1 - 1) / PAGE_2M) + 1;
+    let init_pages = ((c.kernel_init_phys.1 - 1) / PAGE_2M) + 1;
 
     for mb2 in 0..exe_pages {
         let phy_addr = c.kernel_exe_phys.0 + (mb2 * PAGE_2M) as u64;
@@ -158,6 +162,21 @@ pub fn build_page_tables(c: PageTableConfig) -> KernelVirtInfo {
         unsafe { (*TABLE_LVL2_KERN.get()).store(lvl2_entry, mb2 + exe_pages + 1 + tbl2_offset) };
     }
 
+    // KERNEL MAP (INIT)
+    for mb2 in 0..init_pages {
+        let phy_addr = c.kernel_init_phys.0 + (mb2 * PAGE_2M) as u64;
+
+        let lvl2_entry = PageEntry2M::new()
+            .set_present_flag(true)
+            .set_read_write_flag(true)
+            .set_phy_address(phy_addr);
+
+        unsafe {
+            (*TABLE_LVL2_KERN.get())
+                .store(lvl2_entry, mb2 + exe_pages + 2 + stack_pages + tbl2_offset)
+        };
+    }
+
     let lvl3_kernel_entry = PageEntryLvl3::new()
         .set_present_flag(true)
         .set_read_write_flag(true)
@@ -177,6 +196,9 @@ pub fn build_page_tables(c: PageTableConfig) -> KernelVirtInfo {
         exe_end_virt: c.kernel_virt + (exe_pages * PAGE_2M) as u64,
         _stack_start_virt: c.kernel_virt + ((exe_pages + 1) * PAGE_2M) as u64,
         stack_end_virt: c.kernel_virt + ((exe_pages + stack_pages + 1) * PAGE_2M) as u64,
+        init_start_virt: c.kernel_virt + ((exe_pages + stack_pages + 2) * PAGE_2M) as u64,
+        init_end_virt: c.kernel_virt
+            + ((exe_pages + stack_pages + init_pages + 2) * PAGE_2M) as u64,
     }
 }
 

@@ -23,13 +23,9 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use core::{alloc::Layout, fmt::Debug, ptr::NonNull};
-
-use util::align_to;
-
 use crate::MemoryError;
-
-extern crate alloc;
+use core::{alloc::Layout, fmt::Debug, ptr::NonNull};
+use util::align_to;
 
 struct Buddy {
     free: bool,
