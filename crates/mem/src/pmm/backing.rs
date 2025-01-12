@@ -246,7 +246,7 @@ impl TableImpl for TableFlat {
             (start_ptr / el_size) + 1
         };
         let atom_end = end_ptr / el_size;
-        self.healthy_tables += (atom_end - atom_start) as usize;
+        self.healthy_tables += atom_end.saturating_sub(atom_start) as usize;
 
         for atom_idx in atom_start..atom_end {
             self.available.set(atom_idx as usize, true);
@@ -375,7 +375,7 @@ impl TableImpl for TableBits {
         start_ptr: u64,
         end_ptr: u64,
     ) -> Result<usize, MemoryError> {
-        if start_ptr & (el_size - 1) != 0 || end_ptr & (el_size - 1) != 0 {
+        if start_ptr & (PAGE_SIZE - 1) != 0 || end_ptr & (PAGE_SIZE - 1) != 0 {
             return Err(MemoryError::NotPageAligned);
         }
 

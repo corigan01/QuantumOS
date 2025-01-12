@@ -37,7 +37,7 @@ mod backing;
 pub struct PhysPage(pub u64);
 
 pub struct Pmm {
-    table: backing::MemoryTable<backing::TableBits>,
+    table: backing::MemoryTable<backing::TableFlat>,
 }
 
 impl Pmm {
@@ -48,6 +48,7 @@ impl Pmm {
         for table_size in backing::OPT_TABLES {
             if total_real_memory < (table_size * backing::TABLE_SIZE as u64) {
                 opt_table = table_size;
+                break;
             }
         }
 
@@ -55,8 +56,14 @@ impl Pmm {
 
         memory_map
             .iter()
-            .filter(|entry| entry.kind == PhysMemoryKind::Free)
-            .try_for_each(|entry| table.populate_with(entry.start, entry.end).map(|_| ()))?;
+            .filter(|entry| {
+                entry.kind == PhysMemoryKind::Free && entry.start >= (1 * util::consts::MIB as u64)
+            })
+            .try_for_each(|entry| {
+                let (aligned_start, aligned_end) =
+                    util::align_range_to(entry.start, entry.end, 4096);
+                table.populate_with(aligned_start, aligned_end).map(|_| ())
+            })?;
 
         Ok(Self { table })
     }

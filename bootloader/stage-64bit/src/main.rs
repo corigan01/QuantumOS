@@ -113,8 +113,8 @@ fn main(stage_to_stage: &Stage32toStage64) {
         *s2k = Some(KernelBootHeader {
             phys_mem_map: mm,
             video_mode: stage_to_stage.video_mode,
-            init_alloc_region: core::slice::from_raw_parts_mut(
-                virt_info.init_start_virt as *mut u8,
+            init_alloc_region: (
+                virt_info.init_start_virt,
                 (virt_info.init_end_virt - virt_info.init_start_virt) as usize,
             ),
         });

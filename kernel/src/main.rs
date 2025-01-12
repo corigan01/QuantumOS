@@ -33,26 +33,17 @@ mod int;
 mod panic;
 extern crate alloc;
 
-use core::alloc::GlobalAlloc;
-
 use bootloader::KernelBootHeader;
 use lldebug::{debug_ready, logln, make_debug};
+use mem::{
+    alloc::{KernelAllocator, provide_init_region},
+    pmm::Pmm,
+};
 use serial::{Serial, baud::SerialBaud};
 use util::bytes::HumanBytes;
 
-pub struct Dingus {}
-unsafe impl GlobalAlloc for Dingus {
-    unsafe fn alloc(&self, layout: core::alloc::Layout) -> *mut u8 {
-        todo!()
-    }
-
-    unsafe fn dealloc(&self, ptr: *mut u8, layout: core::alloc::Layout) {
-        todo!()
-    }
-}
-
 #[global_allocator]
-static DINGUS: Dingus = Dingus {};
+static ALLOC: KernelAllocator = KernelAllocator::new();
 
 make_debug! {
     "Serial": Option<Serial> = Serial::probe_first(SerialBaud::Baud115200);
@@ -75,6 +66,19 @@ fn main(kbh: &KernelBootHeader) {
 
     int::attach_interrupts();
     int::enable_pic();
+
+    logln!(
+        "Init Heap Region ({})",
+        HumanBytes::from(kbh.init_alloc_region.1)
+    );
+    provide_init_region(unsafe {
+        core::slice::from_raw_parts_mut(kbh.init_alloc_region.0 as *mut u8, kbh.init_alloc_region.1)
+    });
+
+    logln!("Init PhysMemoryManager");
+    let mut pmm = Pmm::new(kbh.phys_mem_map).unwrap();
+    logln!("Page = {:?}", pmm.allocate_page());
+    logln!("Page = {:?}", pmm.allocate_page());
 
     loop {}
 }

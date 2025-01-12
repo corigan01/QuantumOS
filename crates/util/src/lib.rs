@@ -40,6 +40,16 @@ pub const fn align_to(addr: u64, alignment: usize) -> u64 {
         addr
     }
 }
+///
+/// Align `addr` range to `alignment`
+///
+/// Pushes `addr_start` up until it reaches an address that satisfies `alignment`.
+/// Then pushes 'addr_end` down until it reaches an address that satisfies `alignment`.
+pub const fn align_range_to(addr_start: u64, addr_end: u64, alignment: usize) -> (u64, u64) {
+    let start = align_to(addr_start, alignment);
+
+    (start, addr_end & !(4096 - 1))
+}
 
 /// Check the alignment of `addr` and `alignment`
 pub const fn is_align_to(addr: u64, alignment: usize) -> bool {

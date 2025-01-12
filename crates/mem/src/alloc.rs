@@ -24,7 +24,12 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 use crate::MemoryError;
-use core::{alloc::Layout, fmt::Debug, ptr::NonNull};
+use core::{
+    alloc::{GlobalAlloc, Layout},
+    fmt::Debug,
+    ptr::NonNull,
+};
+use lldebug::sync::Mutex;
 use util::align_to;
 
 struct Buddy {
@@ -38,6 +43,9 @@ pub struct BootStrapAlloc {
     buddy: NonNull<Buddy>,
     len: usize,
 }
+
+unsafe impl Send for BootStrapAlloc {}
+unsafe impl Sync for BootStrapAlloc {}
 
 impl BootStrapAlloc {
     pub fn new(memory_region: &mut [u8]) -> Self {
@@ -224,6 +232,52 @@ impl Debug for Buddy {
         }
 
         list.finish()
+    }
+}
+
+struct InnerAllocator {
+    init_alloc: Option<BootStrapAlloc>,
+}
+
+impl InnerAllocator {
+    pub const fn new() -> Self {
+        Self { init_alloc: None }
+    }
+}
+
+static INNER_ALLOC: Mutex<InnerAllocator> = Mutex::new(InnerAllocator::new());
+
+pub fn provide_init_region(region: &'static mut [u8]) {
+    let mut inner = INNER_ALLOC.lock();
+    inner.init_alloc = Some(BootStrapAlloc::new(region));
+}
+
+pub struct KernelAllocator {}
+
+impl KernelAllocator {
+    pub const fn new() -> Self {
+        Self {}
+    }
+}
+
+unsafe impl GlobalAlloc for KernelAllocator {
+    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+        let mut inner = INNER_ALLOC.lock();
+
+        unsafe { inner.init_alloc.as_mut().unwrap().alloc(layout).unwrap() }
+    }
+
+    unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
+        let mut inner = INNER_ALLOC.lock();
+
+        unsafe {
+            inner
+                .init_alloc
+                .as_mut()
+                .unwrap()
+                .free(ptr, layout)
+                .unwrap()
+        }
     }
 }
 
