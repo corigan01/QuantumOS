@@ -23,6 +23,8 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use core::sync::atomic::{AtomicU64, Ordering};
+
 use arch::{
     critcal_section,
     idt64::InterruptInfo,
@@ -46,7 +48,7 @@ pub fn init_timer() {
         );
 
         // Set the trigger time
-        logln!("({}Hz)", set_pit_hz(TIMER_HZ));
+        log!("({}Hz)", set_pit_hz(TIMER_HZ));
 
         // Attach our IRQ
         attach_irq_handler(pit_interrupt_handler, 0);
@@ -54,4 +56,12 @@ pub fn init_timer() {
     logln!("OK");
 }
 
-fn pit_interrupt_handler(_args: &InterruptInfo) {}
+static KERNEL_TICKS: AtomicU64 = AtomicU64::new(0);
+
+fn pit_interrupt_handler(_args: &InterruptInfo) {
+    KERNEL_TICKS.fetch_add(1, Ordering::AcqRel);
+}
+
+pub fn kernel_ticks() -> u64 {
+    KERNEL_TICKS.load(Ordering::Relaxed)
+}

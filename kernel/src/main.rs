@@ -41,6 +41,7 @@ use mem::{
     pmm::Pmm,
 };
 use serial::{Serial, baud::SerialBaud};
+use timer::kernel_ticks;
 use util::bytes::HumanBytes;
 
 #[global_allocator]
@@ -80,5 +81,6 @@ fn main(kbh: &KernelBootHeader) {
     logln!("Init PhysMemoryManager");
     let _pmm = Pmm::new(kbh.phys_mem_map).unwrap();
 
+    logln!("Finished in {}ms", kernel_ticks());
     loop {}
 }
