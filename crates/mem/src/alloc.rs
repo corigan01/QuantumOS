@@ -235,6 +235,7 @@ impl Debug for Buddy {
     }
 }
 
+#[derive(Debug)]
 struct InnerAllocator {
     init_alloc: Option<BootStrapAlloc>,
 }
@@ -250,6 +251,11 @@ static INNER_ALLOC: Mutex<InnerAllocator> = Mutex::new(InnerAllocator::new());
 pub fn provide_init_region(region: &'static mut [u8]) {
     let mut inner = INNER_ALLOC.lock();
     inner.init_alloc = Some(BootStrapAlloc::new(region));
+}
+
+pub fn dump_allocator() {
+    let inner = INNER_ALLOC.lock();
+    lldebug::logln!("{:#?}", inner);
 }
 
 pub struct KernelAllocator {}

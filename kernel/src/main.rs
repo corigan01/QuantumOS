@@ -76,9 +76,7 @@ fn main(kbh: &KernelBootHeader) {
     });
 
     logln!("Init PhysMemoryManager");
-    let mut pmm = Pmm::new(kbh.phys_mem_map).unwrap();
-    logln!("Page = {:?}", pmm.allocate_page());
-    logln!("Page = {:?}", pmm.allocate_page());
+    let _pmm = Pmm::new(kbh.phys_mem_map).unwrap();
 
     loop {}
 }

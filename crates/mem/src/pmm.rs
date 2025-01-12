@@ -23,6 +23,8 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use alloc::boxed::Box;
+
 use crate::{
     MemoryError,
     phys::{PhysMemoryKind, PhysMemoryMap},
@@ -37,7 +39,7 @@ mod backing;
 pub struct PhysPage(pub u64);
 
 pub struct Pmm {
-    table: backing::MemoryTable<backing::TableFlat>,
+    table: Box<backing::MemoryTable<backing::TableFlat>>,
 }
 
 impl Pmm {
@@ -52,7 +54,7 @@ impl Pmm {
             }
         }
 
-        let mut table = backing::MemoryTable::new(opt_table);
+        let mut table = Box::new(backing::MemoryTable::new(opt_table));
 
         memory_map
             .iter()
