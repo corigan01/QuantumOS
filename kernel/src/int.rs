@@ -24,7 +24,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 use arch::{
-    attach_irq,
+    attach_irq, critcal_section,
     idt64::{
         ExceptionKind, InterruptDescTable, InterruptFlags, InterruptInfo, fire_debug_int, interrupt,
     },
@@ -34,22 +34,48 @@ use arch::{
 use lldebug::{logln, sync::Mutex};
 
 static INTERRUPT_TABLE: Mutex<InterruptDescTable> = Mutex::new(InterruptDescTable::new());
+static IRQ_HANDLERS: Mutex<[Option<fn(&InterruptInfo)>; 32]> = Mutex::new([None; 32]);
 
 #[interrupt(0..256)]
 fn main_handler(args: InterruptInfo) {
     match args.flags {
         // IRQ
         InterruptFlags::Irq(irq_num) if irq_num - PIC_IRQ_OFFSET <= 16 => {
+            call_attached_irq(irq_num - PIC_IRQ_OFFSET, &args);
             unsafe { pic_eoi(irq_num - PIC_IRQ_OFFSET) };
         }
+        InterruptFlags::Debug => (),
         exception => {
-            logln!("{:#?}", exception)
+            panic!("UNHANDLED FAULT\n{:#016x?}", args)
         }
         _ => (),
     }
 
     if args.flags.exception_kind() == ExceptionKind::Abort {
         panic!("Interrupt -- {:?}", args.flags);
+    }
+}
+
+fn call_attached_irq(irq_id: u8, args: &InterruptInfo) {
+    let irq_handler = IRQ_HANDLERS.lock();
+
+    if let Some(handler) = irq_handler
+        .get((irq_id) as usize)
+        .and_then(|&handler| handler)
+    {
+        handler(args);
+    }
+}
+
+/// Set a function to be called whenever an irq is triggered.
+pub fn attach_irq_handler(handler_fn: fn(&InterruptInfo), irq: u8) {
+    critcal_section! {
+        let mut irq_handler = IRQ_HANDLERS.lock();
+        let Some(handler) = irq_handler.get_mut(irq as usize) else {
+            return;
+        };
+
+        *handler = Some(handler_fn);
     }
 }
 

@@ -31,6 +31,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 mod int;
 mod panic;
+mod timer;
 extern crate alloc;
 
 use bootloader::KernelBootHeader;
@@ -66,6 +67,7 @@ fn main(kbh: &KernelBootHeader) {
 
     int::attach_interrupts();
     int::enable_pic();
+    timer::init_timer();
 
     logln!(
         "Init Heap Region ({})",

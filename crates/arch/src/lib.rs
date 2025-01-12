@@ -31,6 +31,7 @@ pub mod idt64;
 pub mod io;
 pub mod paging64;
 pub mod pic8259;
+pub mod pit825x;
 pub mod registers;
 
 pub mod interrupts {
@@ -42,6 +43,35 @@ pub mod interrupts {
     #[inline(always)]
     pub unsafe fn disable_interrupts() {
         core::arch::asm!("cli");
+    }
+
+    pub fn assert_interrupts(enabled: bool) {
+        let int_state = crate::registers::eflags::is_interrupts_enable_set();
+        assert_eq!(
+            int_state,
+            enabled,
+            "Interrupts were {} when expected them to be {}",
+            if int_state { "on" } else { "off" },
+            if enabled { "on" } else { "off" }
+        );
+    }
+
+    #[macro_export]
+    macro_rules! critcal_section {
+        ($($tt:tt)*) => {
+            let _priv_interrupt_before_state =
+                ::arch::registers::eflags::is_interrupts_enable_set();
+
+            if _priv_interrupt_before_state {
+                unsafe { ::arch::interrupts::disable_interrupts() };
+            }
+
+            $($tt)*;
+
+            if _priv_interrupt_before_state {
+                unsafe { ::arch::interrupts::enable_interrupts() };
+            }
+        };
     }
 }
 

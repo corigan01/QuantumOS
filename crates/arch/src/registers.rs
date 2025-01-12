@@ -383,8 +383,12 @@ pub mod cr4 {
 pub mod eflags {
     #[inline(never)]
     pub fn read() -> u32 {
-        let mut flags;
+        #[cfg(not(target_pointer_width = "64"))]
+        let mut flags: u32;
+        #[cfg(target_pointer_width = "64")]
+        let mut flags: u64;
 
+        #[cfg(not(target_pointer_width = "64"))]
         unsafe {
             core::arch::asm!("
                 pushf
@@ -394,7 +398,20 @@ pub mod eflags {
             )
         }
 
-        flags
+        #[cfg(target_pointer_width = "64")]
+        unsafe {
+            core::arch::asm!("
+                pushf
+                pop rax
+            ",
+                out("rax") flags
+            )
+        }
+
+        #[cfg(not(target_pointer_width = "64"))]
+        return flags;
+        #[cfg(target_pointer_width = "64")]
+        return flags as u32;
     }
 }
 
