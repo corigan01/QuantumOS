@@ -392,6 +392,10 @@ impl PageMapLvl1 {
     pub fn table_ptr(&self) -> u64 {
         self.0.as_ptr() as u64
     }
+
+    pub fn get(&self, index: usize) -> PageEntry4K {
+        PageEntry4K(self.0[index])
+    }
 }
 
 impl PageMapLvl2 {
@@ -424,6 +428,10 @@ impl PageMapLvl2 {
 
     pub fn table_ptr(&self) -> u64 {
         self.0.as_ptr() as u64
+    }
+
+    pub fn get(&self, index: usize) -> PageEntryLvl2 {
+        PageEntryLvl2(self.0[index])
     }
 }
 
@@ -458,6 +466,10 @@ impl PageMapLvl3 {
     pub fn table_ptr(&self) -> u64 {
         self.0.as_ptr() as u64
     }
+
+    pub fn get(&self, index: usize) -> PageEntryLvl3 {
+        PageEntryLvl3(self.0[index])
+    }
 }
 
 impl PageMapLvl4 {
@@ -491,6 +503,10 @@ impl PageMapLvl4 {
     pub fn table_ptr(&self) -> u64 {
         self.0.as_ptr() as u64
     }
+
+    pub fn get(&self, index: usize) -> PageEntryLvl4 {
+        PageEntryLvl4(self.0[index])
+    }
 }
 
 impl PageMapLvl5 {
@@ -523,6 +539,10 @@ impl PageMapLvl5 {
 
     pub fn table_ptr(&self) -> u64 {
         self.0.as_ptr() as u64
+    }
+
+    pub fn get(&self, index: usize) -> PageEntryLvl5 {
+        PageEntryLvl5(self.0[index])
     }
 }
 

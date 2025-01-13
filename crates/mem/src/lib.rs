@@ -47,4 +47,6 @@ pub enum MemoryError {
     NotPhysicalPage,
     DoubleFree,
     NotFound,
+    /// Could not handle the exception.
+    DidNotHandleException,
 }

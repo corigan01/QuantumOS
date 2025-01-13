@@ -82,5 +82,4 @@ fn main(kbh: &KernelBootHeader) {
     let _pmm = Pmm::new(kbh.phys_mem_map).unwrap();
 
     logln!("Finished in {}ms", kernel_ticks());
-    loop {}
 }

@@ -10,6 +10,8 @@ documentation.workspace = true
 lldebug = {workspace = true}
 util = {workspace = true}
 boolvec = {workspace = true, optional = true}
+arch = {workspace = true}
+hw = {workspace = true}
 
 [features]
 alloc = ["dep:boolvec"]

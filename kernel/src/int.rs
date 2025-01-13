@@ -31,7 +31,7 @@ use arch::{
     interrupts::enable_interrupts,
     pic8259::{pic_eoi, pic_remap},
 };
-use lldebug::{logln, sync::Mutex};
+use lldebug::{log, logln, sync::Mutex};
 
 static INTERRUPT_TABLE: Mutex<InterruptDescTable> = Mutex::new(InterruptDescTable::new());
 static IRQ_HANDLERS: Mutex<[Option<fn(&InterruptInfo)>; 32]> = Mutex::new([None; 32]);
@@ -86,9 +86,9 @@ pub fn attach_interrupts() {
 
     logln!("Attached Interrupts!");
 
-    logln!("Checking Interrupts...");
+    log!("Checking Interrupts...");
     fire_debug_int();
-    logln!("Interrupts Working!");
+    logln!("OK");
 }
 
 const PIC_IRQ_OFFSET: u8 = 0x20;
