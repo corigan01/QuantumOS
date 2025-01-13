@@ -29,6 +29,7 @@ use crate::{MemoryError, pmm::PhysPage};
 use alloc::{boxed::Box, collections::BTreeMap, string::String, vec::Vec};
 use arch::idt64::{InterruptFlags, InterruptInfo};
 use hw::make_hw;
+use lldebug::logln;
 use util::consts::PAGE_4K;
 
 extern crate alloc;
@@ -249,6 +250,7 @@ impl Vmm {
         kernel_regions: impl Iterator<Item = VmRegion>,
     ) -> Result<(), MemoryError> {
         let page_tables = page::VmSafePageTable::copy_from_bootloader();
+        unsafe { page_tables.load() };
 
         let mut vm_objects = Vec::new();
         vm_objects.push(VmObject {

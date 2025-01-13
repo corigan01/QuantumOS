@@ -30,7 +30,7 @@ use core::{
     ptr::NonNull,
 };
 use lldebug::sync::Mutex;
-use util::align_to;
+use util::{align_to, is_align_to};
 
 struct Buddy {
     free: bool,
@@ -42,6 +42,8 @@ struct Buddy {
 pub struct BootStrapAlloc {
     buddy: NonNull<Buddy>,
     len: usize,
+    bytes_used: usize,
+    bytes_total: usize,
 }
 
 unsafe impl Send for BootStrapAlloc {}
@@ -67,6 +69,8 @@ impl BootStrapAlloc {
         Self {
             buddy: aligned_buddy,
             len: 1,
+            bytes_used: alignment + size_of::<Buddy>(),
+            bytes_total: memory_region.len(),
         }
     }
 
@@ -80,6 +84,7 @@ impl BootStrapAlloc {
             let next = next.as_mut();
             current.next = next.next;
             current.len += next.len;
+            self.bytes_used -= next.len;
         }
         self.len -= 1;
     }
@@ -89,10 +94,9 @@ impl BootStrapAlloc {
             let mut buddy = self.buddy;
             loop {
                 let buddy_mut = buddy.as_mut();
-                let min_len = layout.size()
-                    + (align_to(buddy.add(1).addr().get() as u64, layout.align()) as usize
-                        - buddy.add(1).addr().get())
-                    + size_of::<Buddy>();
+                let align_len = align_to(buddy.add(1).addr().get() as u64, layout.align()) as usize
+                    - buddy.add(1).addr().get();
+                let min_len = layout.size() + align_len + size_of::<Buddy>();
 
                 if !buddy_mut.free || buddy_mut.len < min_len {
                     let Some(buddy_next) = buddy_mut.next else {
@@ -104,7 +108,7 @@ impl BootStrapAlloc {
                 }
 
                 // Split
-                if buddy_mut.len > min_len + (size_of::<Buddy>() * 2) {
+                let ret_ptr = if buddy_mut.len > min_len + (size_of::<Buddy>() * 2) {
                     let previous_next = buddy_mut.next;
                     let len = align_to((buddy.addr().get() + min_len) as u64, align_of::<Buddy>())
                         as usize
@@ -122,13 +126,30 @@ impl BootStrapAlloc {
                     buddy_mut.len = len;
                     buddy_mut.next = Some(next_buddy);
                     self.len += 1;
+                    self.bytes_used += buddy_mut.len;
 
-                    return Ok(buddy_mut.ptr.as_ptr().byte_add(size_of::<Buddy>()).cast());
+                    buddy_mut
+                        .ptr
+                        .as_ptr()
+                        .byte_add(size_of::<Buddy>() + align_len)
+                        .cast()
                 } else {
                     buddy_mut.free = false;
+                    self.bytes_used += buddy_mut.len - size_of::<Buddy>();
 
-                    return Ok(buddy_mut.ptr.as_ptr().byte_add(size_of::<Buddy>()).cast());
-                }
+                    buddy_mut
+                        .ptr
+                        .as_ptr()
+                        .byte_add(size_of::<Buddy>() + align_len)
+                        .cast()
+                };
+
+                assert!(
+                    is_align_to(ret_ptr as u64, layout.align()),
+                    "Alloc was about to return unaligned PTR"
+                );
+
+                return Ok(ret_ptr);
             }
         }
     }
@@ -151,6 +172,7 @@ impl BootStrapAlloc {
                     }
 
                     previous_mut.free = true;
+                    self.bytes_used -= previous_mut.len - size_of::<Buddy>();
                     return Ok(());
                 };
 
@@ -184,6 +206,8 @@ impl BootStrapAlloc {
 
                 if previous_buddy.as_ref().free {
                     self.melt_right(previous_buddy);
+                } else {
+                    self.bytes_used -= buddy_mut.len - size_of::<Buddy>();
                 }
 
                 return Ok(());
@@ -196,6 +220,9 @@ impl Debug for BootStrapAlloc {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("BootStrapAlloc")
             .field("len", &self.len)
+            .field("bytes_used", &self.bytes_used)
+            .field("bytes_free", &(self.bytes_total - self.bytes_used))
+            .field("bytes_total", &self.bytes_total)
             .field("buddy", unsafe { self.buddy.as_ref() })
             .finish()
     }

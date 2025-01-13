@@ -24,6 +24,8 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 extern crate alloc;
+use core::fmt::Display;
+
 use alloc::boxed::Box;
 use alloc::sync::Arc;
 use arch::paging64::{
@@ -69,8 +71,8 @@ pub fn virt_to_phys(virt: u64) -> Option<u64> {
             if lvl3_entry.is_page_size_set() {
                 // 1Gib Entry
                 return Some(
-                    (PageMapLvl3::SIZE_PER_INDEX * lvl3_idx as u64)
-                        + (PageMapLvl4::SIZE_PER_INDEX * lvl4_idx as u64),
+                    lvl3_entry.get_next_entry_phy_address()
+                        + (virt & (PageMapLvl3::SIZE_PER_INDEX - 1)),
                 );
             }
 
@@ -84,9 +86,8 @@ pub fn virt_to_phys(virt: u64) -> Option<u64> {
             if lvl2_entry.is_page_size_set() {
                 // 2Mib Entry
                 return Some(
-                    (PageMapLvl2::SIZE_PER_INDEX * lvl2_idx as u64)
-                        + (PageMapLvl3::SIZE_PER_INDEX * lvl3_idx as u64)
-                        + (PageMapLvl4::SIZE_PER_INDEX * lvl4_idx as u64),
+                    lvl2_entry.get_next_entry_phy_address()
+                        + (virt & (PageMapLvl2::SIZE_PER_INDEX - 1)),
                 );
             }
 
@@ -97,7 +98,7 @@ pub fn virt_to_phys(virt: u64) -> Option<u64> {
                 return None;
             }
 
-            Some(lvl1_entry.get_phy_address())
+            Some(lvl1_entry.get_phy_address() + (virt & (PageMapLvl1::SIZE_PER_INDEX - 1)))
         }
     }
 }
@@ -250,37 +251,29 @@ impl VmSafePageTable {
                         lvl4_index,
                         lvl4_entry,
                         lvl4_entry.get_table().map(|lvl3| {
-                            logln!(" PageLvl4[{:03}] = {:#016x}", lvl4_index, lvl4_entry.get_raw());
                             let mut safe_lvl3 = Box::new(VmSafePageLvl3::new());
                             lvl3.entry_iter()
                                 .enumerate()
                                 .for_each(|(lvl3_index, lvl3_entry)| {
                                     // BIG
                                     if let Some(lvl3_large_entry) = PageEntry1G::convert_entry(lvl3_entry) {
-                                        logln!(" |- PageEn1G[{:03}] = {:#016x}", lvl3_index, lvl3_entry.get_raw());
                                         safe_lvl3.set_raw_entry(lvl3_index, lvl3_large_entry);
                                     }
                                     // TABLE
                                     else if lvl3_entry.is_present_set() {
-                                        logln!(" |- PageLvl3[{:03}] = {:#016x}", lvl3_index, lvl3_entry.get_raw());
                                         safe_lvl3.set_raw_table(lvl3_index, lvl3_entry, lvl3_entry.get_table().map(|lvl2| {
                                             let mut safe_lvl2 = Box::new(VmSafePageLvl2::new());
 
                                             lvl2.entry_iter().enumerate().for_each(|(lvl2_index, lvl2_entry)| {
                                                 // BIG
                                                 if let Some(lvl2_large_entry) = PageEntry2M::convert_entry(lvl2_entry) {
-                                                    logln!(" |  |- PageEn2M[{:03}] = {:#016x}", lvl2_index, lvl2_entry.get_raw());
                                                     safe_lvl2.set_raw_entry(lvl2_index, lvl2_large_entry);
                                                 }
                                                 // TABLE
                                                 else if lvl2_entry.is_present_set(){
-                                                    logln!(" |  |- PageLvl2[{:03}] = {:#016x}", lvl2_index, lvl2_entry.get_raw());
                                                     safe_lvl2.set_raw_table(lvl2_index, lvl2_entry, lvl2_entry.get_table().map(|lvl1| {
                                                         let mut safe_lvl1 = Box::new(VmSafePageLvl1::new());
                                                         lvl1.entry_iter().enumerate().for_each(|(lvl1_index, lvl1_entry)| {
-                                                            if lvl1_entry.is_present_set() {
-                                                                logln!(" |  |   |- PageLvl1[{:03}] = {:#016x}", lvl1_index, lvl1_entry.get_raw());
-                                                            }
                                                             safe_lvl1.set_raw(lvl1_index, lvl1_entry);
                                                         });
 
@@ -307,19 +300,20 @@ impl VmSafePageTable {
     ///
     /// These page tables will now be used by the system, and all future lookups for `virt_to_phys`.
     pub unsafe fn load(&self) {
-        let mut page_tables = CURRENT_PAGE_TABLE_ALLOC.lock();
-        *page_tables = Some(self.clone());
-
         let vm_table_ptr = self.cr3.read().phys_table.table_ptr();
         let phys_table_ptr =
             virt_to_phys(vm_table_ptr).expect("Cannot get physical address for page tables!");
+
+        *CURRENT_PAGE_TABLE_ALLOC.lock() = Some(self.clone());
 
         assert!(
             is_align_to(vm_table_ptr, 4096) && is_align_to(phys_table_ptr, 4096),
             "Page tables are not aligned!"
         );
+        logln!("{:#016x}", phys_table_ptr);
 
         unsafe { arch::registers::cr3::set_page_directory_base_register(phys_table_ptr) };
+        logln!("Loaded!");
     }
 
     /// Attempts to return the Physical Address for the given Virt Address.
@@ -358,6 +352,13 @@ impl VmSafePageTable {
         Some(page_entry.get_phy_address())
     }
 
+    pub fn is_loaded(&self) -> bool {
+        CURRENT_PAGE_TABLE_ALLOC
+            .lock()
+            .as_ref()
+            .is_some_and(|inner| inner.cr3.as_mut_ptr() == self.cr3.as_mut_ptr())
+    }
+
     /// Maps the PhysPage to the VirtPage.
     pub fn map_page(
         &mut self,
@@ -365,5 +366,107 @@ impl VmSafePageTable {
         phys_page: PhysPage,
     ) -> Result<(), MemoryError> {
         todo!()
+    }
+}
+
+impl Display for VmSafePageTable {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let cr3_lock = self.cr3.read();
+
+        write!(
+            f,
+            "PageLvl4 ({})\n",
+            self.is_loaded().then_some("Loaded").unwrap_or("Unloaded")
+        )?;
+
+        for (lvl4_index, lvl4_vm) in cr3_lock.vm_table.iter().enumerate() {
+            let Some(lvl4_vm) = lvl4_vm else {
+                continue;
+            };
+
+            let raw = cr3_lock.phys_table.get(lvl4_index);
+            write!(
+                f,
+                " |-PageLvl3[{:03}]: {}{}{} ({})\n",
+                lvl4_index,
+                raw.is_execute_disable_set().then_some("_").unwrap_or("X"),
+                raw.is_read_write_set().then_some("W").unwrap_or("R"),
+                raw.is_accessed_set().then_some("D").unwrap_or("_"),
+                raw.is_user_access_set()
+                    .then_some("User")
+                    .unwrap_or("System"),
+            )?;
+
+            for (lvl3_index, lvl3_vm) in lvl4_vm.vm_table.iter().enumerate() {
+                let raw = lvl4_vm.phys_table.get(lvl3_index);
+                match lvl3_vm {
+                    NextTableKind::NotPresent => (),
+                    NextTableKind::Table(lvl2_table) => {
+                        write!(
+                            f,
+                            " |  |-PageLvl2[{:03}]: {}{}{} ({})\n",
+                            lvl3_index,
+                            raw.is_execute_disable_set().then_some("_").unwrap_or("X"),
+                            raw.is_read_write_set().then_some("W").unwrap_or("R"),
+                            raw.is_accessed_set().then_some("D").unwrap_or("_"),
+                            raw.is_user_access_set()
+                                .then_some("User")
+                                .unwrap_or("System"),
+                        )?;
+
+                        for (lvl2_index, lvl2_vm) in lvl2_table.vm_table.iter().enumerate() {
+                            let raw = lvl2_table.phys_table.get(lvl2_index);
+                            match lvl2_vm {
+                                NextTableKind::NotPresent => (),
+                                NextTableKind::Table(lvl1_table) => {
+                                    write!(
+                                        f,
+                                        " |  |  |-PageLvl1[{:03}]: {}{}{} ({})\n",
+                                        lvl2_index,
+                                        raw.is_execute_disable_set().then_some("_").unwrap_or("X"),
+                                        raw.is_read_write_set().then_some("W").unwrap_or("R"),
+                                        raw.is_accessed_set().then_some("D").unwrap_or("_"),
+                                        raw.is_user_access_set()
+                                            .then_some("User")
+                                            .unwrap_or("System"),
+                                    )?;
+                                    for (lvl1_index, lvl1_vm) in
+                                        lvl1_table.phys_table.entry_iter().enumerate()
+                                    {
+                                        if lvl1_vm.is_present_set() {
+                                            write!(f, " |  |  |  |-Page 4K[{:03}]\n", lvl1_index)?;
+                                        }
+                                    }
+                                }
+                                NextTableKind::LargePage => write!(
+                                    f,
+                                    " |  |  |-Page 2M[{:03}]: {}{}{} ({})\n",
+                                    lvl2_index,
+                                    raw.is_execute_disable_set().then_some("_").unwrap_or("X"),
+                                    raw.is_read_write_set().then_some("W").unwrap_or("R"),
+                                    raw.is_accessed_set().then_some("D").unwrap_or("_"),
+                                    raw.is_user_access_set()
+                                        .then_some("User")
+                                        .unwrap_or("System"),
+                                )?,
+                            }
+                        }
+                    }
+                    NextTableKind::LargePage => write!(
+                        f,
+                        " |  |-Page 1G[{:03}]: {}{}{} ({})\n",
+                        lvl3_index,
+                        raw.is_execute_disable_set().then_some("_").unwrap_or("X"),
+                        raw.is_read_write_set().then_some("W").unwrap_or("R"),
+                        raw.is_accessed_set().then_some("D").unwrap_or("_"),
+                        raw.is_user_access_set()
+                            .then_some("User")
+                            .unwrap_or("System"),
+                    )?,
+                }
+            }
+        }
+
+        Ok(())
     }
 }

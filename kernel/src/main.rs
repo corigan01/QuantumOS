@@ -37,7 +37,7 @@ extern crate alloc;
 use bootloader::KernelBootHeader;
 use lldebug::{debug_ready, logln, make_debug};
 use mem::{
-    alloc::{KernelAllocator, provide_init_region},
+    alloc::{KernelAllocator, dump_allocator, provide_init_region},
     pmm::Pmm,
     vmm::{VirtPage, VmRegion, Vmm},
 };
@@ -94,4 +94,5 @@ fn main(kbh: &KernelBootHeader) {
     .unwrap();
 
     logln!("Finished in {}ms", kernel_ticks());
+    dump_allocator();
 }
