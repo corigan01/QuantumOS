@@ -39,7 +39,7 @@ use lldebug::{debug_ready, logln, make_debug};
 use mem::{
     alloc::{KernelAllocator, dump_allocator, provide_init_region},
     pmm::Pmm,
-    vmm::{VirtPage, VmRegion, Vmm},
+    vmm::{KernelRegionKind, VirtPage, VmRegion, Vmm},
 };
 use serial::{Serial, baud::SerialBaud};
 use timer::kernel_ticks;
@@ -73,10 +73,10 @@ fn main(kbh: &KernelBootHeader) {
 
     logln!(
         "Init Heap Region ({})",
-        HumanBytes::from(kbh.init_alloc_region.1)
+        HumanBytes::from(kbh.kernel_init_heap.1)
     );
     provide_init_region(unsafe {
-        core::slice::from_raw_parts_mut(kbh.init_alloc_region.0 as *mut u8, kbh.init_alloc_region.1)
+        core::slice::from_raw_parts_mut(kbh.kernel_init_heap.0 as *mut u8, kbh.kernel_init_heap.1)
     });
 
     logln!("Init PhysMemoryManager");
@@ -85,14 +85,43 @@ fn main(kbh: &KernelBootHeader) {
     logln!("Init VirtMemoryManager");
     let mut vmm = Vmm::new();
     vmm.init_kernel_process(
-        [VmRegion {
-            start: VirtPage(0),
-            end: VirtPage(10),
-        }]
+        [
+            (
+                VmRegion {
+                    start: VirtPage::containing_page(kbh.kernel_elf.0),
+                    end: VirtPage::containing_page(kbh.kernel_elf.0 + kbh.kernel_elf.1 as u64),
+                },
+                KernelRegionKind::KernelElf,
+            ),
+            (
+                VmRegion {
+                    start: VirtPage::containing_page(kbh.kernel_exe.0),
+                    end: VirtPage::containing_page(kbh.kernel_exe.0 + kbh.kernel_exe.1 as u64),
+                },
+                KernelRegionKind::KernelExe,
+            ),
+            (
+                VmRegion {
+                    start: VirtPage::containing_page(kbh.kernel_stack.0),
+                    end: VirtPage::containing_page(kbh.kernel_stack.0 + kbh.kernel_stack.1 as u64),
+                },
+                KernelRegionKind::KernelStack,
+            ),
+            (
+                VmRegion {
+                    start: VirtPage::containing_page(kbh.kernel_init_heap.0),
+                    end: VirtPage::containing_page(
+                        kbh.kernel_init_heap.0 + kbh.kernel_init_heap.1 as u64,
+                    ),
+                },
+                KernelRegionKind::KernelHeap,
+            ),
+        ]
         .into_iter(),
     )
     .unwrap();
 
+    logln!("{:#?}", vmm);
+
     logln!("Finished in {}ms", kernel_ticks());
-    dump_allocator();
 }

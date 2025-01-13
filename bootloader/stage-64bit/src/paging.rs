@@ -61,7 +61,7 @@ pub struct PageTableConfig {
 pub struct KernelVirtInfo {
     pub exe_start_virt: u64,
     pub exe_end_virt: u64,
-    pub _stack_start_virt: u64,
+    pub stack_start_virt: u64,
     pub stack_end_virt: u64,
     pub init_start_virt: u64,
     pub init_end_virt: u64,
@@ -80,8 +80,8 @@ impl KernelVirtInfo {
     pub fn _stack_slice(&mut self) -> &'static mut [u8] {
         unsafe {
             core::slice::from_raw_parts_mut(
-                self._stack_start_virt as *mut u8,
-                (self.stack_end_virt - self._stack_start_virt) as usize,
+                self.stack_start_virt as *mut u8,
+                (self.stack_end_virt - self.stack_start_virt) as usize,
             )
         }
     }
@@ -194,7 +194,7 @@ pub fn build_page_tables(c: PageTableConfig) -> KernelVirtInfo {
     KernelVirtInfo {
         exe_start_virt: c.kernel_virt,
         exe_end_virt: c.kernel_virt + (exe_pages * PAGE_2M) as u64,
-        _stack_start_virt: c.kernel_virt + ((exe_pages + 1) * PAGE_2M) as u64,
+        stack_start_virt: c.kernel_virt + ((exe_pages + 1) * PAGE_2M) as u64,
         stack_end_virt: c.kernel_virt + ((exe_pages + stack_pages + 1) * PAGE_2M) as u64,
         init_start_virt: c.kernel_virt + ((exe_pages + stack_pages + 2) * PAGE_2M) as u64,
         init_end_virt: c.kernel_virt

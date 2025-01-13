@@ -310,10 +310,7 @@ impl VmSafePageTable {
             is_align_to(vm_table_ptr, 4096) && is_align_to(phys_table_ptr, 4096),
             "Page tables are not aligned!"
         );
-        logln!("{:#016x}", phys_table_ptr);
-
         unsafe { arch::registers::cr3::set_page_directory_base_register(phys_table_ptr) };
-        logln!("Loaded!");
     }
 
     /// Attempts to return the Physical Address for the given Virt Address.
@@ -360,11 +357,7 @@ impl VmSafePageTable {
     }
 
     /// Maps the PhysPage to the VirtPage.
-    pub fn map_page(
-        &mut self,
-        virt_page: VirtPage,
-        phys_page: PhysPage,
-    ) -> Result<(), MemoryError> {
+    pub fn map_page(&self, virt_page: VirtPage, phys_page: PhysPage) -> Result<(), MemoryError> {
         todo!()
     }
 }

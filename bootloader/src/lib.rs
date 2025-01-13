@@ -72,5 +72,8 @@ pub struct Stage32toStage64 {
 pub struct KernelBootHeader {
     pub phys_mem_map: &'static PhysMemoryMap<MEMORY_REGIONS>,
     pub video_mode: Option<(VesaModeId, VesaMode)>,
-    pub init_alloc_region: (u64, usize),
+    pub kernel_elf: (u64, usize),
+    pub kernel_exe: (u64, usize),
+    pub kernel_stack: (u64, usize),
+    pub kernel_init_heap: (u64, usize),
 }

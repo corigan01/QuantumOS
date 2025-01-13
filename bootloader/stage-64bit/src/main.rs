@@ -113,7 +113,16 @@ fn main(stage_to_stage: &Stage32toStage64) {
         *s2k = Some(KernelBootHeader {
             phys_mem_map: mm,
             video_mode: stage_to_stage.video_mode,
-            init_alloc_region: (
+            kernel_elf: (kernel_elf_ptr, kernel_elf_size as usize),
+            kernel_exe: (
+                virt_info.exe_start_virt,
+                (virt_info.exe_end_virt - virt_info.exe_start_virt) as usize,
+            ),
+            kernel_stack: (
+                virt_info.stack_start_virt,
+                (virt_info.stack_end_virt - virt_info.stack_start_virt) as usize,
+            ),
+            kernel_init_heap: (
                 virt_info.init_start_virt,
                 (virt_info.init_end_virt - virt_info.init_start_virt) as usize,
             ),

@@ -23,10 +23,13 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use core::ops::{BitOr, BitOrAssign};
+use core::{
+    fmt::Debug,
+    ops::{BitOr, BitOrAssign},
+};
 
 use crate::{MemoryError, pmm::PhysPage};
-use alloc::{boxed::Box, collections::BTreeMap, string::String, vec::Vec};
+use alloc::{boxed::Box, collections::BTreeMap, format, string::String, vec::Vec};
 use arch::idt64::{InterruptFlags, InterruptInfo};
 use hw::make_hw;
 use lldebug::logln;
@@ -56,7 +59,7 @@ impl Iterator for VmPageIter {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub struct VmRegion {
     pub start: VirtPage,
     pub end: VirtPage,
@@ -76,7 +79,7 @@ impl VmRegion {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub struct VirtPage(pub usize);
 
 impl VirtPage {
@@ -141,7 +144,18 @@ trait VmBacking {
     field(RW, 3, user)
 )]
 #[derive(Clone, Copy)]
-struct VmPermissions(u8);
+pub struct VmPermissions(u8);
+
+impl Debug for VmPermissions {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("VmPermissions")
+            .field("exec", &self.is_exec_set())
+            .field("read", &self.is_read_set())
+            .field("write", &self.is_write_set())
+            .field("user", &self.is_user_set())
+            .finish()
+    }
+}
 
 impl VmPermissions {
     pub const NONE: VmPermissions = VmPermissions(0);
@@ -171,7 +185,7 @@ impl BitOrAssign for VmPermissions {
 
 struct VmObject {
     region: VmRegion,
-    backing: Box<dyn VmBacking>,
+    backing: Option<Box<dyn VmBacking>>,
     permissions: VmPermissions,
     what: String,
     // FIXME: We shouldn't create a page table for each process, we should only create the entries we need
@@ -180,6 +194,18 @@ struct VmObject {
     // NOTE: Since `VmSafePageTable` internally is an `Arc`, this is just a ptr not an entire copy. The
     //       `VmProcess` contains the actual refrence.
     page_table: page::VmSafePageTable,
+}
+
+impl Debug for VmObject {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("VmObject")
+            .field("region", &self.region)
+            .field("permissions", &self.permissions)
+            .field("what", &self.what)
+            .field("page_table", &"...")
+            .field("backing", &"...")
+            .finish()
+    }
 }
 
 impl VmObject {
@@ -197,8 +223,12 @@ impl VmObject {
             return Err(MemoryError::DidNotHandleException);
         };
 
+        let Some(backing) = self.backing.as_mut() else {
+            return Err(MemoryError::DidNotHandleException);
+        };
+
         assert_eq!(
-            self.backing.backing_kind(),
+            backing.backing_kind(),
             VmBackingKind::Physical,
             "TODO: Currently we only support Physical Page backing!"
         );
@@ -210,7 +240,7 @@ impl VmObject {
 
         // This page does not exist, make it!
         if present {
-            let ppage = self.backing.alloc_anywhere()?;
+            let ppage = backing.alloc_anywhere()?;
             self.hydrate_page(VirtPage::containing_page(virt_addr), ppage)?;
 
             Ok(())
@@ -224,12 +254,31 @@ impl VmObject {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+pub enum KernelRegionKind {
+    KernelExe,
+    KernelElf,
+    KernelStack,
+    KernelHeap,
+}
+
 struct VmProcess {
     vm_process_id: usize,
     objects: Vec<VmObject>,
     page_table: page::VmSafePageTable,
 }
 
+impl Debug for VmProcess {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("VmProcess")
+            .field("vm_process_id", &self.vm_process_id)
+            .field("objects", &self.objects)
+            .field("page_table", &"...")
+            .finish()
+    }
+}
+
+#[derive(Debug)]
 pub struct Vmm {
     active_process: usize,
     table: BTreeMap<usize, VmProcess>,
@@ -247,19 +296,29 @@ impl Vmm {
 
     pub fn init_kernel_process(
         &mut self,
-        kernel_regions: impl Iterator<Item = VmRegion>,
+        kernel_regions: impl Iterator<Item = (VmRegion, KernelRegionKind)>,
     ) -> Result<(), MemoryError> {
         let page_tables = page::VmSafePageTable::copy_from_bootloader();
         unsafe { page_tables.load() };
 
-        let mut vm_objects = Vec::new();
-        vm_objects.push(VmObject {
-            region: todo!(),
-            backing: todo!(),
-            permissions: todo!(),
-            page_table: page_tables,
-            what: todo!(),
-        });
+        let vm_objects = kernel_regions
+            .map(|(region, kind)| {
+                let permissions = match kind {
+                    KernelRegionKind::KernelExe => VmPermissions::EXEC | VmPermissions::READ,
+                    KernelRegionKind::KernelElf => VmPermissions::READ,
+                    KernelRegionKind::KernelStack => VmPermissions::READ | VmPermissions::WRITE,
+                    KernelRegionKind::KernelHeap => VmPermissions::READ | VmPermissions::WRITE,
+                };
+
+                VmObject {
+                    region,
+                    backing: None,
+                    permissions,
+                    page_table: page_tables.clone(),
+                    what: format!("{:?}", kind),
+                }
+            })
+            .collect();
 
         self.table.insert(Self::KERNEL_PROCESS, VmProcess {
             vm_process_id: 0,
@@ -267,7 +326,6 @@ impl Vmm {
             page_table: page_tables,
         });
 
-        unsafe { page_tables.load() };
-        todo!()
+        Ok(())
     }
 }
