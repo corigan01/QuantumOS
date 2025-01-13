@@ -39,6 +39,7 @@ use lldebug::{debug_ready, logln, make_debug};
 use mem::{
     alloc::{KernelAllocator, provide_init_region},
     pmm::Pmm,
+    vmm::{VirtPage, VmRegion, Vmm},
 };
 use serial::{Serial, baud::SerialBaud};
 use timer::kernel_ticks;
@@ -80,6 +81,17 @@ fn main(kbh: &KernelBootHeader) {
 
     logln!("Init PhysMemoryManager");
     let _pmm = Pmm::new(kbh.phys_mem_map).unwrap();
+
+    logln!("Init VirtMemoryManager");
+    let mut vmm = Vmm::new();
+    vmm.init_kernel_process(
+        [VmRegion {
+            start: VirtPage(0),
+            end: VirtPage(10),
+        }]
+        .into_iter(),
+    )
+    .unwrap();
 
     logln!("Finished in {}ms", kernel_ticks());
 }

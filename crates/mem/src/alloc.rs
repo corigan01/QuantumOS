@@ -89,8 +89,10 @@ impl BootStrapAlloc {
             let mut buddy = self.buddy;
             loop {
                 let buddy_mut = buddy.as_mut();
-                let min_len =
-                    layout.size() + buddy.add(1).align_offset(layout.align()) + size_of::<Buddy>();
+                let min_len = layout.size()
+                    + (align_to(buddy.add(1).addr().get() as u64, layout.align()) as usize
+                        - buddy.add(1).addr().get())
+                    + size_of::<Buddy>();
 
                 if !buddy_mut.free || buddy_mut.len < min_len {
                     let Some(buddy_next) = buddy_mut.next else {

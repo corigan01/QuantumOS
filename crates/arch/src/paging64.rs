@@ -53,6 +53,10 @@ impl PageEntry4K {
     pub fn new() -> Self {
         Self::zero()
     }
+
+    pub const fn get_raw(&self) -> u64 {
+        self.0
+    }
 }
 
 #[make_hw(
@@ -82,6 +86,18 @@ impl PageEntry2M {
     pub fn new() -> Self {
         Self::zero().set_page_size_flag(true)
     }
+
+    pub const fn convert_entry(entry: PageEntryLvl2) -> Option<Self> {
+        if entry.is_page_size_set() {
+            Some(PageEntry2M(entry.0))
+        } else {
+            None
+        }
+    }
+
+    pub const fn get_raw(&self) -> u64 {
+        self.0
+    }
 }
 
 #[make_hw(
@@ -110,6 +126,18 @@ impl PageEntry1G {
 
     pub fn new() -> Self {
         Self::zero().set_page_size_flag(true)
+    }
+
+    pub const fn convert_entry(entry: PageEntryLvl3) -> Option<Self> {
+        if entry.is_page_size_set() {
+            Some(Self(entry.0))
+        } else {
+            None
+        }
+    }
+
+    pub const fn get_raw(&self) -> u64 {
+        self.0
     }
 }
 
@@ -152,6 +180,18 @@ impl PageEntryLvl2 {
     pub fn new() -> Self {
         Self::zero()
     }
+
+    pub unsafe fn get_table(&self) -> Option<&PageMapLvl1> {
+        if self.is_present_set() && !self.is_page_size_set() {
+            Some(&* (self.get_next_entry_phy_address() as *const PageMapLvl1))
+        } else {
+            None
+        }
+    }
+
+    pub const fn get_raw(&self) -> u64 {
+        self.0
+    }
 }
 
 /// A Page Directory Pointer Table Entry
@@ -192,6 +232,18 @@ impl PageEntryLvl3 {
 
     pub fn new() -> Self {
         Self::zero()
+    }
+
+    pub unsafe fn get_table(&self) -> Option<&PageMapLvl2> {
+        if self.is_present_set() && !self.is_page_size_set() {
+            Some(&* (self.get_next_entry_phy_address() as *const PageMapLvl2))
+        } else {
+            None
+        }
+    }
+
+    pub const fn get_raw(&self) -> u64 {
+        self.0
     }
 }
 
@@ -234,6 +286,18 @@ impl PageEntryLvl4 {
     pub fn new() -> Self {
         Self::zero()
     }
+
+    pub unsafe fn get_table(&self) -> Option<&PageMapLvl3> {
+        if self.is_present_set() {
+            Some(&* (self.get_next_entry_phy_address() as *const PageMapLvl3))
+        } else {
+            None
+        }
+    }
+
+    pub const fn get_raw(&self) -> u64 {
+        self.0
+    }
 }
 
 /// A Page Level 4 Table Entry
@@ -274,6 +338,18 @@ impl PageEntryLvl5 {
 
     pub fn new() -> Self {
         Self::zero()
+    }
+
+    pub unsafe fn get_table(&self) -> Option<&PageMapLvl4> {
+        if self.is_present_set() {
+            Some(&* (self.get_next_entry_phy_address() as *const PageMapLvl4))
+        } else {
+            None
+        }
+    }
+
+    pub const fn get_raw(&self) -> u64 {
+        self.0
     }
 }
 
@@ -396,6 +472,10 @@ impl PageMapLvl1 {
     pub fn get(&self, index: usize) -> PageEntry4K {
         PageEntry4K(self.0[index])
     }
+
+    pub fn entry_iter(&self) -> impl Iterator<Item = PageEntry4K> + use<'_> {
+        self.0.iter().map(|item| PageEntry4K(*item))
+    }
 }
 
 impl PageMapLvl2 {
@@ -432,6 +512,10 @@ impl PageMapLvl2 {
 
     pub fn get(&self, index: usize) -> PageEntryLvl2 {
         PageEntryLvl2(self.0[index])
+    }
+
+    pub fn entry_iter(&self) -> impl Iterator<Item = PageEntryLvl2> + use<'_> {
+        self.0.iter().map(|item| PageEntryLvl2(*item))
     }
 }
 
@@ -470,6 +554,10 @@ impl PageMapLvl3 {
     pub fn get(&self, index: usize) -> PageEntryLvl3 {
         PageEntryLvl3(self.0[index])
     }
+
+    pub fn entry_iter(&self) -> impl Iterator<Item = PageEntryLvl3> + use<'_> {
+        self.0.iter().map(|item| PageEntryLvl3(*item))
+    }
 }
 
 impl PageMapLvl4 {
@@ -507,6 +595,10 @@ impl PageMapLvl4 {
     pub fn get(&self, index: usize) -> PageEntryLvl4 {
         PageEntryLvl4(self.0[index])
     }
+
+    pub fn entry_iter(&self) -> impl Iterator<Item = PageEntryLvl4> + use<'_> {
+        self.0.iter().map(|item| PageEntryLvl4(*item))
+    }
 }
 
 impl PageMapLvl5 {
@@ -543,6 +635,10 @@ impl PageMapLvl5 {
 
     pub fn get(&self, index: usize) -> PageEntryLvl5 {
         PageEntryLvl5(self.0[index])
+    }
+
+    pub fn entry_iter(&self) -> impl Iterator<Item = PageEntryLvl5> + use<'_> {
+        self.0.iter().map(|item| PageEntryLvl5(*item))
     }
 }
 

@@ -26,7 +26,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 use core::ops::{BitOr, BitOrAssign};
 
 use crate::{MemoryError, pmm::PhysPage};
-use alloc::{boxed::Box, string::String, vec::Vec};
+use alloc::{boxed::Box, collections::BTreeMap, string::String, vec::Vec};
 use arch::idt64::{InterruptFlags, InterruptInfo};
 use hw::make_hw;
 use util::consts::PAGE_4K;
@@ -57,8 +57,8 @@ impl Iterator for VmPageIter {
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct VmRegion {
-    start: VirtPage,
-    end: VirtPage,
+    pub start: VirtPage,
+    pub end: VirtPage,
 }
 
 impl VmRegion {
@@ -76,7 +76,7 @@ impl VmRegion {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub struct VirtPage(usize);
+pub struct VirtPage(pub usize);
 
 impl VirtPage {
     /// Get the page that contains this virtal address.
@@ -172,12 +172,19 @@ struct VmObject {
     region: VmRegion,
     backing: Box<dyn VmBacking>,
     permissions: VmPermissions,
+    what: String,
+    // FIXME: We shouldn't create a page table for each process, we should only create the entries we need
+    //        but for now this works.
+    //
+    // NOTE: Since `VmSafePageTable` internally is an `Arc`, this is just a ptr not an entire copy. The
+    //       `VmProcess` contains the actual refrence.
+    page_table: page::VmSafePageTable,
 }
 
 impl VmObject {
     /// Link this physical page to this virtal page.
     fn hydrate_page(&mut self, vpage: VirtPage, ppage: PhysPage) -> Result<(), MemoryError> {
-        todo!()
+        self.page_table.map_page(vpage, ppage)
     }
 
     /// Called upon PageFault. Required to lazy allocate pages.
@@ -216,4 +223,49 @@ impl VmObject {
     }
 }
 
-pub struct Vmm {}
+struct VmProcess {
+    vm_process_id: usize,
+    objects: Vec<VmObject>,
+    page_table: page::VmSafePageTable,
+}
+
+pub struct Vmm {
+    active_process: usize,
+    table: BTreeMap<usize, VmProcess>,
+}
+
+impl Vmm {
+    pub const KERNEL_PROCESS: usize = 0;
+
+    pub const fn new() -> Self {
+        Self {
+            active_process: Self::KERNEL_PROCESS,
+            table: BTreeMap::new(),
+        }
+    }
+
+    pub fn init_kernel_process(
+        &mut self,
+        kernel_regions: impl Iterator<Item = VmRegion>,
+    ) -> Result<(), MemoryError> {
+        let page_tables = page::VmSafePageTable::copy_from_bootloader();
+
+        let mut vm_objects = Vec::new();
+        vm_objects.push(VmObject {
+            region: todo!(),
+            backing: todo!(),
+            permissions: todo!(),
+            page_table: page_tables,
+            what: todo!(),
+        });
+
+        self.table.insert(Self::KERNEL_PROCESS, VmProcess {
+            vm_process_id: 0,
+            objects: vm_objects,
+            page_table: page_tables,
+        });
+
+        unsafe { page_tables.load() };
+        todo!()
+    }
+}

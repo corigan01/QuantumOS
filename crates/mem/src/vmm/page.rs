@@ -26,8 +26,17 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 extern crate alloc;
 use alloc::boxed::Box;
 use alloc::sync::Arc;
-use arch::paging64::{PageMapLvl1, PageMapLvl2, PageMapLvl3, PageMapLvl4};
-use lldebug::sync::Mutex;
+use arch::paging64::{
+    PageEntry1G, PageEntry2M, PageEntry4K, PageEntryLvl2, PageEntryLvl3, PageEntryLvl4,
+    PageMapLvl1, PageMapLvl2, PageMapLvl3, PageMapLvl4,
+};
+use lldebug::{logln, sync::Mutex};
+use spin::RwLock;
+use util::is_align_to;
+
+use crate::{MemoryError, pmm::PhysPage};
+
+use super::VirtPage;
 
 // FIXME: Make a data structure that makes more sense for this
 static CURRENT_PAGE_TABLE_ALLOC: Mutex<Option<VmSafePageTable>> = Mutex::new(None);
@@ -40,6 +49,8 @@ pub fn virt_to_phys(virt: u64) -> Option<u64> {
         safe_table.lookup_virt_address(virt)
     } else {
         // FIXME: This is just hardcoded for now, but should be populated from the bootloader!!!!
+        //
+        // Since we know the bootloader is identity mapped, the physical PTRs are valid virtual PTRs!
         let (lvl4_idx, lvl3_idx, lvl2_idx, lvl1_idx) = table_indexes_for(virt);
 
         let lvl4_table_ptr =
@@ -120,6 +131,16 @@ impl VmSafePageLvl4 {
             vm_table: [const { None }; 512],
         }
     }
+
+    pub fn set_raw(
+        &mut self,
+        index: usize,
+        entry: PageEntryLvl4,
+        table: Option<Box<VmSafePageLvl3>>,
+    ) {
+        self.phys_table.store(entry, index);
+        self.vm_table[index] = table;
+    }
 }
 
 struct VmSafePageLvl3 {
@@ -133,6 +154,23 @@ impl VmSafePageLvl3 {
             phys_table: PageMapLvl3::new(),
             vm_table: [const { NextTableKind::NotPresent }; 512],
         }
+    }
+
+    pub fn set_raw_table(
+        &mut self,
+        index: usize,
+        entry: PageEntryLvl3,
+        table: Option<Box<VmSafePageLvl2>>,
+    ) {
+        self.phys_table.store(entry, index);
+        if let Some(table) = table {
+            self.vm_table[index] = NextTableKind::Table(table);
+        }
+    }
+
+    pub fn set_raw_entry(&mut self, index: usize, entry: PageEntry1G) {
+        self.phys_table.store(entry, index);
+        self.vm_table[index] = NextTableKind::LargePage;
     }
 }
 
@@ -148,6 +186,23 @@ impl VmSafePageLvl2 {
             vm_table: [const { NextTableKind::NotPresent }; 512],
         }
     }
+
+    pub fn set_raw_table(
+        &mut self,
+        index: usize,
+        entry: PageEntryLvl2,
+        table: Option<Box<VmSafePageLvl1>>,
+    ) {
+        self.phys_table.store(entry, index);
+        if let Some(table) = table {
+            self.vm_table[index] = NextTableKind::Table(table);
+        }
+    }
+
+    pub fn set_raw_entry(&mut self, index: usize, entry: PageEntry2M) {
+        self.phys_table.store(entry, index);
+        self.vm_table[index] = NextTableKind::LargePage;
+    }
 }
 
 struct VmSafePageLvl1 {
@@ -160,27 +215,109 @@ impl VmSafePageLvl1 {
             phys_table: PageMapLvl1::new(),
         }
     }
+
+    pub fn set_raw(&mut self, index: usize, entry: PageEntry4K) {
+        self.phys_table.store(entry, index);
+    }
 }
 
 #[derive(Clone)]
 pub struct VmSafePageTable {
-    cr3: Arc<VmSafePageLvl4>,
+    cr3: Arc<RwLock<VmSafePageLvl4>>,
 }
 
 impl VmSafePageTable {
     pub fn new() -> Self {
         Self {
-            cr3: Arc::new(VmSafePageLvl4::new()),
+            cr3: Arc::new(RwLock::new(VmSafePageLvl4::new())),
         }
     }
 
+    /// Copies the page table mapping from the bootloader.
+    pub fn copy_from_bootloader() -> Self {
+        let lvl4 = Arc::new(RwLock::new(VmSafePageLvl4::new()));
+
+        let lvl4_table_ptr =
+            arch::registers::cr3::get_page_directory_base_register() as *const PageMapLvl4;
+
+        unsafe {
+            // Yeah... okay maybe don't do this :)
+            (&*lvl4_table_ptr)
+                .entry_iter()
+                .enumerate()
+                .for_each(|(lvl4_index, lvl4_entry)| {
+                    lvl4.write().set_raw(
+                        lvl4_index,
+                        lvl4_entry,
+                        lvl4_entry.get_table().map(|lvl3| {
+                            logln!(" PageLvl4[{:03}] = {:#016x}", lvl4_index, lvl4_entry.get_raw());
+                            let mut safe_lvl3 = Box::new(VmSafePageLvl3::new());
+                            lvl3.entry_iter()
+                                .enumerate()
+                                .for_each(|(lvl3_index, lvl3_entry)| {
+                                    // BIG
+                                    if let Some(lvl3_large_entry) = PageEntry1G::convert_entry(lvl3_entry) {
+                                        logln!(" |- PageEn1G[{:03}] = {:#016x}", lvl3_index, lvl3_entry.get_raw());
+                                        safe_lvl3.set_raw_entry(lvl3_index, lvl3_large_entry);
+                                    }
+                                    // TABLE
+                                    else if lvl3_entry.is_present_set() {
+                                        logln!(" |- PageLvl3[{:03}] = {:#016x}", lvl3_index, lvl3_entry.get_raw());
+                                        safe_lvl3.set_raw_table(lvl3_index, lvl3_entry, lvl3_entry.get_table().map(|lvl2| {
+                                            let mut safe_lvl2 = Box::new(VmSafePageLvl2::new());
+
+                                            lvl2.entry_iter().enumerate().for_each(|(lvl2_index, lvl2_entry)| {
+                                                // BIG
+                                                if let Some(lvl2_large_entry) = PageEntry2M::convert_entry(lvl2_entry) {
+                                                    logln!(" |  |- PageEn2M[{:03}] = {:#016x}", lvl2_index, lvl2_entry.get_raw());
+                                                    safe_lvl2.set_raw_entry(lvl2_index, lvl2_large_entry);
+                                                }
+                                                // TABLE
+                                                else if lvl2_entry.is_present_set(){
+                                                    logln!(" |  |- PageLvl2[{:03}] = {:#016x}", lvl2_index, lvl2_entry.get_raw());
+                                                    safe_lvl2.set_raw_table(lvl2_index, lvl2_entry, lvl2_entry.get_table().map(|lvl1| {
+                                                        let mut safe_lvl1 = Box::new(VmSafePageLvl1::new());
+                                                        lvl1.entry_iter().enumerate().for_each(|(lvl1_index, lvl1_entry)| {
+                                                            if lvl1_entry.is_present_set() {
+                                                                logln!(" |  |   |- PageLvl1[{:03}] = {:#016x}", lvl1_index, lvl1_entry.get_raw());
+                                                            }
+                                                            safe_lvl1.set_raw(lvl1_index, lvl1_entry);
+                                                        });
+
+                                                        safe_lvl1
+                                                    }));
+                                                }
+                                            });
+
+                                            safe_lvl2
+                                        }));
+                                    }
+                                });
+
+                            safe_lvl3
+                        }),
+                    );
+                });
+        }
+
+        Self { cr3: lvl4 }
+    }
+
+    /// Load these page tables into the CPU's MMU.
+    ///
+    /// These page tables will now be used by the system, and all future lookups for `virt_to_phys`.
     pub unsafe fn load(&self) {
         let mut page_tables = CURRENT_PAGE_TABLE_ALLOC.lock();
         *page_tables = Some(self.clone());
 
-        let vm_table_ptr = self.cr3.phys_table.table_ptr();
+        let vm_table_ptr = self.cr3.read().phys_table.table_ptr();
         let phys_table_ptr =
             virt_to_phys(vm_table_ptr).expect("Cannot get physical address for page tables!");
+
+        assert!(
+            is_align_to(vm_table_ptr, 4096) && is_align_to(phys_table_ptr, 4096),
+            "Page tables are not aligned!"
+        );
 
         unsafe { arch::registers::cr3::set_page_directory_base_register(phys_table_ptr) };
     }
@@ -189,7 +326,8 @@ impl VmSafePageTable {
     pub fn lookup_virt_address(&self, virt: u64) -> Option<u64> {
         let (lvl4_idx, lvl3_idx, lvl2_idx, lvl1_idx) = table_indexes_for(virt);
 
-        let lvl3 = self.cr3.vm_table[lvl4_idx].as_ref()?;
+        let cr3_locked = self.cr3.read();
+        let lvl3 = cr3_locked.vm_table[lvl4_idx].as_ref()?;
         let lvl2 = match &lvl3.vm_table[lvl3_idx] {
             NextTableKind::Table(next_table) => next_table,
             NextTableKind::LargePage => {
@@ -218,5 +356,14 @@ impl VmSafePageTable {
         }
 
         Some(page_entry.get_phy_address())
+    }
+
+    /// Maps the PhysPage to the VirtPage.
+    pub fn map_page(
+        &mut self,
+        virt_page: VirtPage,
+        phys_page: PhysPage,
+    ) -> Result<(), MemoryError> {
+        todo!()
     }
 }
