@@ -371,22 +371,13 @@ impl SharedTable {
 
         self.upgrade_mut(|lvl4| {
             lvl4.upgrade_mut(lvl4_index, |lvl3, lvl4_entry| {
-                lvl4_entry.set_present_flag(true);
-                lvl4_entry.set_read_write_flag(permissions.is_write_set());
-                lvl4_entry.set_user_access_flag(permissions.is_user_set());
-                lvl4_entry.set_execute_disable_flag(!permissions.is_exec_set());
+                lvl4_entry.add_permissions_from(permissions);
 
                 lvl3.upgrade_mut(lvl3_index, |lvl2, lvl3_entry| {
-                    lvl3_entry.set_present_flag(true);
-                    lvl3_entry.set_read_write_flag(permissions.is_write_set());
-                    lvl3_entry.set_user_access_flag(permissions.is_user_set());
-                    lvl3_entry.set_execute_disable_flag(!permissions.is_exec_set());
+                    lvl3_entry.add_permissions_from(permissions);
 
                     lvl2.upgrade_mut(lvl2_index, |lvl1, lvl2_entry| {
-                        lvl2_entry.set_present_flag(true);
-                        lvl2_entry.set_read_write_flag(permissions.is_write_set());
-                        lvl2_entry.set_user_access_flag(permissions.is_user_set());
-                        lvl2_entry.set_execute_disable_flag(!permissions.is_exec_set());
+                        lvl2_entry.add_permissions_from(permissions);
 
                         lvl1.link_page(vpage, ppage, permissions);
                     })
@@ -428,7 +419,7 @@ impl SharedTable {
 
                         entry.set_present_flag(permissions.is_read_set());
                         entry.set_read_write_flag(permissions.is_write_set());
-                        entry.set_user_accessed_flag(permissions.is_user_set());
+                        entry.set_user_access_flag(permissions.is_user_set());
                         entry.set_execute_disable_flag(!permissions.is_exec_set());
 
                         entry.set_phy_address(ppage.0 * PAGE_4K as u64);
@@ -466,7 +457,7 @@ impl SharedTable {
 
                     entry.set_present_flag(permissions.is_read_set());
                     entry.set_read_write_flag(permissions.is_write_set());
-                    entry.set_user_accessed_flag(permissions.is_user_set());
+                    entry.set_user_access_flag(permissions.is_user_set());
                     entry.set_execute_disable_flag(!permissions.is_exec_set());
 
                     entry.set_phy_address(ppage.0 * PAGE_4K as u64);
@@ -862,11 +853,7 @@ impl SharedLvl1 {
     fn link_page(&mut self, vpage: VirtPage, ppage: PhysPage, permissions: VmPermissions) {
         let mut page_entry = PageEntry4K::new();
 
-        page_entry.set_present_flag(true);
-        page_entry.set_read_write_flag(permissions.is_write_set());
-        page_entry.set_execute_disable_flag(!permissions.is_exec_set());
-        page_entry.set_user_accessed_flag(permissions.is_user_set());
-
+        page_entry.add_permissions_from(permissions);
         page_entry.set_phy_address(ppage.0 * PAGE_4K as u64);
 
         let table_index = vpage.0 % 512;
@@ -1035,3 +1022,34 @@ impl Display for SharedLvl1 {
         Ok(())
     }
 }
+
+pub trait PagePermissions {
+    fn reduce_permissions_to(&mut self, permissions: VmPermissions);
+    fn add_permissions_from(&mut self, permissions: VmPermissions);
+}
+
+macro_rules! page_permissions_for {
+    ($($ty:ty),*) => {
+        $(
+            impl PagePermissions for $ty {
+                fn reduce_permissions_to(&mut self, permissions: VmPermissions) {
+                    self.set_present_flag(permissions.is_read_set());
+                    self.set_read_write_flag(permissions.is_write_set());
+                    self.set_user_access_flag(permissions.is_user_set());
+                    self.set_execute_disable_flag(!permissions.is_exec_set());
+                }
+
+                fn add_permissions_from(&mut self, permissions: VmPermissions) {
+                    self.set_present_flag(permissions.is_read_set() | self.is_present_set());
+                    self.set_read_write_flag(permissions.is_write_set() | self.is_read_write_set());
+                    self.set_user_access_flag(permissions.is_user_set() | self.is_user_access_set());
+                    self.set_execute_disable_flag(
+                        !(permissions.is_exec_set() | !self.is_execute_disable_set()),
+                    );
+                }
+            }
+        )*
+    };
+}
+
+page_permissions_for! { PageEntry1G, PageEntry2M, PageEntry4K, PageEntryLvl2, PageEntryLvl3, PageEntryLvl4 }

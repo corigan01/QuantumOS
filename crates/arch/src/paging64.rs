@@ -33,7 +33,7 @@ pub const MAX_PHY_MEMORY_WIDTH: usize = 48;
 #[make_hw(
     field(RW, 0, pub present),
     field(RW, 1, pub read_write),
-    field(RW, 2, pub user_accessed),
+    field(RW, 2, pub user_access),
     field(RW, 3, pub write_though),
     field(RW, 4, pub cache_disable),
     field(RW, 5, pub accessed),
@@ -64,7 +64,7 @@ impl PageEntry4K {
 #[make_hw(
     field(RW, 0, pub present),
     field(RW, 1, pub read_write),
-    field(RW, 2, pub user_accessed),
+    field(RW, 2, pub user_access),
     field(RW, 3, pub write_though),
     field(RW, 4, pub cache_disable),
     field(RW, 5, pub accessed),
@@ -105,7 +105,7 @@ impl PageEntry2M {
 #[make_hw(
     field(RW, 0, pub present),
     field(RW, 1, pub read_write),
-    field(RW, 2, pub user_accessed),
+    field(RW, 2, pub user_access),
     field(RW, 3, pub write_though),
     field(RW, 4, pub cache_disable),
     field(RW, 5, pub accessed),

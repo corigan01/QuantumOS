@@ -131,8 +131,8 @@ fn main(kbh: &KernelBootHeader) {
         .new_process(
             [(
                 VmRegion {
-                    start: VirtPage(0),
-                    end: VirtPage(10),
+                    start: VirtPage(262147),
+                    end: VirtPage(262148),
                 },
                 VmPermissions::READ | VmPermissions::WRITE | VmPermissions::EXEC,
                 format!("Example Region"),
@@ -143,6 +143,12 @@ fn main(kbh: &KernelBootHeader) {
         .unwrap();
 
     unsafe { process.write().load_page_tables().unwrap() };
+
+    unsafe {
+        let ptr = (262147 * 4096) as *mut u8;
+
+        core::ptr::write_volatile(ptr, 10);
+    }
 
     logln!("Wrote to new process's memory area!");
     logln!("Finished in {}ms", kernel_ticks());
