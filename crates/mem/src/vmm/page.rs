@@ -34,8 +34,9 @@ use arch::paging64::{
     PageEntry1G, PageEntry2M, PageEntry4K, PageEntryLvl2, PageEntryLvl3, PageEntryLvl4,
     PageMapLvl1, PageMapLvl2, PageMapLvl3, PageMapLvl4,
 };
+use lldebug::logln;
 use spin::RwLock;
-use util::consts::PAGE_4K;
+use util::consts::{PAGE_1G, PAGE_2M, PAGE_4K};
 
 static CURRENTLY_LOADED_TABLE: SharedTable = SharedTable::empty();
 
@@ -220,6 +221,7 @@ impl SharedTable {
     }
 
     pub unsafe fn load(&self) -> Result<(), MemoryError> {
+        logln!("{}", self);
         // Already loaded, don't need to do anything!
         if self.is_loaded() {
             return Ok(());
@@ -360,8 +362,123 @@ impl SharedTable {
         new_table
     }
 
-    pub fn map_page(&self, vpage: VirtPage, ppage: PhysPage) -> Result<(), MemoryError> {
-        todo!()
+    pub fn map_4k_page(
+        &self,
+        vpage: VirtPage,
+        ppage: PhysPage,
+        permissions: VmPermissions,
+    ) -> Result<(), MemoryError> {
+        let (lvl4_index, lvl3_index, lvl2_index, _) =
+            table_indexes_for(vpage.0 as u64 * PAGE_4K as u64);
+
+        self.upgrade_mut(|lvl4| {
+            lvl4.upgrade_mut(lvl4_index, |lvl3, lvl4_entry| {
+                lvl4_entry.set_present_flag(true);
+                lvl4_entry.set_read_write_flag(permissions.is_write_set());
+                lvl4_entry.set_user_access_flag(permissions.is_user_set());
+                lvl4_entry.set_execute_disable_flag(!permissions.is_exec_set());
+
+                lvl3.upgrade_mut(lvl3_index, |lvl2, lvl3_entry| {
+                    lvl3_entry.set_present_flag(true);
+                    lvl3_entry.set_read_write_flag(permissions.is_write_set());
+                    lvl3_entry.set_user_access_flag(permissions.is_user_set());
+                    lvl3_entry.set_execute_disable_flag(!permissions.is_exec_set());
+
+                    lvl2.upgrade_mut(lvl2_index, |lvl1, lvl2_entry| {
+                        lvl2_entry.set_present_flag(true);
+                        lvl2_entry.set_read_write_flag(permissions.is_write_set());
+                        lvl2_entry.set_user_access_flag(permissions.is_user_set());
+                        lvl2_entry.set_execute_disable_flag(!permissions.is_exec_set());
+
+                        lvl1.link_page(vpage, ppage, permissions);
+                    })
+                })
+            })
+        });
+
+        Ok(())
+    }
+
+    pub fn map_2m_page(
+        &self,
+        vpage: VirtPage,
+        ppage: PhysPage,
+        permissions: VmPermissions,
+    ) -> Result<(), MemoryError> {
+        if (vpage.0 * PAGE_4K) & (PAGE_2M - 1) != 0 {
+            return Err(MemoryError::NotPageAligned);
+        }
+
+        let (lvl4_index, lvl3_index, lvl2_index, _) =
+            table_indexes_for(vpage.0 as u64 * PAGE_4K as u64);
+
+        self.upgrade_mut(|lvl4| {
+            lvl4.upgrade_mut(lvl4_index, |lvl3, lvl4_entry| {
+                lvl4_entry.set_present_flag(permissions.is_read_set());
+                lvl4_entry.set_read_write_flag(permissions.is_write_set());
+                lvl4_entry.set_user_access_flag(permissions.is_user_set());
+                lvl4_entry.set_execute_disable_flag(!permissions.is_exec_set());
+
+                lvl3.upgrade_mut(lvl3_index, |lvl2, lvl3_entry| {
+                    lvl3_entry.set_present_flag(permissions.is_read_set());
+                    lvl3_entry.set_read_write_flag(permissions.is_write_set());
+                    lvl3_entry.set_user_access_flag(permissions.is_user_set());
+                    lvl3_entry.set_execute_disable_flag(!permissions.is_exec_set());
+
+                    lvl2.entry_mut(lvl2_index, || {
+                        let mut entry = PageEntry2M::new();
+
+                        entry.set_present_flag(permissions.is_read_set());
+                        entry.set_read_write_flag(permissions.is_write_set());
+                        entry.set_user_accessed_flag(permissions.is_user_set());
+                        entry.set_execute_disable_flag(!permissions.is_exec_set());
+
+                        entry.set_phy_address(ppage.0 * PAGE_4K as u64);
+
+                        Ok(entry)
+                    })
+                })
+            })
+        })?;
+
+        Ok(())
+    }
+
+    pub fn map_1g_page(
+        &self,
+        vpage: VirtPage,
+        ppage: PhysPage,
+        permissions: VmPermissions,
+    ) -> Result<(), MemoryError> {
+        if (vpage.0 * PAGE_4K) & (PAGE_1G - 1) != 0 {
+            return Err(MemoryError::NotPageAligned);
+        }
+
+        let (lvl4_index, lvl3_index, _, _) = table_indexes_for(vpage.0 as u64 * PAGE_4K as u64);
+
+        self.upgrade_mut(|lvl4| {
+            lvl4.upgrade_mut(lvl4_index, |lvl3, lvl4_entry| {
+                lvl4_entry.set_present_flag(permissions.is_read_set());
+                lvl4_entry.set_read_write_flag(permissions.is_write_set());
+                lvl4_entry.set_user_access_flag(permissions.is_user_set());
+                lvl4_entry.set_execute_disable_flag(!permissions.is_exec_set());
+
+                lvl3.entry_mut(lvl3_index, || {
+                    let mut entry = PageEntry1G::new();
+
+                    entry.set_present_flag(permissions.is_read_set());
+                    entry.set_read_write_flag(permissions.is_write_set());
+                    entry.set_user_accessed_flag(permissions.is_user_set());
+                    entry.set_execute_disable_flag(!permissions.is_exec_set());
+
+                    entry.set_phy_address(ppage.0 * PAGE_4K as u64);
+
+                    Ok(entry)
+                })
+            })
+        })?;
+
+        Ok(())
     }
 }
 
@@ -576,6 +693,7 @@ impl SharedLvl3 {
 
         let ret = match self.vm_table[index] {
             SharedState::OwnedEntry | SharedState::RefEntry | SharedState::NotPresent => {
+                entry = PageEntryLvl3::zero();
                 // Needs to be put into its box, because tables cannot be moved!
                 let new_entry = Arc::new(RwLock::new(SharedLvl2::new()));
                 self.vm_table[index] = SharedState::OwnedTable(new_entry.clone());
@@ -701,6 +819,8 @@ impl SharedLvl2 {
 
         let ret = match self.vm_table[index] {
             SharedState::OwnedEntry | SharedState::RefEntry | SharedState::NotPresent => {
+                entry = PageEntryLvl2::zero();
+
                 // Needs to be put into its box, because tables cannot be moved!
                 let new_entry = Arc::new(RwLock::new(SharedLvl1::new()));
                 self.vm_table[index] = SharedState::OwnedTable(new_entry.clone());
@@ -765,7 +885,7 @@ impl SharedLvl1 {
     fn link_page(&mut self, vpage: VirtPage, ppage: PhysPage, permissions: VmPermissions) {
         let mut page_entry = PageEntry4K::new();
 
-        page_entry.set_present_flag(permissions.is_read_set());
+        page_entry.set_present_flag(true);
         page_entry.set_read_write_flag(permissions.is_write_set());
         page_entry.set_execute_disable_flag(!permissions.is_exec_set());
         page_entry.set_user_accessed_flag(permissions.is_user_set());
@@ -924,13 +1044,15 @@ impl Display for SharedLvl1 {
         writeln!(f, "SharedLvl1")?;
 
         for (index, entry) in self.phys_table.entry_iter().enumerate() {
-            writeln!(
-                f,
-                " |  |  |  |-{index:^3} {} (Ref) [V{:016x}] -> P{:16x}]",
-                entry,
-                index as u64 * PageMapLvl1::SIZE_PER_INDEX,
-                entry.get_phy_address()
-            )?;
+            if entry.is_present_set() {
+                writeln!(
+                    f,
+                    " |  |  |  |-{index:^3} {} [V{:016x}] -> P{:16x}]",
+                    entry,
+                    index as u64 * PageMapLvl1::SIZE_PER_INDEX,
+                    entry.get_phy_address()
+                )?;
+            }
         }
 
         Ok(())

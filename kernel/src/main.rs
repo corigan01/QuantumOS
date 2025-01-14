@@ -34,12 +34,16 @@ mod panic;
 mod timer;
 extern crate alloc;
 
+use alloc::{boxed::Box, format};
 use bootloader::KernelBootHeader;
 use lldebug::{debug_ready, logln, make_debug};
 use mem::{
     alloc::{KernelAllocator, dump_allocator, provide_init_region},
     pmm::Pmm,
-    vmm::{KernelRegionKind, VirtPage, VmRegion, Vmm},
+    vmm::{
+        KernelRegionKind, VirtPage, VmPermissions, VmRegion, Vmm,
+        backing::{PhysicalBacking, VmBacking},
+    },
 };
 use serial::{Serial, baud::SerialBaud};
 use timer::kernel_ticks;
@@ -80,7 +84,8 @@ fn main(kbh: &KernelBootHeader) {
     });
 
     logln!("Init PhysMemoryManager");
-    let _pmm = Pmm::new(kbh.phys_mem_map).unwrap();
+    let pmm = Pmm::new(kbh.phys_mem_map).unwrap();
+    mem::pmm::set_physical_memory_manager(pmm);
 
     logln!("Init VirtMemoryManager");
     let mut vmm = Vmm::new();
@@ -121,7 +126,33 @@ fn main(kbh: &KernelBootHeader) {
     )
     .unwrap();
 
-    logln!("{:#?}", vmm);
+    let boxed: Box<dyn VmBacking> = Box::new(PhysicalBacking::new());
+    let process = vmm
+        .new_process(
+            [(
+                VmRegion {
+                    start: VirtPage(0),
+                    end: VirtPage(10),
+                },
+                VmPermissions::READ | VmPermissions::WRITE | VmPermissions::EXEC,
+                format!("Example Region"),
+                boxed,
+            )]
+            .into_iter(),
+        )
+        .unwrap();
 
+    unsafe { process.write().load_page_tables() };
+
+    for i in 0..255 {
+        let dingus = 0x0100 as *mut u8;
+        unsafe {
+            core::ptr::write_volatile(dingus, i);
+        }
+        assert_eq!(unsafe { *dingus }, i);
+    }
+
+    logln!("{:#?}", vmm);
     logln!("Finished in {}ms", kernel_ticks());
+    // dump_allocator();
 }

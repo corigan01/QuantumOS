@@ -25,9 +25,15 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 extern crate alloc;
 
-use alloc::{string::String, vec::Vec};
+use core::fmt::Debug;
 
-use crate::{MemoryError, pmm::PhysPage};
+use alloc::{string::String, vec::Vec};
+use lldebug::logln;
+
+use crate::{
+    MemoryError,
+    pmm::{PhysPage, use_pmm_mut},
+};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum VmBackingKind {
@@ -56,7 +62,9 @@ pub trait VmBacking {
     ///              - If this is a file, this is the page offset in the file.
     ///              - If this is physical memory, this should be the requested
     ///                `PhysPage`.
-    fn alloc_here(&mut self, request: usize) -> Result<PhysPage, MemoryError>;
+    fn alloc_here(&mut self, request: usize) -> Result<PhysPage, MemoryError> {
+        Err(MemoryError::NotSupported)
+    }
 
     /// Deallocate a 'page' which is backed in physical memory.
     ///
@@ -75,4 +83,41 @@ pub trait VmBacking {
 
     // TODO: Maybe have a `upgrade()` and `downgrade()` function which
     //       could say convert this memory backing to a Swap if its Ram, etc...
+}
+
+#[derive(Clone)]
+pub struct PhysicalBacking {
+    pages: Vec<PhysPage>,
+}
+
+impl PhysicalBacking {
+    pub const fn new() -> Self {
+        Self { pages: Vec::new() }
+    }
+}
+
+impl VmBacking for PhysicalBacking {
+    fn backing_kind(&self) -> VmBackingKind {
+        VmBackingKind::Physical
+    }
+
+    fn alive_physical_pages(&self) -> Result<Vec<PhysPage>, MemoryError> {
+        Ok(self.pages.clone())
+    }
+
+    fn alloc_anywhere(&mut self) -> Result<PhysPage, MemoryError> {
+        let page = use_pmm_mut(|pmm| pmm.allocate_page())?;
+        self.pages.push(page);
+
+        Ok(page)
+    }
+
+    fn dealloc(&mut self, page: PhysPage) -> Result<(), MemoryError> {
+        if !self.pages.contains(&page) {
+            return Err(MemoryError::NotFound);
+        }
+
+        self.pages.retain(|arr| arr != &page);
+        use_pmm_mut(|pmm| pmm.free_page(page))
+    }
 }

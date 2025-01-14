@@ -51,4 +51,5 @@ pub enum MemoryError {
     DidNotHandleException,
     ParentDropped,
     InvalidPageTable,
+    NotSupported,
 }

@@ -196,7 +196,7 @@ pub mod cr2 {
         #[cfg(target_pointer_width = "32")]
         unsafe {
             core::arch::asm!("
-                mov eax, cr3
+                mov eax, cr2
             ",
                 out("eax") flags
             )
@@ -205,7 +205,7 @@ pub mod cr2 {
         #[cfg(target_pointer_width = "64")]
         unsafe {
             core::arch::asm!("
-                mov rax, cr3
+                mov rax, cr2
             ",
                 out("rax") flags
             )

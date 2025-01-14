@@ -24,6 +24,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 use alloc::boxed::Box;
+use spin::RwLock;
 
 use crate::{
     MemoryError,
@@ -37,6 +38,36 @@ mod backing;
 // PAGE ID
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct PhysPage(pub u64);
+
+static THE_PHYSICAL_PAGE_MANAGER: RwLock<Option<Pmm>> = RwLock::new(None);
+
+pub fn set_physical_memory_manager(pmm: Pmm) {
+    *THE_PHYSICAL_PAGE_MANAGER.write() = Some(pmm);
+}
+
+pub fn use_pmm_mut<F, R>(func: F) -> R
+where
+    F: FnOnce(&mut Pmm) -> R,
+{
+    let mut pmm = THE_PHYSICAL_PAGE_MANAGER.write();
+    func(
+        &mut *pmm
+            .as_mut()
+            .expect("Physical Memory Manager has not be set!"),
+    )
+}
+
+pub fn use_pmm_ref<F, R>(func: F) -> R
+where
+    F: FnOnce(&Pmm) -> R,
+{
+    let pmm = THE_PHYSICAL_PAGE_MANAGER.read();
+    func(
+        &*pmm
+            .as_ref()
+            .expect("Physical Memory Manager has not be set!"),
+    )
+}
 
 pub struct Pmm {
     table: Box<backing::MemoryTable<backing::TableFlat>>,

@@ -209,11 +209,11 @@ impl BootStrapAlloc {
                     }
                 }
 
-                if previous_buddy.as_ref().free {
-                    self.melt_right(previous_buddy);
-                } else {
-                    self.bytes_used -= buddy_mut.len - size_of::<Buddy>();
-                }
+                // if previous_buddy.as_ref().free {
+                //     self.melt_right(previous_buddy);
+                // } else {
+                //     self.bytes_used -= buddy_mut.len - size_of::<Buddy>();
+                // }
 
                 return Ok(());
             }

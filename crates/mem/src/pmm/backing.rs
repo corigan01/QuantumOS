@@ -115,6 +115,9 @@ pub struct MemoryTable<Table: TableImpl> {
     element_size: u64,
 }
 
+unsafe impl<T: TableImpl> Send for MemoryTable<T> {}
+unsafe impl<T: TableImpl> Sync for MemoryTable<T> {}
+
 impl<Table: TableImpl> MemoryTable<Table> {
     pub fn new(element_size: u64) -> Self {
         Self {

@@ -31,18 +31,17 @@ use core::{
 use crate::{MemoryError, pmm::PhysPage};
 use alloc::{
     boxed::Box,
-    collections::BTreeMap,
     format,
     string::String,
     sync::{Arc, Weak},
     vec::Vec,
 };
 use arch::idt64::{InterruptFlags, InterruptInfo};
-use backing::VmBackingKind;
+use backing::{VmBacking, VmBackingKind};
 use hw::make_hw;
 use lldebug::logln;
 use spin::RwLock;
-use util::consts::PAGE_4K;
+use util::consts::{PAGE_1G, PAGE_2M, PAGE_4K};
 
 extern crate alloc;
 
@@ -69,6 +68,61 @@ impl Iterator for VmPageIter {
     }
 }
 
+pub struct VmPageLargest2MIter {
+    start_page: VirtPage,
+    end_page: VirtPage,
+}
+
+impl Iterator for VmPageLargest2MIter {
+    type Item = VmContinuousPageArea;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.end_page >= self.start_page {
+            if self.start_page.0 + (PAGE_2M / PAGE_4K) <= self.end_page.0 {
+                self.start_page.0 += PAGE_2M / PAGE_4K;
+                Some(VmContinuousPageArea::Area2M(self.start_page))
+            } else {
+                self.start_page.0 += 1;
+                Some(VmContinuousPageArea::Area4K(self.start_page))
+            }
+        } else {
+            None
+        }
+    }
+}
+
+pub struct VmPageLargest1GIter {
+    start_page: VirtPage,
+    end_page: VirtPage,
+}
+
+impl Iterator for VmPageLargest1GIter {
+    type Item = VmContinuousPageArea;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.end_page >= self.start_page {
+            if self.start_page.0 + (PAGE_1G / PAGE_4K) <= self.end_page.0 {
+                self.start_page.0 += PAGE_1G / PAGE_4K;
+                Some(VmContinuousPageArea::Area1G(self.start_page))
+            } else if self.start_page.0 + (PAGE_2M / PAGE_4K) <= self.end_page.0 {
+                self.start_page.0 += PAGE_2M / PAGE_4K;
+                Some(VmContinuousPageArea::Area2M(self.start_page))
+            } else {
+                self.start_page.0 += 1;
+                Some(VmContinuousPageArea::Area4K(self.start_page))
+            }
+        } else {
+            None
+        }
+    }
+}
+
+pub enum VmContinuousPageArea {
+    Area4K(VirtPage),
+    Area2M(VirtPage),
+    Area1G(VirtPage),
+}
+
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub struct VmRegion {
     pub start: VirtPage,
@@ -81,8 +135,22 @@ impl VmRegion {
         vaddr as usize >= (self.start.0 * PAGE_4K) && (self.end.0 * PAGE_4K) >= vaddr as usize
     }
 
-    pub const fn iter(&self) -> VmPageIter {
+    pub const fn iter_4k(&self) -> VmPageIter {
         VmPageIter {
+            start_page: self.start,
+            end_page: self.end,
+        }
+    }
+
+    pub const fn iter_2m(&self) -> VmPageLargest2MIter {
+        VmPageLargest2MIter {
+            start_page: self.start,
+            end_page: self.end,
+        }
+    }
+
+    pub const fn iter_1g(&self) -> VmPageLargest1GIter {
+        VmPageLargest1GIter {
             start_page: self.start,
             end_page: self.end,
         }
@@ -150,68 +218,16 @@ struct VmObject {
     backing: Option<Box<dyn backing::VmBacking>>,
     permissions: VmPermissions,
     what: String,
-    parent: Weak<RwLock<VmProcess>>,
 }
 
 impl Debug for VmObject {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("VmObject")
             .field("region", &self.region)
+            .field("backing", &"...")
             .field("permissions", &self.permissions)
             .field("what", &self.what)
-            .field("backing", &"...")
-            .field("parent", &self.parent)
             .finish()
-    }
-}
-
-impl VmObject {
-    /// Link this physical page to this virtal page.
-    fn hydrate_page(&mut self, vpage: VirtPage, ppage: PhysPage) -> Result<(), MemoryError> {
-        let Some(parent) = self.parent.upgrade() else {
-            return Err(MemoryError::ParentDropped);
-        };
-
-        parent.read().page_table.map_page(vpage, ppage)
-    }
-
-    /// Called upon PageFault. Required to lazy allocate pages.
-    fn fault_handler(&mut self, info: &InterruptInfo) -> Result<(), MemoryError> {
-        let InterruptFlags::PageFault {
-            present, virt_addr, ..
-        } = info.flags
-        else {
-            return Err(MemoryError::DidNotHandleException);
-        };
-
-        let Some(backing) = self.backing.as_mut() else {
-            return Err(MemoryError::DidNotHandleException);
-        };
-
-        assert_eq!(
-            backing.backing_kind(),
-            VmBackingKind::Physical,
-            "TODO: Currently we only support Physical Page backing!"
-        );
-
-        // This is not our page, we cannot handle it!
-        if !self.region.contains_vaddr(virt_addr) {
-            return Err(MemoryError::DidNotHandleException);
-        }
-
-        // This page does not exist, make it!
-        if present {
-            let ppage = backing.alloc_anywhere()?;
-            self.hydrate_page(VirtPage::containing_page(virt_addr), ppage)?;
-
-            Ok(())
-        } else {
-            Err(MemoryError::DidNotHandleException)
-        }
-    }
-
-    fn vm_pages(&self) -> impl Iterator<Item = VirtPage> {
-        self.region.iter()
     }
 }
 
@@ -223,10 +239,16 @@ pub enum KernelRegionKind {
     KernelHeap,
 }
 
-struct VmProcess {
+pub struct VmProcess {
     vm_process_id: usize,
     objects: Vec<VmObject>,
     page_table: page::SharedTable,
+}
+
+impl VmProcess {
+    pub unsafe fn load_page_tables(&mut self) -> Result<(), MemoryError> {
+        unsafe { self.page_table.load() }
+    }
 }
 
 impl Debug for VmProcess {
@@ -239,10 +261,30 @@ impl Debug for VmProcess {
     }
 }
 
+impl VmProcess {
+    fn map_all_now(&mut self) -> Result<(), MemoryError> {
+        for vm_object in self.objects.iter_mut() {
+            for vpage in vm_object.region.iter_4k() {
+                let ppage = vm_object
+                    .backing
+                    .as_mut()
+                    .ok_or(MemoryError::NotSupported)?
+                    .alloc_anywhere()?;
+
+                logln!("{:?} -> {:?}", vpage, ppage);
+                self.page_table
+                    .map_4k_page(vpage, ppage, vm_object.permissions)?;
+            }
+        }
+
+        Ok(())
+    }
+}
+
 #[derive(Debug)]
 pub struct Vmm {
     active_process: usize,
-    table: BTreeMap<usize, Arc<RwLock<VmProcess>>>,
+    table: Vec<Arc<RwLock<VmProcess>>>,
 }
 
 impl Vmm {
@@ -251,18 +293,18 @@ impl Vmm {
     pub const fn new() -> Self {
         Self {
             active_process: Self::KERNEL_PROCESS,
-            table: BTreeMap::new(),
+            table: Vec::new(),
         }
     }
 
     pub fn init_kernel_process(
         &mut self,
         kernel_regions: impl Iterator<Item = (VmRegion, KernelRegionKind)>,
-    ) -> Result<(), MemoryError> {
+    ) -> Result<Arc<RwLock<VmProcess>>, MemoryError> {
         let page_tables = unsafe { page::SharedTable::new_from_bootloader() };
         unsafe { page_tables.load().unwrap() };
 
-        let vm_process = Arc::new_cyclic(|weak_inner| {
+        let vm_process = Arc::new({
             let vm_objects = kernel_regions
                 .map(|(region, kind)| {
                     let permissions = match kind {
@@ -277,7 +319,6 @@ impl Vmm {
                         backing: None,
                         permissions,
                         what: format!("{:?}", kind),
-                        parent: weak_inner.clone(),
                     }
                 })
                 .collect();
@@ -289,8 +330,39 @@ impl Vmm {
             })
         });
 
-        self.table.insert(Self::KERNEL_PROCESS, vm_process);
+        self.table.push(vm_process.clone());
+        Ok(vm_process)
+    }
 
-        Ok(())
+    fn clone_pages_from_kernel(&self) -> page::SharedTable {
+        self.table[0].read().page_table.clone()
+    }
+
+    pub fn new_process<
+        I: Iterator<Item = (VmRegion, VmPermissions, String, Box<dyn VmBacking>)>,
+    >(
+        &mut self,
+        regions: I,
+    ) -> Result<Arc<RwLock<VmProcess>>, MemoryError> {
+        let vm_process = Arc::new({
+            let vm_objects = regions
+                .map(|(region, permissions, what, backing)| VmObject {
+                    region,
+                    backing: Some(backing),
+                    permissions,
+                    what,
+                })
+                .collect();
+
+            RwLock::new(VmProcess {
+                vm_process_id: self.table.len(),
+                objects: vm_objects,
+                page_table: self.clone_pages_from_kernel(),
+            })
+        });
+
+        vm_process.write().map_all_now()?;
+        self.table.push(vm_process.clone());
+        Ok(vm_process)
     }
 }
