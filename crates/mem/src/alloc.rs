@@ -29,7 +29,7 @@ use core::{
     fmt::Debug,
     ptr::NonNull,
 };
-use lldebug::sync::Mutex;
+use lldebug::{logln, sync::Mutex};
 use util::{align_to, is_align_to};
 
 struct Buddy {
@@ -84,7 +84,12 @@ impl BootStrapAlloc {
             let next = next.as_mut();
             current.next = next.next;
             current.len += next.len;
-            self.bytes_used -= next.len;
+
+            if next.free {
+                self.bytes_used -= size_of::<Buddy>();
+            } else {
+                self.bytes_used -= next.len;
+            }
         }
         self.len -= 1;
     }
