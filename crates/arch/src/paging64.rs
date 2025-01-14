@@ -23,7 +23,7 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use core::marker::PhantomPinned;
+use core::{fmt::Display, marker::PhantomPinned};
 
 use hw::make_hw;
 
@@ -644,3 +644,20 @@ impl PageMapLvl5 {
     }
 }
 
+macro_rules! display_for {
+    ($($ty:ty),*) => {
+        $(
+            impl Display for $ty {
+                fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                    if self.is_present_set() {write!(f, "P")} else {write!(f, "_")}?;
+                    if self.is_read_write_set() {write!(f, "W")} else {write!(f, "R")}?;
+                    if self.is_execute_disable_set() {write!(f, "_")}else{write!(f, "X")}?;
+
+                    Ok(())
+                }
+            }
+        )*
+    };
+}
+
+display_for!{PageEntry1G, PageEntry2M, PageEntry4K, PageEntryLvl2, PageEntryLvl3, PageEntryLvl4, PageEntryLvl5}

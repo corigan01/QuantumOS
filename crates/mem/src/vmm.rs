@@ -261,7 +261,6 @@ impl Vmm {
     ) -> Result<(), MemoryError> {
         let page_tables = unsafe { page::SharedTable::new_from_bootloader() };
         unsafe { page_tables.load().unwrap() };
-        logln!("Loaded!");
 
         let vm_process = Arc::new_cyclic(|weak_inner| {
             let vm_objects = kernel_regions

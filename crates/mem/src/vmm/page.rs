@@ -25,6 +25,8 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 extern crate alloc;
 
+use core::fmt::Display;
+
 use super::{VirtPage, VmPermissions};
 use crate::{MemoryError, pmm::PhysPage};
 use alloc::sync::Arc;
@@ -360,6 +362,15 @@ impl SharedTable {
 
     pub fn map_page(&self, vpage: VirtPage, ppage: PhysPage) -> Result<(), MemoryError> {
         todo!()
+    }
+}
+
+impl Clone for SharedTable {
+    fn clone(&self) -> Self {
+        let mut new_table = Self::empty();
+        new_table.state = RwLock::new(self.state.read().clone());
+
+        new_table
     }
 }
 
@@ -763,5 +774,165 @@ impl SharedLvl1 {
 
         let table_index = vpage.0 % 512;
         self.phys_table.store(page_entry, table_index);
+    }
+}
+
+impl Display for SharedTable {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let state = self.state.read();
+        write!(f, "SharedTable ")?;
+
+        match &*state {
+            SharedState::NotPresent => writeln!(f, "(NotPresent)")?,
+            SharedState::OwnedTable(rw_lock) => {
+                writeln!(f, "(Owned) {}", rw_lock.read())?;
+            }
+            SharedState::RefTable(rw_lock) => {
+                writeln!(f, "(Ref) {}", rw_lock.read())?;
+            }
+            SharedState::OwnedEntry | SharedState::RefEntry => writeln!(f, "(Invalid)")?,
+        }
+
+        Ok(())
+    }
+}
+
+impl Display for SharedLvl4 {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        writeln!(f, "SharedLvl4")?;
+
+        for (index, entry) in self.vm_table.iter().enumerate() {
+            let phys_entry = self.phys_table.get(index);
+
+            match entry {
+                SharedState::OwnedTable(rw_lock) => {
+                    writeln!(f, " |-{index:>3} {} (Owned) {}", phys_entry, rw_lock.read())?;
+                }
+                SharedState::RefTable(rw_lock) => {
+                    writeln!(f, " |-{index:>3} {} (Ref) {}", phys_entry, rw_lock.read())?;
+                }
+                _ => (),
+            }
+        }
+
+        Ok(())
+    }
+}
+
+impl Display for SharedLvl3 {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        writeln!(f, "SharedLvl3")?;
+
+        for (index, entry) in self.vm_table.iter().enumerate() {
+            let phys_entry = self.phys_table.get(index);
+
+            match entry {
+                SharedState::OwnedTable(rw_lock) => {
+                    writeln!(
+                        f,
+                        " |  |-{index:>3} {} (Owned) {}",
+                        phys_entry,
+                        rw_lock.read()
+                    )?;
+                }
+                SharedState::RefTable(rw_lock) => {
+                    writeln!(
+                        f,
+                        " |  |-{index:>3} {} (Ref) {}",
+                        phys_entry,
+                        rw_lock.read()
+                    )?;
+                }
+                SharedState::OwnedEntry => writeln!(
+                    f,
+                    " |  |-{index:^3} {} (Owned) [V{:16x} -> P{:16x}]",
+                    phys_entry,
+                    index as u64 * PageMapLvl3::SIZE_PER_INDEX,
+                    PageEntry1G::convert_entry(phys_entry)
+                        .unwrap()
+                        .get_phy_address()
+                )?,
+                SharedState::RefEntry => writeln!(
+                    f,
+                    " |  |-{index:^3} {} (Ref) [V{:016x}] -> P{:16x}]",
+                    phys_entry,
+                    index as u64 * PageMapLvl3::SIZE_PER_INDEX,
+                    PageEntry1G::convert_entry(phys_entry)
+                        .unwrap()
+                        .get_phy_address()
+                )?,
+                _ => (),
+            }
+        }
+
+        Ok(())
+    }
+}
+
+impl Display for SharedLvl2 {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        writeln!(f, "SharedLvl2")?;
+
+        for (index, entry) in self.vm_table.iter().enumerate() {
+            let phys_entry = self.phys_table.get(index);
+
+            match entry {
+                SharedState::OwnedTable(rw_lock) => {
+                    writeln!(
+                        f,
+                        " |  |  |-{index:>3} {} (Owned) {}",
+                        phys_entry,
+                        rw_lock.read()
+                    )?;
+                }
+                SharedState::RefTable(rw_lock) => {
+                    writeln!(
+                        f,
+                        " |  |  |-{index:>3} {} (Ref) {}",
+                        phys_entry,
+                        rw_lock.read()
+                    )?;
+                }
+                SharedState::OwnedEntry => writeln!(
+                    f,
+                    " |  |  |-{index:^3} {} (Owned) [V{:16x} -> P{:16x}]",
+                    phys_entry,
+                    index as u64 * PageMapLvl2::SIZE_PER_INDEX,
+                    PageEntry2M::convert_entry(phys_entry)
+                        .unwrap()
+                        .get_phy_address()
+                )?,
+                SharedState::RefEntry => writeln!(
+                    f,
+                    " |  |  |-{index:^3} {} (Ref) [V{:016x}] -> P{:16x}]",
+                    phys_entry,
+                    index as u64 * PageMapLvl2::SIZE_PER_INDEX,
+                    PageEntry2M::convert_entry(phys_entry)
+                        .unwrap()
+                        .get_phy_address()
+                )?,
+                _ => (),
+            }
+        }
+
+        Ok(())
+    }
+}
+
+impl Display for SharedLvl1 {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        writeln!(f, "SharedLvl1")?;
+
+        for (index, entry) in self.phys_table.entry_iter().enumerate() {
+            writeln!(
+                f,
+                " |  |  |  |-{index:^3} {} (Ref) [V{:016x}] -> P{:16x}]",
+                entry,
+                index as u64 * PageMapLvl1::SIZE_PER_INDEX,
+                entry.get_phy_address()
+            )?;
+        }
+
+        Ok(())
     }
 }
