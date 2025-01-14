@@ -116,6 +116,7 @@ fn main(stage_to_stage: &Stage16toStage32) {
         s2s.stage32_ptr = stage_to_stage.stage32_ptr;
         s2s.stage64_ptr = stage_to_stage.stage64_ptr;
         s2s.kernel_ptr = stage_to_stage.kernel_ptr;
+        s2s.initfs_ptr = stage_to_stage.initfs_ptr;
         s2s.memory_map = stage_to_stage.memory_map;
         s2s.video_mode = stage_to_stage.video_mode.clone();
 

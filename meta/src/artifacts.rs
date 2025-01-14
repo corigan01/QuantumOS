@@ -153,6 +153,7 @@ async fn build_bootloader_config() -> Result<PathBuf> {
 bootloader64=/bootloader/stage_64.bin
 kernel=/kernel.elf
 vbe-mode=1280x720
+initfs=/init_ue/dummy
 "#,
     )
     .await?;

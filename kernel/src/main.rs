@@ -31,20 +31,23 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 mod int;
 mod panic;
+mod scheduler;
 mod timer;
 extern crate alloc;
 
 use alloc::{boxed::Box, format};
 use bootloader::KernelBootHeader;
-use lldebug::{debug_ready, logln, make_debug};
+use lldebug::{debug_ready, hexdump::HexPrint, logln, make_debug};
 use mem::{
     alloc::{KernelAllocator, provide_init_region},
     pmm::Pmm,
     vmm::{
         KernelRegionKind, VirtPage, VmPermissions, VmRegion, Vmm,
         backing::{PhysicalBacking, VmBacking},
+        set_virtual_memory_manager,
     },
 };
+use scheduler::Scheduler;
 use serial::{Serial, baud::SerialBaud};
 use timer::kernel_ticks;
 use util::bytes::HumanBytes;
@@ -126,31 +129,12 @@ fn main(kbh: &KernelBootHeader) {
     )
     .unwrap();
 
-    let boxed: Box<dyn VmBacking> = Box::new(PhysicalBacking::new());
-    let process = vmm
-        .new_process(
-            [(
-                VmRegion {
-                    start: VirtPage(262147),
-                    end: VirtPage(262148),
-                },
-                VmPermissions::READ | VmPermissions::WRITE | VmPermissions::EXEC,
-                format!("Example Region"),
-                boxed,
-            )]
-            .into_iter(),
-        )
-        .unwrap();
+    set_virtual_memory_manager(vmm);
 
-    unsafe { process.write().load_page_tables().unwrap() };
+    let scheduler = Scheduler::new_initfs(unsafe {
+        core::slice::from_raw_parts(kbh.initfs_ptr.0 as *const u8, kbh.initfs_ptr.1)
+    });
 
-    unsafe {
-        let ptr = (262147 * 4096) as *mut u8;
-
-        core::ptr::write_volatile(ptr, 10);
-    }
-
-    logln!("Wrote to new process's memory area!");
     logln!("Finished in {}ms", kernel_ticks());
     // dump_allocator();
 }

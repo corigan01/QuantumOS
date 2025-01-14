@@ -398,16 +398,56 @@ impl From<u32> for SegmentKind {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum ElfHeader<'a> {
     Header64(&'a Elf64Header),
     Header32(&'a Elf32Header),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum ElfProgramHeaders<'a> {
     ProgHeader64(&'a [ProgramHeader64]),
     ProgHeader32(&'a [ProgramHeader32]),
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct ElfProgramHeaderIter<'a> {
+    headers: ElfProgramHeaders<'a>,
+    index: usize,
+}
+
+impl<'a> ElfProgramHeaders<'a> {
+    pub fn iter(&self) -> ElfProgramHeaderIter<'a> {
+        ElfProgramHeaderIter {
+            headers: *self,
+            index: 0,
+        }
+    }
+}
+
+impl<'a> Iterator for ElfProgramHeaderIter<'a> {
+    type Item = ElfGenProgramHeader;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self.headers {
+            ElfProgramHeaders::ProgHeader64(h64) => {
+                let gen_header = h64
+                    .get(self.index)
+                    .map(|h64_el| ElfGenProgramHeader::from(h64_el))?;
+                self.index += 1;
+
+                Some(gen_header)
+            }
+            ElfProgramHeaders::ProgHeader32(h32) => {
+                let gen_header = h32
+                    .get(self.index)
+                    .map(|h32_el| ElfGenProgramHeader::from(h32_el))?;
+                self.index += 1;
+
+                Some(gen_header)
+            }
+        }
+    }
 }
 
 #[derive(Debug)]

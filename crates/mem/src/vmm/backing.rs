@@ -34,9 +34,12 @@ use crate::{
     pmm::{PhysPage, use_pmm_mut},
 };
 
+use super::{VirtPage, VmPermissions, VmRegion};
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum VmBackingKind {
     Physical,
+    ElfBackedPhysical,
     Other(String),
 }
 
@@ -48,7 +51,7 @@ pub trait VmBacking {
     fn alive_physical_pages(&self) -> Result<Vec<PhysPage>, MemoryError>;
 
     /// Allocate a 'page' which is backed in physical memory.
-    fn alloc_anywhere(&mut self) -> Result<PhysPage, MemoryError>;
+    fn alloc_anywhere(&mut self, vpage: VirtPage) -> Result<PhysPage, MemoryError>;
 
     /// Allocate a 'page' which is backed in physical memory at a given offset.
     ///
@@ -104,7 +107,7 @@ impl VmBacking for PhysicalBacking {
         Ok(self.pages.clone())
     }
 
-    fn alloc_anywhere(&mut self) -> Result<PhysPage, MemoryError> {
+    fn alloc_anywhere(&mut self, _vpage: VirtPage) -> Result<PhysPage, MemoryError> {
         let page = use_pmm_mut(|pmm| pmm.allocate_page())?;
         self.pages.push(page);
 
@@ -118,5 +121,56 @@ impl VmBacking for PhysicalBacking {
 
         self.pages.retain(|arr| arr != &page);
         use_pmm_mut(|pmm| pmm.free_page(page))
+    }
+}
+
+pub trait VmRegionObject: Debug {
+    /// The region of virtual memory this region has
+    fn vm_region(&self) -> VmRegion;
+
+    /// The permissions of this region
+    fn vm_permissions(&self) -> VmPermissions;
+
+    /// VM Region 'What' (Human readable kind)
+    fn vm_what(&self) -> Option<String> {
+        None
+    }
+
+    /// Allocate a physical page.
+    fn alloc_phys_anywhere(&mut self) -> Result<PhysPage, MemoryError> {
+        use_pmm_mut(|pmm| pmm.allocate_page())
+    }
+
+    /// Deallocate a physical page.
+    fn dealloc_phys_page(&mut self, _vpage: VirtPage, ppage: PhysPage) -> Result<(), MemoryError> {
+        use_pmm_mut(|pmm| pmm.free_page(ppage))
+    }
+
+    /// Init this page's memory region
+    ///
+    /// Order of operations:
+    ///  1. A physical page will be allocated by the PMM
+    ///  2. That physical page will then be mapped to a vpage
+    ///  3. The kernel's access bits will be set on that vpage
+    ///  4. [This function get called]
+    ///  5. The kernel's access bits are replaced by user access bits
+    fn init_page(&mut self, _vpage: VirtPage, _ppage: PhysPage) -> Result<(), MemoryError> {
+        Ok(())
+    }
+}
+
+#[derive(Debug)]
+pub struct KernelVmObject {
+    region: VmRegion,
+    permissions: VmPermissions,
+}
+
+impl VmRegionObject for KernelVmObject {
+    fn vm_region(&self) -> VmRegion {
+        self.region
+    }
+
+    fn vm_permissions(&self) -> VmPermissions {
+        self.permissions
     }
 }

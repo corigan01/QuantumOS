@@ -25,10 +25,10 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 use core::{
     fmt::Debug,
-    ops::{BitOr, BitOrAssign},
+    ops::{Add, AddAssign, BitOr, BitOrAssign, Sub, SubAssign},
 };
 
-use crate::MemoryError;
+use crate::{MemoryError, pmm::PhysPage};
 use alloc::{boxed::Box, format, string::String, sync::Arc, vec::Vec};
 use backing::VmBacking;
 use hw::make_hw;
@@ -40,6 +40,36 @@ extern crate alloc;
 
 pub mod backing;
 mod page;
+
+static THE_VIRTUAL_PAGE_MANAGER: RwLock<Option<Vmm>> = RwLock::new(None);
+
+pub fn set_virtual_memory_manager(vmm: Vmm) {
+    *THE_VIRTUAL_PAGE_MANAGER.write() = Some(vmm);
+}
+
+pub fn use_vmm_mut<F, R>(func: F) -> R
+where
+    F: FnOnce(&mut Vmm) -> R,
+{
+    let mut vmm = THE_VIRTUAL_PAGE_MANAGER.write();
+    func(
+        &mut *vmm
+            .as_mut()
+            .expect("Virtual Memory Manager has not be set!"),
+    )
+}
+
+pub fn use_vmm_ref<F, R>(func: F) -> R
+where
+    F: FnOnce(&Vmm) -> R,
+{
+    let vmm = THE_VIRTUAL_PAGE_MANAGER.read();
+    func(
+        &*vmm
+            .as_ref()
+            .expect("Virtual Memory Manager has not be set!"),
+    )
+}
 
 pub struct VmPageIter {
     start_page: VirtPage,
@@ -128,6 +158,13 @@ impl VmRegion {
         vaddr as usize >= (self.start.0 * PAGE_4K) && (self.end.0 * PAGE_4K) >= vaddr as usize
     }
 
+    pub const fn from_vaddr(vaddr: u64, len: usize) -> Self {
+        let start = VirtPage::containing_page(vaddr);
+        let end = VirtPage::containing_page(vaddr + len as u64);
+
+        Self { start, end }
+    }
+
     pub const fn iter_4k(&self) -> VmPageIter {
         VmPageIter {
             start_page: self.start,
@@ -152,6 +189,34 @@ impl VmRegion {
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub struct VirtPage(pub usize);
+
+impl Sub for VirtPage {
+    type Output = Self;
+
+    fn sub(self, rhs: Self) -> Self::Output {
+        Self(self.0 - rhs.0)
+    }
+}
+
+impl SubAssign for VirtPage {
+    fn sub_assign(&mut self, rhs: Self) {
+        self.0 -= rhs.0;
+    }
+}
+
+impl Add for VirtPage {
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        Self(self.0 + rhs.0)
+    }
+}
+
+impl AddAssign for VirtPage {
+    fn add_assign(&mut self, rhs: Self) {
+        self.0 -= rhs.0;
+    }
+}
 
 impl VirtPage {
     /// Get the page that contains this virtal address.
@@ -206,6 +271,12 @@ impl BitOrAssign for VmPermissions {
     }
 }
 
+/// Manages and controls a VmObject
+struct VmBorderObject {
+    object: Box<dyn backing::VmRegionObject>,
+    alive_phys_pages: Vec<PhysPage>,
+}
+
 struct VmObject {
     region: VmRegion,
     backing: Option<Box<dyn backing::VmBacking>>,
@@ -224,6 +295,9 @@ impl Debug for VmObject {
     }
 }
 
+unsafe impl Send for VmObject {}
+unsafe impl Sync for VmObject {}
+
 #[derive(Debug, Clone, Copy)]
 pub enum KernelRegionKind {
     KernelExe,
@@ -233,7 +307,6 @@ pub enum KernelRegionKind {
 }
 
 pub struct VmProcess {
-    vm_process_id: usize,
     objects: Vec<VmObject>,
     page_table: page::SharedTable,
 }
@@ -247,7 +320,6 @@ impl VmProcess {
 impl Debug for VmProcess {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("VmProcess")
-            .field("vm_process_id", &self.vm_process_id)
             .field("objects", &self.objects)
             .field("page_table", &"...")
             .finish()
@@ -262,7 +334,7 @@ impl VmProcess {
                     .backing
                     .as_mut()
                     .ok_or(MemoryError::NotSupported)?
-                    .alloc_anywhere()?;
+                    .alloc_anywhere(vpage)?;
 
                 self.page_table
                     .map_4k_page(vpage, ppage, vm_object.permissions)?;
@@ -314,7 +386,6 @@ impl Vmm {
                 .collect();
 
             RwLock::new(VmProcess {
-                vm_process_id: 0,
                 objects: vm_objects,
                 page_table: page_tables,
             })
@@ -345,7 +416,6 @@ impl Vmm {
                 .collect();
 
             RwLock::new(VmProcess {
-                vm_process_id: self.table.len(),
                 objects: vm_objects,
                 page_table: self.clone_pages_from_kernel(),
             })

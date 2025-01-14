@@ -38,7 +38,6 @@ use lldebug::make_debug;
 use lldebug::{debug_ready, logln};
 use serial::Serial;
 use unreal::enter_unreal;
-use util::bytes::HumanBytes;
 
 mod bump_alloc;
 mod config;
@@ -175,10 +174,7 @@ fn main(disk_id: u16) -> ! {
     let bootloader32_entrypoint = 0x00200000 as *mut u8;
     alloc.push_ptr_to(bootloader32_entrypoint);
 
-    logln!(
-        "Loading stage32 ({})",
-        HumanBytes::from(bootloader32.filesize())
-    );
+    logln!("Loading stage32 ({})", bootloader32.filesize());
     let bootloader32_buffer = unsafe { alloc.allocate(bootloader32.filesize()) }.unwrap();
     bootloader32
         .read(bootloader32_buffer)
@@ -193,10 +189,7 @@ fn main(disk_id: u16) -> ! {
     let bootloader64_entrypoint = 0x00400000 as *mut u8;
     alloc.push_ptr_to(bootloader64_entrypoint);
 
-    logln!(
-        "Loading stage64 ({})",
-        HumanBytes::from(bootloader64.filesize())
-    );
+    logln!("Loading stage64 ({})", bootloader64.filesize());
     let bootloader64_buffer = unsafe { alloc.allocate(bootloader64.filesize()) }.unwrap();
     bootloader64
         .read(bootloader64_buffer)
@@ -208,16 +201,25 @@ fn main(disk_id: u16) -> ! {
 
     let mut kernel_file = fatfs.open(qconfig.kernel).expect("Unable to find kernel");
 
-    logln!(
-        "Loading kernel elf ({})",
-        HumanBytes::from(kernel_file.filesize())
-    );
+    logln!("Loading kernel elf ({})", kernel_file.filesize());
     let kernel_buffer = unsafe { alloc.allocate(kernel_file.filesize()) }.unwrap();
     kernel_file
         .read(kernel_buffer)
         .expect("Unable to read kernel");
 
     let stack_region = unsafe { alloc.allocate(1024 * 1024) }.unwrap();
+
+    // Initfs region
+    logln!("{}", qconfig.initfs);
+    let mut initfs_file = fatfs
+        .open(qconfig.initfs)
+        .expect("Unable to load initfs region");
+
+    logln!("Loading initfs ({})", initfs_file.filesize());
+    let initfs_buffer = unsafe { alloc.allocate(initfs_file.filesize()) }.unwrap();
+    initfs_file
+        .read(initfs_buffer)
+        .expect("Unable to read initfs");
 
     stage_to_stage.bootloader_stack_ptr = (stack_region.as_ptr() as u64, 1024 * 1024);
     stage_to_stage.stage32_ptr = (
@@ -229,6 +231,7 @@ fn main(disk_id: u16) -> ! {
         bootloader64_buffer.len() as u64,
     );
     stage_to_stage.kernel_ptr = (kernel_buffer.as_ptr() as u64, kernel_buffer.len() as u64);
+    stage_to_stage.initfs_ptr = (initfs_buffer.as_ptr() as u64, initfs_buffer.len() as u64);
 
     unsafe {
         unreal::enter_stage2(

@@ -13,3 +13,5 @@ serial = { workspace = true }
 util = {workspace = true}
 mem = {workspace = true, features = ["alloc"]}
 arch = {workspace = true}
+spin = "0.9.8"
+elf = {workspace = true, features = ["alloc"]}

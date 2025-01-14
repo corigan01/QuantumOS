@@ -30,6 +30,7 @@ pub struct BootloaderConfig<'a> {
     pub bootloader64: &'a str,
     pub kernel: &'a str,
     pub expected_vbe_mode: Option<(u16, u16)>,
+    pub initfs: &'a str,
 }
 
 impl<'a> BootloaderConfig<'a> {
@@ -51,6 +52,7 @@ impl<'a> BootloaderConfig<'a> {
                 "bootloader32" => config.bootloader32 = second_option,
                 "bootloader64" => config.bootloader64 = second_option,
                 "kernel" => config.kernel = second_option,
+                "initfs" => config.initfs = second_option,
                 "vbe-mode" => {
                     let mut info_split = second_option.split('x');
                     let (horz_str, vert_str) = (

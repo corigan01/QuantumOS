@@ -5,7 +5,7 @@
 \___\_\_,_/\_,_/_//_/\__/\_,_/_/_/_/ /____/_/_.__/
     Part of the Quantum OS Project
 
-Copyright 2024 Gavin Kellam
+Copyright 2025 Gavin Kellam
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
 associated documentation files (the "Software"), to deal in the Software without restriction,
@@ -25,6 +25,8 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 #![no_std]
 
+#[cfg(feature = "alloc")]
+pub mod elf_owned;
 pub mod tables;
 
 #[derive(Clone, Copy, Debug)]
@@ -45,55 +47,37 @@ pub struct Elf<'a> {
 
 impl<'a> Elf<'a> {
     pub fn new(elf_file: &'a [u8]) -> Self {
+        assert!(
+            elf_file.as_ptr() as usize & (8 - 1) == 0,
+            "Input array must be aligned to u64 sized types!"
+        );
         Self { elf_file }
     }
 
-    pub fn load_into<F>(&self, mut loader_fn: F) -> Result<*const u8>
+    pub fn load_into<'b, F>(&'b self, mut loader_fn: F) -> Result<*const u8>
     where
-        F: FnMut(&tables::ElfGenProgramHeader) -> Option<&'static mut [u8]>,
+        F: FnMut(&tables::ElfGenProgramHeader) -> Option<&'b mut [u8]>,
     {
-        match self.program_headers()? {
-            tables::ElfProgramHeaders::ProgHeader64(header) => header
-                .iter()
-                .map(|h| tables::ElfGenProgramHeader::from(h))
-                .try_for_each(|h| {
-                    if let Some(mem_buffer) = loader_fn(&h) {
-                        let elf_buffer = self
-                            .elf_file
-                            .get(h.in_elf_offset()..h.in_elf_offset() + h.in_elf_size())
-                            .ok_or(ElfErrorKind::NotEnoughBytes)?;
+        self.program_headers()?.iter().try_for_each(|h| {
+            if let Some(mem_buffer) = loader_fn(&h) {
+                let elf_buffer = self.program_header_slice(&h)?;
 
-                        if h.in_elf_size() > mem_buffer.len() {
-                            return Err(ElfErrorKind::Invalid);
-                        }
+                if h.in_elf_size() > mem_buffer.len() {
+                    return Err(ElfErrorKind::Invalid);
+                }
 
-                        mem_buffer[..h.in_elf_size()].copy_from_slice(elf_buffer);
-                    }
+                mem_buffer[..h.in_elf_size()].copy_from_slice(elf_buffer);
+            }
 
-                    Ok(())
-                })?,
-            tables::ElfProgramHeaders::ProgHeader32(header) => header
-                .iter()
-                .map(|h| tables::ElfGenProgramHeader::from(h))
-                .try_for_each(|h| {
-                    if let Some(mem_buffer) = loader_fn(&h) {
-                        let elf_buffer = self
-                            .elf_file
-                            .get(h.in_elf_offset()..h.in_elf_offset() + h.in_elf_size())
-                            .ok_or(ElfErrorKind::NotEnoughBytes)?;
-
-                        if h.in_elf_size() > mem_buffer.len() {
-                            return Err(ElfErrorKind::Invalid);
-                        }
-
-                        mem_buffer[..h.in_elf_size()].copy_from_slice(elf_buffer);
-                    }
-
-                    Ok(())
-                })?,
-        }
-
+            Ok(())
+        })?;
         self.entry_point()
+    }
+
+    pub fn program_header_slice(&self, header: &tables::ElfGenProgramHeader) -> Result<&'a [u8]> {
+        self.elf_file
+            .get(header.in_elf_offset()..header.in_elf_offset() + header.in_elf_size())
+            .ok_or(ElfErrorKind::NotEnoughBytes)
     }
 
     pub fn exe_size(&self) -> Result<usize> {

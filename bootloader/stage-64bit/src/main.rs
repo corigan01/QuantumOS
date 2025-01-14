@@ -126,6 +126,10 @@ fn main(stage_to_stage: &Stage32toStage64) {
                 virt_info.init_start_virt,
                 (virt_info.init_end_virt - virt_info.init_start_virt) as usize,
             ),
+            initfs_ptr: (
+                stage_to_stage.initfs_ptr.0,
+                stage_to_stage.initfs_ptr.1 as usize,
+            ),
         });
 
         jmp_to_kernel(

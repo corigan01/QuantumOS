@@ -8,3 +8,7 @@ documentation.workspace = true
 
 [dependencies]
 lldebug = {workspace = true}
+
+[features]
+alloc = []
+default = []
