@@ -1,0 +1,9 @@
+[package]
+name = "dummy"
+edition = "2024"
+version.workspace = true
+authors.workspace = true
+description.workspace = true
+documentation.workspace = true
+
+[dependencies]

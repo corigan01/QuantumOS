@@ -22,7 +22,8 @@ members = [
   "crates/elf", 
   "crates/mem",
   "crates/arch-macro",
-  "crates/boolvec"
+  "crates/boolvec",
+  "user/dummy"
 ]
 
 default-members = ["meta"]
