@@ -197,7 +197,7 @@ async fn create_diskimg(name: &str, size: usize) -> Result<File> {
 
 pub async fn create_bootloader_dir(
     name: &str,
-    artifacts: impl Iterator<Item = (&Path, &Path)>,
+    artifacts: impl Iterator<Item = (PathBuf, PathBuf)>,
 ) -> Result<PathBuf> {
     let target_dir = tmp_find_target().join(name);
     tokio::fs::create_dir_all(&target_dir)

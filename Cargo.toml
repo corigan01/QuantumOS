@@ -99,3 +99,11 @@ opt-level=1
 strip = true
 debug = 1
 overflow-checks = true
+
+[profile.dummy]
+inherits = "release"
+panic = "abort"
+opt-level=1
+strip = true
+debug = 1
+overflow-checks = true

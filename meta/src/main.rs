@@ -29,28 +29,22 @@ async fn build() -> Result<PathBuf> {
         "fatfs",
         [
             (
-                artifacts.bootsector.as_path(),
-                Path::new("bootloader/bootsector.bin"),
+                artifacts.bootsector,
+                PathBuf::from("bootloader/bootsector.bin"),
             ),
-            (
-                &artifacts.stage_16.as_path(),
-                Path::new("bootloader/stage_16.bin"),
-            ),
-            (
-                &artifacts.boot_cfg.as_path(),
-                Path::new("bootloader/qconfig.cfg"),
-            ),
-            (
-                &artifacts.stage_32.as_path(),
-                Path::new("bootloader/stage_32.bin"),
-            ),
-            (
-                &artifacts.stage_64.as_path(),
-                Path::new("bootloader/stage_64.bin"),
-            ),
-            (&artifacts.kernel.as_path(), Path::new("kernel.elf")),
+            (artifacts.stage_16, PathBuf::from("bootloader/stage_16.bin")),
+            (artifacts.boot_cfg, PathBuf::from("bootloader/qconfig.cfg")),
+            (artifacts.stage_32, PathBuf::from("bootloader/stage_32.bin")),
+            (artifacts.stage_64, PathBuf::from("bootloader/stage_64.bin")),
+            (artifacts.kernel, PathBuf::from("kernel.elf")),
         ]
-        .into_iter(),
+        .into_iter()
+        .chain(artifacts.init_userspace.into_iter().map(|init_ue| {
+            (
+                init_ue.clone(),
+                Path::new("init_ue").join(init_ue.file_name().unwrap()),
+            )
+        })),
     )
     .await?;
 

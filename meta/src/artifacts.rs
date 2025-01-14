@@ -16,6 +16,8 @@ pub struct Artifacts {
 
     pub kernel: PathBuf,
     pub boot_cfg: PathBuf,
+
+    pub init_userspace: Vec<PathBuf>,
 }
 
 #[allow(unused)]
@@ -24,10 +26,12 @@ enum ArchSelect {
     I386,
     /// # Intel 686 (32bit mode)
     I686,
-    /// # Intel IA-32A (64bit mode)
+    /// # Intel IA-32e (64bit mode)
     X64,
-    /// # Intel IA-32A (64bit mode)
+    /// # Intel IA-32e (64bit mode)
     Kernel,
+    /// # Intel IA-32e (64bit mode) -- Userspace Mode
+    UserSpace,
 }
 
 impl Display for ArchSelect {
@@ -58,6 +62,7 @@ impl Display for ArchSelect {
                     .join("../kernel/x86-64-quantum_kernel.json")
                     .to_string_lossy(),
             )),
+            Self::UserSpace => f.write_fmt(format_args!("{}", "x86_64-unknown-quantum",)),
         }
     }
 }
@@ -107,7 +112,9 @@ async fn cargo_helper(profile: Option<&str>, package: &str, arch: ArchSelect) ->
 async fn convert_bin(path: &Path, arch: ArchSelect) -> Result<PathBuf> {
     let arch = match arch {
         ArchSelect::I386 => "elf32-i386",
-        ArchSelect::I686 | ArchSelect::X64 | ArchSelect::Kernel => "elf64-x86-64",
+        ArchSelect::I686 | ArchSelect::X64 | ArchSelect::Kernel | ArchSelect::UserSpace => {
+            "elf64-x86-64"
+        }
     };
 
     let bin_path = path.with_extension("bin");
@@ -154,7 +161,15 @@ vbe-mode=1280x720
 }
 
 pub async fn build_project() -> Result<Artifacts> {
-    let (stage_bootsector, stage_16bit, stage_32bit, stage_64bit, kernel, boot_cfg) = tokio::try_join!(
+    let (
+        stage_bootsector,
+        stage_16bit,
+        stage_32bit,
+        stage_64bit,
+        kernel,
+        dummy_userspace,
+        boot_cfg,
+    ) = tokio::try_join!(
         cargo_helper(
             Some("stage-bootsector"),
             "stage-bootsector",
@@ -164,6 +179,7 @@ pub async fn build_project() -> Result<Artifacts> {
         cargo_helper(Some("stage-32bit"), "stage-32bit", ArchSelect::I686),
         cargo_helper(Some("stage-64bit"), "stage-64bit", ArchSelect::X64),
         cargo_helper(Some("kernel"), "kernel", ArchSelect::Kernel),
+        cargo_helper(Some("dummy"), "dummy", ArchSelect::X64),
         build_bootloader_config(),
     )?;
 
@@ -182,5 +198,6 @@ pub async fn build_project() -> Result<Artifacts> {
         stage_64,
         kernel,
         boot_cfg,
+        init_userspace: vec![dummy_userspace],
     })
 }

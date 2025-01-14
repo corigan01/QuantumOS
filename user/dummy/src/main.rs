@@ -24,12 +24,15 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 #![no_std]
+#![no_main]
+
+use core::panic::PanicInfo;
 
 unsafe fn test_syscall() {
     unsafe {
         core::arch::asm!(
             "
-      mov rax, 0
+      mov rax, 60
       mov rdi, 69
       syscall
       "
@@ -37,7 +40,13 @@ unsafe fn test_syscall() {
     };
 }
 
-fn main() {
+#[panic_handler]
+fn panic(_info: &PanicInfo) -> ! {
+    loop {}
+}
+
+#[unsafe(no_mangle)]
+extern "C" fn _start() {
     unsafe {
         test_syscall();
     }
