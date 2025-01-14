@@ -34,7 +34,6 @@ use arch::paging64::{
     PageEntry1G, PageEntry2M, PageEntry4K, PageEntryLvl2, PageEntryLvl3, PageEntryLvl4,
     PageMapLvl1, PageMapLvl2, PageMapLvl3, PageMapLvl4,
 };
-use lldebug::logln;
 use spin::RwLock;
 use util::consts::{PAGE_1G, PAGE_2M, PAGE_4K};
 
@@ -221,7 +220,6 @@ impl SharedTable {
     }
 
     pub unsafe fn load(&self) -> Result<(), MemoryError> {
-        logln!("{}", self);
         // Already loaded, don't need to do anything!
         if self.is_loaded() {
             return Ok(());
@@ -399,7 +397,7 @@ impl SharedTable {
         Ok(())
     }
 
-    pub fn map_2m_page(
+    pub fn _map_2m_page(
         &self,
         vpage: VirtPage,
         ppage: PhysPage,
@@ -444,7 +442,7 @@ impl SharedTable {
         Ok(())
     }
 
-    pub fn map_1g_page(
+    pub fn _map_1g_page(
         &self,
         vpage: VirtPage,
         ppage: PhysPage,
@@ -511,29 +509,8 @@ impl SharedLvl4 {
         }
     }
 
-    fn upgrade_entry(&mut self, entry: usize) {
-        let state = &mut self.vm_table[entry];
-
-        match state {
-            SharedState::NotPresent => {
-                // Make a new table
-                *state = SharedState::OwnedTable(Arc::new(RwLock::new(SharedLvl3::new())));
-            }
-            SharedState::RefTable(rw_lock) => {
-                let table = rw_lock.clone();
-                let inner_table = table.read();
-
-                *state = SharedState::OwnedTable(Arc::new(RwLock::new(SharedLvl3 {
-                    phys_table: inner_table.phys_table.clone(),
-                    vm_table: inner_table.vm_table.clone(),
-                })));
-            }
-            _ => (),
-        }
-    }
-
     /// Gets a refrence to the inner structure, but does not upgrade it.
-    pub fn inner_ref<F, R>(&self, index: usize, func: F) -> R
+    pub fn _inner_ref<F, R>(&self, index: usize, func: F) -> R
     where
         F: FnOnce(Option<&SharedLvl3>, &PageEntryLvl4) -> R,
     {
@@ -647,7 +624,7 @@ impl SharedLvl3 {
     }
 
     /// Gets a refrence to the inner structure, but does not upgrade it.
-    pub fn inner_ref<F, R>(&self, index: usize, func: F) -> R
+    pub fn _inner_ref<F, R>(&self, index: usize, func: F) -> R
     where
         F: FnOnce(Option<&SharedLvl2>, &PageEntryLvl3) -> R,
     {
@@ -773,7 +750,7 @@ impl SharedLvl2 {
     }
 
     /// Gets a refrence to the inner structure, but does not upgrade it.
-    pub fn inner_ref<F, R>(&self, index: usize, func: F) -> R
+    pub fn _inner_ref<F, R>(&self, index: usize, func: F) -> R
     where
         F: FnOnce(Option<&SharedLvl1>, &PageEntryLvl2) -> R,
     {

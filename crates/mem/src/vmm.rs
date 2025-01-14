@@ -28,16 +28,9 @@ use core::{
     ops::{BitOr, BitOrAssign},
 };
 
-use crate::{MemoryError, pmm::PhysPage};
-use alloc::{
-    boxed::Box,
-    format,
-    string::String,
-    sync::{Arc, Weak},
-    vec::Vec,
-};
-use arch::idt64::{InterruptFlags, InterruptInfo};
-use backing::{VmBacking, VmBackingKind};
+use crate::MemoryError;
+use alloc::{boxed::Box, format, string::String, sync::Arc, vec::Vec};
+use backing::VmBacking;
 use hw::make_hw;
 use lldebug::logln;
 use spin::RwLock;
@@ -271,7 +264,6 @@ impl VmProcess {
                     .ok_or(MemoryError::NotSupported)?
                     .alloc_anywhere()?;
 
-                logln!("{:?} -> {:?}", vpage, ppage);
                 self.page_table
                     .map_4k_page(vpage, ppage, vm_object.permissions)?;
             }
@@ -279,22 +271,20 @@ impl VmProcess {
 
         Ok(())
     }
+
+    pub fn dump_page_tables(&self) {
+        logln!("{}", self.page_table);
+    }
 }
 
 #[derive(Debug)]
 pub struct Vmm {
-    active_process: usize,
     table: Vec<Arc<RwLock<VmProcess>>>,
 }
 
 impl Vmm {
-    pub const KERNEL_PROCESS: usize = 0;
-
     pub const fn new() -> Self {
-        Self {
-            active_process: Self::KERNEL_PROCESS,
-            table: Vec::new(),
-        }
+        Self { table: Vec::new() }
     }
 
     pub fn init_kernel_process(

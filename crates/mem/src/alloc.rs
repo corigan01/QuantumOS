@@ -29,7 +29,7 @@ use core::{
     fmt::Debug,
     ptr::NonNull,
 };
-use lldebug::{logln, sync::Mutex};
+use lldebug::sync::Mutex;
 use util::{align_to, is_align_to};
 
 struct Buddy {

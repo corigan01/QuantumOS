@@ -28,7 +28,6 @@ extern crate alloc;
 use core::fmt::Debug;
 
 use alloc::{string::String, vec::Vec};
-use lldebug::logln;
 
 use crate::{
     MemoryError,
@@ -62,7 +61,7 @@ pub trait VmBacking {
     ///              - If this is a file, this is the page offset in the file.
     ///              - If this is physical memory, this should be the requested
     ///                `PhysPage`.
-    fn alloc_here(&mut self, request: usize) -> Result<PhysPage, MemoryError> {
+    fn alloc_here(&mut self, _request: usize) -> Result<PhysPage, MemoryError> {
         Err(MemoryError::NotSupported)
     }
 

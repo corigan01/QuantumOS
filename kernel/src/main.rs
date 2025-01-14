@@ -38,7 +38,7 @@ use alloc::{boxed::Box, format};
 use bootloader::KernelBootHeader;
 use lldebug::{debug_ready, logln, make_debug};
 use mem::{
-    alloc::{KernelAllocator, dump_allocator, provide_init_region},
+    alloc::{KernelAllocator, provide_init_region},
     pmm::Pmm,
     vmm::{
         KernelRegionKind, VirtPage, VmPermissions, VmRegion, Vmm,
@@ -142,17 +142,9 @@ fn main(kbh: &KernelBootHeader) {
         )
         .unwrap();
 
-    unsafe { process.write().load_page_tables() };
+    unsafe { process.write().load_page_tables().unwrap() };
 
-    for i in 0..255 {
-        let dingus = 0x0100 as *mut u8;
-        unsafe {
-            core::ptr::write_volatile(dingus, i);
-        }
-        assert_eq!(unsafe { *dingus }, i);
-    }
-
-    logln!("{:#?}", vmm);
+    logln!("Wrote to new process's memory area!");
     logln!("Finished in {}ms", kernel_ticks());
     // dump_allocator();
 }
