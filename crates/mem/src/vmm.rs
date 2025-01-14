@@ -29,14 +29,24 @@ use core::{
 };
 
 use crate::{MemoryError, pmm::PhysPage};
-use alloc::{boxed::Box, collections::BTreeMap, format, string::String, vec::Vec};
+use alloc::{
+    boxed::Box,
+    collections::BTreeMap,
+    format,
+    string::String,
+    sync::{Arc, Weak},
+    vec::Vec,
+};
 use arch::idt64::{InterruptFlags, InterruptInfo};
+use backing::VmBackingKind;
 use hw::make_hw;
 use lldebug::logln;
+use spin::RwLock;
 use util::consts::PAGE_4K;
 
 extern crate alloc;
 
+pub mod backing;
 mod page;
 
 pub struct VmPageIter {
@@ -89,54 +99,6 @@ impl VirtPage {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum VmBackingKind {
-    Physical,
-    Other(String),
-}
-
-trait VmBacking {
-    /// The type of memory backing this structure.
-    fn backing_kind(&self) -> VmBackingKind;
-
-    /// Get the physical pages that currently exist (in memory)
-    fn alive_physical_pages(&self) -> Result<Vec<PhysPage>, MemoryError>;
-
-    /// Allocate a 'page' which is backed in physical memory.
-    fn alloc_anywhere(&mut self) -> Result<PhysPage, MemoryError>;
-
-    /// Allocate a 'page' which is backed in physical memory at a given offset.
-    ///
-    /// For tasks like ELF loading or INode backed memory, this is used to load
-    /// a page from the file into memory.
-    ///
-    /// - `request`  This is the given offset (in pages) for which the allocation
-    ///              would like to take place.
-    ///
-    ///              - If this is a file, this is the page offset in the file.
-    ///              - If this is physical memory, this should be the requested
-    ///                `PhysPage`.
-    fn alloc_here(&mut self, request: usize) -> Result<PhysPage, MemoryError>;
-
-    /// Deallocate a 'page' which is backed in physical memory.
-    ///
-    /// If this is a INode backed physical page, it may be enough to just
-    /// unlink the physical page.
-    fn dealloc(&mut self, page: PhysPage) -> Result<(), MemoryError>;
-
-    /// Free all in-use physical pages.
-    fn free_all(&mut self) -> Result<(), MemoryError> {
-        for page in self.alive_physical_pages()? {
-            self.dealloc(page)?;
-        }
-
-        Ok(())
-    }
-
-    // TODO: Maybe have a `upgrade()` and `downgrade()` function which
-    //       could say convert this memory backing to a Swap if its Ram, etc...
-}
-
 #[make_hw(
     field(RW, 0, exec),
     field(RW, 1, read),
@@ -185,15 +147,10 @@ impl BitOrAssign for VmPermissions {
 
 struct VmObject {
     region: VmRegion,
-    backing: Option<Box<dyn VmBacking>>,
+    backing: Option<Box<dyn backing::VmBacking>>,
     permissions: VmPermissions,
     what: String,
-    // FIXME: We shouldn't create a page table for each process, we should only create the entries we need
-    //        but for now this works.
-    //
-    // NOTE: Since `VmSafePageTable` internally is an `Arc`, this is just a ptr not an entire copy. The
-    //       `VmProcess` contains the actual refrence.
-    page_table: page::VmSafePageTable,
+    parent: Weak<RwLock<VmProcess>>,
 }
 
 impl Debug for VmObject {
@@ -202,8 +159,8 @@ impl Debug for VmObject {
             .field("region", &self.region)
             .field("permissions", &self.permissions)
             .field("what", &self.what)
-            .field("page_table", &"...")
             .field("backing", &"...")
+            .field("parent", &self.parent)
             .finish()
     }
 }
@@ -211,7 +168,11 @@ impl Debug for VmObject {
 impl VmObject {
     /// Link this physical page to this virtal page.
     fn hydrate_page(&mut self, vpage: VirtPage, ppage: PhysPage) -> Result<(), MemoryError> {
-        self.page_table.map_page(vpage, ppage)
+        let Some(parent) = self.parent.upgrade() else {
+            return Err(MemoryError::ParentDropped);
+        };
+
+        parent.read().page_table.map_page(vpage, ppage)
     }
 
     /// Called upon PageFault. Required to lazy allocate pages.
@@ -265,7 +226,7 @@ pub enum KernelRegionKind {
 struct VmProcess {
     vm_process_id: usize,
     objects: Vec<VmObject>,
-    page_table: page::VmSafePageTable,
+    page_table: page::SharedTable,
 }
 
 impl Debug for VmProcess {
@@ -281,7 +242,7 @@ impl Debug for VmProcess {
 #[derive(Debug)]
 pub struct Vmm {
     active_process: usize,
-    table: BTreeMap<usize, VmProcess>,
+    table: BTreeMap<usize, Arc<RwLock<VmProcess>>>,
 }
 
 impl Vmm {
@@ -298,33 +259,38 @@ impl Vmm {
         &mut self,
         kernel_regions: impl Iterator<Item = (VmRegion, KernelRegionKind)>,
     ) -> Result<(), MemoryError> {
-        let page_tables = page::VmSafePageTable::copy_from_bootloader();
-        unsafe { page_tables.load() };
+        let page_tables = unsafe { page::SharedTable::new_from_bootloader() };
+        unsafe { page_tables.load().unwrap() };
+        logln!("Loaded!");
 
-        let vm_objects = kernel_regions
-            .map(|(region, kind)| {
-                let permissions = match kind {
-                    KernelRegionKind::KernelExe => VmPermissions::EXEC | VmPermissions::READ,
-                    KernelRegionKind::KernelElf => VmPermissions::READ,
-                    KernelRegionKind::KernelStack => VmPermissions::READ | VmPermissions::WRITE,
-                    KernelRegionKind::KernelHeap => VmPermissions::READ | VmPermissions::WRITE,
-                };
+        let vm_process = Arc::new_cyclic(|weak_inner| {
+            let vm_objects = kernel_regions
+                .map(|(region, kind)| {
+                    let permissions = match kind {
+                        KernelRegionKind::KernelExe => VmPermissions::EXEC | VmPermissions::READ,
+                        KernelRegionKind::KernelElf => VmPermissions::READ,
+                        KernelRegionKind::KernelStack => VmPermissions::READ | VmPermissions::WRITE,
+                        KernelRegionKind::KernelHeap => VmPermissions::READ | VmPermissions::WRITE,
+                    };
 
-                VmObject {
-                    region,
-                    backing: None,
-                    permissions,
-                    page_table: page_tables.clone(),
-                    what: format!("{:?}", kind),
-                }
+                    VmObject {
+                        region,
+                        backing: None,
+                        permissions,
+                        what: format!("{:?}", kind),
+                        parent: weak_inner.clone(),
+                    }
+                })
+                .collect();
+
+            RwLock::new(VmProcess {
+                vm_process_id: 0,
+                objects: vm_objects,
+                page_table: page_tables,
             })
-            .collect();
-
-        self.table.insert(Self::KERNEL_PROCESS, VmProcess {
-            vm_process_id: 0,
-            objects: vm_objects,
-            page_table: page_tables,
         });
+
+        self.table.insert(Self::KERNEL_PROCESS, vm_process);
 
         Ok(())
     }

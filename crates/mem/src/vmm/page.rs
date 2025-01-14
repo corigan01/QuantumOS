@@ -24,90 +24,76 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 extern crate alloc;
-use core::fmt::Display;
 
-use alloc::boxed::Box;
+use super::{VirtPage, VmPermissions};
+use crate::{MemoryError, pmm::PhysPage};
 use alloc::sync::Arc;
 use arch::paging64::{
     PageEntry1G, PageEntry2M, PageEntry4K, PageEntryLvl2, PageEntryLvl3, PageEntryLvl4,
     PageMapLvl1, PageMapLvl2, PageMapLvl3, PageMapLvl4,
 };
-use lldebug::{logln, sync::Mutex};
 use spin::RwLock;
-use util::is_align_to;
+use util::consts::PAGE_4K;
 
-use crate::{MemoryError, pmm::PhysPage};
+static CURRENTLY_LOADED_TABLE: SharedTable = SharedTable::empty();
 
-use super::VirtPage;
-
-// FIXME: Make a data structure that makes more sense for this
-static CURRENT_PAGE_TABLE_ALLOC: Mutex<Option<VmSafePageTable>> = Mutex::new(None);
-
-/// Convert a Virtal Address to a Physical Address
 pub fn virt_to_phys(virt: u64) -> Option<u64> {
-    let page_table = CURRENT_PAGE_TABLE_ALLOC.lock();
+    match CURRENTLY_LOADED_TABLE.virt_to_phys(virt) {
+        Ok(virt) => Some(virt),
+        Err(MemoryError::EmptySegment) | Err(MemoryError::AlreadyUsed) => {
+            // FIXME: This is just hardcoded for now, but should be populated from the bootloader!!!!
+            //
+            // Since we know the bootloader is identity mapped, the physical PTRs are valid virtual PTRs!
+            let (lvl4_idx, lvl3_idx, lvl2_idx, lvl1_idx) = table_indexes_for(virt);
 
-    if let Some(safe_table) = page_table.as_ref() {
-        safe_table.lookup_virt_address(virt)
-    } else {
-        // FIXME: This is just hardcoded for now, but should be populated from the bootloader!!!!
-        //
-        // Since we know the bootloader is identity mapped, the physical PTRs are valid virtual PTRs!
-        let (lvl4_idx, lvl3_idx, lvl2_idx, lvl1_idx) = table_indexes_for(virt);
+            let lvl4_table_ptr =
+                arch::registers::cr3::get_page_directory_base_register() as *const PageMapLvl4;
 
-        let lvl4_table_ptr =
-            arch::registers::cr3::get_page_directory_base_register() as *const PageMapLvl4;
+            unsafe {
+                let lvl4_entry = (&*lvl4_table_ptr).get(lvl4_idx);
 
-        unsafe {
-            let lvl4_entry = (&*lvl4_table_ptr).get(lvl4_idx);
+                let lvl3_table_ptr = lvl4_entry.get_next_entry_phy_address() as *const PageMapLvl3;
+                let lvl3_entry = (&*lvl3_table_ptr).get(lvl3_idx);
 
-            let lvl3_table_ptr = lvl4_entry.get_next_entry_phy_address() as *const PageMapLvl3;
-            let lvl3_entry = (&*lvl3_table_ptr).get(lvl3_idx);
+                if !lvl3_entry.is_present_set() {
+                    return None;
+                }
 
-            if !lvl3_entry.is_present_set() {
-                return None;
+                if lvl3_entry.is_page_size_set() {
+                    // 1Gib Entry
+                    return Some(
+                        lvl3_entry.get_next_entry_phy_address()
+                            + (virt & (PageMapLvl3::SIZE_PER_INDEX - 1)),
+                    );
+                }
+
+                let lvl2_table_ptr = lvl3_entry.get_next_entry_phy_address() as *const PageMapLvl2;
+                let lvl2_entry = (&*lvl2_table_ptr).get(lvl2_idx);
+
+                if !lvl2_entry.is_present_set() {
+                    return None;
+                }
+
+                if lvl2_entry.is_page_size_set() {
+                    // 2Mib Entry
+                    return Some(
+                        lvl2_entry.get_next_entry_phy_address()
+                            + (virt & (PageMapLvl2::SIZE_PER_INDEX - 1)),
+                    );
+                }
+
+                let lvl1_table_ptr = lvl2_entry.get_next_entry_phy_address() as *const PageMapLvl1;
+                let lvl1_entry = (&*lvl1_table_ptr).get(lvl1_idx);
+
+                if !lvl1_entry.is_present_set() {
+                    return None;
+                }
+
+                Some(lvl1_entry.get_phy_address() + (virt & (PageMapLvl1::SIZE_PER_INDEX - 1)))
             }
-
-            if lvl3_entry.is_page_size_set() {
-                // 1Gib Entry
-                return Some(
-                    lvl3_entry.get_next_entry_phy_address()
-                        + (virt & (PageMapLvl3::SIZE_PER_INDEX - 1)),
-                );
-            }
-
-            let lvl2_table_ptr = lvl3_entry.get_next_entry_phy_address() as *const PageMapLvl2;
-            let lvl2_entry = (&*lvl2_table_ptr).get(lvl2_idx);
-
-            if !lvl2_entry.is_present_set() {
-                return None;
-            }
-
-            if lvl2_entry.is_page_size_set() {
-                // 2Mib Entry
-                return Some(
-                    lvl2_entry.get_next_entry_phy_address()
-                        + (virt & (PageMapLvl2::SIZE_PER_INDEX - 1)),
-                );
-            }
-
-            let lvl1_table_ptr = lvl2_entry.get_next_entry_phy_address() as *const PageMapLvl1;
-            let lvl1_entry = (&*lvl1_table_ptr).get(lvl1_idx);
-
-            if !lvl1_entry.is_present_set() {
-                return None;
-            }
-
-            Some(lvl1_entry.get_phy_address() + (virt & (PageMapLvl1::SIZE_PER_INDEX - 1)))
         }
+        _ => None,
     }
-}
-
-#[derive(Clone)]
-enum NextTableKind<T> {
-    NotPresent,
-    Table(Box<T>),
-    LargePage,
 }
 
 /// Returns the indexes into the page tables that would give this virtual address.
@@ -120,346 +106,662 @@ const fn table_indexes_for(vaddr: u64) -> (usize, usize, usize, usize) {
     (lvl4, lvl3, lvl2, lvl1)
 }
 
-struct VmSafePageLvl4 {
+enum SharedState<T> {
+    /// This entry is not present in the table
+    NotPresent,
+    /// We are the owner of this table
+    OwnedTable(Arc<RwLock<T>>),
+    /// We are holding a ref to this table
+    RefTable(Arc<RwLock<T>>),
+    /// We own this entry
+    OwnedEntry,
+    /// We are holding a ref to this entry
+    RefEntry,
+}
+
+pub struct SharedTable {
+    state: RwLock<SharedState<SharedLvl4>>,
+}
+
+pub struct SharedLvl4 {
     phys_table: PageMapLvl4,
-    vm_table: [Option<Box<VmSafePageLvl3>>; 512],
+    vm_table: [SharedState<SharedLvl3>; 512],
 }
 
-impl VmSafePageLvl4 {
-    pub const fn new() -> Self {
-        Self {
-            phys_table: PageMapLvl4::new(),
-            vm_table: [const { None }; 512],
-        }
-    }
-
-    pub fn set_raw(
-        &mut self,
-        index: usize,
-        entry: PageEntryLvl4,
-        table: Option<Box<VmSafePageLvl3>>,
-    ) {
-        self.phys_table.store(entry, index);
-        self.vm_table[index] = table;
-    }
-}
-
-struct VmSafePageLvl3 {
+pub struct SharedLvl3 {
     phys_table: PageMapLvl3,
-    vm_table: [NextTableKind<VmSafePageLvl2>; 512],
+    vm_table: [SharedState<SharedLvl2>; 512],
 }
 
-impl VmSafePageLvl3 {
-    pub const fn new() -> Self {
-        Self {
-            phys_table: PageMapLvl3::new(),
-            vm_table: [const { NextTableKind::NotPresent }; 512],
-        }
-    }
-
-    pub fn set_raw_table(
-        &mut self,
-        index: usize,
-        entry: PageEntryLvl3,
-        table: Option<Box<VmSafePageLvl2>>,
-    ) {
-        self.phys_table.store(entry, index);
-        if let Some(table) = table {
-            self.vm_table[index] = NextTableKind::Table(table);
-        }
-    }
-
-    pub fn set_raw_entry(&mut self, index: usize, entry: PageEntry1G) {
-        self.phys_table.store(entry, index);
-        self.vm_table[index] = NextTableKind::LargePage;
-    }
-}
-
-struct VmSafePageLvl2 {
+pub struct SharedLvl2 {
     phys_table: PageMapLvl2,
-    vm_table: [NextTableKind<VmSafePageLvl1>; 512],
+    vm_table: [SharedState<SharedLvl1>; 512],
 }
 
-impl VmSafePageLvl2 {
-    pub const fn new() -> Self {
-        Self {
-            phys_table: PageMapLvl2::new(),
-            vm_table: [const { NextTableKind::NotPresent }; 512],
-        }
-    }
-
-    pub fn set_raw_table(
-        &mut self,
-        index: usize,
-        entry: PageEntryLvl2,
-        table: Option<Box<VmSafePageLvl1>>,
-    ) {
-        self.phys_table.store(entry, index);
-        if let Some(table) = table {
-            self.vm_table[index] = NextTableKind::Table(table);
-        }
-    }
-
-    pub fn set_raw_entry(&mut self, index: usize, entry: PageEntry2M) {
-        self.phys_table.store(entry, index);
-        self.vm_table[index] = NextTableKind::LargePage;
-    }
-}
-
-struct VmSafePageLvl1 {
+pub struct SharedLvl1 {
     phys_table: PageMapLvl1,
 }
 
-impl VmSafePageLvl1 {
+impl SharedTable {
+    pub const fn empty() -> Self {
+        Self {
+            state: RwLock::new(SharedState::NotPresent),
+        }
+    }
+
+    pub fn is_loaded(&self) -> bool {
+        match &*self.state.read() {
+            SharedState::RefTable(our_table) | SharedState::OwnedTable(our_table) => {
+                match &*CURRENTLY_LOADED_TABLE.state.read() {
+                    SharedState::NotPresent => false,
+                    SharedState::OwnedTable(global_table) | SharedState::RefTable(global_table) => {
+                        Arc::ptr_eq(our_table, global_table)
+                    }
+                    _ => panic!("Table does not support 'Entry' types, yet one was present!"),
+                }
+            }
+            SharedState::NotPresent => false,
+            _ => panic!("Table does not support 'Entry' types, yet one was present!"),
+        }
+    }
+
+    pub fn virt_to_phys(&self, vaddr: u64) -> Result<u64, MemoryError> {
+        let lvl4 = self.state.try_read().ok_or(MemoryError::AlreadyUsed)?;
+        let (lvl4_index, lvl3_index, lvl2_index, lvl1_index) = table_indexes_for(vaddr);
+
+        match &*lvl4 {
+            SharedState::NotPresent => Err(MemoryError::EmptySegment),
+            SharedState::OwnedTable(rw_lock) | SharedState::RefTable(rw_lock) => {
+                let lvl4 = rw_lock.read();
+                let shared_state = &lvl4.vm_table[lvl4_index];
+                match shared_state {
+                    SharedState::NotPresent => Err(MemoryError::NotFound),
+                    SharedState::OwnedTable(rw_lock) | SharedState::RefTable(rw_lock) => {
+                        let lvl3 = rw_lock.read();
+                        let shared_state = &lvl3.vm_table[lvl3_index];
+                        match shared_state {
+                            SharedState::NotPresent => Err(MemoryError::NotFound),
+                            SharedState::OwnedTable(rw_lock) | SharedState::RefTable(rw_lock) => {
+                                let lvl2 = rw_lock.read();
+                                let shared_state = &lvl2.vm_table[lvl2_index];
+                                match shared_state {
+                                    SharedState::NotPresent => Err(MemoryError::NotFound),
+                                    SharedState::OwnedTable(rw_lock)
+                                    | SharedState::RefTable(rw_lock) => {
+                                        let lvl1 = rw_lock.read();
+                                        let shared_state = lvl1.phys_table.get(lvl1_index);
+
+                                        if shared_state.is_present_set() {
+                                            Ok(shared_state.get_phy_address())
+                                        } else {
+                                            Err(MemoryError::NotFound)
+                                        }
+                                    }
+                                    SharedState::OwnedEntry | SharedState::RefEntry => Ok(lvl2
+                                        .phys_table
+                                        .get(lvl2_index)
+                                        .get_next_entry_phy_address()
+                                        | (vaddr & (PageMapLvl2::SIZE_PER_INDEX - 1))),
+                                }
+                            }
+                            SharedState::OwnedEntry | SharedState::RefEntry => {
+                                Ok(lvl3.phys_table.get(lvl3_index).get_next_entry_phy_address()
+                                    | (vaddr & (PageMapLvl3::SIZE_PER_INDEX - 1)))
+                            }
+                        }
+                    }
+                    _ => Err(MemoryError::TableNotSupported),
+                }
+            }
+            _ => Err(MemoryError::TableNotSupported),
+        }
+    }
+
+    pub unsafe fn load(&self) -> Result<(), MemoryError> {
+        // Already loaded, don't need to do anything!
+        if self.is_loaded() {
+            return Ok(());
+        }
+
+        match self.state.read().clone() {
+            SharedState::RefTable(our_table) | SharedState::OwnedTable(our_table) => {
+                let mut global_table = CURRENTLY_LOADED_TABLE.state.write();
+
+                let table_vptr = our_table.read().phys_table.table_ptr();
+                let phys_ptr = virt_to_phys(table_vptr).ok_or(MemoryError::InvalidPageTable)?;
+
+                *global_table = SharedState::RefTable(our_table);
+                unsafe { arch::registers::cr3::set_page_directory_base_register(phys_ptr) };
+
+                Ok(())
+            }
+            SharedState::NotPresent => Err(MemoryError::InvalidPageTable),
+            _ => panic!("Table does not support 'Entry' types, yet one was present!"),
+        }
+    }
+
+    pub fn upgrade_mut<F, R>(&self, func: F) -> R
+    where
+        F: FnOnce(&mut SharedLvl4) -> R,
+    {
+        let mut inner = self.state.write();
+
+        match &*inner {
+            SharedState::NotPresent => {
+                // Needs to be put into its box, because tables cannot be moved!
+                let new_entry = Arc::new(RwLock::new(SharedLvl4::new()));
+                *inner = SharedState::OwnedTable(new_entry.clone());
+
+                let mut writeable = new_entry.write();
+                func(&mut *writeable)
+            }
+            SharedState::OwnedTable(rw_lock) => {
+                let mut writeable = rw_lock.write();
+                func(&mut *writeable)
+            }
+            SharedState::RefTable(rw_lock) => {
+                let table = rw_lock.clone();
+                let inner_table = table.read();
+
+                let writeable = Arc::new(RwLock::new(SharedLvl4 {
+                    phys_table: inner_table.phys_table.clone(),
+                    vm_table: inner_table.vm_table.clone(),
+                }));
+
+                let ret = func(&mut *writeable.write());
+                *inner = SharedState::OwnedTable(writeable);
+
+                ret
+            }
+            SharedState::OwnedEntry | SharedState::RefEntry => panic!(
+                "Table does not support Large Page entries, yet one was found! Assuming invalid state!"
+            ),
+        }
+    }
+
+    pub unsafe fn new_from_bootloader() -> Self {
+        let new_table = Self::empty();
+        let cr3_lvl4 =
+            arch::registers::cr3::get_page_directory_base_register() as *const PageMapLvl4;
+
+        fn bl1(bl_lvl1: &PageMapLvl1, lvl1_shared: &mut SharedLvl1) {
+            bl_lvl1
+                .entry_iter()
+                .enumerate()
+                .for_each(|(lvl1_index, lvl1_entry)| {
+                    lvl1_shared.phys_table.store(lvl1_entry, lvl1_index);
+                });
+        }
+
+        fn bl2(bl_lvl2: &PageMapLvl2, lvl2_shared: &mut SharedLvl2) {
+            bl_lvl2
+                .entry_iter()
+                .enumerate()
+                .for_each(|(lvl2_index, bl_entry_lvl2)| {
+                    if let Some(bl_lvl1) = unsafe { bl_entry_lvl2.get_table() } {
+                        lvl2_shared.upgrade_mut(lvl2_index, |lvl1_shared, lvl2_entry| {
+                            *lvl2_entry = bl_entry_lvl2;
+
+                            bl1(bl_lvl1, lvl1_shared);
+                        })
+                    } else if bl_entry_lvl2.is_present_set() {
+                        lvl2_shared
+                            .entry_mut(lvl2_index, || {
+                                PageEntry2M::convert_entry(bl_entry_lvl2)
+                                    .ok_or(MemoryError::InvalidPageTable)
+                            })
+                            .unwrap();
+                    }
+                });
+        }
+
+        fn bl3(bl_lvl3: &PageMapLvl3, lvl3_shared: &mut SharedLvl3) {
+            bl_lvl3
+                .entry_iter()
+                .enumerate()
+                .for_each(|(lvl3_index, bl_entry_lvl3)| {
+                    if let Some(bl_lvl2) = unsafe { bl_entry_lvl3.get_table() } {
+                        lvl3_shared.upgrade_mut(lvl3_index, |lvl2_shared, lvl3_entry| {
+                            *lvl3_entry = bl_entry_lvl3;
+
+                            bl2(bl_lvl2, lvl2_shared);
+                        });
+                    } else if bl_entry_lvl3.is_present_set() {
+                        lvl3_shared
+                            .entry_mut(lvl3_index, || {
+                                PageEntry1G::convert_entry(bl_entry_lvl3)
+                                    .ok_or(MemoryError::InvalidPageTable)
+                            })
+                            .unwrap();
+                    }
+                });
+        }
+
+        new_table.upgrade_mut(|shared_lvl4| {
+            let bl_lvl4 = unsafe { &*cr3_lvl4 };
+            bl_lvl4
+                .entry_iter()
+                .enumerate()
+                .for_each(|(lvl4_index, bl_entry_lvl4)| {
+                    let Some(bl_lvl3) = (unsafe { bl_entry_lvl4.get_table() }) else {
+                        return ();
+                    };
+
+                    shared_lvl4.upgrade_mut(lvl4_index, |lvl3_shared, lvl4_entry| {
+                        *lvl4_entry = bl_entry_lvl4;
+
+                        bl3(bl_lvl3, lvl3_shared);
+                    });
+                });
+        });
+
+        new_table
+    }
+
+    pub fn map_page(&self, vpage: VirtPage, ppage: PhysPage) -> Result<(), MemoryError> {
+        todo!()
+    }
+}
+
+impl<T> Clone for SharedState<T> {
+    fn clone(&self) -> Self {
+        match self {
+            SharedState::NotPresent => SharedState::NotPresent,
+            SharedState::OwnedTable(rw_lock) | SharedState::RefTable(rw_lock) => {
+                SharedState::RefTable(rw_lock.clone())
+            }
+            SharedState::OwnedEntry | SharedState::RefEntry => SharedState::RefEntry,
+        }
+    }
+}
+
+impl SharedLvl4 {
+    pub const fn new() -> Self {
+        Self {
+            phys_table: PageMapLvl4::new(),
+            vm_table: [const { SharedState::NotPresent }; 512],
+        }
+    }
+
+    fn upgrade_entry(&mut self, entry: usize) {
+        let state = &mut self.vm_table[entry];
+
+        match state {
+            SharedState::NotPresent => {
+                // Make a new table
+                *state = SharedState::OwnedTable(Arc::new(RwLock::new(SharedLvl3::new())));
+            }
+            SharedState::RefTable(rw_lock) => {
+                let table = rw_lock.clone();
+                let inner_table = table.read();
+
+                *state = SharedState::OwnedTable(Arc::new(RwLock::new(SharedLvl3 {
+                    phys_table: inner_table.phys_table.clone(),
+                    vm_table: inner_table.vm_table.clone(),
+                })));
+            }
+            _ => (),
+        }
+    }
+
+    /// Gets a refrence to the inner structure, but does not upgrade it.
+    pub fn inner_ref<F, R>(&self, index: usize, func: F) -> R
+    where
+        F: FnOnce(Option<&SharedLvl3>, &PageEntryLvl4) -> R,
+    {
+        if let Some(locked) = self.vm_table.get(index).and_then(|inner| match inner {
+            SharedState::OwnedTable(rw_lock) | SharedState::RefTable(rw_lock) => {
+                Some(rw_lock.read())
+            }
+            _ => None,
+        }) {
+            func(Some(&*locked), &self.phys_table.get(index))
+        } else {
+            func(None, &self.phys_table.get(index))
+        }
+    }
+
+    /// Convert/Upgrade this index to a `OwnTable` and update `phys_table`.
+    ///
+    /// This function will write the physical address of the entry into the
+    /// `PageEntry` for you.
+    pub fn upgrade_mut<F, R>(&mut self, index: usize, func: F) -> R
+    where
+        F: FnOnce(&mut SharedLvl3, &mut PageEntryLvl4) -> R,
+    {
+        let mut entry = self.phys_table.get(index);
+
+        let ret = match self.vm_table[index] {
+            SharedState::NotPresent => {
+                // Needs to be put into its box, because tables cannot be moved!
+                let new_entry = Arc::new(RwLock::new(SharedLvl3::new()));
+                self.vm_table[index] = SharedState::OwnedTable(new_entry.clone());
+
+                let mut writeable = new_entry.write();
+                let ret = func(&mut *writeable, &mut entry);
+                entry.set_next_entry_phy_address(
+                    virt_to_phys(writeable.phys_table.table_ptr())
+                        .expect("Cannot locate the physical ptr of page table!"),
+                );
+
+                ret
+            }
+            SharedState::OwnedTable(ref rw_lock) => {
+                let mut writeable = rw_lock.write();
+                let ret = func(&mut *writeable, &mut entry);
+                entry.set_next_entry_phy_address(
+                    virt_to_phys(writeable.phys_table.table_ptr())
+                        .expect("Cannot locate the physical ptr of page table!"),
+                );
+
+                ret
+            }
+            SharedState::RefTable(ref rw_lock) => {
+                let table = rw_lock.clone();
+                let inner_table = table.read();
+
+                let writeable = Arc::new(RwLock::new(SharedLvl3 {
+                    phys_table: inner_table.phys_table.clone(),
+                    vm_table: inner_table.vm_table.clone(),
+                }));
+
+                let ret = func(&mut *writeable.write(), &mut entry);
+                entry.set_next_entry_phy_address(
+                    virt_to_phys(writeable.read().phys_table.table_ptr())
+                        .expect("Cannot locate the physical ptr of page table!"),
+                );
+
+                self.vm_table[index] = SharedState::OwnedTable(writeable);
+
+                ret
+            }
+            SharedState::OwnedEntry | SharedState::RefEntry => panic!(
+                "Table does not support Large Page entries, yet one was found! Assuming invalid state!"
+            ),
+        };
+
+        assert!(entry.is_present_set());
+        assert!(!entry.is_page_size_set());
+
+        self.phys_table.store(entry, index);
+
+        ret
+    }
+}
+
+impl SharedLvl3 {
+    pub const fn new() -> Self {
+        Self {
+            phys_table: PageMapLvl3::new(),
+            vm_table: [const { SharedState::NotPresent }; 512],
+        }
+    }
+
+    fn upgrade_entry(&mut self, entry: usize) {
+        let state = &mut self.vm_table[entry];
+
+        match state {
+            SharedState::NotPresent => {
+                // Make a new table
+                *state = SharedState::OwnedTable(Arc::new(RwLock::new(SharedLvl2::new())));
+            }
+            SharedState::RefTable(rw_lock) => {
+                let table = rw_lock.clone();
+                let inner_table = table.read();
+
+                *state = SharedState::OwnedTable(Arc::new(RwLock::new(SharedLvl2 {
+                    phys_table: inner_table.phys_table.clone(),
+                    vm_table: inner_table.vm_table.clone(),
+                })));
+            }
+            _ => (),
+        }
+    }
+
+    /// Gets a refrence to the inner structure, but does not upgrade it.
+    pub fn inner_ref<F, R>(&self, index: usize, func: F) -> R
+    where
+        F: FnOnce(Option<&SharedLvl2>, &PageEntryLvl3) -> R,
+    {
+        if let Some(locked) = self.vm_table.get(index).and_then(|inner| match inner {
+            SharedState::OwnedTable(rw_lock) | SharedState::RefTable(rw_lock) => {
+                Some(rw_lock.read())
+            }
+            _ => None,
+        }) {
+            func(Some(&*locked), &self.phys_table.get(index))
+        } else {
+            func(None, &self.phys_table.get(index))
+        }
+    }
+
+    /// Upgrade this index to a 'OwnedEntry' and update the `phys_table` with PageEntry1G
+    pub fn entry_mut<F, E>(&mut self, index: usize, func: F) -> Result<(), E>
+    where
+        F: FnOnce() -> Result<PageEntry1G, E>,
+    {
+        let ret = func()?;
+
+        assert!(
+            ret.is_page_size_set(),
+            "Large entry must have 'page_size' flag set!"
+        );
+
+        self.vm_table[index] = SharedState::OwnedEntry;
+        self.phys_table.store(ret, index);
+
+        Ok(())
+    }
+
+    /// Convert/Upgrade this index to a `OwnTable` and update `phys_table`.
+    ///
+    /// This function will write the physical address of the entry into the
+    /// `PageEntry` for you.
+    pub fn upgrade_mut<F, R>(&mut self, index: usize, func: F) -> R
+    where
+        F: FnOnce(&mut SharedLvl2, &mut PageEntryLvl3) -> R,
+    {
+        let mut entry = self.phys_table.get(index);
+
+        let ret = match self.vm_table[index] {
+            SharedState::OwnedEntry | SharedState::RefEntry | SharedState::NotPresent => {
+                // Needs to be put into its box, because tables cannot be moved!
+                let new_entry = Arc::new(RwLock::new(SharedLvl2::new()));
+                self.vm_table[index] = SharedState::OwnedTable(new_entry.clone());
+
+                let mut writeable = new_entry.write();
+                let ret = func(&mut *writeable, &mut entry);
+                entry.set_next_entry_phy_address(
+                    virt_to_phys(writeable.phys_table.table_ptr())
+                        .expect("Cannot locate the physical ptr of page table!"),
+                );
+
+                ret
+            }
+            SharedState::OwnedTable(ref rw_lock) => {
+                let mut writeable = rw_lock.write();
+                let ret = func(&mut *writeable, &mut entry);
+                entry.set_next_entry_phy_address(
+                    virt_to_phys(writeable.phys_table.table_ptr())
+                        .expect("Cannot locate the physical ptr of page table!"),
+                );
+
+                ret
+            }
+            SharedState::RefTable(_) => {
+                self.upgrade_entry(index);
+
+                let SharedState::OwnedTable(ref table) = self.vm_table[index] else {
+                    panic!("Upgraded table, but table is not owned!");
+                };
+
+                let mut writeable = table.write();
+                let ret = func(&mut *writeable, &mut entry);
+                entry.set_next_entry_phy_address(
+                    virt_to_phys(writeable.phys_table.table_ptr())
+                        .expect("Cannot locate the physical ptr of page table!"),
+                );
+
+                ret
+            }
+        };
+
+        assert!(entry.is_present_set());
+        assert!(!entry.is_page_size_set());
+
+        self.phys_table.store(entry, index);
+
+        ret
+    }
+}
+
+impl SharedLvl2 {
+    pub const fn new() -> Self {
+        Self {
+            phys_table: PageMapLvl2::new(),
+            vm_table: [const { SharedState::NotPresent }; 512],
+        }
+    }
+
+    fn upgrade_entry(&mut self, entry: usize) {
+        let state = &mut self.vm_table[entry];
+
+        match state {
+            SharedState::NotPresent => {
+                // Make a new table
+                *state = SharedState::OwnedTable(Arc::new(RwLock::new(SharedLvl1::new())));
+            }
+            SharedState::RefTable(rw_lock) => {
+                let table = rw_lock.clone();
+                let inner_table = table.read();
+
+                *state = SharedState::OwnedTable(Arc::new(RwLock::new(SharedLvl1 {
+                    phys_table: inner_table.phys_table.clone(),
+                })));
+            }
+            _ => (),
+        }
+    }
+
+    /// Gets a refrence to the inner structure, but does not upgrade it.
+    pub fn inner_ref<F, R>(&self, index: usize, func: F) -> R
+    where
+        F: FnOnce(Option<&SharedLvl1>, &PageEntryLvl2) -> R,
+    {
+        if let Some(locked) = self.vm_table.get(index).and_then(|inner| match inner {
+            SharedState::OwnedTable(rw_lock) | SharedState::RefTable(rw_lock) => {
+                Some(rw_lock.read())
+            }
+            _ => None,
+        }) {
+            func(Some(&*locked), &self.phys_table.get(index))
+        } else {
+            func(None, &self.phys_table.get(index))
+        }
+    }
+    ///
+    /// Upgrade this index to a 'OwnedEntry' and update the `phys_table` with PageEntry1G
+    pub fn entry_mut<F, E>(&mut self, index: usize, func: F) -> Result<(), E>
+    where
+        F: FnOnce() -> Result<PageEntry2M, E>,
+    {
+        let ret = func()?;
+
+        assert!(
+            ret.is_page_size_set(),
+            "Large entry must have 'page_size' flag set!"
+        );
+
+        self.vm_table[index] = SharedState::OwnedEntry;
+        self.phys_table.store(ret, index);
+
+        Ok(())
+    }
+
+    /// Convert/Upgrade this index to a `OwnTable` and update `phys_table`.
+    ///
+    /// This function will write the physical address of the entry into the
+    /// `PageEntry` for you.
+    pub fn upgrade_mut<F, R>(&mut self, index: usize, func: F) -> R
+    where
+        F: FnOnce(&mut SharedLvl1, &mut PageEntryLvl2) -> R,
+    {
+        let mut entry = self.phys_table.get(index);
+
+        let ret = match self.vm_table[index] {
+            SharedState::OwnedEntry | SharedState::RefEntry | SharedState::NotPresent => {
+                // Needs to be put into its box, because tables cannot be moved!
+                let new_entry = Arc::new(RwLock::new(SharedLvl1::new()));
+                self.vm_table[index] = SharedState::OwnedTable(new_entry.clone());
+
+                let mut writeable = new_entry.write();
+                let ret = func(&mut *writeable, &mut entry);
+                entry.set_next_entry_phy_address(
+                    virt_to_phys(writeable.phys_table.table_ptr())
+                        .expect("Cannot locate the physical ptr of page table!"),
+                );
+
+                ret
+            }
+            SharedState::OwnedTable(ref rw_lock) => {
+                let mut writeable = rw_lock.write();
+                let ret = func(&mut *writeable, &mut entry);
+                entry.set_next_entry_phy_address(
+                    virt_to_phys(writeable.phys_table.table_ptr())
+                        .expect("Cannot locate the physical ptr of page table!"),
+                );
+
+                ret
+            }
+            SharedState::RefTable(_) => {
+                self.upgrade_entry(index);
+
+                let SharedState::OwnedTable(ref table) = self.vm_table[index] else {
+                    panic!("Upgraded table, but table is not owned!");
+                };
+
+                let mut writeable = table.write();
+                let ret = func(&mut *writeable, &mut entry);
+                entry.set_next_entry_phy_address(
+                    virt_to_phys(writeable.phys_table.table_ptr())
+                        .expect("Cannot locate the physical ptr of page table!"),
+                );
+
+                ret
+            }
+        };
+
+        assert!(entry.is_present_set());
+        assert!(!entry.is_page_size_set());
+
+        self.phys_table.store(entry, index);
+
+        ret
+    }
+}
+
+impl SharedLvl1 {
     pub const fn new() -> Self {
         Self {
             phys_table: PageMapLvl1::new(),
         }
     }
 
-    pub fn set_raw(&mut self, index: usize, entry: PageEntry4K) {
-        self.phys_table.store(entry, index);
-    }
-}
-
-#[derive(Clone)]
-pub struct VmSafePageTable {
-    cr3: Arc<RwLock<VmSafePageLvl4>>,
-}
-
-impl VmSafePageTable {
-    pub fn new() -> Self {
-        Self {
-            cr3: Arc::new(RwLock::new(VmSafePageLvl4::new())),
-        }
-    }
-
-    /// Copies the page table mapping from the bootloader.
-    pub fn copy_from_bootloader() -> Self {
-        let lvl4 = Arc::new(RwLock::new(VmSafePageLvl4::new()));
-
-        let lvl4_table_ptr =
-            arch::registers::cr3::get_page_directory_base_register() as *const PageMapLvl4;
-
-        unsafe {
-            // Yeah... okay maybe don't do this :)
-            (&*lvl4_table_ptr)
-                .entry_iter()
-                .enumerate()
-                .for_each(|(lvl4_index, lvl4_entry)| {
-                    lvl4.write().set_raw(
-                        lvl4_index,
-                        lvl4_entry,
-                        lvl4_entry.get_table().map(|lvl3| {
-                            let mut safe_lvl3 = Box::new(VmSafePageLvl3::new());
-                            lvl3.entry_iter()
-                                .enumerate()
-                                .for_each(|(lvl3_index, lvl3_entry)| {
-                                    // BIG
-                                    if let Some(lvl3_large_entry) = PageEntry1G::convert_entry(lvl3_entry) {
-                                        safe_lvl3.set_raw_entry(lvl3_index, lvl3_large_entry);
-                                    }
-                                    // TABLE
-                                    else if lvl3_entry.is_present_set() {
-                                        safe_lvl3.set_raw_table(lvl3_index, lvl3_entry, lvl3_entry.get_table().map(|lvl2| {
-                                            let mut safe_lvl2 = Box::new(VmSafePageLvl2::new());
-
-                                            lvl2.entry_iter().enumerate().for_each(|(lvl2_index, lvl2_entry)| {
-                                                // BIG
-                                                if let Some(lvl2_large_entry) = PageEntry2M::convert_entry(lvl2_entry) {
-                                                    safe_lvl2.set_raw_entry(lvl2_index, lvl2_large_entry);
-                                                }
-                                                // TABLE
-                                                else if lvl2_entry.is_present_set(){
-                                                    safe_lvl2.set_raw_table(lvl2_index, lvl2_entry, lvl2_entry.get_table().map(|lvl1| {
-                                                        let mut safe_lvl1 = Box::new(VmSafePageLvl1::new());
-                                                        lvl1.entry_iter().enumerate().for_each(|(lvl1_index, lvl1_entry)| {
-                                                            safe_lvl1.set_raw(lvl1_index, lvl1_entry);
-                                                        });
-
-                                                        safe_lvl1
-                                                    }));
-                                                }
-                                            });
-
-                                            safe_lvl2
-                                        }));
-                                    }
-                                });
-
-                            safe_lvl3
-                        }),
-                    );
-                });
-        }
-
-        Self { cr3: lvl4 }
-    }
-
-    /// Load these page tables into the CPU's MMU.
+    /// This function calculates the realative offset of vpage in its **OWN** table.
     ///
-    /// These page tables will now be used by the system, and all future lookups for `virt_to_phys`.
-    pub unsafe fn load(&self) {
-        let vm_table_ptr = self.cr3.read().phys_table.table_ptr();
-        let phys_table_ptr =
-            virt_to_phys(vm_table_ptr).expect("Cannot get physical address for page tables!");
+    /// The caller still needs to ensure the page table entries that point to `Self`
+    /// are correctly aligned to point to `vpage`!
+    fn link_page(&mut self, vpage: VirtPage, ppage: PhysPage, permissions: VmPermissions) {
+        let mut page_entry = PageEntry4K::new();
 
-        *CURRENT_PAGE_TABLE_ALLOC.lock() = Some(self.clone());
+        page_entry.set_present_flag(permissions.is_read_set());
+        page_entry.set_read_write_flag(permissions.is_write_set());
+        page_entry.set_execute_disable_flag(!permissions.is_exec_set());
+        page_entry.set_user_accessed_flag(permissions.is_user_set());
 
-        assert!(
-            is_align_to(vm_table_ptr, 4096) && is_align_to(phys_table_ptr, 4096),
-            "Page tables are not aligned!"
-        );
-        unsafe { arch::registers::cr3::set_page_directory_base_register(phys_table_ptr) };
-    }
+        page_entry.set_phy_address(ppage.0 * PAGE_4K as u64);
 
-    /// Attempts to return the Physical Address for the given Virt Address.
-    pub fn lookup_virt_address(&self, virt: u64) -> Option<u64> {
-        let (lvl4_idx, lvl3_idx, lvl2_idx, lvl1_idx) = table_indexes_for(virt);
-
-        let cr3_locked = self.cr3.read();
-        let lvl3 = cr3_locked.vm_table[lvl4_idx].as_ref()?;
-        let lvl2 = match &lvl3.vm_table[lvl3_idx] {
-            NextTableKind::Table(next_table) => next_table,
-            NextTableKind::LargePage => {
-                return Some(
-                    (PageMapLvl3::SIZE_PER_INDEX * lvl3_idx as u64)
-                        + (PageMapLvl4::SIZE_PER_INDEX * lvl4_idx as u64),
-                );
-            }
-            NextTableKind::NotPresent => return None,
-        };
-        let lvl1 = match &lvl2.vm_table[lvl2_idx] {
-            NextTableKind::Table(next_table) => next_table,
-            NextTableKind::LargePage => {
-                return Some(
-                    (PageMapLvl2::SIZE_PER_INDEX * lvl2_idx as u64)
-                        + (PageMapLvl3::SIZE_PER_INDEX * lvl3_idx as u64)
-                        + (PageMapLvl4::SIZE_PER_INDEX * lvl4_idx as u64),
-                );
-            }
-            NextTableKind::NotPresent => return None,
-        };
-
-        let page_entry = lvl1.phys_table.get(lvl1_idx);
-        if !page_entry.is_present_set() {
-            return None;
-        }
-
-        Some(page_entry.get_phy_address())
-    }
-
-    pub fn is_loaded(&self) -> bool {
-        CURRENT_PAGE_TABLE_ALLOC
-            .lock()
-            .as_ref()
-            .is_some_and(|inner| inner.cr3.as_mut_ptr() == self.cr3.as_mut_ptr())
-    }
-
-    /// Maps the PhysPage to the VirtPage.
-    pub fn map_page(&self, virt_page: VirtPage, phys_page: PhysPage) -> Result<(), MemoryError> {
-        todo!()
-    }
-}
-
-impl Display for VmSafePageTable {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        let cr3_lock = self.cr3.read();
-
-        write!(
-            f,
-            "PageLvl4 ({})\n",
-            self.is_loaded().then_some("Loaded").unwrap_or("Unloaded")
-        )?;
-
-        for (lvl4_index, lvl4_vm) in cr3_lock.vm_table.iter().enumerate() {
-            let Some(lvl4_vm) = lvl4_vm else {
-                continue;
-            };
-
-            let raw = cr3_lock.phys_table.get(lvl4_index);
-            write!(
-                f,
-                " |-PageLvl3[{:03}]: {}{}{} ({})\n",
-                lvl4_index,
-                raw.is_execute_disable_set().then_some("_").unwrap_or("X"),
-                raw.is_read_write_set().then_some("W").unwrap_or("R"),
-                raw.is_accessed_set().then_some("D").unwrap_or("_"),
-                raw.is_user_access_set()
-                    .then_some("User")
-                    .unwrap_or("System"),
-            )?;
-
-            for (lvl3_index, lvl3_vm) in lvl4_vm.vm_table.iter().enumerate() {
-                let raw = lvl4_vm.phys_table.get(lvl3_index);
-                match lvl3_vm {
-                    NextTableKind::NotPresent => (),
-                    NextTableKind::Table(lvl2_table) => {
-                        write!(
-                            f,
-                            " |  |-PageLvl2[{:03}]: {}{}{} ({})\n",
-                            lvl3_index,
-                            raw.is_execute_disable_set().then_some("_").unwrap_or("X"),
-                            raw.is_read_write_set().then_some("W").unwrap_or("R"),
-                            raw.is_accessed_set().then_some("D").unwrap_or("_"),
-                            raw.is_user_access_set()
-                                .then_some("User")
-                                .unwrap_or("System"),
-                        )?;
-
-                        for (lvl2_index, lvl2_vm) in lvl2_table.vm_table.iter().enumerate() {
-                            let raw = lvl2_table.phys_table.get(lvl2_index);
-                            match lvl2_vm {
-                                NextTableKind::NotPresent => (),
-                                NextTableKind::Table(lvl1_table) => {
-                                    write!(
-                                        f,
-                                        " |  |  |-PageLvl1[{:03}]: {}{}{} ({})\n",
-                                        lvl2_index,
-                                        raw.is_execute_disable_set().then_some("_").unwrap_or("X"),
-                                        raw.is_read_write_set().then_some("W").unwrap_or("R"),
-                                        raw.is_accessed_set().then_some("D").unwrap_or("_"),
-                                        raw.is_user_access_set()
-                                            .then_some("User")
-                                            .unwrap_or("System"),
-                                    )?;
-                                    for (lvl1_index, lvl1_vm) in
-                                        lvl1_table.phys_table.entry_iter().enumerate()
-                                    {
-                                        if lvl1_vm.is_present_set() {
-                                            write!(f, " |  |  |  |-Page 4K[{:03}]\n", lvl1_index)?;
-                                        }
-                                    }
-                                }
-                                NextTableKind::LargePage => write!(
-                                    f,
-                                    " |  |  |-Page 2M[{:03}]: {}{}{} ({})\n",
-                                    lvl2_index,
-                                    raw.is_execute_disable_set().then_some("_").unwrap_or("X"),
-                                    raw.is_read_write_set().then_some("W").unwrap_or("R"),
-                                    raw.is_accessed_set().then_some("D").unwrap_or("_"),
-                                    raw.is_user_access_set()
-                                        .then_some("User")
-                                        .unwrap_or("System"),
-                                )?,
-                            }
-                        }
-                    }
-                    NextTableKind::LargePage => write!(
-                        f,
-                        " |  |-Page 1G[{:03}]: {}{}{} ({})\n",
-                        lvl3_index,
-                        raw.is_execute_disable_set().then_some("_").unwrap_or("X"),
-                        raw.is_read_write_set().then_some("W").unwrap_or("R"),
-                        raw.is_accessed_set().then_some("D").unwrap_or("_"),
-                        raw.is_user_access_set()
-                            .then_some("User")
-                            .unwrap_or("System"),
-                    )?,
-                }
-            }
-        }
-
-        Ok(())
+        let table_index = vpage.0 % 512;
+        self.phys_table.store(page_entry, table_index);
     }
 }

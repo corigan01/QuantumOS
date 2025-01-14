@@ -49,4 +49,6 @@ pub enum MemoryError {
     NotFound,
     /// Could not handle the exception.
     DidNotHandleException,
+    ParentDropped,
+    InvalidPageTable,
 }

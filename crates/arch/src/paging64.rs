@@ -23,6 +23,8 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use core::marker::PhantomPinned;
+
 use hw::make_hw;
 
 /// The max 'bits' of physical memory the system supports.
@@ -355,23 +357,23 @@ impl PageEntryLvl5 {
 
 #[repr(C, align(4096))]
 #[derive(Clone, Copy)]
-pub struct PageMapLvl5([u64; 512]);
+pub struct PageMapLvl5([u64; 512], PhantomPinned);
 
 #[repr(C, align(4096))]
 #[derive(Clone, Copy)]
-pub struct PageMapLvl4([u64; 512]);
+pub struct PageMapLvl4([u64; 512], PhantomPinned);
 
 #[repr(C, align(4096))]
 #[derive(Clone, Copy)]
-pub struct PageMapLvl3([u64; 512]);
+pub struct PageMapLvl3([u64; 512], PhantomPinned);
 
 #[repr(C, align(4096))]
 #[derive(Clone, Copy)]
-pub struct PageMapLvl2([u64; 512]);
+pub struct PageMapLvl2([u64; 512], PhantomPinned);
 
 #[repr(C, align(4096))]
 #[derive(Clone, Copy)]
-pub struct PageMapLvl1([u64; 512]);
+pub struct PageMapLvl1([u64; 512], PhantomPinned);
 
 // TODO: Make docs for these
 // Theses are the entires that can fit into the tables
@@ -442,7 +444,7 @@ impl PageMapLvl1 {
     pub const SIZE_FOR_TABLE: u64 = util::consts::PAGE_4K as u64 * 512;
 
     pub const fn new() -> Self {
-        Self([0; 512])
+        Self([0; 512], PhantomPinned {})
     }
 
     /// Convert an address to a table offset.
@@ -483,7 +485,7 @@ impl PageMapLvl2 {
     pub const SIZE_FOR_TABLE: u64 = util::consts::PAGE_2M as u64 * 512;
 
     pub const fn new() -> Self {
-        Self([0; 512])
+        Self([0; 512], PhantomPinned {})
     }
 
     /// Convert an address to a table offset.
@@ -524,7 +526,7 @@ impl PageMapLvl3 {
     pub const SIZE_FOR_TABLE: u64 = util::consts::PAGE_1G as u64 * 512 ;
 
     pub const fn new() -> Self {
-        Self([0; 512])
+        Self([0; 512], PhantomPinned {})
     }
     
     /// Convert an address to a table offset.
@@ -565,7 +567,7 @@ impl PageMapLvl4 {
     pub const SIZE_FOR_TABLE: u64 = util::consts::PAGE_1G as u64 * 512 * 512;
 
     pub const fn new() -> Self {
-        Self([0; 512])
+        Self([0; 512], PhantomPinned {})
     }
 
     /// Convert an address to a table offset.
@@ -618,7 +620,7 @@ impl PageMapLvl5 {
     }
 
     pub const fn new() -> Self {
-        Self([0; 512])
+        Self([0; 512], PhantomPinned {})
     }
 
     pub fn store(&mut self, entry: impl Lvl5Entry, index: usize) {
