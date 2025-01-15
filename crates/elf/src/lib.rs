@@ -54,6 +54,10 @@ impl<'a> Elf<'a> {
         Self { elf_file }
     }
 
+    pub fn raw_slice(&self) -> &'a [u8] {
+        self.elf_file
+    }
+
     pub fn load_into<'b, F>(&'b self, mut loader_fn: F) -> Result<*const u8>
     where
         F: FnMut(&tables::ElfGenProgramHeader) -> Option<&'b mut [u8]>,

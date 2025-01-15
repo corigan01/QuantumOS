@@ -25,7 +25,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 use alloc::{boxed::Box, vec::Vec};
 use elf::{elf_owned::ElfOwned, tables::SegmentKind};
-use lldebug::logln;
+use lldebug::{hexdump::HexPrint, logln};
 use mem::{
     MemoryError,
     pmm::PhysPage,
@@ -75,7 +75,6 @@ impl Scheduler {
             VmPermissions::READ | VmPermissions::WRITE,
             false,
         ));
-        self.kernel.vm.map_all_now()?;
 
         let (vaddr_low, vaddr_hi) = elf_owned
             .elf()
@@ -83,15 +82,31 @@ impl Scheduler {
             .map_err(|_| MemoryError::NotSupported)?;
 
         let process = VmProcess::new_from(&self.kernel.vm);
-        logln!("Initfs loading to : V{:#016x}", vaddr_low);
 
         process.add_vm_object(ElfBacked::new_boxed(
             VmRegion::from_vaddr(vaddr_low as u64, vaddr_hi - vaddr_low),
             VmPermissions::WRITE | VmPermissions::READ | VmPermissions::USER | VmPermissions::EXEC,
             elf_owned,
         ));
+        process.add_vm_object(NothingBacked::new_boxed(
+            VmRegion {
+                start: VirtPage(2),
+                end: VirtPage(3),
+            },
+            VmPermissions::WRITE | VmPermissions::READ | VmPermissions::USER,
+        ));
 
-        process.map_all_now()
+        logln!("{:#?}", process);
+
+        process.map_all_now()?;
+        process.dump_page_tables();
+        logln!(
+            "Initfs loading to : V{:#016x}\n{}",
+            vaddr_low,
+            unsafe { core::slice::from_raw_parts(vaddr_low as *const u8, 126) }.hexdump()
+        );
+
+        Ok(())
     }
 }
 
@@ -142,6 +157,13 @@ impl VmRegionObject for ElfBacked {
             .elf()
             .program_header_slice(&header)
             .map_err(|_| MemoryError::DidNotHandleException)?;
+        logln!(
+            "{} -> {} {:#?}",
+            header.in_elf_offset(),
+            header.in_elf_size(),
+            header
+        );
+        logln!("{}", elf_buffer.hexdump());
 
         let virtal_slice =
             unsafe { core::slice::from_raw_parts_mut((vpage.0 * PAGE_4K) as *mut u8, 4096) };
@@ -155,5 +177,30 @@ impl VmRegionObject for ElfBacked {
         }
 
         Ok(())
+    }
+}
+
+#[derive(Debug)]
+pub struct NothingBacked {
+    region: VmRegion,
+    permissions: VmPermissions,
+}
+
+impl NothingBacked {
+    pub fn new_boxed(region: VmRegion, permissions: VmPermissions) -> Box<dyn VmRegionObject> {
+        Box::new(Self {
+            region,
+            permissions,
+        })
+    }
+}
+
+impl VmRegionObject for NothingBacked {
+    fn vm_region(&self) -> VmRegion {
+        self.region
+    }
+
+    fn vm_permissions(&self) -> VmPermissions {
+        self.permissions
     }
 }

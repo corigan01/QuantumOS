@@ -192,7 +192,8 @@ global_asm!(
         push 0
         # interrupt stack
         push 0x23
-        mov rax, 0x200000000000 
+        #mov rax, 0x200000000000 
+        mov rax, 0x3000
         push rax
         # rflags
         push 0x200
@@ -200,7 +201,7 @@ global_asm!(
         push 0x1b
 
         # Task Entry Point
-        mov rax, 0x00000000200000
+        mov rax, 0x00000000400000
         push rax
 
         # Init UE with zeroed registers

@@ -62,7 +62,9 @@ impl Display for ArchSelect {
                     .join("../kernel/x86-64-quantum_kernel.json")
                     .to_string_lossy(),
             )),
-            Self::UserSpace => f.write_fmt(format_args!("{}", "x86_64-unknown-quantum",)),
+            Self::UserSpace => {
+                f.write_fmt(format_args!("{}", "./user/x86_64-unknown-quantum.json",))
+            }
         }
     }
 }
@@ -180,7 +182,7 @@ pub async fn build_project() -> Result<Artifacts> {
         cargo_helper(Some("stage-32bit"), "stage-32bit", ArchSelect::I686),
         cargo_helper(Some("stage-64bit"), "stage-64bit", ArchSelect::X64),
         cargo_helper(Some("kernel"), "kernel", ArchSelect::Kernel),
-        cargo_helper(Some("dummy"), "dummy", ArchSelect::X64),
+        cargo_helper(Some("dummy"), "dummy", ArchSelect::UserSpace),
         build_bootloader_config(),
     )?;
 

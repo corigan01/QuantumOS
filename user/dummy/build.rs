@@ -1,11 +1,11 @@
 /*
-  ____                 __               __  __
- / __ \__ _____ ____  / /___ ____ _    / / / /__ ___ ____
-/ /_/ / // / _ `/ _ \/ __/ // /  ' \  / /_/ (_-</ -_) __/
-\___\_\_,_/\_,_/_//_/\__/\_,_/_/_/_/  \____/___/\__/_/
+  ____                 __               __ __                 __
+ / __ \__ _____ ____  / /___ ____ _    / //_/__ _______  ___ / /
+/ /_/ / // / _ `/ _ \/ __/ // /  ' \  / ,< / -_) __/ _ \/ -_) /
+\___\_\_,_/\_,_/_//_/\__/\_,_/_/_/_/ /_/|_|\__/_/ /_//_/\__/_/
   Part of the Quantum OS Kernel
 
-Copyright 2025 Gavin Kellam
+Copyright 2024 Gavin Kellam
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
 associated documentation files (the "Software"), to deal in the Software without restriction,
@@ -23,31 +23,14 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-#![no_std]
-#![no_main]
+use std::path::Path;
 
-use core::panic::PanicInfo;
-
-unsafe fn test_syscall() {
-    unsafe {
-        core::arch::asm!(
-            "
-      mov rax, 60
-      mov rdi, 69
-      int 0x80
-      "
-        )
-    };
-}
-
-#[panic_handler]
-fn panic(_info: &PanicInfo) -> ! {
-    loop {}
-}
-
-#[unsafe(no_mangle)]
-extern "C" fn _start() {
-    unsafe {
-        test_syscall();
-    }
+fn main() {
+    let local_path = Path::new(env!("CARGO_MANIFEST_DIR"));
+    println!("cargo:rerun-if-changed=build.rs");
+    println!("cargo:rerun-if-changed=../x86_64-unknown-quantum.ld");
+    println!(
+        "cargo:rustc-link-arg-bins=--script={}",
+        local_path.join("../x86_64-unknown-quantum.ld").display()
+    )
 }
