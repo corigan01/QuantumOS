@@ -652,6 +652,7 @@ macro_rules! display_for {
                     if self.is_present_set() {write!(f, "P")} else {write!(f, "_")}?;
                     if self.is_read_write_set() {write!(f, "W")} else {write!(f, "R")}?;
                     if self.is_execute_disable_set() {write!(f, "_")}else{write!(f, "X")}?;
+                    if self.is_user_access_set() {write!(f, "U")}else{write!(f, "S")}?;
 
                     Ok(())
                 }

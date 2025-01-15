@@ -29,8 +29,7 @@ use core::{
 };
 
 use crate::{MemoryError, pmm::PhysPage};
-use alloc::{boxed::Box, format, string::String, sync::Arc, vec::Vec};
-use backing::VmBacking;
+use alloc::{boxed::Box, collections::btree_map::BTreeMap, vec::Vec};
 use hw::make_hw;
 use lldebug::logln;
 use spin::RwLock;
@@ -40,36 +39,6 @@ extern crate alloc;
 
 pub mod backing;
 mod page;
-
-static THE_VIRTUAL_PAGE_MANAGER: RwLock<Option<Vmm>> = RwLock::new(None);
-
-pub fn set_virtual_memory_manager(vmm: Vmm) {
-    *THE_VIRTUAL_PAGE_MANAGER.write() = Some(vmm);
-}
-
-pub fn use_vmm_mut<F, R>(func: F) -> R
-where
-    F: FnOnce(&mut Vmm) -> R,
-{
-    let mut vmm = THE_VIRTUAL_PAGE_MANAGER.write();
-    func(
-        &mut *vmm
-            .as_mut()
-            .expect("Virtual Memory Manager has not be set!"),
-    )
-}
-
-pub fn use_vmm_ref<F, R>(func: F) -> R
-where
-    F: FnOnce(&Vmm) -> R,
-{
-    let vmm = THE_VIRTUAL_PAGE_MANAGER.read();
-    func(
-        &*vmm
-            .as_ref()
-            .expect("Virtual Memory Manager has not be set!"),
-    )
-}
 
 pub struct VmPageIter {
     start_page: VirtPage,
@@ -156,6 +125,11 @@ impl VmRegion {
     /// Is this vaddr within the page bounds.
     pub const fn contains_vaddr(&self, vaddr: u64) -> bool {
         vaddr as usize >= (self.start.0 * PAGE_4K) && (self.end.0 * PAGE_4K) >= vaddr as usize
+    }
+    ///
+    /// Is this vaddr within the page bounds.
+    pub const fn contains_vpage(&self, vaddr: VirtPage) -> bool {
+        vaddr.0 >= self.start.0 && self.end.0 >= vaddr.0
     }
 
     pub const fn from_vaddr(vaddr: u64, len: usize) -> Self {
@@ -272,157 +246,87 @@ impl BitOrAssign for VmPermissions {
 }
 
 /// Manages and controls a VmObject
+#[derive(Debug)]
 struct VmBorderObject {
     object: Box<dyn backing::VmRegionObject>,
-    alive_phys_pages: Vec<PhysPage>,
+    mapping: BTreeMap<VirtPage, PhysPage>,
 }
 
-struct VmObject {
-    region: VmRegion,
-    backing: Option<Box<dyn backing::VmBacking>>,
-    permissions: VmPermissions,
-    what: String,
-}
-
-impl Debug for VmObject {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.debug_struct("VmObject")
-            .field("region", &self.region)
-            .field("backing", &"...")
-            .field("permissions", &self.permissions)
-            .field("what", &self.what)
-            .finish()
-    }
-}
-
-unsafe impl Send for VmObject {}
-unsafe impl Sync for VmObject {}
-
-#[derive(Debug, Clone, Copy)]
-pub enum KernelRegionKind {
-    KernelExe,
-    KernelElf,
-    KernelStack,
-    KernelHeap,
-}
-
-pub struct VmProcess {
-    objects: Vec<VmObject>,
-    page_table: page::SharedTable,
-}
-
-impl VmProcess {
-    pub unsafe fn load_page_tables(&mut self) -> Result<(), MemoryError> {
-        unsafe { self.page_table.load() }
-    }
-}
-
-impl Debug for VmProcess {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.debug_struct("VmProcess")
-            .field("objects", &self.objects)
-            .field("page_table", &"...")
-            .finish()
-    }
-}
-
-impl VmProcess {
-    fn map_all_now(&mut self) -> Result<(), MemoryError> {
-        for vm_object in self.objects.iter_mut() {
-            for vpage in vm_object.region.iter_4k() {
-                let ppage = vm_object
-                    .backing
-                    .as_mut()
-                    .ok_or(MemoryError::NotSupported)?
-                    .alloc_anywhere(vpage)?;
-
-                self.page_table
-                    .map_4k_page(vpage, ppage, vm_object.permissions)?;
-            }
+impl VmBorderObject {
+    pub fn new(object: Box<dyn backing::VmRegionObject>) -> Self {
+        Self {
+            object,
+            mapping: BTreeMap::new(),
         }
-
-        Ok(())
-    }
-
-    pub fn dump_page_tables(&self) {
-        logln!("{}", self.page_table);
     }
 }
 
 #[derive(Debug)]
-pub struct Vmm {
-    table: Vec<Arc<RwLock<VmProcess>>>,
+pub struct VmProcess {
+    objects: RwLock<Vec<VmBorderObject>>,
+    page_table: page::SharedTable,
 }
 
-impl Vmm {
-    pub const fn new() -> Self {
-        Self { table: Vec::new() }
+impl VmProcess {
+    pub unsafe fn new_from_bootloader() -> Self {
+        Self {
+            objects: RwLock::new(Vec::new()),
+            page_table: unsafe { page::SharedTable::new_from_bootloader() },
+        }
     }
 
-    pub fn init_kernel_process(
-        &mut self,
-        kernel_regions: impl Iterator<Item = (VmRegion, KernelRegionKind)>,
-    ) -> Result<Arc<RwLock<VmProcess>>, MemoryError> {
-        let page_tables = unsafe { page::SharedTable::new_from_bootloader() };
-        unsafe { page_tables.load().unwrap() };
-
-        let vm_process = Arc::new({
-            let vm_objects = kernel_regions
-                .map(|(region, kind)| {
-                    let permissions = match kind {
-                        KernelRegionKind::KernelExe => VmPermissions::EXEC | VmPermissions::READ,
-                        KernelRegionKind::KernelElf => VmPermissions::READ,
-                        KernelRegionKind::KernelStack => VmPermissions::READ | VmPermissions::WRITE,
-                        KernelRegionKind::KernelHeap => VmPermissions::READ | VmPermissions::WRITE,
-                    };
-
-                    VmObject {
-                        region,
-                        backing: None,
-                        permissions,
-                        what: format!("{:?}", kind),
-                    }
-                })
-                .collect();
-
-            RwLock::new(VmProcess {
-                objects: vm_objects,
-                page_table: page_tables,
-            })
-        });
-
-        self.table.push(vm_process.clone());
-        Ok(vm_process)
+    pub fn new_from(other: &VmProcess) -> Self {
+        Self {
+            objects: RwLock::new(Vec::new()),
+            page_table: other.page_table.clone(),
+        }
     }
 
-    fn clone_pages_from_kernel(&self) -> page::SharedTable {
-        self.table[0].read().page_table.clone()
+    pub fn add_vm_object(&self, object: Box<dyn backing::VmRegionObject>) {
+        self.objects.write().push(VmBorderObject::new(object));
     }
 
-    pub fn new_process<
-        I: Iterator<Item = (VmRegion, VmPermissions, String, Box<dyn VmBacking>)>,
-    >(
-        &mut self,
-        regions: I,
-    ) -> Result<Arc<RwLock<VmProcess>>, MemoryError> {
-        let vm_process = Arc::new({
-            let vm_objects = regions
-                .map(|(region, permissions, what, backing)| VmObject {
-                    region,
-                    backing: Some(backing),
-                    permissions,
-                    what,
-                })
-                .collect();
+    pub unsafe fn load_page_tables(&self) -> Result<(), MemoryError> {
+        unsafe { self.page_table.load() }
+    }
 
-            RwLock::new(VmProcess {
-                objects: vm_objects,
-                page_table: self.clone_pages_from_kernel(),
-            })
-        });
+    pub fn map_all_now(&self) -> Result<(), MemoryError> {
+        let mut objects = self.objects.write();
 
-        vm_process.write().map_all_now()?;
-        self.table.push(vm_process.clone());
-        Ok(vm_process)
+        // First load all pages into page tables
+        for b_obj in objects.iter_mut() {
+            let vm_region = b_obj.object.vm_region();
+
+            // Kernel Priv
+            let vm_permissions = VmPermissions::READ | VmPermissions::WRITE;
+
+            for vpage in vm_region.iter_4k() {
+                let ppage = b_obj.object.alloc_phys_anywhere()?;
+                self.page_table.map_4k_page(vpage, ppage, vm_permissions)?;
+                b_obj.mapping.insert(vpage, ppage);
+            }
+        }
+
+        logln!("{}", self.page_table);
+        unsafe { self.page_table.load()? };
+        logln!("{}", self.page_table);
+
+        for b_obj in objects.iter_mut() {
+            let vm_region = b_obj.object.vm_region();
+            let vm_permissions = b_obj.object.vm_permissions();
+
+            for vpage in vm_region.iter_4k() {
+                let ppage = *b_obj.mapping.get(&vpage).ok_or(MemoryError::NotFound)?;
+                b_obj.object.init_page(vpage, ppage)?;
+
+                self.page_table.map_4k_page(vpage, ppage, vm_permissions)?;
+            }
+        }
+
+        unsafe { self.page_table.load() }
+    }
+
+    pub fn dump_page_tables(&self) {
+        logln!("{}", self.page_table);
     }
 }

@@ -42,9 +42,8 @@ use mem::{
     alloc::{KernelAllocator, provide_init_region},
     pmm::Pmm,
     vmm::{
-        KernelRegionKind, VirtPage, VmPermissions, VmRegion, Vmm,
-        backing::{PhysicalBacking, VmBacking},
-        set_virtual_memory_manager,
+        VirtPage, VmPermissions, VmProcess, VmRegion,
+        backing::{KernelVmObject, PhysicalBacking, VmBacking},
     },
 };
 use scheduler::Scheduler;
@@ -91,49 +90,44 @@ fn main(kbh: &KernelBootHeader) {
     mem::pmm::set_physical_memory_manager(pmm);
 
     logln!("Init VirtMemoryManager");
-    let mut vmm = Vmm::new();
-    vmm.init_kernel_process(
-        [
-            (
-                VmRegion {
-                    start: VirtPage::containing_page(kbh.kernel_elf.0),
-                    end: VirtPage::containing_page(kbh.kernel_elf.0 + kbh.kernel_elf.1 as u64),
-                },
-                KernelRegionKind::KernelElf,
-            ),
-            (
-                VmRegion {
-                    start: VirtPage::containing_page(kbh.kernel_exe.0),
-                    end: VirtPage::containing_page(kbh.kernel_exe.0 + kbh.kernel_exe.1 as u64),
-                },
-                KernelRegionKind::KernelExe,
-            ),
-            (
-                VmRegion {
-                    start: VirtPage::containing_page(kbh.kernel_stack.0),
-                    end: VirtPage::containing_page(kbh.kernel_stack.0 + kbh.kernel_stack.1 as u64),
-                },
-                KernelRegionKind::KernelStack,
-            ),
-            (
-                VmRegion {
-                    start: VirtPage::containing_page(kbh.kernel_init_heap.0),
-                    end: VirtPage::containing_page(
-                        kbh.kernel_init_heap.0 + kbh.kernel_init_heap.1 as u64,
-                    ),
-                },
-                KernelRegionKind::KernelHeap,
-            ),
-        ]
-        .into_iter(),
-    )
-    .unwrap();
+    let kernel_process = unsafe { VmProcess::new_from_bootloader() };
 
-    set_virtual_memory_manager(vmm);
+    kernel_process.add_vm_object(KernelVmObject::new_boxed(
+        VmRegion {
+            start: VirtPage::containing_page(kbh.kernel_elf.0),
+            end: VirtPage::containing_page(kbh.kernel_elf.0 + kbh.kernel_elf.1 as u64),
+        },
+        VmPermissions::READ,
+    ));
+    kernel_process.add_vm_object(KernelVmObject::new_boxed(
+        VmRegion {
+            start: VirtPage::containing_page(kbh.kernel_exe.0),
+            end: VirtPage::containing_page(kbh.kernel_exe.0 + kbh.kernel_exe.1 as u64),
+        },
+        VmPermissions::READ | VmPermissions::EXEC,
+    ));
+    kernel_process.add_vm_object(KernelVmObject::new_boxed(
+        VmRegion {
+            start: VirtPage::containing_page(kbh.kernel_stack.0),
+            end: VirtPage::containing_page(kbh.kernel_stack.0 + kbh.kernel_stack.1 as u64),
+        },
+        VmPermissions::READ | VmPermissions::WRITE,
+    ));
+    kernel_process.add_vm_object(KernelVmObject::new_boxed(
+        VmRegion {
+            start: VirtPage::containing_page(kbh.kernel_init_heap.0),
+            end: VirtPage::containing_page(kbh.kernel_init_heap.0 + kbh.kernel_init_heap.1 as u64),
+        },
+        VmPermissions::READ | VmPermissions::WRITE,
+    ));
 
-    let scheduler = Scheduler::new_initfs(unsafe {
-        core::slice::from_raw_parts(kbh.initfs_ptr.0 as *const u8, kbh.initfs_ptr.1)
-    });
+    let mut scheduler = Scheduler::new(kernel_process);
+
+    scheduler
+        .add_initfs(unsafe {
+            core::slice::from_raw_parts(kbh.initfs_ptr.0 as *const u8, kbh.initfs_ptr.1)
+        })
+        .unwrap();
 
     logln!("Finished in {}ms", kernel_ticks());
     // dump_allocator();

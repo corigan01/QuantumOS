@@ -27,7 +27,7 @@ extern crate alloc;
 
 use core::fmt::Debug;
 
-use alloc::{string::String, vec::Vec};
+use alloc::{boxed::Box, string::String, vec::Vec};
 
 use crate::{
     MemoryError,
@@ -163,6 +163,19 @@ pub trait VmRegionObject: Debug {
 pub struct KernelVmObject {
     region: VmRegion,
     permissions: VmPermissions,
+}
+
+impl KernelVmObject {
+    pub const fn new(region: VmRegion, permissions: VmPermissions) -> Self {
+        Self {
+            region,
+            permissions,
+        }
+    }
+
+    pub fn new_boxed(region: VmRegion, permissions: VmPermissions) -> Box<dyn VmRegionObject> {
+        Box::new(Self::new(region, permissions))
+    }
 }
 
 impl VmRegionObject for KernelVmObject {

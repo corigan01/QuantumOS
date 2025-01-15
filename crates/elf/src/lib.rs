@@ -80,7 +80,7 @@ impl<'a> Elf<'a> {
             .ok_or(ElfErrorKind::NotEnoughBytes)
     }
 
-    pub fn exe_size(&self) -> Result<usize> {
+    pub fn vaddr_range(&self) -> Result<(usize, usize)> {
         let mut lowest_addr = u64::MAX;
         let mut highest_addr = 0;
 
@@ -102,6 +102,12 @@ impl<'a> Elf<'a> {
                     highest_addr = highest_addr.max(h.expected_vaddr() + h.in_mem_size() as u64);
                 }),
         }
+
+        Ok((lowest_addr as usize, highest_addr as usize))
+    }
+
+    pub fn exe_size(&self) -> Result<usize> {
+        let (lowest_addr, highest_addr) = self.vaddr_range()?;
 
         if lowest_addr >= highest_addr {
             Ok(0)

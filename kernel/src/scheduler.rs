@@ -27,13 +27,13 @@ use core::alloc::Layout;
 
 use alloc::{alloc::alloc_zeroed, boxed::Box, format, sync::Arc, vec::Vec};
 use elf::{elf_owned::ElfOwned, tables::SegmentKind};
-use lldebug::logln;
+use lldebug::{hexdump::HexPrint, logln};
 use mem::{
+    MemoryError,
     pmm::{PhysPage, use_pmm_mut},
     vmm::{
         VirtPage, VmPermissions, VmProcess, VmRegion,
-        backing::{PhysicalBacking, VmBacking, VmBackingKind},
-        use_vmm_mut,
+        backing::{PhysicalBacking, VmBacking, VmBackingKind, VmRegionObject},
     },
 };
 use spin::RwLock;
@@ -41,13 +41,12 @@ use util::consts::PAGE_4K;
 
 pub struct Process {
     id: usize,
-    loc: ElfOwned,
-    // TODO: We need to have a VmProcess struct that contains the locking logic inside
-    process: Arc<RwLock<VmProcess>>,
+    vm: VmProcess,
 }
 
 pub struct Scheduler {
-    process: Process,
+    kernel: Process,
+    process_list: Vec<Process>,
 }
 
 const EXPECTED_START_ADDR: usize = 0x00400000;
@@ -55,89 +54,96 @@ const EXPECTED_STACK_ADDR: usize = 0x10000000;
 const EXPECTED_STACK_LEN: usize = 4096;
 
 impl Scheduler {
-    pub fn new_initfs(initfs: &[u8]) -> Self {
-        let elf_owned = ElfOwned::new_from_slice(initfs);
-        let elf_regions = elf_owned
-            .elf()
-            .program_headers()
-            .unwrap()
-            .iter()
-            .filter(|h| h.segment_kind() == SegmentKind::Load)
-            .map(|h| {
-                let vm_region = VmRegion::from_vaddr(h.expected_vaddr(), h.in_mem_size());
-                let binary_backed: Box<dyn VmBacking> = Box::new(BinaryBacked::new(
-                    vm_region,
-                    elf_owned.elf().program_header_slice(&h).unwrap().into(),
-                ));
-
-                (
-                    vm_region,
-                    VmPermissions::USER | VmPermissions::EXEC | VmPermissions::READ,
-                    format!("LOAD"),
-                    binary_backed,
-                )
-            });
-
-        // let exe_backing: Box<dyn VmBacking> = Box::new(ElfBacking::new(exe_region, elf_owned));
-        let stack_backing: Box<dyn VmBacking> = Box::new(PhysicalBacking::new());
-
-        let process = use_vmm_mut(|vmm| {
-            vmm.new_process(
-                [(
-                    VmRegion {
-                        start: VirtPage(EXPECTED_STACK_ADDR / PAGE_4K),
-                        end: VirtPage((EXPECTED_STACK_ADDR + EXPECTED_STACK_LEN) / PAGE_4K + 1),
-                    },
-                    VmPermissions::USER | VmPermissions::WRITE | VmPermissions::READ,
-                    format!("init stack"),
-                    stack_backing,
-                )]
-                .into_iter()
-                .chain(elf_regions),
-            )
-        })
-        .unwrap();
-
-        unsafe { process.write().load_page_tables().unwrap() };
-        logln!("INIT Page tables loaded!");
-
-        todo!()
-    }
-}
-
-pub struct BinaryBacked {
-    vm_region: VmRegion,
-    binary: Vec<u8>,
-    pages: Vec<PhysPage>,
-}
-
-impl BinaryBacked {
-    pub fn new(vm_region: VmRegion, binary: Vec<u8>) -> Self {
+    pub fn new(kernel_process: VmProcess) -> Self {
         Self {
-            vm_region,
-            binary,
-            pages: Vec::new(),
+            kernel: Process {
+                id: 0,
+                vm: kernel_process,
+            },
+            process_list: Vec::new(),
         }
     }
+
+    pub fn add_initfs(&mut self, initfs: &[u8]) -> Result<(), MemoryError> {
+        let elf_owned = ElfOwned::new_from_slice(initfs);
+
+        let (vaddr_low, vaddr_hi) = elf_owned
+            .elf()
+            .vaddr_range()
+            .map_err(|_| MemoryError::NotSupported)?;
+
+        let process = VmProcess::new_from(&self.kernel.vm);
+
+        process.add_vm_object(ElfBacked::new_boxed(
+            VmRegion::from_vaddr(vaddr_low as u64, vaddr_hi - vaddr_low),
+            VmPermissions::WRITE | VmPermissions::READ | VmPermissions::USER | VmPermissions::EXEC,
+            elf_owned,
+        ));
+        logln!("Begining map");
+
+        process.map_all_now()
+    }
 }
 
-impl VmBacking for BinaryBacked {
-    fn backing_kind(&self) -> VmBackingKind {
-        VmBackingKind::ElfBackedPhysical
+#[derive(Debug)]
+pub struct ElfBacked {
+    region: VmRegion,
+    permissions: VmPermissions,
+    // TODO: Make this global and ref to it instead of copying it a bunch of times
+    elf: ElfOwned,
+}
+
+impl ElfBacked {
+    pub fn new_boxed(
+        region: VmRegion,
+        permissions: VmPermissions,
+        elf: ElfOwned,
+    ) -> Box<dyn VmRegionObject> {
+        Box::new(Self {
+            region,
+            permissions,
+            elf,
+        })
+    }
+}
+
+impl VmRegionObject for ElfBacked {
+    fn vm_region(&self) -> VmRegion {
+        self.region
     }
 
-    fn alive_physical_pages(&self) -> Result<Vec<PhysPage>, mem::MemoryError> {
-        Ok(self.pages.clone())
+    fn vm_permissions(&self) -> VmPermissions {
+        self.permissions
     }
 
-    fn alloc_anywhere(&mut self, vpage: VirtPage) -> Result<PhysPage, mem::MemoryError> {
-        let phys_page = use_pmm_mut(|pmm| pmm.allocate_page());
-        let inner_offset = (vpage - self.vm_region.start).0 * PAGE_4K;
+    fn init_page(&mut self, vpage: VirtPage, _ppage: PhysPage) -> Result<(), MemoryError> {
+        let header = self
+            .elf
+            .elf()
+            .program_headers()
+            .map_err(|_| MemoryError::DidNotHandleException)?
+            .iter()
+            .filter(|h| h.segment_kind() == SegmentKind::Load)
+            .find(|h| self.region.contains_vaddr(h.expected_vaddr()))
+            .ok_or(MemoryError::NotFound)?;
 
-        todo!()
-    }
+        let elf_buffer = self
+            .elf
+            .elf()
+            .program_header_slice(&header)
+            .map_err(|_| MemoryError::DidNotHandleException)?;
 
-    fn dealloc(&mut self, page: PhysPage) -> Result<(), mem::MemoryError> {
-        todo!()
+        let virtal_slice =
+            unsafe { core::slice::from_raw_parts_mut((vpage.0 * PAGE_4K) as *mut u8, 4096) };
+        let buffer_offset = (vpage - self.region.start).0 * PAGE_4K;
+
+        // This page is within the elf file
+        if elf_buffer.len() >= buffer_offset {
+            let elf_buf = &elf_buffer[buffer_offset..];
+
+            virtal_slice[..elf_buf.len()].copy_from_slice(elf_buf);
+        }
+
+        Ok(())
     }
 }

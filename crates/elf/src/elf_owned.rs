@@ -41,6 +41,7 @@ impl ElfOwned {
 
         let aligned_u8_slice = unsafe { core::slice::from_raw_parts_mut(ptr, elf.len()) };
         aligned_u8_slice.copy_from_slice(elf);
+        unsafe { inner_array.set_len((elf.len() - 1) / 8 + 1) };
 
         Self { array: inner_array }
     }
@@ -55,5 +56,11 @@ impl ElfOwned {
         Elf {
             elf_file: self.as_bytes(),
         }
+    }
+}
+
+impl core::fmt::Debug for ElfOwned {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("ElfOwned").finish_non_exhaustive()
     }
 }

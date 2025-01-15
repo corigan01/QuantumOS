@@ -25,7 +25,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 extern crate alloc;
 
-use core::fmt::Display;
+use core::fmt::{Debug, Display};
 
 use super::{VirtPage, VmPermissions};
 use crate::{MemoryError, pmm::PhysPage};
@@ -1053,3 +1053,9 @@ macro_rules! page_permissions_for {
 }
 
 page_permissions_for! { PageEntry1G, PageEntry2M, PageEntry4K, PageEntryLvl2, PageEntryLvl3, PageEntryLvl4 }
+
+impl Debug for SharedTable {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("SharedTable").finish_non_exhaustive()
+    }
+}
