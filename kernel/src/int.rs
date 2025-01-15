@@ -40,7 +40,7 @@ use lldebug::{log, logln, sync::Mutex};
 static INTERRUPT_TABLE: Mutex<InterruptDescTable> = Mutex::new(InterruptDescTable::new());
 static IRQ_HANDLERS: Mutex<[Option<fn(&InterruptInfo)>; 32]> = Mutex::new([None; 32]);
 
-#[interrupt(0..48)]
+#[interrupt(0..50)]
 fn main_handler(args: InterruptInfo) {
     match args.flags {
         // IRQ
@@ -48,6 +48,9 @@ fn main_handler(args: InterruptInfo) {
             call_attached_irq(irq_num - PIC_IRQ_OFFSET, &args);
             unsafe { pic_eoi(irq_num - PIC_IRQ_OFFSET) };
         }
+        InterruptFlags::Irq(irq_num) if irq_num == 49 => unsafe {
+            task_start();
+        },
         InterruptFlags::Debug => (),
         exception => {
             panic!("UNHANDLED FAULT\n{:#016x?}", args)
@@ -104,7 +107,8 @@ pub fn attach_syscall() {
     gate.set_privilege(arch::CpuPrivilege::Ring3);
     gate.set_offset(syscall_entry as u64);
     gate.set_gate_kind(arch::idt64::GateKind::InterruptGate);
-    gate.set_code_segment(Segment::new(3, arch::CpuPrivilege::Ring3));
+    gate.set_code_segment(Segment::new(1, arch::CpuPrivilege::Ring0));
+    // gate.set_code_segment(Segment::new(3, arch::CpuPrivilege::Ring3));
 
     idt.attach_raw(0x80, gate);
     unsafe { idt.submit_table().load() };
@@ -127,7 +131,7 @@ unsafe extern "C" {
 
 #[unsafe(no_mangle)]
 extern "C" fn syscall_handler() {
-    todo!()
+    logln!("Hello from userspace!");
 }
 
 global_asm!(
@@ -170,7 +174,6 @@ global_asm!(
     r#"
     .global task_start
     task_start:
-        cli
         # Save our state to the stack
         push rax
         push rbx

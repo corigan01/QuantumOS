@@ -191,6 +191,7 @@ impl TaskStateSegmentPtr {
         task.set_base(tss as *const _ as u64);
         task.set_limit(size_of::<crate::tss64::TaskStateSegment>() as u32);
 
+        task.set_accessed_flag(true);
         task.set_present_flag(true);
         task.set_code_segment_flag(true);
         task.set_accessed_flag(true);

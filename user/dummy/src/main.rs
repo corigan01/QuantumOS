@@ -50,4 +50,5 @@ extern "C" fn _start() {
     unsafe {
         test_syscall();
     }
+    loop {}
 }

@@ -73,7 +73,8 @@ fn main(kbh: &KernelBootHeader) {
     );
 
     gdt::init_kernel_gdt();
-    gdt::set_stack_for_privl(0x200000000000 as *mut u8, Ring0);
+    // gdt::set_stack_for_privl(0x200000000000 as *mut u8, Ring0);
+    gdt::set_stack_for_privl(0x3000 as *mut u8, Ring0);
     unsafe { gdt::load_tss() };
     int::attach_interrupts();
     int::attach_syscall();
@@ -136,9 +137,8 @@ fn main(kbh: &KernelBootHeader) {
         })
         .unwrap();
 
-    unsafe {
-        task_start();
-    }
+    logln!("Attempting to jump to userspace!");
+    unsafe { core::arch::asm!("int 0x31") };
     loop {}
 
     logln!("Finished in {}ms", kernel_ticks());
