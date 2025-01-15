@@ -95,7 +95,7 @@ impl TaskStateSegment {
 
     pub fn set_stack_for_priv(&mut self, rsp: *mut u8, privl: CpuPrivilege) {
         let addr_lo = (rsp.addr() & 0xFFFFFFFF) as u32;
-        let addr_hi = (rsp.addr() >> 32 & 0xFFFFFFFF) as u32;
+        let addr_hi = ((rsp.addr() as u64 >> 32) & 0xFFFFFFFF) as u32;
 
         match privl {
             CpuPrivilege::Ring0 => {
@@ -116,7 +116,7 @@ impl TaskStateSegment {
 
     pub fn set_stack_for_ist(&mut self, rsp: *mut u8, ist_id: usize) {
         let addr_lo = (rsp.addr() & 0xFFFFFFFF) as u32;
-        let addr_hi = (rsp.addr() >> 32 & 0xFFFFFFFF) as u32;
+        let addr_hi = ((rsp.addr() as u64 >> 32) & 0xFFFFFFFF) as u32;
 
         match ist_id {
             0 => {

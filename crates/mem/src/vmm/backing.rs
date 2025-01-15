@@ -146,6 +146,10 @@ pub trait VmRegionObject: Debug {
         use_pmm_mut(|pmm| pmm.free_page(ppage))
     }
 
+    fn special_region(&self) -> bool {
+        false
+    }
+
     /// Init this page's memory region
     ///
     /// Order of operations:
@@ -163,24 +167,34 @@ pub trait VmRegionObject: Debug {
 pub struct KernelVmObject {
     region: VmRegion,
     permissions: VmPermissions,
+    special_region: bool,
 }
 
 impl KernelVmObject {
-    pub const fn new(region: VmRegion, permissions: VmPermissions) -> Self {
+    pub const fn new(region: VmRegion, permissions: VmPermissions, special_region: bool) -> Self {
         Self {
             region,
             permissions,
+            special_region,
         }
     }
 
-    pub fn new_boxed(region: VmRegion, permissions: VmPermissions) -> Box<dyn VmRegionObject> {
-        Box::new(Self::new(region, permissions))
+    pub fn new_boxed(
+        region: VmRegion,
+        permissions: VmPermissions,
+        special_region: bool,
+    ) -> Box<dyn VmRegionObject> {
+        Box::new(Self::new(region, permissions, special_region))
     }
 }
 
 impl VmRegionObject for KernelVmObject {
     fn vm_region(&self) -> VmRegion {
         self.region
+    }
+
+    fn special_region(&self) -> bool {
+        self.special_region
     }
 
     fn vm_permissions(&self) -> VmPermissions {

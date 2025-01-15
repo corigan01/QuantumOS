@@ -36,8 +36,10 @@ mod scheduler;
 mod timer;
 extern crate alloc;
 
+use arch::CpuPrivilege::Ring0;
 use bootloader::KernelBootHeader;
-use lldebug::{debug_ready, hexdump::HexPrint, logln, make_debug};
+use int::task_start;
+use lldebug::{debug_ready, logln, make_debug};
 use mem::{
     alloc::{KernelAllocator, provide_init_region},
     pmm::Pmm,
@@ -71,7 +73,10 @@ fn main(kbh: &KernelBootHeader) {
     );
 
     gdt::init_kernel_gdt();
+    gdt::set_stack_for_privl(0x200000000000 as *mut u8, Ring0);
+    unsafe { gdt::load_tss() };
     int::attach_interrupts();
+    int::attach_syscall();
     int::enable_pic();
     timer::init_timer();
 
@@ -96,6 +101,7 @@ fn main(kbh: &KernelBootHeader) {
             end: VirtPage::containing_page(kbh.kernel_elf.0 + kbh.kernel_elf.1 as u64),
         },
         VmPermissions::READ,
+        true,
     ));
     kernel_process.add_vm_object(KernelVmObject::new_boxed(
         VmRegion {
@@ -103,6 +109,7 @@ fn main(kbh: &KernelBootHeader) {
             end: VirtPage::containing_page(kbh.kernel_exe.0 + kbh.kernel_exe.1 as u64),
         },
         VmPermissions::READ | VmPermissions::EXEC,
+        true,
     ));
     kernel_process.add_vm_object(KernelVmObject::new_boxed(
         VmRegion {
@@ -110,6 +117,7 @@ fn main(kbh: &KernelBootHeader) {
             end: VirtPage::containing_page(kbh.kernel_stack.0 + kbh.kernel_stack.1 as u64),
         },
         VmPermissions::READ | VmPermissions::WRITE,
+        true,
     ));
     kernel_process.add_vm_object(KernelVmObject::new_boxed(
         VmRegion {
@@ -117,6 +125,7 @@ fn main(kbh: &KernelBootHeader) {
             end: VirtPage::containing_page(kbh.kernel_init_heap.0 + kbh.kernel_init_heap.1 as u64),
         },
         VmPermissions::READ | VmPermissions::WRITE,
+        true,
     ));
 
     let mut scheduler = Scheduler::new(kernel_process);
@@ -126,6 +135,11 @@ fn main(kbh: &KernelBootHeader) {
             core::slice::from_raw_parts(kbh.initfs_ptr.0 as *const u8, kbh.initfs_ptr.1)
         })
         .unwrap();
+
+    unsafe {
+        task_start();
+    }
+    loop {}
 
     logln!("Finished in {}ms", kernel_ticks());
 }

@@ -189,7 +189,7 @@ impl TaskStateSegmentPtr {
     pub fn new(tss: &'static crate::tss64::TaskStateSegment) -> Self {
         let mut task = Self(0);
         task.set_base(tss as *const _ as u64);
-        task.set_limit((size_of::<crate::tss64::TaskStateSegment>() - 1) as u32);
+        task.set_limit(size_of::<crate::tss64::TaskStateSegment>() as u32);
 
         task.set_present_flag(true);
         task.set_code_segment_flag(true);

@@ -29,9 +29,12 @@ use lldebug::logln;
 use mem::{
     MemoryError,
     pmm::PhysPage,
-    vmm::{VirtPage, VmPermissions, VmProcess, VmRegion, backing::VmRegionObject},
+    vmm::{
+        VirtPage, VmPermissions, VmProcess, VmRegion,
+        backing::{KernelVmObject, VmRegionObject},
+    },
 };
-use util::consts::PAGE_4K;
+use util::consts::{PAGE_2M, PAGE_4K};
 
 pub struct Process {
     id: usize,
@@ -47,6 +50,8 @@ const EXPECTED_START_ADDR: usize = 0x00400000;
 const EXPECTED_STACK_ADDR: usize = 0x10000000;
 const EXPECTED_STACK_LEN: usize = 4096;
 
+const KERNEL_HANDLER_RSP: usize = 0x200000000000;
+
 impl Scheduler {
     pub fn new(kernel_process: VmProcess) -> Self {
         Self {
@@ -60,6 +65,17 @@ impl Scheduler {
 
     pub fn add_initfs(&mut self, initfs: &[u8]) -> Result<(), MemoryError> {
         let elf_owned = ElfOwned::new_from_slice(initfs);
+
+        // Kernel Process Stack
+        self.kernel.vm.add_vm_object(KernelVmObject::new_boxed(
+            VmRegion {
+                start: VirtPage::containing_page(KERNEL_HANDLER_RSP as u64),
+                end: VirtPage::containing_page((KERNEL_HANDLER_RSP + PAGE_2M) as u64),
+            },
+            VmPermissions::READ | VmPermissions::WRITE,
+            false,
+        ));
+        self.kernel.vm.map_all_now()?;
 
         let (vaddr_low, vaddr_hi) = elf_owned
             .elf()

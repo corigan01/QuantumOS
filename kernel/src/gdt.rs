@@ -23,10 +23,15 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use arch::gdt::{CodeSegmentDesc, DataSegmentDesc, GlobalDescriptorTable, TaskStateSegmentPtr};
+use arch::{
+    CpuPrivilege,
+    gdt::{CodeSegmentDesc, DataSegmentDesc, GlobalDescriptorTable, TaskStateSegmentPtr},
+    tss64::TaskStateSegment,
+};
 use spin::RwLock;
 
 static KERNEL_GDT: RwLock<GlobalDescriptorTable<7>> = RwLock::new(GlobalDescriptorTable::new());
+static KERNEL_TSS: RwLock<TaskStateSegment> = RwLock::new(TaskStateSegment::new());
 
 pub fn init_kernel_gdt() {
     let mut gdt = GlobalDescriptorTable::new();
@@ -62,7 +67,10 @@ pub fn init_kernel_gdt() {
             .set_writable_flag(true)
             .set_privilege_level(3),
     );
-    // gdt.store_tss(5, TaskStateSegmentPtr::new(todo!()));
+    gdt.store_tss(
+        5,
+        TaskStateSegmentPtr::new(unsafe { &*KERNEL_TSS.as_mut_ptr() }),
+    );
 
     *KERNEL_GDT.write() = gdt;
     unsafe { load_gdt() };
@@ -70,4 +78,17 @@ pub fn init_kernel_gdt() {
 
 pub unsafe fn load_gdt() {
     unsafe { (&mut *KERNEL_GDT.as_mut_ptr()).pack().load() };
+}
+
+pub fn set_stack_for_privl(rsp: *mut u8, cpu_privl: CpuPrivilege) {
+    KERNEL_TSS.write().set_stack_for_priv(rsp, cpu_privl);
+}
+
+pub fn set_tss_for_interrupt(rsp: *mut u8, ist_id: usize) {
+    KERNEL_TSS.write().set_stack_for_ist(rsp, ist_id);
+}
+
+pub unsafe fn load_tss() {
+    // TODO: Make this dynamic so that the TSS can be refrenced
+    unsafe { core::arch::asm!("mov ax, 0x28", "ltr ax",) }
 }

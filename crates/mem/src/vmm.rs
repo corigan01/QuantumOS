@@ -293,11 +293,25 @@ impl VmProcess {
         unsafe { self.page_table.load() }
     }
 
+    // TODO: Make this random, right now this just returns the highest unused page
+    fn find_free_vm_page(&self) -> Result<VirtPage, MemoryError> {
+        self.objects
+            .read()
+            .iter()
+            .map(|region| region.object.vm_region().end)
+            .max()
+            .ok_or(MemoryError::NotFound)
+    }
+
     pub fn map_all_now(&self) -> Result<(), MemoryError> {
         let mut objects = self.objects.write();
 
         // First load all pages into page tables
         for b_obj in objects.iter_mut() {
+            if b_obj.object.special_region() {
+                continue;
+            }
+
             let vm_region = b_obj.object.vm_region();
 
             // Kernel Priv
@@ -313,6 +327,10 @@ impl VmProcess {
         unsafe { self.page_table.load()? };
 
         for b_obj in objects.iter_mut() {
+            if b_obj.object.special_region() {
+                continue;
+            }
+
             let vm_region = b_obj.object.vm_region();
             let vm_permissions = b_obj.object.vm_permissions();
 

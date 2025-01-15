@@ -23,20 +23,24 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use core::arch::global_asm;
+
 use arch::{
     attach_irq, critcal_section,
     idt64::{
-        ExceptionKind, InterruptDescTable, InterruptFlags, InterruptInfo, fire_debug_int, interrupt,
+        ExceptionKind, GateDescriptor, InterruptDescTable, InterruptFlags, InterruptInfo,
+        fire_debug_int, interrupt,
     },
     interrupts::enable_interrupts,
     pic8259::{pic_eoi, pic_remap},
+    registers::Segment,
 };
 use lldebug::{log, logln, sync::Mutex};
 
 static INTERRUPT_TABLE: Mutex<InterruptDescTable> = Mutex::new(InterruptDescTable::new());
 static IRQ_HANDLERS: Mutex<[Option<fn(&InterruptInfo)>; 32]> = Mutex::new([None; 32]);
 
-#[interrupt(0..256)]
+#[interrupt(0..48)]
 fn main_handler(args: InterruptInfo) {
     match args.flags {
         // IRQ
@@ -91,6 +95,22 @@ pub fn attach_interrupts() {
     logln!("OK");
 }
 
+pub fn attach_syscall() {
+    let mut idt = INTERRUPT_TABLE.lock();
+    logln!("Attaching Syscalls...");
+
+    let mut gate = GateDescriptor::zero();
+    gate.set_present_flag(true);
+    gate.set_privilege(arch::CpuPrivilege::Ring3);
+    gate.set_offset(syscall_entry as u64);
+    gate.set_gate_kind(arch::idt64::GateKind::InterruptGate);
+    gate.set_code_segment(Segment::new(3, arch::CpuPrivilege::Ring3));
+
+    idt.attach_raw(0x80, gate);
+    unsafe { idt.submit_table().load() };
+    logln!("Syscall attached!");
+}
+
 const PIC_IRQ_OFFSET: u8 = 0x20;
 
 pub fn enable_pic() {
@@ -99,3 +119,104 @@ pub fn enable_pic() {
         enable_interrupts();
     }
 }
+
+unsafe extern "C" {
+    fn syscall_entry();
+    pub fn task_start();
+}
+
+#[unsafe(no_mangle)]
+extern "C" fn syscall_handler() {
+    todo!()
+}
+
+global_asm!(
+    r#"
+    syscall_entry:
+        cli
+        push rbx
+        push rcx
+        push rdx
+        push rsi
+        push rdi
+        push rbp
+        push r8
+        push r9
+        push r10
+        push r11
+        push r12
+        push r13
+        push r14
+        push r15
+        call syscall_handler
+        pop r15
+        pop r14
+        pop r13
+        pop r12
+        pop r11
+        pop r10
+        pop r9
+        pop r8
+        pop rbp
+        pop rdi
+        pop rsi
+        pop rdx
+        pop rcx
+        pop rbx
+        iretq"#
+);
+
+global_asm!(
+    r#"
+    .global task_start
+    task_start:
+        cli
+        # Save our state to the stack
+        push rax
+        push rbx
+        push rcx
+        push rdx
+        push rsi
+        push rdi
+        push rbp
+        push r8
+        push r9
+        push r10
+        push r11
+        push r12
+        push r13
+        push r14
+        push r15
+
+        #errno
+        push 0
+        # interrupt stack
+        push 0x23
+        mov rax, 0x200000000000 
+        push rax
+        # rflags
+        push 0x200
+        # Code segment
+        push 0x1b
+
+        # Task Entry Point
+        mov rax, 0x00000000200000
+        push rax
+
+        # Init UE with zeroed registers
+        xor rax, rax
+        xor rbx, rbx
+        xor rcx, rcx
+        xor rdx, rdx
+        xor rbp, rbp
+        xor r8, r8
+        xor r9, r9
+        xor r10, r10
+        xor r11, r11
+        xor r12, r12
+        xor r13, r13
+        xor r14, r14
+        xor r15, r15
+        iretq
+    "#
+);
