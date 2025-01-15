@@ -269,9 +269,12 @@ pub struct VmProcess {
 
 impl VmProcess {
     pub unsafe fn new_from_bootloader() -> Self {
+        let page_table = unsafe { page::SharedTable::new_from_bootloader() };
+        unsafe { page_table.load().unwrap() };
+
         Self {
             objects: RwLock::new(Vec::new()),
-            page_table: unsafe { page::SharedTable::new_from_bootloader() },
+            page_table,
         }
     }
 
@@ -307,9 +310,7 @@ impl VmProcess {
             }
         }
 
-        logln!("{}", self.page_table);
         unsafe { self.page_table.load()? };
-        logln!("{}", self.page_table);
 
         for b_obj in objects.iter_mut() {
             let vm_region = b_obj.object.vm_region();

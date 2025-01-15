@@ -29,6 +29,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #![feature(abi_x86_interrupt)]
 #![feature(allocator_api)]
 
+mod gdt;
 mod int;
 mod panic;
 mod scheduler;
@@ -73,6 +74,7 @@ fn main(kbh: &KernelBootHeader) {
         HumanBytes::from(kbh.phys_mem_map.bytes_of(mem::phys::PhysMemoryKind::Free))
     );
 
+    gdt::init_kernel_gdt();
     int::attach_interrupts();
     int::enable_pic();
     timer::init_timer();

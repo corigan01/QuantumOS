@@ -34,6 +34,7 @@ use arch::paging64::{
     PageEntry1G, PageEntry2M, PageEntry4K, PageEntryLvl2, PageEntryLvl3, PageEntryLvl4,
     PageMapLvl1, PageMapLvl2, PageMapLvl3, PageMapLvl4,
 };
+use lldebug::logln;
 use spin::RwLock;
 use util::consts::{PAGE_1G, PAGE_2M, PAGE_4K};
 
@@ -42,7 +43,7 @@ static CURRENTLY_LOADED_TABLE: SharedTable = SharedTable::empty();
 pub fn virt_to_phys(virt: u64) -> Option<u64> {
     match CURRENTLY_LOADED_TABLE.virt_to_phys(virt) {
         Ok(virt) => Some(virt),
-        Err(MemoryError::EmptySegment) | Err(MemoryError::AlreadyUsed) => {
+        Err(MemoryError::EmptySegment) => {
             // FIXME: This is just hardcoded for now, but should be populated from the bootloader!!!!
             //
             // Since we know the bootloader is identity mapped, the physical PTRs are valid virtual PTRs!
@@ -174,23 +175,23 @@ impl SharedTable {
         match &*lvl4 {
             SharedState::NotPresent => Err(MemoryError::EmptySegment),
             SharedState::OwnedTable(rw_lock) | SharedState::RefTable(rw_lock) => {
-                let lvl4 = rw_lock.read();
+                let lvl4 = unsafe { &mut *rw_lock.as_mut_ptr() };
                 let shared_state = &lvl4.vm_table[lvl4_index];
                 match shared_state {
                     SharedState::NotPresent => Err(MemoryError::NotFound),
                     SharedState::OwnedTable(rw_lock) | SharedState::RefTable(rw_lock) => {
-                        let lvl3 = rw_lock.read();
+                        let lvl3 = unsafe { &mut *rw_lock.as_mut_ptr() };
                         let shared_state = &lvl3.vm_table[lvl3_index];
                         match shared_state {
                             SharedState::NotPresent => Err(MemoryError::NotFound),
                             SharedState::OwnedTable(rw_lock) | SharedState::RefTable(rw_lock) => {
-                                let lvl2 = rw_lock.read();
+                                let lvl2 = unsafe { &mut *rw_lock.as_mut_ptr() };
                                 let shared_state = &lvl2.vm_table[lvl2_index];
                                 match shared_state {
                                     SharedState::NotPresent => Err(MemoryError::NotFound),
                                     SharedState::OwnedTable(rw_lock)
                                     | SharedState::RefTable(rw_lock) => {
-                                        let lvl1 = rw_lock.read();
+                                        let lvl1 = unsafe { &mut *rw_lock.as_mut_ptr() };
                                         let shared_state = lvl1.phys_table.get(lvl1_index);
 
                                         if shared_state.is_present_set() {
@@ -225,12 +226,13 @@ impl SharedTable {
             return Ok(());
         }
 
-        match self.state.read().clone() {
+        let new_state = (&*self.state.read()).clone();
+        match new_state {
             SharedState::RefTable(our_table) | SharedState::OwnedTable(our_table) => {
-                let mut global_table = CURRENTLY_LOADED_TABLE.state.write();
-
                 let table_vptr = our_table.read().phys_table.table_ptr();
                 let phys_ptr = virt_to_phys(table_vptr).ok_or(MemoryError::InvalidPageTable)?;
+
+                let mut global_table = CURRENTLY_LOADED_TABLE.state.write();
 
                 *global_table = SharedState::RefTable(our_table);
                 unsafe { arch::registers::cr3::set_page_directory_base_register(phys_ptr) };
@@ -380,9 +382,9 @@ impl SharedTable {
                         lvl2_entry.add_permissions_from(permissions);
 
                         lvl1.link_page(vpage, ppage, permissions);
-                    })
-                })
-            })
+                    });
+                });
+            });
         });
 
         Ok(())
@@ -535,9 +537,10 @@ impl SharedLvl4 {
 
                 let mut writeable = new_entry.write();
                 let ret = func(&mut *writeable, &mut entry);
+                let write_ptr = writeable.phys_table.table_ptr();
+
                 entry.set_next_entry_phy_address(
-                    virt_to_phys(writeable.phys_table.table_ptr())
-                        .expect("Cannot locate the physical ptr of page table!"),
+                    virt_to_phys(write_ptr).expect("Cannot locate the physical ptr of page table!"),
                 );
 
                 ret
@@ -545,9 +548,10 @@ impl SharedLvl4 {
             SharedState::OwnedTable(ref rw_lock) => {
                 let mut writeable = rw_lock.write();
                 let ret = func(&mut *writeable, &mut entry);
+                let write_ptr = writeable.phys_table.table_ptr();
+
                 entry.set_next_entry_phy_address(
-                    virt_to_phys(writeable.phys_table.table_ptr())
-                        .expect("Cannot locate the physical ptr of page table!"),
+                    virt_to_phys(write_ptr).expect("Cannot locate the physical ptr of page table!"),
                 );
 
                 ret
@@ -562,9 +566,10 @@ impl SharedLvl4 {
                 }));
 
                 let ret = func(&mut *writeable.write(), &mut entry);
+                let write_ptr = writeable.read().phys_table.table_ptr();
+
                 entry.set_next_entry_phy_address(
-                    virt_to_phys(writeable.read().phys_table.table_ptr())
-                        .expect("Cannot locate the physical ptr of page table!"),
+                    virt_to_phys(write_ptr).expect("Cannot locate the physical ptr of page table!"),
                 );
 
                 self.vm_table[index] = SharedState::OwnedTable(writeable);
@@ -590,27 +595,6 @@ impl SharedLvl3 {
         Self {
             phys_table: PageMapLvl3::new(),
             vm_table: [const { SharedState::NotPresent }; 512],
-        }
-    }
-
-    fn upgrade_entry(&mut self, entry: usize) {
-        let state = &mut self.vm_table[entry];
-
-        match state {
-            SharedState::NotPresent => {
-                // Make a new table
-                *state = SharedState::OwnedTable(Arc::new(RwLock::new(SharedLvl2::new())));
-            }
-            SharedState::RefTable(rw_lock) => {
-                let table = rw_lock.clone();
-                let inner_table = table.read();
-
-                *state = SharedState::OwnedTable(Arc::new(RwLock::new(SharedLvl2 {
-                    phys_table: inner_table.phys_table.clone(),
-                    vm_table: inner_table.vm_table.clone(),
-                })));
-            }
-            _ => (),
         }
     }
 
@@ -668,9 +652,10 @@ impl SharedLvl3 {
 
                 let mut writeable = new_entry.write();
                 let ret = func(&mut *writeable, &mut entry);
+                let write_ptr = writeable.phys_table.table_ptr();
+
                 entry.set_next_entry_phy_address(
-                    virt_to_phys(writeable.phys_table.table_ptr())
-                        .expect("Cannot locate the physical ptr of page table!"),
+                    virt_to_phys(write_ptr).expect("Cannot locate the physical ptr of page table!"),
                 );
 
                 ret
@@ -678,26 +663,31 @@ impl SharedLvl3 {
             SharedState::OwnedTable(ref rw_lock) => {
                 let mut writeable = rw_lock.write();
                 let ret = func(&mut *writeable, &mut entry);
+                let write_ptr = writeable.phys_table.table_ptr();
+
                 entry.set_next_entry_phy_address(
-                    virt_to_phys(writeable.phys_table.table_ptr())
-                        .expect("Cannot locate the physical ptr of page table!"),
+                    virt_to_phys(write_ptr).expect("Cannot locate the physical ptr of page table!"),
                 );
 
                 ret
             }
-            SharedState::RefTable(_) => {
-                self.upgrade_entry(index);
+            SharedState::RefTable(ref rw_lock) => {
+                let table = rw_lock.clone();
+                let inner_table = table.read();
 
-                let SharedState::OwnedTable(ref table) = self.vm_table[index] else {
-                    panic!("Upgraded table, but table is not owned!");
-                };
+                let writeable = Arc::new(RwLock::new(SharedLvl2 {
+                    phys_table: inner_table.phys_table.clone(),
+                    vm_table: inner_table.vm_table.clone(),
+                }));
 
-                let mut writeable = table.write();
-                let ret = func(&mut *writeable, &mut entry);
+                let ret = func(&mut *writeable.write(), &mut entry);
+                let write_ptr = writeable.read().phys_table.table_ptr();
+
                 entry.set_next_entry_phy_address(
-                    virt_to_phys(writeable.phys_table.table_ptr())
-                        .expect("Cannot locate the physical ptr of page table!"),
+                    virt_to_phys(write_ptr).expect("Cannot locate the physical ptr of page table!"),
                 );
+
+                self.vm_table[index] = SharedState::OwnedTable(writeable);
 
                 ret
             }
@@ -717,26 +707,6 @@ impl SharedLvl2 {
         Self {
             phys_table: PageMapLvl2::new(),
             vm_table: [const { SharedState::NotPresent }; 512],
-        }
-    }
-
-    fn upgrade_entry(&mut self, entry: usize) {
-        let state = &mut self.vm_table[entry];
-
-        match state {
-            SharedState::NotPresent => {
-                // Make a new table
-                *state = SharedState::OwnedTable(Arc::new(RwLock::new(SharedLvl1::new())));
-            }
-            SharedState::RefTable(rw_lock) => {
-                let table = rw_lock.clone();
-                let inner_table = table.read();
-
-                *state = SharedState::OwnedTable(Arc::new(RwLock::new(SharedLvl1 {
-                    phys_table: inner_table.phys_table.clone(),
-                })));
-            }
-            _ => (),
         }
     }
 
@@ -795,9 +765,10 @@ impl SharedLvl2 {
 
                 let mut writeable = new_entry.write();
                 let ret = func(&mut *writeable, &mut entry);
+                let write_ptr = writeable.phys_table.table_ptr();
+
                 entry.set_next_entry_phy_address(
-                    virt_to_phys(writeable.phys_table.table_ptr())
-                        .expect("Cannot locate the physical ptr of page table!"),
+                    virt_to_phys(write_ptr).expect("Cannot locate the physical ptr of page table!"),
                 );
 
                 ret
@@ -805,26 +776,30 @@ impl SharedLvl2 {
             SharedState::OwnedTable(ref rw_lock) => {
                 let mut writeable = rw_lock.write();
                 let ret = func(&mut *writeable, &mut entry);
+                let write_ptr = writeable.phys_table.table_ptr();
+
                 entry.set_next_entry_phy_address(
-                    virt_to_phys(writeable.phys_table.table_ptr())
-                        .expect("Cannot locate the physical ptr of page table!"),
+                    virt_to_phys(write_ptr).expect("Cannot locate the physical ptr of page table!"),
                 );
 
                 ret
             }
-            SharedState::RefTable(_) => {
-                self.upgrade_entry(index);
+            SharedState::RefTable(ref rw_lock) => {
+                let table = rw_lock.clone();
+                let inner_table = table.read();
 
-                let SharedState::OwnedTable(ref table) = self.vm_table[index] else {
-                    panic!("Upgraded table, but table is not owned!");
-                };
+                let writeable = Arc::new(RwLock::new(SharedLvl1 {
+                    phys_table: inner_table.phys_table.clone(),
+                }));
 
-                let mut writeable = table.write();
-                let ret = func(&mut *writeable, &mut entry);
+                let ret = func(&mut *writeable.write(), &mut entry);
+                let write_ptr = writeable.read().phys_table.table_ptr();
+
                 entry.set_next_entry_phy_address(
-                    virt_to_phys(writeable.phys_table.table_ptr())
-                        .expect("Cannot locate the physical ptr of page table!"),
+                    virt_to_phys(write_ptr).expect("Cannot locate the physical ptr of page table!"),
                 );
+
+                self.vm_table[index] = SharedState::OwnedTable(writeable);
 
                 ret
             }

@@ -79,7 +79,6 @@ impl Scheduler {
             VmPermissions::WRITE | VmPermissions::READ | VmPermissions::USER | VmPermissions::EXEC,
             elf_owned,
         ));
-        logln!("Begining map");
 
         process.map_all_now()
     }
