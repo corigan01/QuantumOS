@@ -36,16 +36,12 @@ mod scheduler;
 mod timer;
 extern crate alloc;
 
-use alloc::{boxed::Box, format};
 use bootloader::KernelBootHeader;
 use lldebug::{debug_ready, hexdump::HexPrint, logln, make_debug};
 use mem::{
     alloc::{KernelAllocator, provide_init_region},
     pmm::Pmm,
-    vmm::{
-        VirtPage, VmPermissions, VmProcess, VmRegion,
-        backing::{KernelVmObject, PhysicalBacking, VmBacking},
-    },
+    vmm::{VirtPage, VmPermissions, VmProcess, VmRegion, backing::KernelVmObject},
 };
 use scheduler::Scheduler;
 use serial::{Serial, baud::SerialBaud};
@@ -132,5 +128,4 @@ fn main(kbh: &KernelBootHeader) {
         .unwrap();
 
     logln!("Finished in {}ms", kernel_ticks());
-    // dump_allocator();
 }

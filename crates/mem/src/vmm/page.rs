@@ -34,7 +34,6 @@ use arch::paging64::{
     PageEntry1G, PageEntry2M, PageEntry4K, PageEntryLvl2, PageEntryLvl3, PageEntryLvl4,
     PageMapLvl1, PageMapLvl2, PageMapLvl3, PageMapLvl4,
 };
-use lldebug::logln;
 use spin::RwLock;
 use util::consts::{PAGE_1G, PAGE_2M, PAGE_4K};
 
@@ -999,7 +998,7 @@ impl Display for SharedLvl1 {
 }
 
 pub trait PagePermissions {
-    fn reduce_permissions_to(&mut self, permissions: VmPermissions);
+    fn _reduce_permissions_to(&mut self, permissions: VmPermissions);
     fn add_permissions_from(&mut self, permissions: VmPermissions);
 }
 
@@ -1007,7 +1006,7 @@ macro_rules! page_permissions_for {
     ($($ty:ty),*) => {
         $(
             impl PagePermissions for $ty {
-                fn reduce_permissions_to(&mut self, permissions: VmPermissions) {
+                fn _reduce_permissions_to(&mut self, permissions: VmPermissions) {
                     self.set_present_flag(permissions.is_read_set());
                     self.set_read_write_flag(permissions.is_write_set());
                     self.set_user_access_flag(permissions.is_user_set());

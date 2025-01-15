@@ -23,20 +23,14 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use core::alloc::Layout;
-
-use alloc::{alloc::alloc_zeroed, boxed::Box, format, sync::Arc, vec::Vec};
+use alloc::{boxed::Box, vec::Vec};
 use elf::{elf_owned::ElfOwned, tables::SegmentKind};
-use lldebug::{hexdump::HexPrint, logln};
+use lldebug::logln;
 use mem::{
     MemoryError,
-    pmm::{PhysPage, use_pmm_mut},
-    vmm::{
-        VirtPage, VmPermissions, VmProcess, VmRegion,
-        backing::{PhysicalBacking, VmBacking, VmBackingKind, VmRegionObject},
-    },
+    pmm::PhysPage,
+    vmm::{VirtPage, VmPermissions, VmProcess, VmRegion, backing::VmRegionObject},
 };
-use spin::RwLock;
 use util::consts::PAGE_4K;
 
 pub struct Process {
@@ -73,6 +67,7 @@ impl Scheduler {
             .map_err(|_| MemoryError::NotSupported)?;
 
         let process = VmProcess::new_from(&self.kernel.vm);
+        logln!("Initfs loading to : V{:#016x}", vaddr_low);
 
         process.add_vm_object(ElfBacked::new_boxed(
             VmRegion::from_vaddr(vaddr_low as u64, vaddr_hi - vaddr_low),

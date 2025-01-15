@@ -33,6 +33,7 @@ pub mod paging64;
 pub mod pic8259;
 pub mod pit825x;
 pub mod registers;
+pub mod tss64;
 
 pub mod interrupts {
     #[inline(always)]
