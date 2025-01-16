@@ -26,7 +26,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 use core::arch::global_asm;
 
 use arch::{
-    attach_irq, critcal_section,
+    CpuPrivilege, attach_irq, critcal_section,
     idt64::{
         ExceptionKind, GateDescriptor, InterruptDescTable, InterruptFlags, InterruptInfo,
         fire_debug_int, interrupt,
@@ -35,13 +35,13 @@ use arch::{
     pic8259::{pic_eoi, pic_remap},
     registers::Segment,
 };
-use lldebug::{log, logln, sync::Mutex};
+use lldebug::{log, logln, sync::Mutex, warnln};
 
 static INTERRUPT_TABLE: Mutex<InterruptDescTable> = Mutex::new(InterruptDescTable::new());
 static IRQ_HANDLERS: Mutex<[Option<fn(&InterruptInfo)>; 32]> = Mutex::new([None; 32]);
 
 #[interrupt(0..50)]
-fn main_handler(args: InterruptInfo) {
+fn exception_handler(args: InterruptInfo) {
     match args.flags {
         // IRQ
         InterruptFlags::Irq(irq_num) if irq_num - PIC_IRQ_OFFSET <= 16 => {
@@ -86,9 +86,10 @@ pub fn attach_irq_handler(handler_fn: fn(&InterruptInfo), irq: u8) {
     }
 }
 
+/// Attach the main 'exception handler' function to the IDT
 pub fn attach_interrupts() {
     let mut idt = INTERRUPT_TABLE.lock();
-    attach_irq!(idt, main_handler);
+    attach_irq!(idt, exception_handler);
     unsafe { idt.submit_table().load() };
 
     logln!("Attached Interrupts!");
@@ -98,25 +99,43 @@ pub fn attach_interrupts() {
     logln!("OK");
 }
 
+/// Attach the main 'syscall' entrypoint handler to the IDT
 pub fn attach_syscall() {
     let mut idt = INTERRUPT_TABLE.lock();
     logln!("Attaching Syscalls...");
 
+    // Attach the old 'int 0x80' syscall handler
     let mut gate = GateDescriptor::zero();
     gate.set_present_flag(true);
-    gate.set_privilege(arch::CpuPrivilege::Ring3);
-    gate.set_offset(syscall_entry as u64);
+    gate.set_privilege(CpuPrivilege::Ring3);
+    gate.set_offset(int80_entry as u64);
     gate.set_gate_kind(arch::idt64::GateKind::InterruptGate);
-    gate.set_code_segment(Segment::new(1, arch::CpuPrivilege::Ring0));
-    // gate.set_code_segment(Segment::new(3, arch::CpuPrivilege::Ring3));
+    gate.set_code_segment(Segment::new(1, CpuPrivilege::Ring0));
 
     idt.attach_raw(0x80, gate);
     unsafe { idt.submit_table().load() };
-    logln!("Syscall attached!");
+    logln!("Syscall 0x80 attached!");
+
+    // Now attach the 'SYSCALL' instruction handler
+    unsafe {
+        arch::registers::ia32_efer::set_syscall_extensions_flag(true);
+        arch::registers::amd_syscall::set_syscall_target_ptr(syscall_entry as u64);
+        arch::registers::amd_syscall::write_kernel_segments(
+            Segment::new(1, CpuPrivilege::Ring0),
+            Segment::new(2, CpuPrivilege::Ring0),
+        );
+        arch::registers::amd_syscall::write_userspace_segments(
+            Segment::new(3, CpuPrivilege::Ring3),
+            Segment::new(4, CpuPrivilege::Ring3),
+        );
+    }
+
+    logln!("Syscall instruction attached!");
 }
 
 const PIC_IRQ_OFFSET: u8 = 0x20;
 
+/// Enable the PIC
 pub fn enable_pic() {
     unsafe {
         pic_remap(PIC_IRQ_OFFSET, PIC_IRQ_OFFSET + 8);
@@ -125,17 +144,45 @@ pub fn enable_pic() {
 }
 
 unsafe extern "C" {
+    fn int80_entry();
     fn syscall_entry();
     pub fn task_start();
 }
 
 #[unsafe(no_mangle)]
-extern "C" fn syscall_handler() {
-    logln!("Hello from userspace!");
+extern "C" fn syscall_handler(
+    rdi: u64,
+    rsi: u64,
+    rdx: u64,
+    rcx: u64,
+    r8: u64,
+    syscall_number: u64,
+) -> u64 {
+    logln!(
+        "called SYSCALL_{syscall_number}: {rdi:#016x} {rsi:#016x} {rdx:#016x} {rcx:#016x} {r8:#016x}!"
+    );
+
+    match syscall_number {
+        69 => ::lldebug::priv_print(
+            lldebug::LogKind::Log,
+            "userspace",
+            format_args!(
+                "{}",
+                core::str::from_utf8(unsafe {
+                    core::slice::from_raw_parts(rdi as *const u8, rsi as usize)
+                })
+                .unwrap()
+            ),
+        ),
+        _ => warnln!("Unknown syscall!"),
+    }
+
+    0
 }
 
 global_asm!(
     r#"
+    .global syscall_entry
     syscall_entry:
         cli
         push rbx
@@ -152,7 +199,59 @@ global_asm!(
         push r13
         push r14
         push r15
+
+        # Set the kernel stack, saving the UE stack
+        mov r12, rsp
+        mov rsp, 0x200000000000
+        push r12
+
+        # rFLAGS in R11
+        # RIP in RCX
+
+        mov r9, rax
         call syscall_handler
+
+        pop rsp
+        pop r15
+        pop r14
+        pop r13
+        pop r12
+        pop r11
+        pop r10
+        pop r9
+        pop r8
+        pop rbp
+        pop rdi
+        pop rsi
+        pop rdx
+        pop rcx
+        pop rbx
+
+
+
+        sysret
+
+    .global int80_entry
+    int80_entry:
+        cli
+        push rbx
+        push rcx
+        push rdx
+        push rsi
+        push rdi
+        push rbp
+        push r8
+        push r9
+        push r10
+        push r11
+        push r12
+        push r13
+        push r14
+        push r15
+
+        mov r9, rax
+        call syscall_handler
+
         pop r15
         pop r14
         pop r13
@@ -193,7 +292,7 @@ global_asm!(
 
         #errno
         push 0
-        # interrupt stack
+        # Task Stack
         push 0x23
         #mov rax, 0x200000000000 
         mov rax, 0x3000

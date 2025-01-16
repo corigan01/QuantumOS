@@ -76,7 +76,7 @@ pub mod interrupts {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum CpuPrivilege {
     Ring0,
     Ring1,

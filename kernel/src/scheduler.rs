@@ -69,12 +69,13 @@ impl Scheduler {
         // Kernel Process Stack
         self.kernel.vm.add_vm_object(KernelVmObject::new_boxed(
             VmRegion {
-                start: VirtPage::containing_page(KERNEL_HANDLER_RSP as u64),
-                end: VirtPage::containing_page((KERNEL_HANDLER_RSP + PAGE_2M) as u64),
+                start: VirtPage::containing_page((KERNEL_HANDLER_RSP - PAGE_2M) as u64),
+                end: VirtPage::containing_page((KERNEL_HANDLER_RSP + PAGE_4K) as u64),
             },
-            VmPermissions::READ | VmPermissions::WRITE,
+            VmPermissions::READ | VmPermissions::WRITE | VmPermissions::USER | VmPermissions::EXEC,
             false,
         ));
+        self.kernel.vm.map_all_now();
 
         let (vaddr_low, vaddr_hi) = elf_owned
             .elf()
@@ -96,15 +97,14 @@ impl Scheduler {
             VmPermissions::WRITE | VmPermissions::READ | VmPermissions::USER,
         ));
 
-        logln!("{:#?}", process);
-
         process.map_all_now()?;
-        process.dump_page_tables();
+        logln!("{:#?}", process);
         logln!(
             "Initfs loading to : V{:#016x}\n{}",
             vaddr_low,
-            unsafe { core::slice::from_raw_parts(vaddr_low as *const u8, 126) }.hexdump()
+            unsafe { core::slice::from_raw_parts(vaddr_low as *const u8, 128) }.hexdump()
         );
+        process.dump_page_tables();
 
         Ok(())
     }
@@ -142,38 +142,38 @@ impl VmRegionObject for ElfBacked {
     }
 
     fn init_page(&mut self, vpage: VirtPage, _ppage: PhysPage) -> Result<(), MemoryError> {
-        let header = self
+        let elf_headers = self
             .elf
             .elf()
             .program_headers()
             .map_err(|_| MemoryError::DidNotHandleException)?
             .iter()
             .filter(|h| h.segment_kind() == SegmentKind::Load)
-            .find(|h| self.region.contains_vaddr(h.expected_vaddr()))
-            .ok_or(MemoryError::NotFound)?;
+            .filter(|h| self.region.contains_vaddr(h.expected_vaddr()));
 
-        let elf_buffer = self
-            .elf
-            .elf()
-            .program_header_slice(&header)
-            .map_err(|_| MemoryError::DidNotHandleException)?;
-        logln!(
-            "{} -> {} {:#?}",
-            header.in_elf_offset(),
-            header.in_elf_size(),
-            header
-        );
-        logln!("{}", elf_buffer.hexdump());
+        for header in elf_headers {
+            let elf_buffer = self
+                .elf
+                .elf()
+                .program_header_slice(&header)
+                .map_err(|_| MemoryError::DidNotHandleException)?;
 
-        let virtal_slice =
-            unsafe { core::slice::from_raw_parts_mut((vpage.0 * PAGE_4K) as *mut u8, 4096) };
-        let buffer_offset = (vpage - self.region.start).0 * PAGE_4K;
+            let page_offset = header.expected_vaddr() as usize % PAGE_4K;
 
-        // This page is within the elf file
-        if elf_buffer.len() >= buffer_offset {
-            let elf_buf = &elf_buffer[buffer_offset..];
+            let virtal_slice = unsafe {
+                core::slice::from_raw_parts_mut(
+                    (vpage.0 * PAGE_4K + page_offset) as *mut u8,
+                    4096 - page_offset,
+                )
+            };
+            let buffer_offset = (vpage - self.region.start).0 * PAGE_4K;
 
-            virtal_slice[..elf_buf.len()].copy_from_slice(elf_buf);
+            // This page is within the elf file
+            if elf_buffer.len() >= buffer_offset {
+                let elf_buf = &elf_buffer[buffer_offset..];
+
+                virtal_slice[..elf_buf.len()].copy_from_slice(elf_buf);
+            }
         }
 
         Ok(())

@@ -28,15 +28,15 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 use core::panic::PanicInfo;
 
-unsafe fn test_syscall() {
+unsafe fn debug_syscall(ptr: *const u8, len: usize) {
     unsafe {
         core::arch::asm!(
             "
-      mov rax, 60
-      mov rdi, 69
-      int 0x80
-      "
-        )
+        syscall
+      ",
+      in("rax") 69,
+      in("rdi") ptr,
+      in("rsi") len)
     };
 }
 
@@ -47,8 +47,10 @@ fn panic(_info: &PanicInfo) -> ! {
 
 #[unsafe(no_mangle)]
 extern "C" fn _start() {
+    let hello_world = "Hello World from UE!!";
     unsafe {
-        test_syscall();
+        // test_syscall();
+        debug_syscall(hello_world.as_ptr(), hello_world.len());
     }
     loop {}
 }

@@ -108,6 +108,20 @@ impl Segment {
 
         Self((gdt_index << 3) | privl)
     }
+
+    pub const fn gdt_index(&self) -> u16 {
+        self.0 >> 3
+    }
+
+    pub const fn cpu_privl(&self) -> CpuPrivilege {
+        match self.0 & 3 {
+            0 => CpuPrivilege::Ring0,
+            1 => CpuPrivilege::Ring1,
+            2 => CpuPrivilege::Ring2,
+            3 => CpuPrivilege::Ring3,
+            _ => unreachable!(),
+        }
+    }
 }
 
 impl SegmentRegisters {
@@ -464,5 +478,100 @@ pub mod ia32_efer {
     #[inline(always)]
     pub unsafe fn write(value: u64) {
         write_msr(0xC0000080, value);
+    }
+}
+
+pub mod amd_syscall {
+    use crate::CpuPrivilege;
+
+    use super::{make_hw, read_msr, write_msr, Segment};
+    const STAR: u32 = 0xC0000081;
+    const LSTAR: u32 = 0xC0000082;
+    const CSTAR: u32 = 0xC0000083;
+    const SFMASK: u32 = 0xC0000084;
+
+    #[make_hw(
+        field(RW, 32..48, pub syscall_target_code_segment),
+        field(RW, 48..64, pub sysret_target_code_segment),
+    )]
+    mod ia32_star {
+        use super::{read_msr, write_msr, STAR};
+
+        #[inline(always)]
+        pub fn read() -> u64 {
+            unsafe { read_msr(STAR) }
+        }
+
+        #[inline(always)]
+        pub unsafe fn write(value: u64) {
+            write_msr(STAR, value);
+        }
+    }
+
+    /// Set the entry point segments for the kernel when a userspace program calls 'syscall'
+    pub unsafe fn write_kernel_segments(code_segment: Segment, stack_segment: Segment) {
+        assert_eq!(
+            code_segment.gdt_index(),
+            stack_segment.gdt_index() - 1,
+            "The stack segment is always 1 index higher in the gdt from the code segment!"
+        );
+        assert_eq!(
+            code_segment.cpu_privl(),
+            CpuPrivilege::Ring0,
+            "Kernel code segment should be of privilege RING0"
+        );
+        assert_eq!(
+            stack_segment.cpu_privl(),
+            CpuPrivilege::Ring0,
+            "Kernel stack segment should be of privilege RING0"
+        );
+
+        unsafe { ia32_star::set_syscall_target_code_segment(code_segment.0) };
+    }
+
+    /// Set the entry point segments for userspace when a kernel syscall returns with 'sysret'
+    pub unsafe fn write_userspace_segments(code_segment: Segment, stack_segment: Segment) {
+        assert_eq!(
+            code_segment.gdt_index(),
+            stack_segment.gdt_index() - 1,
+            "The stack segment is always 1 index higher in the gdt from the code segment!"
+        );
+        assert_eq!(
+            code_segment.cpu_privl(),
+            CpuPrivilege::Ring3,
+            "Userspace code segment should be of privilege RING3"
+        );
+        assert_eq!(
+            stack_segment.cpu_privl(),
+            CpuPrivilege::Ring3,
+            "Userspace stack segment should be of privilege RING3"
+        );
+
+        unsafe { ia32_star::set_sysret_target_code_segment(code_segment.0) };
+    }
+
+    /// Set the syscall entry point for when a userspace program calls 'syscall'.
+    ///
+    /// # Note
+    /// - 'syscall' does not save the RSP, so kernel syscall handler will need to do
+    ///    that.
+    /// - 'syscall' puts userspace RIP into RCX and userspace rFLAGS into R11.
+    pub unsafe fn set_syscall_target_ptr(target_fn: u64) {
+        unsafe { write_msr(LSTAR, target_fn) };
+    }
+
+    /// Set the syscall entry point for when a userspace program calls 'syscall' in ia32e-32bit mode.
+    ///
+    /// # Note
+    /// - 'syscall' does not save the RSP, so kernel syscall handler will need to do
+    ///    that.
+    /// - 'syscall' puts userspace RIP into RCX and userspace rFLAGS into R11.
+    pub unsafe fn set_syscall_compatibility_target_ptr(target_fn: u64) {
+        unsafe { write_msr(CSTAR, target_fn) };
+    }
+
+    /// If a bit is set, it clears that flag in the rFLAGS register.
+    pub unsafe fn set_rflags_mask(mask: u64) {
+        unsafe { write_msr(SFMASK, mask) };
     }
 }
