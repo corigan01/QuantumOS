@@ -49,7 +49,7 @@ impl Iterator for VmPageIter {
     type Item = VirtPage;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.end_page > self.start_page {
+        if self.end_page >= self.start_page {
             let result = Some(self.start_page);
             self.start_page.0 += 1;
 
@@ -70,7 +70,7 @@ impl Iterator for VmPageLargest2MIter {
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.end_page >= self.start_page {
-            if self.start_page.0 + (PAGE_2M / PAGE_4K) < self.end_page.0 {
+            if self.start_page.0 + (PAGE_2M / PAGE_4K) <= self.end_page.0 {
                 self.start_page.0 += PAGE_2M / PAGE_4K;
                 Some(VmContinuousPageArea::Area2M(self.start_page))
             } else {
@@ -93,7 +93,7 @@ impl Iterator for VmPageLargest1GIter {
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.end_page >= self.start_page {
-            if self.start_page.0 + (PAGE_1G / PAGE_4K) < self.end_page.0 {
+            if self.start_page.0 + (PAGE_1G / PAGE_4K) <= self.end_page.0 {
                 self.start_page.0 += PAGE_1G / PAGE_4K;
                 Some(VmContinuousPageArea::Area1G(self.start_page))
             } else if self.start_page.0 + (PAGE_2M / PAGE_4K) < self.end_page.0 {
@@ -124,12 +124,12 @@ pub struct VmRegion {
 impl VmRegion {
     /// Is this vaddr within the page bounds.
     pub const fn contains_vaddr(&self, vaddr: u64) -> bool {
-        vaddr as usize >= (self.start.0 * PAGE_4K) && (self.end.0 * PAGE_4K) > vaddr as usize
+        vaddr as usize >= (self.start.0 * PAGE_4K) && (self.end.0 * PAGE_4K) >= vaddr as usize
     }
     ///
     /// Is this vaddr within the page bounds.
     pub const fn contains_vpage(&self, vaddr: VirtPage) -> bool {
-        vaddr.0 >= self.start.0 && self.end.0 > vaddr.0
+        vaddr.0 >= self.start.0 && self.end.0 >= vaddr.0
     }
 
     pub const fn from_vaddr(vaddr: u64, len: usize) -> Self {
@@ -195,7 +195,7 @@ impl AddAssign for VirtPage {
 impl VirtPage {
     /// Get the page that contains this virtal address.
     pub const fn containing_page(vaddr: u64) -> VirtPage {
-        VirtPage((vaddr as usize - 1) / PAGE_4K + 1)
+        VirtPage(vaddr as usize / PAGE_4K)
     }
 }
 

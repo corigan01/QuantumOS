@@ -26,18 +26,36 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #![no_std]
 #![no_main]
 
-use core::panic::PanicInfo;
+use core::{fmt::Write, panic::PanicInfo};
 
-unsafe fn debug_syscall(ptr: *const u8, len: usize) {
+unsafe fn syscall(
+    mut syscall_number: u64,
+    arg1: u64,
+    arg2: u64,
+    arg3: u64,
+    arg4: u64,
+    arg5: u64,
+) -> u64 {
     unsafe {
         core::arch::asm!(
-            "
-        syscall
-      ",
-      in("rax") 69,
-      in("rdi") ptr,
-      in("rsi") len)
+            "int 0x80",
+            // "syscall",
+            inlateout("rax") syscall_number,
+            in("rdi") arg1,
+            in("rsi") arg2,
+            in("rdx") arg3,
+            inout("rcx") arg4 => _,
+            in("r8") arg5,
+            out("r11") _,
+            clobber_abi("system")
+        )
     };
+
+    syscall_number
+}
+
+unsafe fn debug_syscall(ptr: *const u8, len: usize) {
+    unsafe { syscall(69, ptr as u64, len as u64, 0, 0, 0) };
 }
 
 #[panic_handler]
@@ -45,12 +63,42 @@ fn panic(_info: &PanicInfo) -> ! {
     loop {}
 }
 
+struct StdOut {}
+
+impl core::fmt::Write for StdOut {
+    fn write_str(&mut self, s: &str) -> core::fmt::Result {
+        unsafe {
+            debug_syscall(s.as_ptr(), s.len());
+        }
+        Ok(())
+    }
+}
+
+#[doc(hidden)]
+pub fn priv_print(args: core::fmt::Arguments) {
+    let _ = StdOut {}.write_fmt(args);
+}
+
+#[macro_export]
+macro_rules! print {
+    ($($arg:tt)*) => {{
+        $crate::priv_print(format_args!($($arg)*));
+    }};
+}
+
+#[macro_export]
+macro_rules! println {
+    () => {{ $crate::log!("\n") }};
+    ($($arg:tt)*) => {{
+        $crate::priv_print(format_args!($($arg)*));
+        $crate::print!("\n");
+    }};
+}
+
+#[unsafe(link_section = ".start")]
 #[unsafe(no_mangle)]
 extern "C" fn _start() {
-    let hello_world = "Hello World from UE!!";
-    unsafe {
-        // test_syscall();
-        debug_syscall(hello_world.as_ptr(), hello_world.len());
-    }
+    let hello_world = "Hello World from UE!!\n";
+    println!("Dingus {} {:#016x}", hello_world, _start as u64);
     loop {}
 }

@@ -24,7 +24,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 use alloc::{boxed::Box, vec::Vec};
-use elf::{elf_owned::ElfOwned, tables::SegmentKind};
+use elf::{Elf, elf_owned::ElfOwned, tables::SegmentKind};
 use lldebug::{hexdump::HexPrint, logln};
 use mem::{
     MemoryError,
@@ -91,8 +91,8 @@ impl Scheduler {
         ));
         process.add_vm_object(NothingBacked::new_boxed(
             VmRegion {
-                start: VirtPage(2),
-                end: VirtPage(3),
+                start: VirtPage(1),
+                end: VirtPage(11),
             },
             VmPermissions::WRITE | VmPermissions::READ | VmPermissions::USER,
         ));
@@ -100,11 +100,19 @@ impl Scheduler {
         process.map_all_now()?;
         logln!("{:#?}", process);
         logln!(
-            "Initfs loading to : V{:#016x}\n{}",
+            "Initfs loading to : V{:#016x} -> V{:#016x} [{} - {}] \n{}",
             vaddr_low,
-            unsafe { core::slice::from_raw_parts(vaddr_low as *const u8, 128) }.hexdump()
+            vaddr_hi,
+            vaddr_low / PAGE_4K,
+            vaddr_hi / PAGE_4K,
+            unsafe {
+                core::slice::from_raw_parts(
+                    vaddr_low as *const u8,
+                    128, // Elf::new(initfs).exe_size().unwrap_or(0),
+                )
+            }
+            .hexdump()
         );
-        process.dump_page_tables();
 
         Ok(())
     }
@@ -148,32 +156,47 @@ impl VmRegionObject for ElfBacked {
             .program_headers()
             .map_err(|_| MemoryError::DidNotHandleException)?
             .iter()
-            .filter(|h| h.segment_kind() == SegmentKind::Load)
-            .filter(|h| self.region.contains_vaddr(h.expected_vaddr()));
+            .enumerate()
+            .filter(|(_, h)| {
+                let expected_vpage_start = VirtPage::containing_page(h.expected_vaddr());
+                let expected_vpage_end =
+                    VirtPage::containing_page(h.expected_vaddr() + h.in_mem_size() as u64);
 
-        for header in elf_headers {
-            let elf_buffer = self
+                h.segment_kind() == SegmentKind::Load
+                    && expected_vpage_start <= vpage
+                    && expected_vpage_end >= vpage
+            });
+
+        let vbuffer =
+            unsafe { core::slice::from_raw_parts_mut((vpage.0 * PAGE_4K) as *mut u8, PAGE_4K) };
+
+        for (i, header) in elf_headers {
+            let elf_memory_buffer = self
                 .elf
                 .elf()
                 .program_header_slice(&header)
                 .map_err(|_| MemoryError::DidNotHandleException)?;
 
-            let page_offset = header.expected_vaddr() as usize % PAGE_4K;
+            let buf_start = (vpage.0 * PAGE_4K).saturating_sub(header.expected_vaddr() as usize);
+            let vbuffer_offset = (header.expected_vaddr() as usize + buf_start) % PAGE_4K;
 
-            let virtal_slice = unsafe {
-                core::slice::from_raw_parts_mut(
-                    (vpage.0 * PAGE_4K + page_offset) as *mut u8,
-                    4096 - page_offset,
-                )
-            };
-            let buffer_offset = (vpage - self.region.start).0 * PAGE_4K;
+            let this_page_buffer = &elf_memory_buffer
+                [buf_start..(buf_start + (PAGE_4K - vbuffer_offset)).min(elf_memory_buffer.len())];
 
-            // This page is within the elf file
-            if elf_buffer.len() >= buffer_offset {
-                let elf_buf = &elf_buffer[buffer_offset..];
+            logln!(
+                "[{}]: {vbuffer_offset:>5}..{:<5} <-- {:>5}..{:<5}   id={i} [{:>16x} - {:<16x}] = {:>16x} {}",
+                vpage.0,
+                vbuffer_offset + this_page_buffer.len(),
+                buf_start,
+                (buf_start + (PAGE_4K - vbuffer_offset)).min(elf_memory_buffer.len()),
+                header.expected_vaddr(),
+                header.expected_vaddr() as usize + header.in_elf_size(),
+                vpage.0 * PAGE_4K,
+                0
+            );
 
-                virtal_slice[..elf_buf.len()].copy_from_slice(elf_buf);
-            }
+            vbuffer[vbuffer_offset..vbuffer_offset + this_page_buffer.len()]
+                .copy_from_slice(this_page_buffer);
         }
 
         Ok(())

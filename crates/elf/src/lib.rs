@@ -88,24 +88,13 @@ impl<'a> Elf<'a> {
         let mut lowest_addr = u64::MAX;
         let mut highest_addr = 0;
 
-        match self.program_headers()? {
-            tables::ElfProgramHeaders::ProgHeader64(header) => header
-                .iter()
-                .map(|h| tables::ElfGenProgramHeader::from(h))
-                .filter(|h| h.segment_kind() == tables::SegmentKind::Load)
-                .for_each(|h| {
-                    lowest_addr = lowest_addr.min(h.expected_vaddr());
-                    highest_addr = highest_addr.max(h.expected_vaddr() + h.in_mem_size() as u64);
-                }),
-            tables::ElfProgramHeaders::ProgHeader32(header) => header
-                .iter()
-                .map(|h| tables::ElfGenProgramHeader::from(h))
-                .filter(|h| h.segment_kind() == tables::SegmentKind::Load)
-                .for_each(|h| {
-                    lowest_addr = lowest_addr.min(h.expected_vaddr());
-                    highest_addr = highest_addr.max(h.expected_vaddr() + h.in_mem_size() as u64);
-                }),
-        }
+        self.program_headers()?
+            .iter()
+            .filter(|h| h.segment_kind() == tables::SegmentKind::Load)
+            .for_each(|h| {
+                lowest_addr = lowest_addr.min(h.expected_vaddr());
+                highest_addr = highest_addr.max(h.expected_vaddr() + h.in_mem_size() as u64);
+            });
 
         Ok((lowest_addr as usize, highest_addr as usize))
     }

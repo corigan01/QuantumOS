@@ -150,6 +150,7 @@ unsafe extern "C" {
 }
 
 #[unsafe(no_mangle)]
+#[inline(never)]
 extern "C" fn syscall_handler(
     rdi: u64,
     rsi: u64,
@@ -158,9 +159,9 @@ extern "C" fn syscall_handler(
     r8: u64,
     syscall_number: u64,
 ) -> u64 {
-    logln!(
-        "called SYSCALL_{syscall_number}: {rdi:#016x} {rsi:#016x} {rdx:#016x} {rcx:#016x} {r8:#016x}!"
-    );
+    // logln!(
+    //     "called SYSCALL_{syscall_number}: {rdi:#016x} {rsi:#016x} {rdx:#016x} {rcx:#016x} {r8:#016x}!"
+    // );
 
     match syscall_number {
         69 => ::lldebug::priv_print(
@@ -185,6 +186,7 @@ global_asm!(
     .global syscall_entry
     syscall_entry:
         cli
+        # Push to UE's stack
         push rbx
         push rcx
         push rdx
@@ -201,9 +203,9 @@ global_asm!(
         push r15
 
         # Set the kernel stack, saving the UE stack
-        mov r12, rsp
+        mov r9, rsp
         mov rsp, 0x200000000000
-        push r12
+        push r9
 
         # rFLAGS in R11
         # RIP in RCX
@@ -211,7 +213,10 @@ global_asm!(
         mov r9, rax
         call syscall_handler
 
+        # Pop the rsp from the kernel stack
         pop rsp
+
+        # Restore UE's registers
         pop r15
         pop r14
         pop r13
@@ -226,9 +231,6 @@ global_asm!(
         pop rdx
         pop rcx
         pop rbx
-
-
-
         sysret
 
     .global int80_entry
@@ -294,8 +296,7 @@ global_asm!(
         push 0
         # Task Stack
         push 0x23
-        #mov rax, 0x200000000000 
-        mov rax, 0x3000
+        mov rax, 0xa000
         push rax
         # rflags
         push 0x200
