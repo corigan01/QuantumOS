@@ -91,7 +91,10 @@ enum ExtendedKind<'a> {
 
 impl Bpb {
     const ROOT_ENTRY_SIZE: usize = 32;
+    // FIXME: Maybe rust bug? These constants are being used!
+    #[allow(unused)]
     const FAT12_CLUSTERS: usize = 4085;
+    #[allow(unused)]
     const FAT16_CLUSTERS: usize = 65525;
 
     pub(crate) fn new<Disk: ReadSeek>(disk: &mut Disk) -> Result<Self> {
