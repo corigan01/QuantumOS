@@ -226,6 +226,7 @@ fn build_memory_map(s2s: &Stage32toStage64, kernel_exe_len: usize) -> paging::Pa
             })
             .expect("Unable to find region for kernel pages");
         mm.add_region(kernels_pages).unwrap();
+        kernels_pages.scrub(0);
 
         let kernels_stack_pages = mm
             .find_continuous_of(PhysMemoryKind::Free, PAGE_2M, PAGE_2M, 1 * MIB as u64)

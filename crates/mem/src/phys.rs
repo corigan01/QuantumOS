@@ -97,6 +97,17 @@ impl PhysMemoryEntry {
     pub const fn len(&self) -> u64 {
         self.end - self.start
     }
+
+    /// Write a pattern of bytes to this area
+    ///
+    /// # Note
+    /// The pages that repr this memory entry must already be writeable and page mapped!
+    pub unsafe fn scrub(&self, byte_pattern: u8) {
+        let phys_slice = unsafe {
+            core::slice::from_raw_parts_mut(self.start as *mut u8, (self.end - self.start) as usize)
+        };
+        phys_slice.fill(byte_pattern);
+    }
 }
 
 pub struct PhysMemoryIter<'a, const N: usize> {

@@ -501,7 +501,7 @@ pub fn get_stage_to_stage_from_multiboot_header(header: *const Multiboot1Info) -
     assert_eq!(unsafe { core::ptr::read_volatile(stack_ptr) }, 0);
 
     let header_ref = unsafe { &*header };
-    logln!("Multiboot mode! Launched from boot loader {:?}!", unsafe {
+    logln!("Multiboot mode! Launched from bootloader {:?}!", unsafe {
         core::ffi::CStr::from_ptr(header_ref.boot_loader_name as *const i8)
     });
 
@@ -512,6 +512,8 @@ pub fn get_stage_to_stage_from_multiboot_header(header: *const Multiboot1Info) -
         )
     };
 
+    // FIXME: We should make a more generic memory entry to pass around instead of
+    //        using e820 mappings.
     let mut e820_map: [bios::memory::MemoryEntry; MAX_MEMORY_MAP_ENTRIES] =
         [unsafe { core::mem::zeroed() }; MAX_MEMORY_MAP_ENTRIES];
     e820_map
@@ -523,7 +525,13 @@ pub fn get_stage_to_stage_from_multiboot_header(header: *const Multiboot1Info) -
             e820.region_type = entry.kind;
         });
 
+    // Qemu writes all of the PTRs and LENs of each of our bootloader compoenents into memory addr +1Mib
+    //
+    // You can find more details of this in the meta/main.rs file.
     let &[stage32_ptr, stage32_len, stage64_ptr, stage64_len, kernel_ptr, kernel_len, initfs_ptr, initfs_len] =
+        // FIXME: I am not sure if this is the best way of passing these arguments in, but
+        //        its also only for emulator booting so I think its fine for now. Maybe
+        //        replace in the future?
         (unsafe { core::slice::from_raw_parts(0x100000 as *const u64, 8) })
     else {
         unreachable!("Cannot match compile time length amount of elements!");
@@ -531,7 +539,6 @@ pub fn get_stage_to_stage_from_multiboot_header(header: *const Multiboot1Info) -
 
     Stage16toStage32 {
         bootloader_stack_ptr: (stack_ptr as u64, INIT_STACK.len() as u64),
-        // FIXME: We should try and link with these in the linkerscript!
         stage32_ptr: (stage32_ptr, stage32_len),
         stage64_ptr: (stage64_ptr, stage64_len),
         kernel_ptr: (kernel_ptr, kernel_len),

@@ -156,7 +156,7 @@ fn main(disk_id: u16) -> ! {
         stage_to_stage.video_mode = Some((closest_video_id, closest_video_info));
 
         logln!(
-            "Optimal Video Mode {:00x}): {}x{} {}bbp",
+            "Optimal Video Mode id={:#04x}: {}x{} {}bbp",
             closest_video_id.get_id(),
             closest_video_info.width,
             closest_video_info.height,
