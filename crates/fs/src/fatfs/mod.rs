@@ -63,6 +63,10 @@ enum FatEntry {
     Defective,
 }
 
+// FIXME: Bug: Rust thinks some of these constants are not being used, yet they are
+//        used in `from_fat16` and `from_fat32` which are being used. Maybe a bug with
+//        Rust?
+#[allow(dead_code)]
 impl FatEntry {
     const FREE_CLUSTER: u32 = 0;
     const ALLOCATED_CLUSTER_BEGIN: u32 = 2;
