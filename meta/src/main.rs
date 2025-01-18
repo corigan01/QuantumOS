@@ -16,35 +16,84 @@ mod artifacts;
 mod cmdline;
 mod disk;
 
-async fn build() -> Result<PathBuf> {
-    let (artifacts, disk) = tokio::join!(build_project(), DiskImgBaker::new());
+struct QuickBootImages {
+    // Address, Pat
+    kernel_img: (usize, usize, PathBuf),
+    initfs_img: (usize, usize, PathBuf),
+    loader32: (usize, usize, PathBuf),
+    loader64: (usize, usize, PathBuf),
+    data_ptr: usize,
+}
+
+struct BuildResult {
+    disk_img: PathBuf,
+    quick_boot: Option<QuickBootImages>,
+}
+
+async fn build(multiboot_mode: bool) -> Result<BuildResult> {
+    let (artifacts, disk) = tokio::join!(build_project(multiboot_mode), DiskImgBaker::new());
 
     let artifacts = artifacts.expect("Failed to build artifacts!");
     let mut disk = disk?;
 
     disk.write_bootsector(&artifacts.bootsector).await?;
-    disk.write_stage16(&artifacts.stage_16).await?;
 
-    let bootloader_dir_path = create_bootloader_dir(
-        "fatfs",
-        [
-            (
-                artifacts.bootsector,
-                PathBuf::from("bootloader/bootsector.bin"),
-            ),
-            (artifacts.stage_16, PathBuf::from("bootloader/stage_16.bin")),
-            (artifacts.boot_cfg, PathBuf::from("bootloader/qconfig.cfg")),
-            (artifacts.stage_32, PathBuf::from("bootloader/stage_32.bin")),
-            (artifacts.stage_64, PathBuf::from("bootloader/stage_64.bin")),
-            (artifacts.kernel, PathBuf::from("kernel.elf")),
-            (artifacts.initfs, PathBuf::from("initfs")),
-        ]
-        .into_iter(),
-    )
-    .await?;
+    let quick_boot = if !multiboot_mode {
+        disk.write_stage16(&artifacts.stage_16).await?;
 
-    disk.dir_to_fat(&bootloader_dir_path).await?;
-    disk.finish_and_write().await
+        let bootloader_dir_path = create_bootloader_dir(
+            "fatfs",
+            [
+                (
+                    artifacts.bootsector,
+                    PathBuf::from("bootloader/bootsector.bin"),
+                ),
+                (artifacts.stage_16, PathBuf::from("bootloader/stage_16.bin")),
+                (artifacts.boot_cfg, PathBuf::from("bootloader/qconfig.cfg")),
+                (artifacts.stage_32, PathBuf::from("bootloader/stage_32.bin")),
+                (artifacts.stage_64, PathBuf::from("bootloader/stage_64.bin")),
+                (artifacts.kernel, PathBuf::from("kernel.elf")),
+                (artifacts.initfs, PathBuf::from("initfs")),
+            ]
+            .into_iter(),
+        )
+        .await?;
+
+        disk.dir_to_fat(&bootloader_dir_path).await?;
+
+        // We built the normal bootloader, so no need to emit fast boot binaries
+        None
+    } else {
+        let data_ptr = 0x00100000;
+
+        let loader32_ptr = 0x00200000;
+        let loader32_size = 0x00100000;
+
+        let loader64_ptr = 0x00400000;
+        let loader64_size = 0x00100000;
+
+        let kernel_ptr = 0x00600000;
+        let kernel_size = artifacts.kernel_len;
+
+        let initfs_ptr = kernel_ptr + kernel_size;
+        let initfs_len = artifacts.initfs_len;
+
+        // `build_project` will emit different binaries depending on how its configured
+        Some(QuickBootImages {
+            kernel_img: (kernel_ptr, kernel_size, artifacts.kernel),
+            initfs_img: (initfs_ptr, initfs_len, artifacts.initfs),
+            loader32: (loader32_ptr, loader32_size, artifacts.stage_32),
+            loader64: (loader64_ptr, loader64_size, artifacts.stage_64),
+            data_ptr,
+        })
+    };
+
+    let disk_img = disk.finish_and_write().await?;
+
+    Ok(BuildResult {
+        disk_img,
+        quick_boot,
+    })
 }
 
 fn run_qemu(
@@ -53,6 +102,7 @@ fn run_qemu(
     enable_no_graphic: bool,
     log_interrupts: bool,
     slow_emu: bool,
+    quick_boot: Option<QuickBootImages>,
 ) -> Result<()> {
     let kvm: &[&str] = if enable_kvm {
         &["--enable-kvm", "--cpu", "host"]
@@ -74,10 +124,97 @@ fn run_qemu(
     } else {
         &[]
     };
+    let fast_boot: &[&str] = if let Some(quick_boot) = quick_boot {
+        &[
+            // Stage32
+            "-kernel",
+            &format!("{}", quick_boot.loader32.2.to_string_lossy()),
+            // Stage64
+            "-device",
+            &format!(
+                "loader,addr={},file={},force-raw=on",
+                quick_boot.loader64.0,
+                quick_boot.loader64.2.to_string_lossy()
+            ),
+            // Kernel
+            "-device",
+            &format!(
+                "loader,addr={},file={},force-raw=on",
+                quick_boot.kernel_img.0,
+                quick_boot.kernel_img.2.to_string_lossy()
+            ),
+            // initfs
+            "-device",
+            &format!(
+                "loader,addr={},file={},force-raw=on",
+                quick_boot.initfs_img.0,
+                quick_boot.initfs_img.2.to_string_lossy()
+            ),
+            // Write options into memory (Stage32_ptr)
+            "-device",
+            &format!(
+                "loader,addr={},data={:#016x},data-len=8",
+                quick_boot.data_ptr + (8 * 0),
+                quick_boot.loader32.0
+            ),
+            // Write options into memory (Stage32_len)
+            "-device",
+            &format!(
+                "loader,addr={},data={:#016x},data-len=8",
+                quick_boot.data_ptr + (8 * 1),
+                quick_boot.loader32.1
+            ),
+            // Write options into memory (Stage64_ptr)
+            "-device",
+            &format!(
+                "loader,addr={},data={:#016x},data-len=8",
+                quick_boot.data_ptr + (8 * 2),
+                quick_boot.loader64.0
+            ),
+            // Write options into memory (Stage64_len)
+            "-device",
+            &format!(
+                "loader,addr={},data={:#016x},data-len=8",
+                quick_boot.data_ptr + (8 * 3),
+                quick_boot.loader64.1
+            ),
+            // Write options into memory (Kernel_ptr)
+            "-device",
+            &format!(
+                "loader,addr={},data={:#016x},data-len=8",
+                quick_boot.data_ptr + (8 * 4),
+                quick_boot.kernel_img.0
+            ),
+            // Write options into memory (Kernel_len)
+            "-device",
+            &format!(
+                "loader,addr={},data={:#016x},data-len=8",
+                quick_boot.data_ptr + (8 * 5),
+                quick_boot.kernel_img.1
+            ),
+            // Write options into memory (initfs_ptr)
+            "-device",
+            &format!(
+                "loader,addr={},data={:#016x},data-len=8",
+                quick_boot.data_ptr + (8 * 6),
+                quick_boot.initfs_img.0
+            ),
+            // Write options into memory (initfs_len)
+            "-device",
+            &format!(
+                "loader,addr={},data={:#016x},data-len=8",
+                quick_boot.data_ptr + (8 * 7),
+                quick_boot.initfs_img.1
+            ),
+        ]
+    } else {
+        &[]
+    };
 
     Command::new("qemu-system-x86_64")
         .args(kvm)
         .args(no_graphic)
+        .args(fast_boot)
         .arg("--name")
         .arg("Quantum OS")
         .arg("-device")
@@ -155,23 +292,46 @@ async fn main() -> Result<()> {
 
     match args.option.unwrap_or(cmdline::TaskOption::Run) {
         cmdline::TaskOption::Build => {
-            build().await?;
+            build(false).await?;
         }
         cmdline::TaskOption::Run => {
             if !args.use_bochs {
                 run_qemu(
-                    &build().await?,
+                    &build(false).await?.disk_img,
                     args.enable_kvm,
                     args.no_graphic,
                     args.log_interrupts,
                     args.slow_emulator,
+                    None,
                 )?;
             } else {
-                run_bochs(&build().await?).await?;
+                run_bochs(&build(false).await?.disk_img).await?;
             }
         }
+        cmdline::TaskOption::RunQuick => {
+            if args.use_bochs {
+                panic!("Bochs is not supported with quick-load mode! Please use QEMU, or switch to using default bootloader mode!");
+            }
+
+            let BuildResult {
+                disk_img,
+                quick_boot: Some(quick_boot),
+            } = build(true).await?
+            else {
+                panic!("Build didn't return expected results!");
+            };
+
+            run_qemu(
+                &disk_img,
+                args.enable_kvm,
+                args.no_graphic,
+                args.log_interrupts,
+                args.slow_emulator,
+                Some(quick_boot),
+            )?;
+        }
         cmdline::TaskOption::BuildDisk => {
-            run_mk_image(&build().await?).await?;
+            run_mk_image(&build(false).await?.disk_img).await?;
         }
         cmdline::TaskOption::Clean => {
             todo!("clean")

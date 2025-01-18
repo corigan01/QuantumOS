@@ -35,6 +35,8 @@ pub enum TaskOption {
     Build,
     /// Run + Build Quantum OS
     Run,
+    /// Run + Build Quantum OS (with multiboot support from qemu)
+    RunQuick,
     /// Clean up all build artifacts
     Clean,
     /// Build QMK Disk Image

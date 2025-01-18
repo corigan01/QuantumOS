@@ -38,6 +38,8 @@ use bootloader::{Stage16toStage32, Stage32toStage64};
 use lldebug::{debug_ready, logln, make_debug};
 use serial::{baud::SerialBaud, Serial};
 
+#[cfg(feature = "multiboot")]
+mod multiboot;
 mod paging;
 mod panic;
 
@@ -52,8 +54,19 @@ make_debug! {
 
 #[no_mangle]
 #[link_section = ".start"]
+#[cfg(not(feature = "multiboot"))]
 extern "C" fn _start(stage_to_stage: u32) {
     main(unsafe { &(*(stage_to_stage as *const Stage16toStage32)) });
+    panic!("Main should not return");
+}
+
+#[no_mangle]
+#[link_section = ".start"]
+#[cfg(feature = "multiboot")]
+extern "C" fn _start() {
+    let stage_to_stage = init_multiboot!();
+
+    main(&stage_to_stage);
     panic!("Main should not return");
 }
 

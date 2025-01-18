@@ -14,9 +14,11 @@ pub struct Artifacts {
     pub stage_64: PathBuf,
 
     pub kernel: PathBuf,
+    pub kernel_len: usize,
     pub boot_cfg: PathBuf,
 
     pub initfs: PathBuf,
+    pub initfs_len: usize,
 }
 
 #[allow(unused)]
@@ -68,13 +70,24 @@ impl Display for ArchSelect {
     }
 }
 
-async fn cargo_helper(profile: Option<&str>, package: &str, arch: ArchSelect) -> Result<PathBuf> {
+async fn cargo_helper(
+    profile: Option<&str>,
+    package: &str,
+    arch: ArchSelect,
+    feature_flags: Option<&str>,
+) -> Result<PathBuf> {
     let compile_mode = profile.unwrap_or("release");
 
     let build_std_options: &[&str] = if package == "kernel" {
         &["-Zbuild-std=core,alloc"]
     } else {
         &["-Zbuild-std=core"]
+    };
+
+    let feature_flags: &[&str] = if let Some(feature_flags) = feature_flags {
+        &["--features", feature_flags]
+    } else {
+        &[]
     };
 
     Command::new("cargo")
@@ -95,6 +108,7 @@ async fn cargo_helper(profile: Option<&str>, package: &str, arch: ArchSelect) ->
             "-Zbuild-std-features=compiler-builtins-mem",
             "-Zunstable-options",
         ])
+        .args(feature_flags)
         .args(build_std_options)
         .stdout(Stdio::null())
         .stderr(Stdio::inherit())
@@ -182,7 +196,12 @@ pub async fn build_initfs_file(initfs_files: &[(PathBuf, PathBuf)]) -> Result<Pa
     Ok(tar_path)
 }
 
-pub async fn build_project() -> Result<Artifacts> {
+pub async fn file_len_of(file: &Path) -> Result<usize> {
+    let file = tokio::fs::OpenOptions::new().read(true).open(file).await?;
+    Ok(file.metadata().await?.len() as usize)
+}
+
+pub async fn build_project(multiboot_mode: bool) -> Result<Artifacts> {
     let (
         stage_bootsector,
         stage_16bit,
@@ -196,12 +215,22 @@ pub async fn build_project() -> Result<Artifacts> {
             Some("stage-bootsector"),
             "stage-bootsector",
             ArchSelect::I386,
+            None
         ),
-        cargo_helper(Some("stage-16bit"), "stage-16bit", ArchSelect::I386),
-        cargo_helper(Some("stage-32bit"), "stage-32bit", ArchSelect::I686),
-        cargo_helper(Some("stage-64bit"), "stage-64bit", ArchSelect::X64),
-        cargo_helper(Some("kernel"), "kernel", ArchSelect::Kernel),
-        cargo_helper(Some("dummy"), "dummy", ArchSelect::UserSpace),
+        cargo_helper(Some("stage-16bit"), "stage-16bit", ArchSelect::I386, None),
+        cargo_helper(
+            Some("stage-32bit"),
+            "stage-32bit",
+            ArchSelect::I686,
+            if multiboot_mode {
+                Some("multiboot")
+            } else {
+                None
+            }
+        ),
+        cargo_helper(Some("stage-64bit"), "stage-64bit", ArchSelect::X64, None),
+        cargo_helper(Some("kernel"), "kernel", ArchSelect::Kernel, None),
+        cargo_helper(Some("dummy"), "dummy", ArchSelect::UserSpace, None),
         build_bootloader_config(),
     )?;
 
@@ -215,13 +244,21 @@ pub async fn build_project() -> Result<Artifacts> {
         build_initfs_file(&ue_slice),
     )?;
 
+    let (kernel_len, initfs_len) = tokio::try_join!(file_len_of(&kernel), file_len_of(&initfs))?;
+
     Ok(Artifacts {
         bootsector,
         stage_16,
-        stage_32,
+        stage_32: if multiboot_mode {
+            stage_32bit
+        } else {
+            stage_32
+        },
         stage_64,
         kernel,
         boot_cfg,
         initfs,
+        kernel_len,
+        initfs_len,
     })
 }

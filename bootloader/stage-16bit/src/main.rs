@@ -156,9 +156,11 @@ fn main(disk_id: u16) -> ! {
         stage_to_stage.video_mode = Some((closest_video_id, closest_video_info));
 
         logln!(
-            "Optimal Video Mode  = (0x{:00x}) {:?}",
+            "Optimal Video Mode {:00x}): {}x{} {}bbp",
             closest_video_id.get_id(),
-            closest_video_info
+            closest_video_info.width,
+            closest_video_info.height,
+            closest_video_info.bpp
         );
     } else {
         stage_to_stage.video_mode = None;
@@ -174,7 +176,11 @@ fn main(disk_id: u16) -> ! {
     let bootloader32_entrypoint = 0x00200000 as *mut u8;
     alloc.push_ptr_to(bootloader32_entrypoint);
 
-    logln!("Loading stage32 ({})", bootloader32.filesize());
+    logln!(
+        "Loading stage32 '{}' ({} Bytes)",
+        qconfig.bootloader32,
+        bootloader32.filesize()
+    );
     let bootloader32_buffer = unsafe { alloc.allocate(bootloader32.filesize()) }.unwrap();
     bootloader32
         .read(bootloader32_buffer)
@@ -189,7 +195,11 @@ fn main(disk_id: u16) -> ! {
     let bootloader64_entrypoint = 0x00400000 as *mut u8;
     alloc.push_ptr_to(bootloader64_entrypoint);
 
-    logln!("Loading stage64 ({})", bootloader64.filesize());
+    logln!(
+        "Loading stage64 '{}' ({} Bytes)",
+        qconfig.bootloader64,
+        bootloader64.filesize()
+    );
     let bootloader64_buffer = unsafe { alloc.allocate(bootloader64.filesize()) }.unwrap();
     bootloader64
         .read(bootloader64_buffer)
@@ -201,7 +211,11 @@ fn main(disk_id: u16) -> ! {
 
     let mut kernel_file = fatfs.open(qconfig.kernel).expect("Unable to find kernel");
 
-    logln!("Loading kernel elf ({})", kernel_file.filesize());
+    logln!(
+        "Loading kernel '{}' ({} Bytes)",
+        qconfig.kernel,
+        kernel_file.filesize()
+    );
     let kernel_buffer = unsafe { alloc.allocate(kernel_file.filesize()) }.unwrap();
     kernel_file
         .read(kernel_buffer)
@@ -210,12 +224,15 @@ fn main(disk_id: u16) -> ! {
     let stack_region = unsafe { alloc.allocate(1024 * 1024) }.unwrap();
 
     // Initfs region
-    logln!("{}", qconfig.initfs);
     let mut initfs_file = fatfs
         .open(qconfig.initfs)
         .expect("Unable to load initfs region");
 
-    logln!("Loading initfs ({})", initfs_file.filesize());
+    logln!(
+        "Loading initfs '{}' ({} Bytes)",
+        qconfig.initfs,
+        initfs_file.filesize()
+    );
     let initfs_buffer = unsafe { alloc.allocate(initfs_file.filesize()) }.unwrap();
     initfs_file
         .read(initfs_buffer)

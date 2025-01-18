@@ -3,7 +3,16 @@ ENTRY(_start)
 SECTIONS {
     . = 0x00200000;
 
-    .start : {
+    .boot :
+    {
+        *(.multiboot_header)
+    }
+    
+    .stack : ALIGN(8) {
+        *(.stack .stack.*)
+    }
+
+    .start : ALIGN(4K) {
         *(.start .start.*)
     }
     .text : {
@@ -27,4 +36,6 @@ SECTIONS {
     .font : {
         *(.font .font.*)
     }
+
+    . = ALIGN(4096);
 }

@@ -13,3 +13,8 @@ serial = {workspace = true}
 lldebug = {workspace = true}
 arch = {workspace = true}
 util = {workspace = true}
+bios = { workspace = true, optional = true }
+
+[features]
+multiboot = ["dep:bios"]
+default = []
