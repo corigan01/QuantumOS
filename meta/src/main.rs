@@ -37,14 +37,9 @@ async fn build() -> Result<PathBuf> {
             (artifacts.stage_32, PathBuf::from("bootloader/stage_32.bin")),
             (artifacts.stage_64, PathBuf::from("bootloader/stage_64.bin")),
             (artifacts.kernel, PathBuf::from("kernel.elf")),
+            (artifacts.initfs, PathBuf::from("initfs")),
         ]
-        .into_iter()
-        .chain(artifacts.init_userspace.into_iter().map(|init_ue| {
-            (
-                init_ue.clone(),
-                Path::new("init_ue").join(init_ue.file_name().unwrap()),
-            )
-        })),
+        .into_iter(),
     )
     .await?;
 

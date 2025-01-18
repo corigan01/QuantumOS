@@ -1,6 +1,5 @@
 use anyhow::{Context, Error, Result};
 use async_process::{Command, Stdio};
-use futures::future;
 use std::fmt::Display;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -17,7 +16,7 @@ pub struct Artifacts {
     pub kernel: PathBuf,
     pub boot_cfg: PathBuf,
 
-    pub init_userspace: Vec<PathBuf>,
+    pub initfs: PathBuf,
 }
 
 #[allow(unused)]
@@ -155,12 +154,32 @@ async fn build_bootloader_config() -> Result<PathBuf> {
 bootloader64=/bootloader/stage_64.bin
 kernel=/kernel.elf
 vbe-mode=1280x720
-initfs=/init_ue/dummy
+initfs=/initfs
 "#,
     )
     .await?;
 
     Ok(target_location)
+}
+
+pub async fn build_initfs_file(initfs_files: &[(PathBuf, PathBuf)]) -> Result<PathBuf> {
+    let tar_path = PathBuf::from("./target/bin/initfs");
+    let tar_backed = std::fs::OpenOptions::new()
+        .write(true)
+        .truncate(true)
+        .create(true)
+        .open(&tar_path)?;
+
+    let mut ar = tar::Builder::new(tar_backed);
+
+    for (init_elf, to_loc) in initfs_files {
+        let mut elf_file = std::fs::OpenOptions::new().read(true).open(init_elf)?;
+        ar.append_file(to_loc, &mut elf_file)?;
+    }
+
+    ar.finish()?;
+
+    Ok(tar_path)
 }
 
 pub async fn build_project() -> Result<Artifacts> {
@@ -186,13 +205,15 @@ pub async fn build_project() -> Result<Artifacts> {
         build_bootloader_config(),
     )?;
 
-    let (bootsector, stage_16, stage_32, stage_64) = future::try_join4(
+    let ue_slice = [(dummy_userspace, PathBuf::from("./dummy"))];
+
+    let (bootsector, stage_16, stage_32, stage_64, initfs) = tokio::try_join!(
         convert_bin(&stage_bootsector, ArchSelect::I386),
         convert_bin(&stage_16bit, ArchSelect::I386),
         convert_bin(&stage_32bit, ArchSelect::I686),
         convert_bin(&stage_64bit, ArchSelect::X64),
-    )
-    .await?;
+        build_initfs_file(&ue_slice),
+    )?;
 
     Ok(Artifacts {
         bootsector,
@@ -201,6 +222,6 @@ pub async fn build_project() -> Result<Artifacts> {
         stage_64,
         kernel,
         boot_cfg,
-        init_userspace: vec![dummy_userspace],
+        initfs,
     })
 }
