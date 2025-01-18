@@ -98,7 +98,7 @@ macro_rules! println {
 #[unsafe(link_section = ".start")]
 #[unsafe(no_mangle)]
 extern "C" fn _start() {
-    let hello_world = "Hello World from UE!!\n";
+    let hello_world = "Hello World from UE!! ";
     println!("Dingus {} {:#016x}", hello_world, _start as u64);
     loop {}
 }

@@ -38,7 +38,6 @@ extern crate alloc;
 
 use arch::CpuPrivilege::Ring0;
 use bootloader::KernelBootHeader;
-use int::task_start;
 use lldebug::{debug_ready, logln, make_debug};
 use mem::{
     alloc::{KernelAllocator, provide_init_region},
