@@ -164,6 +164,7 @@ extern "C" fn syscall_handler(
     // );
 
     match syscall_number {
+        0 => todo!("Exit syscall"),
         69 => ::lldebug::priv_print(
             lldebug::LogKind::Log,
             "userspace",

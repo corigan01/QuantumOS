@@ -27,10 +27,11 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #![no_main]
 
 use core::panic::PanicInfo;
-use libq::dbugln;
+use libq::{ExitCode, dbugln, exit};
 
 #[panic_handler]
-fn panic(_info: &PanicInfo) -> ! {
+fn panic(info: &PanicInfo) -> ! {
+    dbugln!("{}", info);
     loop {}
 }
 
@@ -39,5 +40,6 @@ fn panic(_info: &PanicInfo) -> ! {
 extern "C" fn _start() {
     let hello_world = "Hello World from UE!! ";
     dbugln!("Hello World! -- {hello_world}");
-    loop {}
+
+    exit(ExitCode::Success);
 }

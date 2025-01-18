@@ -117,6 +117,8 @@ macro_rules! raw_syscall {
     }};
 }
 
+/// QuantumOS Exit SyscallID
+pub const QOS_SYSCALL_NUMBER_EXIT: usize = 0;
 /// QuantumOS Debug Output SyscallID
 pub const QOS_SYSCALL_NUMBER_DEBUG: usize = 69;
 
@@ -140,6 +142,7 @@ impl SysDebugResp {
     }
 }
 
+/// Write to the kernel's debug output
 pub unsafe fn debug_syscall(msg: &str) -> SysDebugResp {
     let syscall_resp =
         unsafe { raw_syscall!(QOS_SYSCALL_NUMBER_DEBUG, msg.as_ptr(), msg.bytes().len()) };
@@ -150,4 +153,27 @@ pub unsafe fn debug_syscall(msg: &str) -> SysDebugResp {
         2 => SysDebugResp::LenInvalid,
         _ => unreachable!("Kernel should only repond with SysDebugResp, kernel error?"),
     }
+}
+
+/// Possible Exit Reasons
+#[derive(Debug, Clone, Copy)]
+pub enum SysExitCode {
+    Success,
+    Failure,
+    Other(u8),
+}
+
+/// Exit the program
+///
+/// # Note
+/// This syscall **CANNOT** fail, and will be guaranteed to exit the program!
+pub unsafe fn exit_syscall(exit_reason: SysExitCode) -> ! {
+    let sys_exit_code: u64 = match exit_reason {
+        SysExitCode::Success => 0,
+        SysExitCode::Failure => 1,
+        SysExitCode::Other(e) => e as u64,
+    };
+
+    unsafe { raw_syscall!(QOS_SYSCALL_NUMBER_EXIT, sys_exit_code) };
+    unreachable!("Exit syscall should never return!")
 }
