@@ -54,6 +54,7 @@ util = { path = "crates/util" }
 elf = { path = "crates/elf" }
 mem = { path = "crates/mem" }
 boolvec = { path = "crates/boolvec" }
+libq = { path = "user/libq" }
 
 [profile.stage-bootsector]
 inherits = "release"

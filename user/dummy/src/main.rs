@@ -28,34 +28,12 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 use core::{fmt::Write, panic::PanicInfo};
 
-unsafe fn syscall(
-    mut syscall_number: u64,
-    arg1: u64,
-    arg2: u64,
-    arg3: u64,
-    arg4: u64,
-    arg5: u64,
-) -> u64 {
-    unsafe {
-        core::arch::asm!(
-            "int 0x80",
-            // "syscall",
-            inlateout("rax") syscall_number,
-            in("rdi") arg1,
-            in("rsi") arg2,
-            in("rdx") arg3,
-            inout("rcx") arg4 => _,
-            in("r8") arg5,
-            out("r11") _,
-            clobber_abi("system")
-        )
-    };
-
-    syscall_number
-}
+use libq::raw_syscall;
 
 unsafe fn debug_syscall(ptr: *const u8, len: usize) {
-    unsafe { syscall(69, ptr as u64, len as u64, 0, 0, 0) };
+    unsafe {
+        raw_syscall!(69, ptr as u64, len as u64);
+    }
 }
 
 #[panic_handler]
