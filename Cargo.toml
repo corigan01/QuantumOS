@@ -23,7 +23,8 @@ members = [
   "crates/mem",
   "crates/arch-macro",
   "crates/boolvec",
-  "user/dummy"
+  "user/dummy",
+  "user/libq"
 ]
 
 default-members = ["meta"]
@@ -104,6 +105,6 @@ overflow-checks = true
 inherits = "release"
 panic = "abort"
 opt-level=0
-strip = false
+strip = true
 debug = 1
 overflow-checks = true
