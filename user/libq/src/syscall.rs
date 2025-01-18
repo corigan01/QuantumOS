@@ -36,7 +36,7 @@ macro_rules! raw_syscall {
         );
     };
     ($syscall_number:expr) => {{
-        let mut syscall_return: u64 = $syscall_number;
+        let mut syscall_return: u64 = { $syscall_number } as u64;
 
         $crate::raw_syscall!(__priv_custom_asm,
             inlateout("rax") syscall_return,
@@ -46,8 +46,8 @@ macro_rules! raw_syscall {
 
         syscall_return
     }};
-    ($syscall_number:expr, $arg1:expr) => {
-        let mut syscall_return: u64 = $syscall_number;
+    ($syscall_number:expr, $arg1:expr) => {{
+        let mut syscall_return: u64 = { $syscall_number } as u64;
 
         $crate::raw_syscall!(__priv_custom_asm,
             inlateout("rax") syscall_return,
@@ -57,9 +57,9 @@ macro_rules! raw_syscall {
         );
 
         syscall_return
-    };
-    ($syscall_number:expr, $arg1:expr, $arg2:expr) => {
-        let mut syscall_return: u64 = $syscall_number;
+    }};
+    ($syscall_number:expr, $arg1:expr, $arg2:expr) => {{
+        let mut syscall_return: u64 = { $syscall_number } as u64;
 
         $crate::raw_syscall!(__priv_custom_asm,
             inlateout("rax") syscall_return,
@@ -70,9 +70,9 @@ macro_rules! raw_syscall {
         );
 
         syscall_return
-    };
-    ($syscall_number:expr, $arg1:expr, $arg2:expr, $arg3:expr) => {
-        let mut syscall_return: u64 = $syscall_number;
+    }};
+    ($syscall_number:expr, $arg1:expr, $arg2:expr, $arg3:expr) => {{
+        let mut syscall_return: u64 = { $syscall_number } as u64;
 
         $crate::raw_syscall!(__priv_custom_asm,
             inlateout("rax") syscall_return,
@@ -84,9 +84,9 @@ macro_rules! raw_syscall {
         );
 
         syscall_return
-    };
-    ($syscall_number:expr, $arg1:expr, $arg2:expr, $arg3:expr, $arg4:expr) => {
-        let mut syscall_return: u64 = $syscall_number;
+    }};
+    ($syscall_number:expr, $arg1:expr, $arg2:expr, $arg3:expr, $arg4:expr) => {{
+        let mut syscall_return: u64 = { $syscall_number } as u64;
 
         $crate::raw_syscall!(__priv_custom_asm,
             inlateout("rax") syscall_return,
@@ -98,9 +98,9 @@ macro_rules! raw_syscall {
         );
 
         syscall_return
-    };
-    ($syscall_number:expr, $arg1:expr, $arg2:expr, $arg3:expr, $arg4:expr, $arg5:expr) => {
-        let mut syscall_return: u64 = $syscall_number;
+    }};
+    ($syscall_number:expr, $arg1:expr, $arg2:expr, $arg3:expr, $arg4:expr, $arg5:expr) => {{
+        let mut syscall_return: u64 = { $syscall_number } as u64;
 
         $crate::raw_syscall!(__priv_custom_asm,
             inlateout("rax") syscall_return,
@@ -114,8 +114,40 @@ macro_rules! raw_syscall {
 
         syscall_return
 
-    };
+    }};
 }
 
 /// QuantumOS Debug Output SyscallID
 pub const QOS_SYSCALL_NUMBER_DEBUG: usize = 69;
+
+/// Possiable errors for `debug` system call.
+#[must_use]
+#[derive(Debug, Clone, Copy)]
+pub enum SysDebugResp {
+    Okay,
+    PtrInvalid,
+    LenInvalid,
+}
+
+// TODO: This should be put into a macro because all syscalls will have this same structure.
+impl SysDebugResp {
+    pub fn unwrap(self) {
+        match self {
+            SysDebugResp::Okay => (),
+            SysDebugResp::PtrInvalid => panic!("SysDebugResp: unwrap - Input Ptr was invalid!"),
+            SysDebugResp::LenInvalid => panic!("SysDebugResp: unwrap - Input Length was invalid!"),
+        }
+    }
+}
+
+pub unsafe fn debug_syscall(msg: &str) -> SysDebugResp {
+    let syscall_resp =
+        unsafe { raw_syscall!(QOS_SYSCALL_NUMBER_DEBUG, msg.as_ptr(), msg.bytes().len()) };
+
+    match syscall_resp {
+        0 => SysDebugResp::Okay,
+        1 => SysDebugResp::PtrInvalid,
+        2 => SysDebugResp::LenInvalid,
+        _ => unreachable!("Kernel should only repond with SysDebugResp, kernel error?"),
+    }
+}

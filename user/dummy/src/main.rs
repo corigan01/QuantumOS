@@ -26,57 +26,18 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #![no_std]
 #![no_main]
 
-use core::{fmt::Write, panic::PanicInfo};
-
-use libq::raw_syscall;
-
-unsafe fn debug_syscall(ptr: *const u8, len: usize) {
-    unsafe {
-        raw_syscall!(69, ptr as u64, len as u64);
-    }
-}
+use core::panic::PanicInfo;
+use libq::dbugln;
 
 #[panic_handler]
 fn panic(_info: &PanicInfo) -> ! {
     loop {}
 }
 
-struct StdOut {}
-
-impl core::fmt::Write for StdOut {
-    fn write_str(&mut self, s: &str) -> core::fmt::Result {
-        unsafe {
-            debug_syscall(s.as_ptr(), s.len());
-        }
-        Ok(())
-    }
-}
-
-#[doc(hidden)]
-pub fn priv_print(args: core::fmt::Arguments) {
-    let _ = StdOut {}.write_fmt(args);
-}
-
-#[macro_export]
-macro_rules! print {
-    ($($arg:tt)*) => {{
-        $crate::priv_print(format_args!($($arg)*));
-    }};
-}
-
-#[macro_export]
-macro_rules! println {
-    () => {{ $crate::log!("\n") }};
-    ($($arg:tt)*) => {{
-        $crate::priv_print(format_args!($($arg)*));
-        $crate::print!("\n");
-    }};
-}
-
 #[unsafe(link_section = ".start")]
 #[unsafe(no_mangle)]
 extern "C" fn _start() {
     let hello_world = "Hello World from UE!! ";
-    println!("Dingus {} {:#016x}", hello_world, _start as u64);
+    dbugln!("Hello World! -- {hello_world}");
     loop {}
 }
