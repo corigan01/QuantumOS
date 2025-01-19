@@ -34,6 +34,7 @@ use mem::{
         backing::{KernelVmObject, VmRegionObject},
     },
 };
+use tar::Tar;
 use util::consts::{PAGE_2M, PAGE_4K};
 
 pub struct Process {
@@ -64,7 +65,21 @@ impl Scheduler {
     }
 
     pub fn add_initfs(&mut self, initfs: &[u8]) -> Result<(), MemoryError> {
-        let elf_owned = ElfOwned::new_from_slice(initfs);
+        let tar_file = Tar::new(initfs);
+
+        for header in tar_file.iter() {
+            logln!("Found file: {:?}", header.filename());
+        }
+
+        logln!("Done!");
+
+        let elf_owned = ElfOwned::new_from_slice(
+            tar_file
+                .iter()
+                .find(|t| t.is_file("dummy"))
+                .map(|t| t.file().unwrap())
+                .unwrap(),
+        );
 
         // Kernel Process Stack
         self.kernel.vm.add_vm_object(KernelVmObject::new_boxed(

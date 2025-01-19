@@ -34,6 +34,7 @@ pub enum PhysMemoryKind {
     AcpiReclaimable,
     Bootloader,
     Kernel,
+    InitFs,
     PageTables,
     Broken,
 }

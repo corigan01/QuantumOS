@@ -187,6 +187,7 @@ pub async fn build_initfs_file(initfs_files: &[(PathBuf, PathBuf)]) -> Result<Pa
     let mut ar = tar::Builder::new(tar_backed);
 
     for (init_elf, to_loc) in initfs_files {
+        println!("{:?} {:?}", init_elf, to_loc);
         let mut elf_file = std::fs::OpenOptions::new().read(true).open(init_elf)?;
         ar.append_file(to_loc, &mut elf_file)?;
     }
@@ -234,7 +235,10 @@ pub async fn build_project(multiboot_mode: bool) -> Result<Artifacts> {
         build_bootloader_config(),
     )?;
 
-    let ue_slice = [(dummy_userspace, PathBuf::from("./dummy"))];
+    let ue_slice = [
+        (dummy_userspace, PathBuf::from("./dummy")),
+        (stage_16bit.clone(), PathBuf::from("./stage")),
+    ];
 
     let (bootsector, stage_16, stage_32, stage_64, initfs) = tokio::try_join!(
         convert_bin(&stage_bootsector, ArchSelect::I386),
