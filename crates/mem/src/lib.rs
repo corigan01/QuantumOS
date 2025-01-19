@@ -25,6 +25,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 #![no_std]
 
+pub mod addr;
 #[cfg(feature = "alloc")]
 pub mod alloc;
 pub mod phys;

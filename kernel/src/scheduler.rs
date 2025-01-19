@@ -24,7 +24,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 use alloc::{boxed::Box, vec::Vec};
-use elf::{Elf, elf_owned::ElfOwned, tables::SegmentKind};
+use elf::{elf_owned::ElfOwned, tables::SegmentKind};
 use lldebug::{hexdump::HexPrint, logln};
 use mem::{
     MemoryError,
@@ -199,15 +199,13 @@ impl VmRegionObject for ElfBacked {
                 [buf_start..(buf_start + (PAGE_4K - vbuffer_offset)).min(elf_memory_buffer.len())];
 
             logln!(
-                "[{}]: {vbuffer_offset:>5}..{:<5} <-- {:>5}..{:<5}   id={i} [{:>16x} - {:<16x}] = {:>16x} {}",
+                "ELF LOADING... [{}] {vbuffer_offset:>5}..{:<5} <-- {:>5}..{:<5}   id={i} [{:>16x} - {:<16x}]",
                 vpage.0,
                 vbuffer_offset + this_page_buffer.len(),
                 buf_start,
                 (buf_start + (PAGE_4K - vbuffer_offset)).min(elf_memory_buffer.len()),
                 header.expected_vaddr(),
                 header.expected_vaddr() as usize + header.in_elf_size(),
-                vpage.0 * PAGE_4K,
-                0
             );
 
             vbuffer[vbuffer_offset..vbuffer_offset + this_page_buffer.len()]
