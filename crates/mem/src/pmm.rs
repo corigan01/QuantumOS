@@ -90,11 +90,12 @@ impl Pmm {
         memory_map
             .iter()
             .filter(|entry| {
-                entry.kind == PhysMemoryKind::Free && entry.start >= (1 * util::consts::MIB as u64)
+                entry.kind == PhysMemoryKind::Free && entry.start.addr() >= (1 * util::consts::MIB)
             })
             .try_for_each(|entry| {
+                // FIXME: We should convert PMM to use PhysAddr too
                 let (aligned_start, aligned_end) =
-                    util::align_range_to(entry.start, entry.end, 4096);
+                    util::align_range_to(entry.start.addr() as u64, entry.end.addr() as u64, 4096);
                 table.populate_with(aligned_start, aligned_end).map(|_| ())
             })?;
 

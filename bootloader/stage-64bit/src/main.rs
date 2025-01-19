@@ -34,7 +34,10 @@ use elf::{
     tables::{ArchKind, SegmentKind},
 };
 use lldebug::{debug_ready, log, logln, make_debug};
-use mem::phys::{PhysMemoryEntry, PhysMemoryKind, PhysMemoryMap};
+use mem::{
+    addr::PhysAddr,
+    phys::{PhysMemoryEntry, PhysMemoryKind, PhysMemoryMap},
+};
 use serial::{Serial, baud::SerialBaud};
 use util::{
     align_to,
@@ -184,40 +187,40 @@ fn build_memory_map(s2s: &Stage32toStage64, kernel_exe_len: usize) -> paging::Pa
         let (s32_start, s32_len) = s2s.stage32_ptr;
         mm.add_region(PhysMemoryEntry {
             kind: PhysMemoryKind::Bootloader,
-            start: s32_start,
-            end: s32_start + s32_len,
+            start: (s32_start as usize).into(),
+            end: PhysAddr::from((s32_start + s32_len) as usize),
         })
         .expect("Unable to add stage32 to memory map");
 
         let (elf_start, elf_len) = s2s.kernel_ptr;
         mm.add_region(PhysMemoryEntry {
             kind: PhysMemoryKind::Bootloader,
-            start: elf_start,
-            end: elf_start + elf_len,
+            start: (elf_start as usize).into(),
+            end: PhysAddr::from((elf_start + elf_len) as usize),
         })
         .expect("Unable to add elf to memory map");
 
         let (initfs_start, initfs_len) = s2s.initfs_ptr;
         mm.add_region(PhysMemoryEntry {
             kind: PhysMemoryKind::InitFs,
-            start: initfs_start,
-            end: initfs_start + initfs_len,
+            start: (initfs_start as usize).into(),
+            end: PhysAddr::from((initfs_start + initfs_len) as usize),
         })
         .expect("Unable to add initfs to memory map");
 
         let (s64_start, s64_len) = s2s.stage64_ptr;
         mm.add_region(PhysMemoryEntry {
             kind: PhysMemoryKind::Bootloader,
-            start: s64_start,
-            end: s64_start + s64_len,
+            start: (s64_start as usize).into(),
+            end: PhysAddr::from((s64_start + s64_len) as usize),
         })
         .expect("Unable to add stage64 to memory map");
 
         let (stack_start, stack_len) = s2s.bootloader_stack_ptr;
         mm.add_region(PhysMemoryEntry {
             kind: PhysMemoryKind::Bootloader,
-            start: stack_start,
-            end: stack_start + stack_len,
+            start: (stack_start as usize).into(),
+            end: PhysAddr::from((stack_start + stack_len) as usize),
         })
         .expect("Unable to add bootloader's stack to memory map");
 
@@ -226,7 +229,7 @@ fn build_memory_map(s2s: &Stage32toStage64, kernel_exe_len: usize) -> paging::Pa
                 PhysMemoryKind::Free,
                 align_to(kernel_exe_len as u64, PAGE_2M) as usize,
                 PAGE_2M,
-                1 * MIB as u64,
+                PhysAddr::from(1 * MIB),
             )
             .map(|p| PhysMemoryEntry {
                 kind: PhysMemoryKind::Kernel,
@@ -237,7 +240,12 @@ fn build_memory_map(s2s: &Stage32toStage64, kernel_exe_len: usize) -> paging::Pa
         kernels_pages.scrub(0);
 
         let kernels_stack_pages = mm
-            .find_continuous_of(PhysMemoryKind::Free, PAGE_2M, PAGE_2M, 1 * MIB as u64)
+            .find_continuous_of(
+                PhysMemoryKind::Free,
+                PAGE_2M,
+                PAGE_2M,
+                PhysAddr::from(1 * MIB),
+            )
             .map(|p| PhysMemoryEntry {
                 kind: PhysMemoryKind::Kernel,
                 ..p
@@ -246,7 +254,12 @@ fn build_memory_map(s2s: &Stage32toStage64, kernel_exe_len: usize) -> paging::Pa
         mm.add_region(kernels_stack_pages).unwrap();
 
         let kernels_init_pages = mm
-            .find_continuous_of(PhysMemoryKind::Free, PAGE_2M, PAGE_2M, 1 * MIB as u64)
+            .find_continuous_of(
+                PhysMemoryKind::Free,
+                PAGE_2M,
+                PAGE_2M,
+                PhysAddr::from(1 * MIB),
+            )
             .map(|p| PhysMemoryEntry {
                 kind: PhysMemoryKind::Kernel,
                 ..p
@@ -257,13 +270,19 @@ fn build_memory_map(s2s: &Stage32toStage64, kernel_exe_len: usize) -> paging::Pa
         logln!("{}", mm);
 
         paging::PageTableConfig {
-            kernel_exe_phys: (kernels_pages.start, kernels_pages.len() as usize),
+            kernel_exe_phys: (
+                kernels_pages.start.addr() as u64,
+                kernels_pages.len() as usize,
+            ),
             kernel_stack_phys: (
-                kernels_stack_pages.start,
+                kernels_stack_pages.start.addr() as u64,
                 kernels_stack_pages.len() as usize,
             ),
             kernel_virt: 0x100000000000,
-            kernel_init_phys: (kernels_init_pages.start, kernels_init_pages.len() as usize),
+            kernel_init_phys: (
+                kernels_init_pages.start.addr() as u64,
+                kernels_init_pages.len() as usize,
+            ),
         }
     }
 }

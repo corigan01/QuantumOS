@@ -25,6 +25,8 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 use util::bytes::HumanBytes;
 
+use crate::addr::PhysAddr;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum PhysMemoryKind {
     None,
@@ -41,21 +43,21 @@ pub enum PhysMemoryKind {
 
 pub trait MemoryDesc {
     fn memory_kind(&self) -> PhysMemoryKind;
-    fn memory_start(&self) -> u64;
-    fn memory_end(&self) -> u64;
+    fn memory_start(&self) -> PhysAddr;
+    fn memory_end(&self) -> PhysAddr;
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct PhysMemoryBorder {
     kind: PhysMemoryKind,
-    address: u64,
+    address: PhysAddr,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct PhysMemoryEntry {
     pub kind: PhysMemoryKind,
-    pub start: u64,
-    pub end: u64,
+    pub start: PhysAddr,
+    pub end: PhysAddr,
 }
 
 impl MemoryDesc for PhysMemoryEntry {
@@ -63,11 +65,11 @@ impl MemoryDesc for PhysMemoryEntry {
         self.kind
     }
 
-    fn memory_start(&self) -> u64 {
+    fn memory_start(&self) -> PhysAddr {
         self.start
     }
 
-    fn memory_end(&self) -> u64 {
+    fn memory_end(&self) -> PhysAddr {
         self.end
     }
 }
@@ -77,11 +79,11 @@ impl MemoryDesc for &PhysMemoryEntry {
         self.kind
     }
 
-    fn memory_start(&self) -> u64 {
+    fn memory_start(&self) -> PhysAddr {
         self.start
     }
 
-    fn memory_end(&self) -> u64 {
+    fn memory_end(&self) -> PhysAddr {
         self.end
     }
 }
@@ -90,13 +92,13 @@ impl PhysMemoryEntry {
     pub const fn empty() -> Self {
         Self {
             kind: PhysMemoryKind::None,
-            start: 0,
-            end: 0,
+            start: PhysAddr::dangling(),
+            end: PhysAddr::dangling(),
         }
     }
 
-    pub const fn len(&self) -> u64 {
-        self.end - self.start
+    pub const fn len(&self) -> usize {
+        self.end.addr() - self.start.addr()
     }
 
     /// Write a pattern of bytes to this area
@@ -105,7 +107,10 @@ impl PhysMemoryEntry {
     /// The pages that repr this memory entry must already be writeable and page mapped!
     pub unsafe fn scrub(&self, byte_pattern: u8) {
         let phys_slice = unsafe {
-            core::slice::from_raw_parts_mut(self.start as *mut u8, (self.end - self.start) as usize)
+            core::slice::from_raw_parts_mut(
+                self.start.as_mut_ptr(),
+                self.start.distance_to(self.end),
+            )
         };
         phys_slice.fill(byte_pattern);
     }
@@ -154,7 +159,7 @@ impl<const N: usize> PhysMemoryMap<N> {
         Self {
             borders: [PhysMemoryBorder {
                 kind: PhysMemoryKind::None,
-                address: 0,
+                address: PhysAddr::dangling(),
             }; N],
             len: 0,
         }
@@ -168,7 +173,7 @@ impl<const N: usize> PhysMemoryMap<N> {
         let mut bytes = 0;
         self.iter()
             .filter(|r| r.kind == kind)
-            .for_each(|region| bytes += region.end - region.start);
+            .for_each(|region| bytes += region.start.distance_to(region.end));
 
         bytes as usize
     }
@@ -184,7 +189,7 @@ impl<const N: usize> PhysMemoryMap<N> {
                 | PhysMemoryKind::PageTables => true,
                 _ => false,
             })
-            .for_each(|region| bytes += region.end - region.start);
+            .for_each(|region| bytes += region.start.distance_to(region.end));
 
         bytes as usize
     }
@@ -194,18 +199,18 @@ impl<const N: usize> PhysMemoryMap<N> {
         from_kind: PhysMemoryKind,
         bytes: usize,
         alignment: usize,
-        min_address: u64,
+        min_address: PhysAddr,
     ) -> Option<PhysMemoryEntry> {
         self.iter()
             .filter(|region| region.kind == from_kind)
             .find_map(|region| {
-                let new_start = util::align_to(region.start.max(min_address), alignment);
+                let new_start = region.start.max(min_address).align_up_to(alignment);
 
-                if region.end > new_start && (region.end - new_start) >= bytes as u64 {
+                if region.end > new_start && new_start.distance_to(region.end) >= bytes {
                     Some(PhysMemoryEntry {
                         kind: region.kind,
                         start: new_start,
-                        end: new_start + bytes as u64,
+                        end: new_start.offset(bytes),
                     })
                 } else {
                     None
@@ -374,7 +379,7 @@ impl<const N: usize> PhysMemoryMap<N> {
         if index + 1 == self.len {
             self.len -= 1;
             self.borders[index].kind = PhysMemoryKind::None;
-            self.borders[index].address = 0;
+            self.borders[index].address = 0.into();
             return Ok(());
         }
 
@@ -383,7 +388,7 @@ impl<const N: usize> PhysMemoryMap<N> {
         self.len -= 1;
 
         self.borders[self.len].kind = PhysMemoryKind::None;
-        self.borders[self.len].address = 0;
+        self.borders[self.len].address = 0.into();
 
         Ok(())
     }
@@ -403,7 +408,7 @@ impl<const N: usize> core::fmt::Display for PhysMemoryMap<N> {
                 region.kind,
                 region.start,
                 region.end,
-                HumanBytes::from(region.end - region.start)
+                HumanBytes::from(region.start.distance_to(region.end))
             ))?;
         }
         f.write_str("+--------------+------------------+------------------+-------------------+\n")
@@ -427,7 +432,7 @@ mod test {
         assert_eq!(
             mm.insert_raw(0, PhysMemoryBorder {
                 kind: PhysMemoryKind::Free,
-                address: 0
+                address: 0.into()
             }),
             Ok(())
         );
@@ -436,15 +441,15 @@ mod test {
         assert_eq!(mm.borders, [
             PhysMemoryBorder {
                 kind: PhysMemoryKind::Free,
-                address: 0
+                address: 0.into()
             },
             PhysMemoryBorder {
                 kind: PhysMemoryKind::None,
-                address: 0
+                address: 0.into()
             },
             PhysMemoryBorder {
                 kind: PhysMemoryKind::None,
-                address: 0
+                address: 0.into()
             }
         ]);
     }
@@ -456,7 +461,7 @@ mod test {
         assert_eq!(
             mm.insert_raw(0, PhysMemoryBorder {
                 kind: PhysMemoryKind::Free,
-                address: 0
+                address: 0.into()
             }),
             Ok(())
         );
@@ -464,7 +469,7 @@ mod test {
         assert_eq!(
             mm.insert_raw(1, PhysMemoryBorder {
                 kind: PhysMemoryKind::None,
-                address: 1
+                address: 1.into()
             }),
             Ok(())
         );
@@ -473,15 +478,15 @@ mod test {
         assert_eq!(mm.borders, [
             PhysMemoryBorder {
                 kind: PhysMemoryKind::Free,
-                address: 0
+                address: 0.into()
             },
             PhysMemoryBorder {
                 kind: PhysMemoryKind::None,
-                address: 1
+                address: 1.into()
             },
             PhysMemoryBorder {
                 kind: PhysMemoryKind::None,
-                address: 0
+                address: 0.into()
             }
         ]);
     }
@@ -493,7 +498,7 @@ mod test {
         assert_eq!(
             mm.insert_raw(0, PhysMemoryBorder {
                 kind: PhysMemoryKind::Free,
-                address: 0
+                address: 0.into()
             }),
             Ok(())
         );
@@ -501,7 +506,7 @@ mod test {
         assert_eq!(
             mm.insert_raw(1, PhysMemoryBorder {
                 kind: PhysMemoryKind::Reserved,
-                address: 1
+                address: 1.into()
             }),
             Ok(())
         );
@@ -509,7 +514,7 @@ mod test {
         assert_eq!(
             mm.insert_raw(2, PhysMemoryBorder {
                 kind: PhysMemoryKind::None,
-                address: 2
+                address: 2.into()
             }),
             Ok(())
         );
@@ -518,15 +523,15 @@ mod test {
         assert_eq!(mm.borders, [
             PhysMemoryBorder {
                 kind: PhysMemoryKind::Free,
-                address: 0
+                address: 0.into()
             },
             PhysMemoryBorder {
                 kind: PhysMemoryKind::Reserved,
-                address: 1
+                address: 1.into()
             },
             PhysMemoryBorder {
                 kind: PhysMemoryKind::None,
-                address: 2
+                address: 2.into()
             }
         ]);
     }
@@ -538,7 +543,7 @@ mod test {
         assert_eq!(
             mm.insert_raw(0, PhysMemoryBorder {
                 kind: PhysMemoryKind::Free,
-                address: 0
+                address: 0.into()
             }),
             Ok(())
         );
@@ -546,7 +551,7 @@ mod test {
         assert_eq!(
             mm.insert_raw(1, PhysMemoryBorder {
                 kind: PhysMemoryKind::Reserved,
-                address: 1
+                address: 1.into()
             }),
             Ok(())
         );
@@ -554,7 +559,7 @@ mod test {
         assert_eq!(
             mm.insert_raw(1, PhysMemoryBorder {
                 kind: PhysMemoryKind::None,
-                address: 2
+                address: 2.into()
             }),
             Ok(())
         );
@@ -563,19 +568,19 @@ mod test {
         assert_eq!(mm.borders, [
             PhysMemoryBorder {
                 kind: PhysMemoryKind::Free,
-                address: 0
+                address: 0.into()
             },
             PhysMemoryBorder {
                 kind: PhysMemoryKind::None,
-                address: 2
+                address: 2.into()
             },
             PhysMemoryBorder {
                 kind: PhysMemoryKind::Reserved,
-                address: 1
+                address: 1.into()
             },
             PhysMemoryBorder {
                 kind: PhysMemoryKind::None,
-                address: 0
+                address: 0.into()
             }
         ]);
     }
@@ -587,7 +592,7 @@ mod test {
         assert_eq!(
             mm.insert_raw(0, PhysMemoryBorder {
                 kind: PhysMemoryKind::Free,
-                address: 0
+                address: 0.into()
             }),
             Ok(())
         );
@@ -595,7 +600,7 @@ mod test {
         assert_eq!(
             mm.insert_raw(1, PhysMemoryBorder {
                 kind: PhysMemoryKind::Reserved,
-                address: 1
+                address: 1.into()
             }),
             Ok(())
         );
@@ -603,7 +608,7 @@ mod test {
         assert_eq!(
             mm.insert_raw(2, PhysMemoryBorder {
                 kind: PhysMemoryKind::None,
-                address: 2
+                address: 2.into()
             }),
             Ok(())
         );
@@ -614,19 +619,19 @@ mod test {
         assert_eq!(mm.borders, [
             PhysMemoryBorder {
                 kind: PhysMemoryKind::Free,
-                address: 0
+                address: 0.into()
             },
             PhysMemoryBorder {
                 kind: PhysMemoryKind::Reserved,
-                address: 1
+                address: 1.into()
             },
             PhysMemoryBorder {
                 kind: PhysMemoryKind::None,
-                address: 0
+                address: 0.into()
             },
             PhysMemoryBorder {
                 kind: PhysMemoryKind::None,
-                address: 0
+                address: 0.into()
             }
         ]);
     }
@@ -638,7 +643,7 @@ mod test {
         assert_eq!(
             mm.insert_raw(0, PhysMemoryBorder {
                 kind: PhysMemoryKind::Free,
-                address: 0
+                address: 0.into()
             }),
             Ok(())
         );
@@ -646,7 +651,7 @@ mod test {
         assert_eq!(
             mm.insert_raw(1, PhysMemoryBorder {
                 kind: PhysMemoryKind::Reserved,
-                address: 1
+                address: 1.into()
             }),
             Ok(())
         );
@@ -654,7 +659,7 @@ mod test {
         assert_eq!(
             mm.insert_raw(2, PhysMemoryBorder {
                 kind: PhysMemoryKind::None,
-                address: 2
+                address: 2.into()
             }),
             Ok(())
         );
@@ -665,19 +670,19 @@ mod test {
         assert_eq!(mm.borders, [
             PhysMemoryBorder {
                 kind: PhysMemoryKind::Free,
-                address: 0
+                address: 0.into()
             },
             PhysMemoryBorder {
                 kind: PhysMemoryKind::None,
-                address: 2
+                address: 2.into()
             },
             PhysMemoryBorder {
                 kind: PhysMemoryKind::None,
-                address: 0
+                address: 0.into()
             },
             PhysMemoryBorder {
                 kind: PhysMemoryKind::None,
-                address: 0
+                address: 0.into()
             }
         ]);
     }
@@ -689,7 +694,7 @@ mod test {
         assert_eq!(
             mm.insert_raw(0, PhysMemoryBorder {
                 kind: PhysMemoryKind::Free,
-                address: 0
+                address: 0.into()
             }),
             Ok(())
         );
@@ -697,7 +702,7 @@ mod test {
         assert_eq!(
             mm.insert_raw(1, PhysMemoryBorder {
                 kind: PhysMemoryKind::Reserved,
-                address: 1
+                address: 1.into()
             }),
             Ok(())
         );
@@ -705,7 +710,7 @@ mod test {
         assert_eq!(
             mm.insert_raw(2, PhysMemoryBorder {
                 kind: PhysMemoryKind::None,
-                address: 2
+                address: 2.into()
             }),
             Ok(())
         );
@@ -716,19 +721,19 @@ mod test {
         assert_eq!(mm.borders, [
             PhysMemoryBorder {
                 kind: PhysMemoryKind::Reserved,
-                address: 1
+                address: 1.into()
             },
             PhysMemoryBorder {
                 kind: PhysMemoryKind::None,
-                address: 2
+                address: 2.into()
             },
             PhysMemoryBorder {
                 kind: PhysMemoryKind::None,
-                address: 0
+                address: 0.into()
             },
             PhysMemoryBorder {
                 kind: PhysMemoryKind::None,
-                address: 0
+                address: 0.into()
             }
         ]);
     }
@@ -741,8 +746,8 @@ mod test {
         assert_eq!(
             mm.add_region(PhysMemoryEntry {
                 kind: PhysMemoryKind::Free,
-                start: 0,
-                end: 10
+                start: 0.into(),
+                end: 10.into()
             }),
             Ok(())
         );
@@ -751,19 +756,19 @@ mod test {
         assert_eq!(mm.borders, [
             PhysMemoryBorder {
                 kind: PhysMemoryKind::Free,
-                address: 0
+                address: 0.into()
             },
             PhysMemoryBorder {
                 kind: PhysMemoryKind::None,
-                address: 10
+                address: 10.into()
             },
             PhysMemoryBorder {
                 kind: PhysMemoryKind::None,
-                address: 0
+                address: 0.into()
             },
             PhysMemoryBorder {
                 kind: PhysMemoryKind::None,
-                address: 0
+                address: 0.into()
             }
         ]);
     }
@@ -775,8 +780,8 @@ mod test {
         assert_eq!(
             mm.add_region(PhysMemoryEntry {
                 kind: PhysMemoryKind::Free,
-                start: 0,
-                end: 10
+                start: 0.into(),
+                end: 10.into()
             }),
             Ok(()),
             "{:#?}",
@@ -786,8 +791,8 @@ mod test {
         assert_eq!(
             mm.add_region(PhysMemoryEntry {
                 kind: PhysMemoryKind::Free,
-                start: 20,
-                end: 30
+                start: 20.into(),
+                end: 30.into()
             }),
             Ok(()),
             "{:#?}",
@@ -798,19 +803,19 @@ mod test {
         assert_eq!(mm.borders, [
             PhysMemoryBorder {
                 kind: PhysMemoryKind::Free,
-                address: 0
+                address: 0.into()
             },
             PhysMemoryBorder {
                 kind: PhysMemoryKind::None,
-                address: 10
+                address: 10.into()
             },
             PhysMemoryBorder {
                 kind: PhysMemoryKind::Free,
-                address: 20
+                address: 20.into()
             },
             PhysMemoryBorder {
                 kind: PhysMemoryKind::None,
-                address: 30
+                address: 30.into()
             }
         ]);
     }
@@ -822,8 +827,8 @@ mod test {
         assert_eq!(
             mm.add_region(PhysMemoryEntry {
                 kind: PhysMemoryKind::Free,
-                start: 0,
-                end: 10
+                start: 0.into(),
+                end: 10.into()
             }),
             Ok(()),
             "{:#?}",
@@ -833,8 +838,8 @@ mod test {
         assert_eq!(
             mm.add_region(PhysMemoryEntry {
                 kind: PhysMemoryKind::Reserved,
-                start: 5,
-                end: 20
+                start: 5.into(),
+                end: 20.into()
             }),
             Ok(()),
             "{:#?}",
@@ -845,19 +850,19 @@ mod test {
         assert_eq!(mm.borders, [
             PhysMemoryBorder {
                 kind: PhysMemoryKind::Free,
-                address: 0
+                address: 0.into()
             },
             PhysMemoryBorder {
                 kind: PhysMemoryKind::Reserved,
-                address: 5
+                address: 5.into()
             },
             PhysMemoryBorder {
                 kind: PhysMemoryKind::None,
-                address: 20
+                address: 20.into()
             },
             PhysMemoryBorder {
                 kind: PhysMemoryKind::None,
-                address: 0
+                address: 0.into()
             }
         ]);
     }
@@ -869,32 +874,32 @@ mod test {
 
         mm.add_region(PhysMemoryEntry {
             kind: PhysMemoryKind::Free,
-            start: 5,
-            end: 14,
+            start: 5.into(),
+            end: 14.into(),
         })
         .unwrap();
         mm.add_region(PhysMemoryEntry {
             kind: PhysMemoryKind::Reserved,
-            start: 0,
-            end: 6,
+            start: 0.into(),
+            end: 6.into(),
         })
         .unwrap();
         mm.add_region(PhysMemoryEntry {
             kind: PhysMemoryKind::Special,
-            start: 3,
-            end: 10,
+            start: 3.into(),
+            end: 10.into(),
         })
         .unwrap();
         mm.add_region(PhysMemoryEntry {
             kind: PhysMemoryKind::Bootloader,
-            start: 14,
-            end: 18,
+            start: 14.into(),
+            end: 18.into(),
         })
         .unwrap();
         mm.add_region(PhysMemoryEntry {
             kind: PhysMemoryKind::Free,
-            start: 14,
-            end: 18,
+            start: 14.into(),
+            end: 18.into(),
         })
         .unwrap();
 
@@ -904,43 +909,43 @@ mod test {
             [
                 PhysMemoryBorder {
                     kind: PhysMemoryKind::Reserved,
-                    address: 0
+                    address: 0.into()
                 },
                 PhysMemoryBorder {
                     kind: PhysMemoryKind::Special,
-                    address: 3
+                    address: 3.into()
                 },
                 PhysMemoryBorder {
                     kind: PhysMemoryKind::Free,
-                    address: 10
+                    address: 10.into()
                 },
                 PhysMemoryBorder {
                     kind: PhysMemoryKind::Bootloader,
-                    address: 14
+                    address: 14.into()
                 },
                 PhysMemoryBorder {
                     kind: PhysMemoryKind::None,
-                    address: 18
+                    address: 18.into()
                 },
                 PhysMemoryBorder {
                     kind: PhysMemoryKind::None,
-                    address: 0
+                    address: 0.into()
                 },
                 PhysMemoryBorder {
                     kind: PhysMemoryKind::None,
-                    address: 0
+                    address: 0.into()
                 },
                 PhysMemoryBorder {
                     kind: PhysMemoryKind::None,
-                    address: 0
+                    address: 0.into()
                 },
                 PhysMemoryBorder {
                     kind: PhysMemoryKind::None,
-                    address: 0
+                    address: 0.into()
                 },
                 PhysMemoryBorder {
                     kind: PhysMemoryKind::None,
-                    address: 0
+                    address: 0.into()
                 },
             ],
             "{:#?}",
@@ -953,38 +958,38 @@ mod test {
         let real_mem_map = [
             PhysMemoryEntry {
                 kind: PhysMemoryKind::Free,
-                start: 0,
-                end: 654336,
+                start: 0.into(),
+                end: 654336.into(),
             },
             PhysMemoryEntry {
                 kind: PhysMemoryKind::Reserved,
-                start: 654336,
-                end: 654336 + 1024,
+                start: 654336.into(),
+                end: (654336 + 1024).into(),
             },
             PhysMemoryEntry {
                 kind: PhysMemoryKind::Reserved,
-                start: 983040,
-                end: 983040 + 65536,
+                start: 983040.into(),
+                end: (983040 + 65536).into(),
             },
             PhysMemoryEntry {
                 kind: PhysMemoryKind::Free,
-                start: 1048576,
-                end: 1048576 + 267255808,
+                start: 1048576.into(),
+                end: (1048576 + 267255808).into(),
             },
             PhysMemoryEntry {
                 kind: PhysMemoryKind::Reserved,
-                start: 268304384,
-                end: 268304384 + 131072,
+                start: 268304384.into(),
+                end: (268304384 + 131072).into(),
             },
             PhysMemoryEntry {
                 kind: PhysMemoryKind::Reserved,
-                start: 4294705152,
-                end: 4294705152 + 262144,
+                start: 4294705152.into(),
+                end: (4294705152 + 262144).into(),
             },
             PhysMemoryEntry {
                 kind: PhysMemoryKind::Reserved,
-                start: 1086626725888,
-                end: 1086626725888 + 12884901888,
+                start: 1086626725888.into(),
+                end: (1086626725888 + 12884901888).into(),
             },
         ];
 
@@ -1003,15 +1008,15 @@ mod test {
 
         mm.add_region(PhysMemoryEntry {
             kind: PhysMemoryKind::Free,
-            start: 0,
-            end: 10,
+            start: 0.into(),
+            end: 10.into(),
         })
         .unwrap();
 
         mm.add_region(PhysMemoryEntry {
             kind: PhysMemoryKind::Reserved,
-            start: 5,
-            end: 20,
+            start: 5.into(),
+            end: 20.into(),
         })
         .unwrap();
 
@@ -1021,16 +1026,16 @@ mod test {
             iter.next(),
             Some(PhysMemoryEntry {
                 kind: PhysMemoryKind::Free,
-                start: 0,
-                end: 5
+                start: 0.into(),
+                end: 5.into()
             })
         );
         assert_eq!(
             iter.next(),
             Some(PhysMemoryEntry {
                 kind: PhysMemoryKind::Reserved,
-                start: 5,
-                end: 20
+                start: 5.into(),
+                end: 20.into()
             })
         );
 
@@ -1043,32 +1048,32 @@ mod test {
 
         mm.add_region(PhysMemoryEntry {
             kind: PhysMemoryKind::Free,
-            start: 1,
-            end: 64,
+            start: 1.into(),
+            end: 64.into(),
         })
         .unwrap();
 
         mm.add_region(PhysMemoryEntry {
             kind: PhysMemoryKind::Reserved,
-            start: 32,
-            end: 64,
+            start: 32.into(),
+            end: 64.into(),
         })
         .unwrap();
 
         assert_eq!(
-            mm.find_continuous_of(PhysMemoryKind::Free, 16, 8, 0),
+            mm.find_continuous_of(PhysMemoryKind::Free, 16, 8, 0.into()),
             Some(PhysMemoryEntry {
                 kind: PhysMemoryKind::Free,
-                start: 8,
-                end: 24
+                start: 8.into(),
+                end: 24.into()
             })
         );
         assert_eq!(
-            mm.find_continuous_of(PhysMemoryKind::Free, 8, 8, 10),
+            mm.find_continuous_of(PhysMemoryKind::Free, 8, 8, 10.into()),
             Some(PhysMemoryEntry {
                 kind: PhysMemoryKind::Free,
-                start: 16,
-                end: 24
+                start: 16.into(),
+                end: 24.into()
             })
         );
     }
@@ -1077,58 +1082,58 @@ mod test {
     fn test_real_add_ss_regions_to_mm() {
         let mut mm = PhysMemoryMap::<16>::new();
 
-        const EXAMPLE_MM: [PhysMemoryEntry; 7] = [
+        let example_mm = [
             PhysMemoryEntry {
                 kind: PhysMemoryKind::Free,
-                start: 0,
-                end: 654336,
+                start: 0.into(),
+                end: 654336.into(),
             },
             PhysMemoryEntry {
                 kind: PhysMemoryKind::Reserved,
-                start: 654336,
-                end: 655360,
+                start: 654336.into(),
+                end: 655360.into(),
             },
             PhysMemoryEntry {
                 kind: PhysMemoryKind::Reserved,
-                start: 983040,
-                end: 1048576,
+                start: 983040.into(),
+                end: 1048576.into(),
             },
             PhysMemoryEntry {
                 kind: PhysMemoryKind::Free,
-                start: 1048576,
-                end: 268304384,
+                start: 1048576.into(),
+                end: 268304384.into(),
             },
             PhysMemoryEntry {
                 kind: PhysMemoryKind::Reserved,
-                start: 268304384,
-                end: 268435456,
+                start: 268304384.into(),
+                end: 268435456.into(),
             },
             PhysMemoryEntry {
                 kind: PhysMemoryKind::Reserved,
-                start: 4294705152,
-                end: 4294967296,
+                start: 4294705152.into(),
+                end: 4294967296.into(),
             },
             PhysMemoryEntry {
                 kind: PhysMemoryKind::Reserved,
-                start: 1086626725888,
-                end: 1099511627776,
+                start: 1086626725888.into(),
+                end: 1099511627776.into(),
             },
         ];
 
-        for example in EXAMPLE_MM.iter() {
+        for example in example_mm.iter() {
             mm.add_region(example).unwrap();
         }
 
         mm.add_region(PhysMemoryEntry {
             kind: PhysMemoryKind::Bootloader,
-            start: 2097152,
-            end: 2124304,
+            start: 2097152.into(),
+            end: 2124304.into(),
         })
         .unwrap();
         mm.add_region(PhysMemoryEntry {
             kind: PhysMemoryKind::Bootloader,
-            start: 4194304,
-            end: 4218432,
+            start: 4194304.into(),
+            end: 4218432.into(),
         })
         .unwrap();
 
@@ -1136,67 +1141,67 @@ mod test {
         assert_eq!(mm.borders, [
             PhysMemoryBorder {
                 kind: PhysMemoryKind::Free,
-                address: 0,
+                address: 0.into(),
             },
             PhysMemoryBorder {
                 kind: PhysMemoryKind::Reserved,
-                address: 654336,
+                address: 654336.into(),
             },
             PhysMemoryBorder {
                 kind: PhysMemoryKind::None,
-                address: 655360,
+                address: 655360.into(),
             },
             PhysMemoryBorder {
                 kind: PhysMemoryKind::Reserved,
-                address: 983040,
+                address: 983040.into(),
             },
             PhysMemoryBorder {
                 kind: PhysMemoryKind::Free,
-                address: 1048576,
+                address: 1048576.into(),
             },
             PhysMemoryBorder {
                 kind: PhysMemoryKind::Bootloader,
-                address: 2097152,
+                address: 2097152.into(),
             },
             PhysMemoryBorder {
                 kind: PhysMemoryKind::Free,
-                address: 2124304,
+                address: 2124304.into(),
             },
             PhysMemoryBorder {
                 kind: PhysMemoryKind::Bootloader,
-                address: 0x400000,
+                address: 0x400000.into(),
             },
             PhysMemoryBorder {
                 kind: PhysMemoryKind::Free,
-                address: 0x405e40,
+                address: 0x405e40.into(),
             },
             PhysMemoryBorder {
                 kind: PhysMemoryKind::Reserved,
-                address: 268304384,
+                address: 268304384.into(),
             },
             PhysMemoryBorder {
                 kind: PhysMemoryKind::None,
-                address: 268435456,
+                address: 268435456.into(),
             },
             PhysMemoryBorder {
                 kind: PhysMemoryKind::Reserved,
-                address: 4294705152,
+                address: 4294705152.into(),
             },
             PhysMemoryBorder {
                 kind: PhysMemoryKind::None,
-                address: 4294967296,
+                address: 4294967296.into(),
             },
             PhysMemoryBorder {
                 kind: PhysMemoryKind::Reserved,
-                address: 1086626725888,
+                address: 1086626725888.into(),
             },
             PhysMemoryBorder {
                 kind: PhysMemoryKind::None,
-                address: 1099511627776,
+                address: 1099511627776.into(),
             },
             PhysMemoryBorder {
                 kind: PhysMemoryKind::None,
-                address: 0,
+                address: 0.into(),
             },
         ],);
     }

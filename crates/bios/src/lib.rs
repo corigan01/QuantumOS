@@ -420,6 +420,8 @@ pub mod disk {
 }
 
 pub mod memory {
+    use mem::addr::PhysAddr;
+
     use crate::BiosStatus;
 
     #[repr(C)]
@@ -442,12 +444,12 @@ pub mod memory {
             }
         }
 
-        fn memory_start(&self) -> u64 {
-            self.base_address
+        fn memory_start(&self) -> PhysAddr {
+            PhysAddr::from(self.base_address as usize)
         }
 
-        fn memory_end(&self) -> u64 {
-            self.base_address + self.region_length
+        fn memory_end(&self) -> PhysAddr {
+            PhysAddr::from((self.base_address + self.region_length) as usize)
         }
     }
 

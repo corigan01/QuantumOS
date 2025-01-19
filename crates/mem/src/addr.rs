@@ -52,192 +52,255 @@ macro_rules! make_addr {
         $(#[$attr:meta])*
         $ident:ident
     ) => {
-            $(#[$attr])*
-            #[derive(Clone, Copy)]
-            pub struct $ident<A: AlignmentTo = NotAligned> {
-                addr: usize,
-                _ph: PhantomData<A>,
-            }
+        $(#[$attr])*
+        #[derive(Clone, Copy)]
+        pub struct $ident<A: AlignmentTo = NotAligned> {
+            addr: usize,
+            _ph: PhantomData<A>,
+        }
 
-            impl<T: AlignmentTo> PartialEq for $ident<T> {
-                fn eq(&self, other: &Self) -> bool {
-                    self.addr == other.addr
+        impl<T: AlignmentTo> PartialEq for $ident<T> {
+            fn eq(&self, other: &Self) -> bool {
+                self.addr == other.addr
+            }
+        }
+
+        impl<T: AlignmentTo> PartialOrd for $ident<T> {
+            fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
+                Some(self.addr.cmp(&other.addr))
+            }
+        }
+
+        impl<T: AlignmentTo> Ord for $ident<T> {
+            fn cmp(&self, other: &Self) -> core::cmp::Ordering {
+                self.addr.cmp(&other.addr)
+            }
+        }
+
+        impl<T: AlignmentTo> Eq for $ident<T> {}
+
+        impl core::fmt::Debug for $ident<NotAligned> {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                f.debug_tuple(stringify!($ident)).field(&self.addr).finish()
+            }
+        }
+
+        impl<const ALIGNMENT: usize> core::fmt::Debug for $ident<AlignedTo<ALIGNMENT>> {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                f.debug_struct(concat!(stringify!($ident), "<Aligned>"))
+                    .field("align", &ALIGNMENT)
+                    .field("addr", &self.addr)
+                    .finish()
+            }
+        }
+
+        impl<T: AlignmentTo> core::fmt::Display for $ident<T> {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                self.addr.fmt(f)
+            }
+        }
+
+        impl<T: AlignmentTo> core::fmt::LowerHex for $ident<T> {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                self.addr.fmt(f)
+            }
+        }
+
+        impl<T: AlignmentTo> core::fmt::UpperHex for $ident<T> {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                self.addr.fmt(f)
+            }
+        }
+
+        impl<T> From<*const T> for $ident<NotAligned> {
+            fn from(value: *const T) -> Self {
+                $ident {
+                    addr: value.addr(),
+                    _ph: PhantomData,
                 }
             }
+        }
 
-            impl<T: AlignmentTo> PartialOrd for $ident<T> {
-                fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
-                    Some(self.addr.cmp(&other.addr))
+        impl<T> From<&T> for $ident<NotAligned> {
+            fn from(value: &T) -> Self {
+                $ident {
+                    addr: value as *const _ as usize,
+                    _ph: PhantomData,
                 }
             }
+        }
 
-            impl core::fmt::Debug for $ident<NotAligned> {
-                fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-                    f.debug_tuple("$ident").field(&self.addr).finish()
+        impl<T> From<&mut T> for $ident<NotAligned> {
+            fn from(value: &mut T) -> Self {
+                $ident {
+                    addr: value as *const _ as usize,
+                    _ph: PhantomData,
                 }
             }
+        }
 
-            impl<const ALIGNMENT: usize> core::fmt::Debug for $ident<AlignedTo<ALIGNMENT>> {
-                fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-                    f.debug_struct("$ident<Aligned>")
-                        .field("align", &ALIGNMENT)
-                        .field("addr", &self.addr)
-                        .finish()
+        impl From<usize> for $ident<NotAligned> {
+            fn from(value: usize) -> Self {
+                $ident {
+                    addr: value,
+                    _ph: PhantomData,
                 }
             }
+        }
 
-            impl<T> From<*const T> for $ident<NotAligned> {
-                fn from(value: *const T) -> Self {
-                    $ident {
+        impl<T, const ALIGNMENT: usize> TryFrom<*const T> for $ident<AlignedTo<ALIGNMENT>> {
+            type Error = AlignmentError<ALIGNMENT>;
+
+            fn try_from(value: *const T) -> Result<Self, Self::Error> {
+                if !ALIGNMENT.is_power_of_two() {
+                    panic!("Alignment {} should be a power of 2!", ALIGNMENT);
+                }
+
+                if value.addr() & (ALIGNMENT - 1) == 0 {
+                    Ok($ident {
                         addr: value.addr(),
                         _ph: PhantomData,
-                    }
+                    })
+                } else {
+                    Err(AlignmentError(()))
                 }
             }
+        }
 
-            impl<T> From<&T> for $ident<NotAligned> {
-                fn from(value: &T) -> Self {
-                    $ident {
-                        addr: value as *const _ as usize,
-                        _ph: PhantomData,
-                    }
+        impl<const ALIGNMENT: usize> TryFrom<usize> for $ident<AlignedTo<ALIGNMENT>> {
+            type Error = AlignmentError<ALIGNMENT>;
+
+            fn try_from(value: usize) -> Result<Self, Self::Error> {
+                if !ALIGNMENT.is_power_of_two() {
+                    panic!("Alignment {} should be a power of 2!", ALIGNMENT);
                 }
-            }
 
-            impl<T> From<&mut T> for $ident<NotAligned> {
-                fn from(value: &mut T) -> Self {
-                    $ident {
-                        addr: value as *const _ as usize,
-                        _ph: PhantomData,
-                    }
-                }
-            }
-
-            impl From<usize> for $ident<NotAligned> {
-                fn from(value: usize) -> Self {
-                    $ident {
+                if value & (ALIGNMENT - 1) == 0 {
+                    Ok($ident {
                         addr: value,
                         _ph: PhantomData,
-                    }
+                    })
+                } else {
+                    Err(AlignmentError(()))
                 }
             }
+        }
 
-            impl<T, const ALIGNMENT: usize> TryFrom<*const T> for $ident<AlignedTo<ALIGNMENT>> {
-                type Error = AlignmentError<ALIGNMENT>;
+        impl<const ALIGNMENT: usize> TryFrom<$ident<NotAligned>> for $ident<AlignedTo<ALIGNMENT>> {
+            type Error = AlignmentError<ALIGNMENT>;
 
-                fn try_from(value: *const T) -> Result<Self, Self::Error> {
-                    if !ALIGNMENT.is_power_of_two() {
-                        panic!("Alignment {} should be a power of 2!", ALIGNMENT);
-                    }
+            fn try_from(value: $ident<NotAligned>) -> Result<Self, Self::Error> {
+                if !ALIGNMENT.is_power_of_two() {
+                    panic!("Alignment {} should be a power of 2!", ALIGNMENT);
+                }
 
-                    if value.addr() & (ALIGNMENT - 1) == 0 {
-                        Ok($ident {
-                            addr: value.addr(),
-                            _ph: PhantomData,
-                        })
-                    } else {
-                        Err(AlignmentError(()))
-                    }
+                if value.addr() & (ALIGNMENT - 1) == 0 {
+                    Ok($ident {
+                        addr: value.addr(),
+                        _ph: PhantomData,
+                    })
+                } else {
+                    Err(AlignmentError(()))
                 }
             }
+        }
 
-            impl<const ALIGNMENT: usize> TryFrom<usize> for $ident<AlignedTo<ALIGNMENT>> {
-                type Error = AlignmentError<ALIGNMENT>;
-
-                fn try_from(value: usize) -> Result<Self, Self::Error> {
-                    if !ALIGNMENT.is_power_of_two() {
-                        panic!("Alignment {} should be a power of 2!", ALIGNMENT);
-                    }
-
-                    if value & (ALIGNMENT - 1) == 0 {
-                        Ok($ident {
-                            addr: value,
-                            _ph: PhantomData,
-                        })
-                    } else {
-                        Err(AlignmentError(()))
-                    }
-                }
+        impl<A: AlignmentTo> $ident<A> {
+            /// Get the address contained within the $ident
+            pub const fn addr(&self) -> usize {
+                self.addr
             }
 
-            impl<const ALIGNMENT: usize> TryFrom<$ident<NotAligned>> for $ident<AlignedTo<ALIGNMENT>> {
-                type Error = AlignmentError<ALIGNMENT>;
-
-                fn try_from(value: $ident<NotAligned>) -> Result<Self, Self::Error> {
-                    if !ALIGNMENT.is_power_of_two() {
-                        panic!("Alignment {} should be a power of 2!", ALIGNMENT);
-                    }
-
-                    if value.addr() & (ALIGNMENT - 1) == 0 {
-                        Ok($ident {
-                            addr: value.addr(),
-                            _ph: PhantomData,
-                        })
-                    } else {
-                        Err(AlignmentError(()))
-                    }
-                }
+            /// Cast the inner addr into a ptr
+            pub const fn as_ptr<T>(&self) -> *const T {
+                self.addr as *const T
             }
 
-            impl<A: AlignmentTo> $ident<A> {
-                /// Get the address contained within the $ident
-                pub const fn addr(&self) -> usize {
+            /// Cast the inner addr into a ptr
+            pub const fn as_mut_ptr<T>(&self) -> *mut T {
+                self.addr as *mut T
+            }
+
+            /// Align the addr by bumping up its value until it reaches a valid alignment.
+            pub const fn align_up_to(&mut self, alignment: usize) -> Self {
+                let rmd = self.addr % alignment;
+
+                self.addr = if rmd != 0 {
+                    alignment - rmd + self.addr
+                } else {
                     self.addr
-                }
+                };
 
-                /// Cast the inner addr into a ptr
-                pub const fn as_ptr<T>(&self) -> *const T {
-                    self.addr as *const T
-                }
+                *self
+            }
 
-                /// Cast the inner addr into a ptr
-                pub const fn as_mut_ptr<T>(&self) -> *mut T {
-                    self.addr as *mut T
-                }
+            /// Align the addr by bumping down its value until it reaches a valid alignment.
+            pub const fn align_down_to(&mut self, alignment: usize) -> Self {
+                let rmd = self.addr % alignment;
+                self.addr = if rmd != 0 { self.addr - rmd } else { self.addr };
 
-                /// Align the addr by bumping up its value until it reaches a valid alignment.
-                pub const fn align_up_to(&mut self, alignment: usize) -> Self {
-                    let rmd = self.addr % alignment;
+                *self
+            }
 
-                    self.addr = if rmd != 0 {
-                        alignment - rmd + self.addr
+            /// Align up this ptr to fit nicely into the aligned type.
+            ///
+            /// # Note
+            /// This will shift the ptr up until it meets the alignment.
+            pub const fn align_into<const ALIGNMENT: usize>(self) -> $ident<AlignedTo<ALIGNMENT>> {
+                let rmd = self.addr % ALIGNMENT;
+
+                $ident {
+                    addr: if rmd != 0 {
+                        ALIGNMENT - rmd + self.addr
                     } else {
                         self.addr
-                    };
-
-                    *self
-                }
-
-                /// Align the addr by bumping down its value until it reaches a valid alignment.
-                pub const fn align_down_to(&mut self, alignment: usize) -> Self {
-                    let rmd = self.addr % alignment;
-                    self.addr = if rmd != 0 { self.addr - rmd } else { self.addr };
-
-                    *self
-                }
-
-                /// Align up this ptr to fit nicely into the aligned type.
-                ///
-                /// # Note
-                /// This will shift the ptr up until it meets the alignment.
-                pub const fn align_into<const ALIGNMENT: usize>(self) -> $ident<AlignedTo<ALIGNMENT>> {
-                    let rmd = self.addr % ALIGNMENT;
-
-                    $ident {
-                        addr: if rmd != 0 {
-                            ALIGNMENT - rmd + self.addr
-                        } else {
-                            self.addr
-                        },
-                        _ph: PhantomData,
-                    }
-                }
-
-                /// Check if this ptr is null.
-                pub const fn is_null(&self) -> bool {
-                    self.addr == 0
+                    },
+                    _ph: PhantomData,
                 }
             }
+
+            /// Check if this ptr is null.
+            pub const fn is_null(&self) -> bool {
+                self.addr == 0
+            }
+
+
+            /// Make a new ptr to nothing.
+            pub const fn dangling() -> Self {
+                Self {
+                    addr: 0,
+                    _ph: PhantomData
+                }
+            }
+
+            /// Get the length from `self` to `ptr`.
+            ///
+            /// # Note
+            /// `ptr` is used as the 'end' address in this calculation. This function
+            /// will panic if `ptr` is less than `self`
+            pub const fn distance_to<U: AlignmentTo>(&self, ptr: PhysAddr<U>) -> usize {
+                ptr.addr - self.addr
+            }
+        }
+
+        impl<const ALIGNMENT: usize> $ident<AlignedTo<ALIGNMENT>> {
+            /// Attempt to offset this `addr` by an `offset`.
+            pub const fn try_offset(self, offset: usize) -> Result<Self, AlignmentError<ALIGNMENT>> {
+                if offset & (ALIGNMENT - 1) != 0 {
+                    return Err(AlignmentError(()));
+                }
+
+
+                Ok(Self{ addr: self.addr + offset, _ph: PhantomData })
+            }
+        }
+
+        impl $ident<NotAligned> {
+            /// Offset this addr by `offset`.
+            pub const fn offset(self, offset: usize) -> Self {
+                Self{ addr: self.addr + offset, _ph: PhantomData }
+            }
+        }
 
     };
 }
