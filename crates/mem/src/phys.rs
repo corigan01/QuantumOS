@@ -34,9 +34,12 @@ pub enum PhysMemoryKind {
     Reserved,
     Special,
     AcpiReclaimable,
-    Bootloader,
-    Kernel,
+    KernelExe,
+    KernelStack,
+    KernelHeap,
+    KernelElf,
     InitFs,
+    Bootloader,
     PageTables,
     Broken,
 }
@@ -185,7 +188,11 @@ impl<const N: usize> PhysMemoryMap<N> {
                 PhysMemoryKind::Free
                 | PhysMemoryKind::AcpiReclaimable
                 | PhysMemoryKind::Bootloader
-                | PhysMemoryKind::Kernel
+                | PhysMemoryKind::KernelExe
+                | PhysMemoryKind::KernelStack
+                | PhysMemoryKind::KernelElf
+                | PhysMemoryKind::KernelHeap
+                | PhysMemoryKind::InitFs
                 | PhysMemoryKind::PageTables => true,
                 _ => false,
             })

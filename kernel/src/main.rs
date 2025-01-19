@@ -41,7 +41,7 @@ use bootloader::KernelBootHeader;
 use lldebug::{debug_ready, logln, make_debug};
 use mem::{
     alloc::{KernelAllocator, provide_init_region},
-    pmm::Pmm,
+    pmm::{Pmm, PmmPhysPage},
     vmm::{VirtPage, VmPermissions, VmProcess, VmRegion, backing::KernelVmObject},
 };
 use scheduler::Scheduler;
@@ -93,7 +93,7 @@ fn main(kbh: &KernelBootHeader) {
     let free_pages = pmm.pages_free().unwrap();
 
     logln!(
-        "Pages Free {} ({})",
+        "Unused Physical Pages {} ({})",
         free_pages,
         HumanBytes::from(free_pages * PAGE_4K)
     );
@@ -145,7 +145,5 @@ fn main(kbh: &KernelBootHeader) {
 
     logln!("Attempting to jump to userspace!");
     unsafe { core::arch::asm!("int 0x31") };
-    loop {}
-
     logln!("Finished in {}ms", kernel_ticks());
 }

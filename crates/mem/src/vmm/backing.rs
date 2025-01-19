@@ -25,13 +25,10 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 extern crate alloc;
 
-use core::fmt::Debug;
-
-use alloc::{boxed::Box, string::String, vec::Vec};
-
-use crate::{MemoryError, page::PhysPage, pmm::use_pmm_mut};
-
 use super::{VirtPage, VmPermissions, VmRegion};
+use crate::{MemoryError, page::PhysPage, pmm::use_pmm_mut};
+use alloc::{boxed::Box, string::String, vec::Vec};
+use core::fmt::Debug;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum VmBackingKind {

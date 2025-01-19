@@ -25,6 +25,10 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 use crate::addr::{AlignedTo, AlignmentError, AlignmentTo, PhysAddr, VirtAddr};
 use core::marker::PhantomData;
+use core::ops::Add;
+use core::ops::AddAssign;
+use core::ops::Sub;
+use core::ops::SubAssign;
 use util::consts::PAGE_4K;
 
 pub trait PagingStructureSize: Clone + Copy {
@@ -272,6 +276,35 @@ macro_rules! impl_traits_for {
                         .finish()
                 }
             }
+
+            impl Sub for $t {
+                type Output = $t;
+
+                fn sub(self, rhs: Self) -> Self::Output {
+                    Self::new(self.page() - rhs.page())
+                }
+            }
+
+            impl SubAssign for $t{
+                fn sub_assign(&mut self, rhs: Self) {
+                    self.id -= rhs.id;
+                }
+            }
+
+            impl Add for $t  {
+                type Output = $t;
+
+                fn add(self, rhs: Self) -> Self::Output {
+                    Self::new(self.page() + rhs.page())
+                }
+            }
+
+            impl AddAssign for $t {
+                fn add_assign(&mut self, rhs: Self) {
+                    self.id -= rhs.id;
+                }
+            }
+
         )*
     };
 }

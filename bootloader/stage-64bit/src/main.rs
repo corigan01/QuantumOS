@@ -194,7 +194,7 @@ fn build_memory_map(s2s: &Stage32toStage64, kernel_exe_len: usize) -> paging::Pa
 
         let (elf_start, elf_len) = s2s.kernel_ptr;
         mm.add_region(PhysMemoryEntry {
-            kind: PhysMemoryKind::Bootloader,
+            kind: PhysMemoryKind::KernelElf,
             start: (elf_start as usize).into(),
             end: PhysAddr::from((elf_start + elf_len) as usize),
         })
@@ -232,7 +232,7 @@ fn build_memory_map(s2s: &Stage32toStage64, kernel_exe_len: usize) -> paging::Pa
                 PhysAddr::from(1 * MIB),
             )
             .map(|p| PhysMemoryEntry {
-                kind: PhysMemoryKind::Kernel,
+                kind: PhysMemoryKind::KernelExe,
                 ..p
             })
             .expect("Unable to find region for kernel pages");
@@ -247,7 +247,7 @@ fn build_memory_map(s2s: &Stage32toStage64, kernel_exe_len: usize) -> paging::Pa
                 PhysAddr::from(1 * MIB),
             )
             .map(|p| PhysMemoryEntry {
-                kind: PhysMemoryKind::Kernel,
+                kind: PhysMemoryKind::KernelStack,
                 ..p
             })
             .expect("Unable to find region for kernel's stack pages");
@@ -261,7 +261,7 @@ fn build_memory_map(s2s: &Stage32toStage64, kernel_exe_len: usize) -> paging::Pa
                 PhysAddr::from(1 * MIB),
             )
             .map(|p| PhysMemoryEntry {
-                kind: PhysMemoryKind::Kernel,
+                kind: PhysMemoryKind::KernelHeap,
                 ..p
             })
             .expect("Unable to find region for kernel's stack pages");
