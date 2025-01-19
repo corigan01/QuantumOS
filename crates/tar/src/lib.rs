@@ -27,10 +27,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #![feature(pointer_is_aligned_to)]
 
 use core::{ffi::FromBytesUntilNulError, str::Utf8Error};
-use lldebug::hexdump::HexPrint;
-
 use header::TarHeader;
-use lldebug::logln;
 
 mod header;
 
