@@ -206,6 +206,14 @@ macro_rules! make_addr {
         }
 
         impl<A: AlignmentTo> $ident<A> {
+            /// Force a value as an addr.
+            pub const unsafe fn new_unchecked(value: usize) -> Self {
+               Self {
+                  addr: value,
+                  _ph: PhantomData
+               }
+            }
+
             /// Get the address contained within the $ident
             pub const fn addr(&self) -> usize {
                 self.addr
@@ -280,6 +288,11 @@ macro_rules! make_addr {
             /// will panic if `ptr` is less than `self`
             pub const fn distance_to<U: AlignmentTo>(&self, ptr: PhysAddr<U>) -> usize {
                 ptr.addr - self.addr
+            }
+
+            /// Check if this addr is aligned to some Alignment
+            pub const fn is_aligned_to(&self, alignment: usize) -> bool {
+                self.addr & (alignment - 1) == 0
             }
         }
 

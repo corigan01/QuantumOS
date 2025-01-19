@@ -28,6 +28,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 pub mod addr;
 #[cfg(feature = "alloc")]
 pub mod alloc;
+pub mod page;
 pub mod phys;
 #[cfg(feature = "alloc")]
 pub mod pmm;
