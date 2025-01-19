@@ -110,6 +110,8 @@ pub trait TableImpl: Sized {
         page: PhysPage,
         el_size: usize,
     ) -> Result<AllocationResult, MemoryError>;
+
+    fn pages_free(&self, el_size: usize) -> Result<usize, MemoryError>;
 }
 
 #[derive(Clone)]
@@ -156,6 +158,11 @@ impl<Table: TableImpl> MemoryTable<Table> {
     #[inline]
     pub fn free_page(&mut self, page: PhysPage) -> Result<(), MemoryError> {
         self.table.free_page(page, self.element_size).map(|_| ())
+    }
+
+    #[inline]
+    pub fn pages_free(&self) -> Result<usize, MemoryError> {
+        self.table.pages_free(self.element_size)
     }
 }
 
@@ -380,6 +387,22 @@ impl TableImpl for TableFlat {
             new_size: self.healthy_tables.max(self.dirty_tables.min(1)),
         })
     }
+
+    fn pages_free(&self, el_size: usize) -> Result<usize, MemoryError> {
+        self.table.iter().try_fold(0, |acc, el| {
+            Ok(acc
+                + match el {
+                    TableElementKind::NotAllocated => 0,
+                    TableElementKind::Present => el_size / PAGE_4K,
+                    TableElementKind::TableFlat { ptr, .. } => {
+                        unsafe { ptr.as_ref() }.pages_free()?
+                    }
+                    TableElementKind::TableBits { ptr, .. } => {
+                        unsafe { ptr.as_ref() }.pages_free()?
+                    }
+                })
+        })
+    }
 }
 
 impl TableImpl for TableBits {
@@ -456,6 +479,10 @@ impl TableImpl for TableBits {
             page,
             new_size: self.atom_size,
         })
+    }
+
+    fn pages_free(&self, el_size: usize) -> Result<usize, MemoryError> {
+        Ok(self.atom_size * (el_size / PAGE_4K))
     }
 }
 

@@ -47,7 +47,7 @@ use mem::{
 use scheduler::Scheduler;
 use serial::{Serial, baud::SerialBaud};
 use timer::kernel_ticks;
-use util::bytes::HumanBytes;
+use util::{bytes::HumanBytes, consts::PAGE_4K};
 
 #[global_allocator]
 static ALLOC: KernelAllocator = KernelAllocator::new();
@@ -90,6 +90,13 @@ fn main(kbh: &KernelBootHeader) {
 
     logln!("Init PhysMemoryManager");
     let pmm = Pmm::new(kbh.phys_mem_map).unwrap();
+    let free_pages = pmm.pages_free().unwrap();
+
+    logln!(
+        "Pages Free {} ({})",
+        free_pages,
+        HumanBytes::from(free_pages * PAGE_4K)
+    );
     mem::pmm::set_physical_memory_manager(pmm);
 
     logln!("Init VirtMemoryManager");

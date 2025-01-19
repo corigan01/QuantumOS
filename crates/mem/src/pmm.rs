@@ -109,4 +109,8 @@ impl Pmm {
     pub fn free_page(&mut self, page: PhysPage) -> Result<(), MemoryError> {
         self.table.free_page(page)
     }
+
+    pub fn pages_free(&self) -> Result<usize, MemoryError> {
+        self.table.pages_free()
+    }
 }
