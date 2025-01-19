@@ -27,13 +27,16 @@ use crate::addr::{AlignedTo, AlignmentError, AlignmentTo, PhysAddr, VirtAddr};
 use core::marker::PhantomData;
 use util::consts::PAGE_4K;
 
-pub trait PagingStructureSize {
+pub trait PagingStructureSize: Clone + Copy {
     const N_PAGES: usize;
     const N_BYTES: usize = Self::N_PAGES * PAGE_4K;
 }
 
+#[derive(Clone, Copy)]
 pub struct Page4K {}
+#[derive(Clone, Copy)]
 pub struct Page2M {}
+#[derive(Clone, Copy)]
 pub struct Page1G {}
 
 impl PagingStructureSize for Page4K {
@@ -63,6 +66,7 @@ impl<const REQUIRED_PAGE_ALIGNMENT: usize> core::fmt::Debug
 }
 
 /// A structure representing a well aligned Physical page
+#[derive(Clone, Copy)]
 pub struct PhysPage<Size: PagingStructureSize = Page4K> {
     id: usize,
     _ph: PhantomData<Size>,
@@ -142,6 +146,11 @@ impl<S: PagingStructureSize> PhysPage<S> {
     ///  - This function is also 'sized' to the current page size of `self`.
     pub const fn pages_to(&self, lhs: &Self) -> usize {
         lhs.id - self.id
+    }
+
+    /// Get the page id of this page.
+    pub const fn page(&self) -> usize {
+        self.id
     }
 }
 
@@ -225,6 +234,11 @@ impl<S: PagingStructureSize> VirtPage<S> {
     ///  - This function is also 'sized' to the current page size of `self`.
     pub const fn pages_to(&self, lhs: &Self) -> usize {
         lhs.id - self.id
+    }
+
+    /// Get the page id of this page.
+    pub const fn page(&self) -> usize {
+        self.id
     }
 }
 

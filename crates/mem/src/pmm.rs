@@ -25,19 +25,17 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 use alloc::boxed::Box;
 use spin::RwLock;
+use util::consts::PAGE_4K;
 
 use crate::{
     MemoryError,
+    page::PhysPage,
     phys::{PhysMemoryKind, PhysMemoryMap},
 };
 
 extern crate alloc;
 
 mod backing;
-
-// PAGE ID
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub struct PhysPage(pub u64);
 
 static THE_PHYSICAL_PAGE_MANAGER: RwLock<Option<Pmm>> = RwLock::new(None);
 
@@ -75,11 +73,11 @@ pub struct Pmm {
 
 impl Pmm {
     pub fn new<const SIZE: usize>(memory_map: &PhysMemoryMap<SIZE>) -> Result<Self, MemoryError> {
-        let total_real_memory = memory_map.sdram_bytes() as u64;
+        let total_real_memory = memory_map.sdram_bytes();
 
         let mut opt_table = *backing::OPT_TABLES.last().unwrap();
         for table_size in backing::OPT_TABLES {
-            if total_real_memory < (table_size * backing::TABLE_SIZE as u64) {
+            if total_real_memory < (table_size * backing::TABLE_SIZE) {
                 opt_table = table_size;
                 break;
             }
@@ -93,10 +91,12 @@ impl Pmm {
                 entry.kind == PhysMemoryKind::Free && entry.start.addr() >= (1 * util::consts::MIB)
             })
             .try_for_each(|entry| {
-                // FIXME: We should convert PMM to use PhysAddr too
-                let (aligned_start, aligned_end) =
-                    util::align_range_to(entry.start.addr() as u64, entry.end.addr() as u64, 4096);
-                table.populate_with(aligned_start, aligned_end).map(|_| ())
+                table
+                    .populate_with(
+                        entry.start.align_up_to(PAGE_4K).try_into().unwrap(),
+                        entry.end.align_down_to(PAGE_4K).try_into().unwrap(),
+                    )
+                    .map(|_| ())
             })?;
 
         Ok(Self { table })

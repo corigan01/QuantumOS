@@ -114,37 +114,25 @@ macro_rules! make_addr {
 
         impl<T> From<*const T> for $ident<NotAligned> {
             fn from(value: *const T) -> Self {
-                $ident {
-                    addr: value.addr(),
-                    _ph: PhantomData,
-                }
+                Self::new(value.addr())
             }
         }
 
         impl<T> From<&T> for $ident<NotAligned> {
             fn from(value: &T) -> Self {
-                $ident {
-                    addr: value as *const _ as usize,
-                    _ph: PhantomData,
-                }
+                Self::new(value as *const _ as usize)
             }
         }
 
         impl<T> From<&mut T> for $ident<NotAligned> {
             fn from(value: &mut T) -> Self {
-                $ident {
-                    addr: value as *const _ as usize,
-                    _ph: PhantomData,
-                }
+                Self::new(value as *const _ as usize)
             }
         }
 
         impl From<usize> for $ident<NotAligned> {
             fn from(value: usize) -> Self {
-                $ident {
-                    addr: value,
-                    _ph: PhantomData,
-                }
+                Self::new(value)
             }
         }
 
@@ -157,10 +145,7 @@ macro_rules! make_addr {
                 }
 
                 if value.addr() & (ALIGNMENT - 1) == 0 {
-                    Ok($ident {
-                        addr: value.addr(),
-                        _ph: PhantomData,
-                    })
+                    Ok(Self::try_new(value.addr()))
                 } else {
                     Err(AlignmentError(()))
                 }
@@ -176,10 +161,7 @@ macro_rules! make_addr {
                 }
 
                 if value & (ALIGNMENT - 1) == 0 {
-                    Ok($ident {
-                        addr: value,
-                        _ph: PhantomData,
-                    })
+                    Ok(Self::try_new(value))
                 } else {
                     Err(AlignmentError(()))
                 }
@@ -195,10 +177,7 @@ macro_rules! make_addr {
                 }
 
                 if value.addr() & (ALIGNMENT - 1) == 0 {
-                    Ok($ident {
-                        addr: value.addr(),
-                        _ph: PhantomData,
-                    })
+                    Ok(Self::try_new(value.addr()))
                 } else {
                     Err(AlignmentError(()))
                 }
@@ -230,7 +209,7 @@ macro_rules! make_addr {
             }
 
             /// Align the addr by bumping up its value until it reaches a valid alignment.
-            pub const fn align_up_to(&mut self, alignment: usize) -> Self {
+            pub const fn align_up_to(mut self, alignment: usize) -> Self {
                 let rmd = self.addr % alignment;
 
                 self.addr = if rmd != 0 {
@@ -239,15 +218,15 @@ macro_rules! make_addr {
                     self.addr
                 };
 
-                *self
+                self
             }
 
             /// Align the addr by bumping down its value until it reaches a valid alignment.
-            pub const fn align_down_to(&mut self, alignment: usize) -> Self {
+            pub const fn align_down_to(mut self, alignment: usize) -> Self {
                 let rmd = self.addr % alignment;
                 self.addr = if rmd != 0 { self.addr - rmd } else { self.addr };
 
-                *self
+                self
             }
 
             /// Align up this ptr to fit nicely into the aligned type.
@@ -294,6 +273,7 @@ macro_rules! make_addr {
             pub const fn is_aligned_to(&self, alignment: usize) -> bool {
                 self.addr & (alignment - 1) == 0
             }
+
         }
 
         impl<const ALIGNMENT: usize> $ident<AlignedTo<ALIGNMENT>> {
@@ -303,15 +283,56 @@ macro_rules! make_addr {
                     return Err(AlignmentError(()));
                 }
 
-
-                Ok(Self{ addr: self.addr + offset, _ph: PhantomData })
+                Ok(Self::try_new(self.addr + offset))
             }
+
+            /// Get the 'realative' value based on the size of a chunk.
+            ///
+            /// This preforms `self.addr() % element_size` internally.
+            ///
+            /// This function asserts that the 'chunk_size' is aligned to
+            /// this addresses alignment constraints.
+            pub fn realative_offset(self, chunk_size: usize) -> Self {
+                assert!((ALIGNMENT % chunk_size == 0) || (ALIGNMENT % chunk_size == ALIGNMENT), "'chunk_size' is not aligned to address alignment!");
+                Self::try_new(self.addr() % chunk_size)
+            }
+
+            /// Make a new address, asserts if address is not aligned.
+            pub const fn try_new(addr: usize) -> Self {
+                assert!(addr & (ALIGNMENT - 1) == 0, "Address not aligned");
+                Self {
+                    addr,
+                    _ph: PhantomData
+                }
+            }
+
         }
 
         impl $ident<NotAligned> {
+            /// Make a new address.
+            pub const fn new(addr: usize) -> Self {
+                Self {
+                    addr,
+                    _ph: PhantomData
+                }
+            }
+
             /// Offset this addr by `offset`.
             pub const fn offset(self, offset: usize) -> Self {
                 Self{ addr: self.addr + offset, _ph: PhantomData }
+            }
+
+            /// Get the 'realative' value based on the size of a chunk.
+            ///
+            /// This preforms `self.addr() % element_size` internally.
+            ///
+            /// This function asserts that the 'chunk_size' is aligned to
+            /// this addresses alignment constraints.
+            pub const fn realative_offset(self, chunk_size: usize) -> Self {
+                Self {
+                    addr: (self.addr() % chunk_size),
+                    _ph: PhantomData
+                }
             }
         }
 

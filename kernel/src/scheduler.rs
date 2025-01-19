@@ -28,7 +28,7 @@ use elf::{elf_owned::ElfOwned, tables::SegmentKind};
 use lldebug::{hexdump::HexPrint, logln};
 use mem::{
     MemoryError,
-    pmm::PhysPage,
+    page::PhysPage,
     vmm::{
         VirtPage, VmPermissions, VmProcess, VmRegion,
         backing::{KernelVmObject, VmRegionObject},

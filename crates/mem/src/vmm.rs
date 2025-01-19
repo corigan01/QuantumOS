@@ -28,7 +28,7 @@ use core::{
     ops::{Add, AddAssign, BitOr, BitOrAssign, Sub, SubAssign},
 };
 
-use crate::{MemoryError, pmm::PhysPage};
+use crate::{MemoryError, page::PhysPage};
 use alloc::{boxed::Box, collections::btree_map::BTreeMap, vec::Vec};
 use hw::make_hw;
 use lldebug::logln;

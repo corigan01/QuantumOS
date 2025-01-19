@@ -28,7 +28,7 @@ extern crate alloc;
 use core::fmt::{Debug, Display};
 
 use super::{VirtPage, VmPermissions};
-use crate::{MemoryError, pmm::PhysPage};
+use crate::{MemoryError, page::PhysPage};
 use alloc::sync::Arc;
 use arch::paging64::{
     PageEntry1G, PageEntry2M, PageEntry4K, PageEntryLvl2, PageEntryLvl3, PageEntryLvl4,
@@ -423,7 +423,7 @@ impl SharedTable {
                         entry.set_user_access_flag(permissions.is_user_set());
                         entry.set_execute_disable_flag(!permissions.is_exec_set());
 
-                        entry.set_phy_address(ppage.0 * PAGE_4K as u64);
+                        entry.set_phy_address(ppage.addr().addr() as u64);
 
                         Ok(entry)
                     })
@@ -461,7 +461,7 @@ impl SharedTable {
                     entry.set_user_access_flag(permissions.is_user_set());
                     entry.set_execute_disable_flag(!permissions.is_exec_set());
 
-                    entry.set_phy_address(ppage.0 * PAGE_4K as u64);
+                    entry.set_phy_address(ppage.addr().addr() as u64);
 
                     Ok(entry)
                 })
@@ -828,7 +828,7 @@ impl SharedLvl1 {
         let mut page_entry = PageEntry4K::new();
 
         page_entry.add_permissions_from(permissions);
-        page_entry.set_phy_address(ppage.0 * PAGE_4K as u64);
+        page_entry.set_phy_address(ppage.addr().addr() as u64);
 
         let table_index = vpage.0 % 512;
         self.phys_table.store(page_entry, table_index);

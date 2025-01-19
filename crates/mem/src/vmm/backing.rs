@@ -29,10 +29,7 @@ use core::fmt::Debug;
 
 use alloc::{boxed::Box, string::String, vec::Vec};
 
-use crate::{
-    MemoryError,
-    pmm::{PhysPage, use_pmm_mut},
-};
+use crate::{MemoryError, page::PhysPage, pmm::use_pmm_mut};
 
 use super::{VirtPage, VmPermissions, VmRegion};
 
@@ -58,12 +55,13 @@ pub trait VmBacking {
     /// For tasks like ELF loading or INode backed memory, this is used to load
     /// a page from the file into memory.
     ///
-    /// - `request`  This is the given offset (in pages) for which the allocation
-    ///              would like to take place.
+    /// # request
+    /// This is the given offset (in pages) for which the allocation
+    /// would like to take place.
     ///
-    ///              - If this is a file, this is the page offset in the file.
-    ///              - If this is physical memory, this should be the requested
-    ///                `PhysPage`.
+    ///  - If this is a file, this is the page offset in the file.
+    ///  - If this is physical memory, this should be the requested
+    ///    'PhysPage'.
     fn alloc_here(&mut self, _request: usize) -> Result<PhysPage, MemoryError> {
         Err(MemoryError::NotSupported)
     }
