@@ -35,6 +35,8 @@ pub mod phys;
 #[cfg(feature = "alloc")]
 pub mod pmm;
 #[cfg(feature = "alloc")]
+pub mod virt2phys;
+#[cfg(feature = "alloc")]
 pub mod vmm;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -120,7 +120,7 @@ impl<S: PagingStructureSize> PhysPage<S> {
     }
 
     /// Get the current page sized value that would contain the given address.
-    pub const fn containing_addr<Alignment: AlignmentTo>(&self, addr: PhysAddr<Alignment>) -> Self {
+    pub const fn containing_addr<Alignment: AlignmentTo>(addr: PhysAddr<Alignment>) -> Self {
         Self::new(addr.addr() / S::N_BYTES)
     }
 
