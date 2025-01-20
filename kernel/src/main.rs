@@ -101,36 +101,26 @@ fn main(kbh: &KernelBootHeader) {
     );
     mem::pmm::set_physical_memory_manager(pmm);
 
+    logln!("Attached virt2phys provider!");
     init_virt2phys_provider();
+
     let new_tables = Virt2PhysMapping::empty();
-    new_tables
-        .correlate_page(
-            mem::page::VirtPage::new(10),
-            PhysPage::new(1),
-            VmOptions::none()
-                .set_no_tlb_flush_flag(true)
-                .set_increase_perm_flag(true),
-            mem::paging::VmPermissions::none()
-                .set_read_flag(true)
-                .set_write_flag(true)
-                .set_exec_flag(true),
-        )
-        .unwrap();
-    new_tables
-        .correlate_page(
-            mem::page::VirtPage::new(51224),
-            PhysPage::new(2),
-            VmOptions::none()
-                .set_no_tlb_flush_flag(true)
-                .set_increase_perm_flag(true),
-            mem::paging::VmPermissions::none()
-                .set_read_flag(true)
-                .set_write_flag(true)
-                .set_exec_flag(true)
-                .set_user_flag(true),
-        )
-        .unwrap();
-    logln!("Page tables:\n{new_tables:#?}");
+    for i in 0..1024 {
+        new_tables
+            .correlate_page(
+                mem::page::VirtPage::new(10 + i),
+                PhysPage::new(1 + i),
+                VmOptions::none()
+                    .set_no_tlb_flush_flag(false)
+                    .set_increase_perm_flag(true),
+                mem::paging::VmPermissions::none()
+                    .set_read_flag(true)
+                    .set_write_flag(true)
+                    .set_exec_flag(true),
+            )
+            .unwrap();
+    }
+    // logln!("Page tables:\n{new_tables:#?}");
 
     logln!("Init VirtMemoryManager");
     let kernel_process = unsafe { VmProcess::new_from_bootloader() };

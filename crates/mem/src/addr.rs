@@ -186,6 +186,7 @@ macro_rules! make_addr {
 
         impl<A: AlignmentTo> $ident<A> {
             /// Force a value as an addr.
+            #[inline]
             pub const unsafe fn new_unchecked(value: usize) -> Self {
                Self {
                   addr: value,

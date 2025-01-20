@@ -86,7 +86,13 @@ impl Clone for Virt2PhysMapping {
 /// Flush this page from the TLB
 #[inline]
 pub unsafe fn flush_tlb(page: VirtPage) {
-    todo!()
+    unsafe {
+        core::arch::asm!(
+            "invlpg [rax]",
+            in("rax") page.addr().addr(),
+            options(nostack)
+        )
+    }
 }
 
 /// Returns the indexes into the page tables that would give this virtual address.
@@ -351,7 +357,7 @@ impl Virt2PhysMapping {
                     let page_entry = lower.table.get(lvl1_index);
 
                     // Make sure we don't override unless we are told to
-                    if entry.is_present_set() && !options.is_overwrite_set() {
+                    if page_entry.is_present_set() && !options.is_overwrite_set() {
                         return Some(PageCorrelationError::PageAlreadyMapped);
                     }
 
@@ -982,6 +988,34 @@ impl SafePageMapLvl1 {
 }
 
 impl core::fmt::Debug for Virt2PhysMapping {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let mapping_lock = self.mapping.read();
+
+        let Some(_) = mapping_lock.as_ref() else {
+            writeln!(f, "Virt2PhysMapping ?? (Empty)")?;
+            return Ok(());
+        };
+
+        write!(f, "Virt2PhysMapping (",)?;
+
+        if self.is_loaded() {
+            write!(f, "Current")?;
+        } else {
+            write!(
+                f,
+                "Not Loaded, refs={}",
+                self.mapping
+                    .read()
+                    .as_ref()
+                    .map(|inner| Arc::strong_count(inner))
+                    .unwrap_or(0)
+            )?;
+        }
+        writeln!(f, ")")
+    }
+}
+
+impl core::fmt::Display for Virt2PhysMapping {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         let mapping_lock = self.mapping.read();
 
