@@ -34,7 +34,7 @@ use crate::{
     pmm::SharedPhysPage,
 };
 use alloc::{boxed::Box, collections::BTreeMap, sync::Arc, vec::Vec};
-use lldebug::{hexdump::HexPrint, logln};
+use lldebug::logln;
 use spin::RwLock;
 use util::consts::PAGE_4K;
 
@@ -397,6 +397,33 @@ impl VmObject {
         vm_process: &VmProcess,
         info: PageFaultInfo,
     ) -> PageFaultReponse {
+        // If this was a write, and we dont support writting, this is a fault!
+        if info.write_read_access && !self.permissions.is_write_set() {
+            return PageFaultReponse::NoAccess {
+                page_perm: self.permissions,
+                request_perm: VmPermissions::none().set_write_flag(true),
+                page: VirtPage::containing_addr(info.vaddr),
+            };
+        }
+
+        // If this was an execute, and we dont support exec, this is a fault!
+        if info.execute_fault && !self.permissions.is_exec_set() {
+            return PageFaultReponse::NoAccess {
+                page_perm: self.permissions,
+                request_perm: VmPermissions::none().set_exec_flag(true),
+                page: VirtPage::containing_addr(info.vaddr),
+            };
+        }
+
+        // If this was a UE-access fault, and we dont support it, this is a fault!
+        if info.user_fault && !self.permissions.is_user_set() {
+            return PageFaultReponse::NoAccess {
+                page_perm: self.permissions,
+                request_perm: VmPermissions::none().set_user_flag(true),
+                page: VirtPage::containing_addr(info.vaddr),
+            };
+        }
+
         match self
             .fill_action
             .write()
@@ -622,7 +649,7 @@ pub fn test() {
             .set_read_flag(true)
             .set_write_flag(true)
             .set_user_flag(true),
-        VmFillAction::Scrub(0xFF),
+        VmFillAction::Nothing,
     )
     .unwrap();
 
@@ -648,14 +675,6 @@ pub fn test() {
     );
 
     logln!("{}", proc.page_tables);
-
-    logln!(
-        "{}",
-        unsafe {
-            core::slice::from_raw_parts(VirtPage::<Page4K>::new(16).addr().addr() as *const u8, 128)
-        }
-        .hexdump()
-    );
 
     todo!("Test Done!");
 }
