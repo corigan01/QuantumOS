@@ -24,7 +24,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 extern crate alloc;
-use core::ops::{Add, BitOr, BitOrAssign};
+use core::ops::{BitOr, BitOrAssign};
 
 use crate::{
     addr::{PhysAddr, VirtAddr},
@@ -395,12 +395,12 @@ impl Virt2PhysMapping {
 
     /// Check if this table is currently loaded
     pub fn is_loaded(&self) -> bool {
+        // FIXME: I think this is a bug with RwLock, since there should only be
+        //        read locks (I even checked), but it always hangs?
         unsafe { &*self.mapping.as_mut_ptr() }
             .as_ref()
             .is_some_and(|our_table| {
-                CURRENTLY_LOADED_PAGE_TABLES
-                    .mapping
-                    .read()
+                unsafe { &*CURRENTLY_LOADED_PAGE_TABLES.mapping.as_mut_ptr() }
                     .as_ref()
                     .is_some_and(|global_table| Arc::ptr_eq(our_table, global_table))
             })
@@ -434,7 +434,9 @@ impl Virt2PhysMapping {
         &self,
         page: VirtPage,
     ) -> Result<PhysPage, PhysPtrTranslationError> {
-        let mapping_lock = self.mapping.read();
+        // FIXME: I think this is a bug with RwLock, since there should only be
+        //        read locks (I even checked), but it always hangs?
+        let mapping_lock = unsafe { &*self.mapping.as_mut_ptr() };
         let Some(inner) = mapping_lock.as_ref() else {
             return Err(PhysPtrTranslationError::PageEntriesNotSetup);
         };
@@ -593,35 +595,6 @@ impl Virt2PhysMapping {
             let lvl2_fun = |entry: &mut PageEntryLvl2, table: &mut SafePageMapLvl1| {
                 let prev_permissions = entry.get_permissions();
 
-                // Zero entry if its not present
-                if !entry.is_present_set() {
-                    *entry = PageEntryLvl2::zero();
-                    entry.add_permissions_from(permissions);
-                } else {
-                    // Unless we are told to upgrade permissions, fail
-                    if prev_permissions < permissions && !options.is_increase_perm_set() {
-                        return Err(PageCorrelationError::ExistingPermissionsTooStrict {
-                            table_perms: entry.get_permissions(),
-                            requested_perms: permissions,
-                        });
-                    } else if prev_permissions < permissions && options.is_increase_perm_set() {
-                        entry.add_permissions_from(permissions);
-                    }
-
-                    // Unless we are told to reduce permissions, fail
-                    if prev_permissions > permissions && !options.is_reduce_perm_set() {
-                        return Err(PageCorrelationError::ExistingPermissionsPermissive {
-                            table_perms: entry.get_permissions(),
-                            requested_perms: permissions,
-                        });
-                    } else if prev_permissions < permissions && options.is_reduce_perm_set() {
-                        entry.reduce_permissions_to(permissions);
-                    }
-                }
-
-                // Set this flag to present if we have any flags enabled
-                entry.set_present_flag(permissions.0 != 0);
-
                 // If this is a new entry and we are currently loaded, we save this addr for later
                 if is_loaded && !entry.is_present_set() {
                     vaddr1 = Some(VirtAddr::new(table.table.table_ptr() as usize));
@@ -636,16 +609,9 @@ impl Virt2PhysMapping {
                             .addr() as u64,
                     );
                 }
-                // Otherwise this isnt a new entry, and we don't care about finding its PhysAddr
-                table.inner_correlate_page(lvl1_index, vpage, ppage, options, permissions)
-            };
-
-            let lvl3_fun = |entry: &mut PageEntryLvl3, table: &mut SafePageMapLvl2| {
-                let prev_permissions = entry.get_permissions();
 
                 // Zero entry if its not present
                 if !entry.is_present_set() {
-                    *entry = PageEntryLvl3::zero();
                     entry.add_permissions_from(permissions);
                 } else {
                     // Unless we are told to upgrade permissions, fail
@@ -671,6 +637,13 @@ impl Virt2PhysMapping {
 
                 // Set this flag to present if we have any flags enabled
                 entry.set_present_flag(permissions.0 != 0);
+
+                // Otherwise this isnt a new entry, and we don't care about finding its PhysAddr
+                table.inner_correlate_page(lvl1_index, vpage, ppage, options, permissions)
+            };
+
+            let lvl3_fun = |entry: &mut PageEntryLvl3, table: &mut SafePageMapLvl2| {
+                let prev_permissions = entry.get_permissions();
 
                 // If this is a new entry and we are currently loaded, we save this addr for later
                 if is_loaded && !entry.is_present_set() {
@@ -686,16 +659,9 @@ impl Virt2PhysMapping {
                             .addr() as u64,
                     );
                 }
-                // Otherwise this isnt a new entry, and we don't care about finding its PhysAddr
-                table.ensured_mut_at(lvl2_index, lvl2_fun)
-            };
-
-            let prev_page = lvl4_mut.ensured_mut_at(lvl4_index, |entry, table| {
-                let prev_permissions = entry.get_permissions();
 
                 // Zero entry if its not present
                 if !entry.is_present_set() {
-                    *entry = PageEntryLvl4::zero();
                     entry.add_permissions_from(permissions);
                 } else {
                     // Unless we are told to upgrade permissions, fail
@@ -722,6 +688,13 @@ impl Virt2PhysMapping {
                 // Set this flag to present if we have any flags enabled
                 entry.set_present_flag(permissions.0 != 0);
 
+                // Otherwise this isnt a new entry, and we don't care about finding its PhysAddr
+                table.ensured_mut_at(lvl2_index, lvl2_fun)
+            };
+
+            let prev_page = lvl4_mut.ensured_mut_at(lvl4_index, |entry, table| {
+                let prev_permissions = entry.get_permissions();
+
                 // If this is a new entry and we are currently loaded, we save this addr for later
                 if is_loaded && !entry.is_present_set() {
                     vaddr3 = Some(VirtAddr::new(table.table.table_ptr() as usize));
@@ -736,8 +709,36 @@ impl Virt2PhysMapping {
                             .addr() as u64,
                     );
                 }
-                // Otherwise this isnt a new entry, and we don't care about finding its PhysAddr
 
+                // Zero entry if its not present
+                if !entry.is_present_set() {
+                    entry.add_permissions_from(permissions);
+                } else {
+                    // Unless we are told to upgrade permissions, fail
+                    if prev_permissions < permissions && !options.is_increase_perm_set() {
+                        return Err(PageCorrelationError::ExistingPermissionsTooStrict {
+                            table_perms: entry.get_permissions(),
+                            requested_perms: permissions,
+                        });
+                    } else if prev_permissions < permissions && options.is_increase_perm_set() {
+                        entry.add_permissions_from(permissions);
+                    }
+
+                    // Unless we are told to reduce permissions, fail
+                    if prev_permissions > permissions && !options.is_reduce_perm_set() {
+                        return Err(PageCorrelationError::ExistingPermissionsPermissive {
+                            table_perms: entry.get_permissions(),
+                            requested_perms: permissions,
+                        });
+                    } else if prev_permissions < permissions && options.is_reduce_perm_set() {
+                        entry.reduce_permissions_to(permissions);
+                    }
+                }
+
+                // Set this flag to present if we have any flags enabled
+                entry.set_present_flag(permissions.0 != 0);
+
+                // Otherwise this isnt a new entry, and we don't care about finding its PhysAddr
                 table.ensured_mut_at(lvl3_index, lvl3_fun)
             })?;
 
@@ -1252,6 +1253,7 @@ impl core::fmt::Display for Virt2PhysMapping {
         // Formatting for LVL2 page tables
         fn lvl2_fun(
             f: &mut core::fmt::Formatter<'_>,
+            skip_4k: bool,
             lvl4_index: usize,
             lvl3_index: usize,
             lvl2_index: usize,
@@ -1264,30 +1266,37 @@ impl core::fmt::Display for Virt2PhysMapping {
 
             writeln!(
                 f,
-                " | | |-{lvl2_index:>3}. PageTableLvl1 {} :: [VirtRegion {:#016x}]",
+                " | | |-{lvl2_index:>3}. PageTableLvl1 {} :: [VirtRegion {:#016x}] {}",
                 lvl2_entry.get_permissions(),
                 lvl4_index * (PageMapLvl4::SIZE_PER_INDEX as usize)
                     + lvl3_index * (PageMapLvl3::SIZE_PER_INDEX as usize)
-                    + lvl2_index * (PageMapLvl2::SIZE_PER_INDEX as usize)
+                    + lvl2_index * (PageMapLvl2::SIZE_PER_INDEX as usize),
+                lvl2_entry
+                    .is_page_size_set()
+                    .then_some("Huge Page")
+                    .unwrap_or("")
             )?;
 
-            for lvl1_index in 0..512 {
-                let lvl1_entry = lvl1.table.get(lvl1_index);
+            // I use the alt-formatting option '#' to disable the 4k pages
+            if !skip_4k {
+                for lvl1_index in 0..512 {
+                    let lvl1_entry = lvl1.table.get(lvl1_index);
 
-                if !lvl1_entry.is_present_set() {
-                    continue;
+                    if !lvl1_entry.is_present_set() {
+                        continue;
+                    }
+
+                    writeln!(
+                        f,
+                        " | | | |-{lvl1_index:>3}. Page4K {} :: [VirtAddr {:#016x} -> PhysAddr {:#016x}]",
+                        lvl1_entry.get_permissions(),
+                        lvl4_index * (PageMapLvl4::SIZE_PER_INDEX as usize)
+                            + lvl3_index * (PageMapLvl3::SIZE_PER_INDEX as usize)
+                            + lvl2_index * (PageMapLvl2::SIZE_PER_INDEX as usize)
+                            + lvl1_index * (PageMapLvl1::SIZE_PER_INDEX as usize),
+                        lvl1_entry.get_phy_address()
+                    )?;
                 }
-
-                writeln!(
-                    f,
-                    " | | | |-{lvl1_index:>3}. Page4K {} :: [VirtAddr {:#016x} -> PhysAddr {:#016x}]",
-                    lvl1_entry.get_permissions(),
-                    lvl4_index * (PageMapLvl4::SIZE_PER_INDEX as usize)
-                        + lvl3_index * (PageMapLvl3::SIZE_PER_INDEX as usize)
-                        + lvl2_index * (PageMapLvl2::SIZE_PER_INDEX as usize)
-                        + lvl1_index * (PageMapLvl1::SIZE_PER_INDEX as usize),
-                    lvl1_entry.get_phy_address()
-                )?;
             }
 
             Ok(())
@@ -1296,6 +1305,7 @@ impl core::fmt::Display for Virt2PhysMapping {
         // Formatting for LVL3 page tables
         fn lvl3_fun(
             f: &mut core::fmt::Formatter<'_>,
+            skip_4k: bool,
             lvl4_index: usize,
             lvl3_index: usize,
             lvl3_entry: &PageEntryLvl3,
@@ -1307,15 +1317,21 @@ impl core::fmt::Display for Virt2PhysMapping {
 
             writeln!(
                 f,
-                " | |-{lvl3_index:>3}. PageTableLvl2 {} :: [VirtRegion {:#016x}]",
+                " | |-{lvl3_index:>3}. PageTableLvl2 {} :: [VirtRegion {:#016x}] {}",
                 lvl3_entry.get_permissions(),
                 lvl4_index * (PageMapLvl4::SIZE_PER_INDEX as usize)
-                    + lvl3_index * (PageMapLvl3::SIZE_PER_INDEX as usize)
+                    + lvl3_index * (PageMapLvl3::SIZE_PER_INDEX as usize),
+                lvl3_entry
+                    .is_page_size_set()
+                    .then_some("Huge Page")
+                    .unwrap_or("")
             )?;
 
             for lvl2_index in 0..512 {
                 if let Some(err) = lvl2.ref_at(lvl2_index, |lvl2_entry, lvl1| {
-                    lvl2_fun(f, lvl4_index, lvl3_index, lvl2_index, lvl2_entry, lvl1)
+                    lvl2_fun(
+                        f, skip_4k, lvl4_index, lvl3_index, lvl2_index, lvl2_entry, lvl1,
+                    )
                 }) {
                     err?;
                 }
@@ -1327,6 +1343,7 @@ impl core::fmt::Display for Virt2PhysMapping {
         // Formatting for LVL4 page tables
         fn lvl4_fun(
             f: &mut core::fmt::Formatter<'_>,
+            skip_4k: bool,
             lvl4_index: usize,
             lvl4_entry: &PageEntryLvl4,
             lvl3: &SafePageMapLvl3,
@@ -1337,14 +1354,19 @@ impl core::fmt::Display for Virt2PhysMapping {
 
             writeln!(
                 f,
-                " |-{lvl4_index:>3}. PageTableLvl3 {} :: [VirtRegion {:#016x}]",
+                " |-{lvl4_index:>3}. PageTableLvl3 {} :: [VirtRegion {:#016x}] {} ${:016x}",
                 lvl4_entry.get_permissions(),
-                lvl4_index * (PageMapLvl4::SIZE_PER_INDEX as usize)
+                lvl4_index * (PageMapLvl4::SIZE_PER_INDEX as usize),
+                lvl4_entry
+                    .is_page_size_set()
+                    .then_some("Huge Page")
+                    .unwrap_or(""),
+                lvl4_entry.get_raw()
             )?;
 
             for lvl3_index in 0..512 {
                 if let Some(err) = lvl3.ref_at(lvl3_index, |lvl3_entry, lvl2| {
-                    lvl3_fun(f, lvl4_index, lvl3_index, lvl3_entry, lvl2)
+                    lvl3_fun(f, skip_4k, lvl4_index, lvl3_index, lvl3_entry, lvl2)
                 }) {
                     err?;
                 }
@@ -1355,7 +1377,7 @@ impl core::fmt::Display for Virt2PhysMapping {
 
         for lvl4_index in 0..512 {
             if let Some(err) = lvl4.ref_at(lvl4_index, |lvl4_entry, lvl3| {
-                lvl4_fun(f, lvl4_index, lvl4_entry, lvl3)
+                lvl4_fun(f, f.alternate(), lvl4_index, lvl4_entry, lvl3)
             }) {
                 err?;
             }
