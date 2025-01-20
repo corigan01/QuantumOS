@@ -23,13 +23,8 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use core::{
-    ops::Deref,
-    sync::atomic::{AtomicUsize, Ordering},
-};
-
 use alloc::{boxed::Box, sync::Arc};
-use lldebug::logln;
+use core::ops::Deref;
 use spin::RwLock;
 use util::consts::PAGE_4K;
 
@@ -124,25 +119,18 @@ impl Pmm {
 /// This physical page was allocated by the PMM and when dropped it
 /// will automaticlly be returned. Its a refrence counted PhysicalPage.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub struct PmmPhysPage(Arc<PhysPage>);
+pub struct SharedPhysPage(Arc<PhysPage>);
 
-impl Drop for PmmPhysPage {
+impl Drop for SharedPhysPage {
     fn drop(&mut self) {
         if self.ref_count() == 1 {
-            logln!("{:?} dropped its last ref", self.0);
             use_pmm_mut(|pmm| pmm.free_page(*self.0))
                 .expect("Unable to drop inner page when ref count hit zero!");
-        } else {
-            logln!(
-                "{:?} dropped one of its ref (ref={})",
-                self.0,
-                Arc::strong_count(&self.0)
-            );
         }
     }
 }
 
-impl Deref for PmmPhysPage {
+impl Deref for SharedPhysPage {
     type Target = PhysPage;
 
     fn deref(&self) -> &Self::Target {
@@ -150,10 +138,9 @@ impl Deref for PmmPhysPage {
     }
 }
 
-impl PmmPhysPage {
+impl SharedPhysPage {
     /// Allocates a new PmmPhysPage anywhere in the physical address space.
     pub fn allocate_anywhere() -> Result<Self, MemoryError> {
-        logln!("Allocated new tracked physical page");
         let page = use_pmm_mut(|pmm| pmm.allocate_page())?;
 
         Ok(Self(Arc::new(page)))

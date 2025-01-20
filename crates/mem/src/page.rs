@@ -311,6 +311,20 @@ macro_rules! impl_traits_for {
     };
 }
 
+impl VirtPage<Page4K> {
+    /// Create a new Virtual Page from a well aligned VirtAddr
+    pub const fn from_aligned(addr: VirtAddr<AlignedTo<PAGE_4K>>) -> Self {
+        Self::new(addr.addr() / PAGE_4K)
+    }
+}
+
+impl PhysPage<Page4K> {
+    /// Create a new Physical Page from a well aligned PhysAddr
+    pub const fn from_aligned(addr: PhysAddr<AlignedTo<PAGE_4K>>) -> Self {
+        Self::new(addr.addr() / PAGE_4K)
+    }
+}
+
 impl_traits_for! { PhysPage<Page4K>, PhysPage<Page2M>, PhysPage<Page1G>, VirtPage<Page4K>, VirtPage<Page2M>, VirtPage<Page1G> }
 
 #[cfg(test)]

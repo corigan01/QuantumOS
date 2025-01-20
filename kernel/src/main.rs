@@ -41,9 +41,8 @@ use bootloader::KernelBootHeader;
 use lldebug::{debug_ready, logln, make_debug};
 use mem::{
     alloc::{KernelAllocator, provide_init_region},
-    page::PhysPage,
-    paging::{Virt2PhysMapping, VmOptions, init_virt2phys_provider},
-    pmm::{Pmm, PmmPhysPage},
+    paging::{Virt2PhysMapping, init_virt2phys_provider},
+    pmm::Pmm,
     vmm::{VirtPage, VmPermissions, VmProcess, VmRegion, backing::KernelVmObject},
 };
 use scheduler::Scheduler;
@@ -107,6 +106,9 @@ fn main(kbh: &KernelBootHeader) {
     let new_tables = unsafe { Virt2PhysMapping::inhearit_bootloader() }.unwrap();
     unsafe { new_tables.clone().load() }.unwrap();
     logln!("Page tables:\n{new_tables:#}");
+
+    let mut proc = mem::vm::ProcessVm::new();
+    proc.test();
 
     logln!("Init VirtMemoryManager");
     let kernel_process = unsafe { VmProcess::new_from_bootloader() };

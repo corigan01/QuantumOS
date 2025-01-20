@@ -36,6 +36,11 @@ use arch::{
     registers::Segment,
 };
 use lldebug::{log, logln, sync::Mutex, warnln};
+use mem::{
+    addr::VirtAddr,
+    page::VirtPage,
+    vm::{PageFaultInfo, call_page_fault_handler},
+};
 
 static INTERRUPT_TABLE: Mutex<InterruptDescTable> = Mutex::new(InterruptDescTable::new());
 static IRQ_HANDLERS: Mutex<[Option<fn(&InterruptInfo)>; 32]> = Mutex::new([None; 32]);
@@ -51,6 +56,46 @@ fn exception_handler(args: InterruptInfo) {
         InterruptFlags::Irq(irq_num) if irq_num == 49 => unsafe {
             task_start();
         },
+        InterruptFlags::PageFault {
+            present,
+            write,
+            user,
+            reserved_write,
+            instruction_fetch,
+            protection_key,
+            shadow_stack,
+            software_guard,
+            virt_addr,
+        } => {
+            let vaddr = VirtAddr::new(virt_addr as usize);
+            let info = PageFaultInfo {
+                is_present: present,
+                write_read_access: write,
+                execute_fault: instruction_fetch,
+                user_fault: user,
+                vaddr,
+            };
+            match call_page_fault_handler(info) {
+                // If this page fault was handled, we dont need to do anything!
+                mem::vm::PageFaultReponse::Handled => (),
+                // Crash the process
+                mem::vm::PageFaultReponse::NoAccess {
+                    page_perm,
+                    request_perm,
+                    page,
+                } => {
+                    todo!("crash process")
+                }
+                // panic
+                mem::vm::PageFaultReponse::CriticalFault(error) => {
+                    panic!("PageFault critical fault: {error}");
+                }
+                // panic
+                mem::vm::PageFaultReponse::NotAttachedHandler => {
+                    panic!("PageFault without attached handler!");
+                }
+            }
+        }
         InterruptFlags::Debug => (),
         exception => {
             panic!("UNHANDLED FAULT\n{:#016x?}", args)
