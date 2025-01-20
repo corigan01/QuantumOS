@@ -107,7 +107,7 @@ fn main(kbh: &KernelBootHeader) {
     unsafe { new_tables.clone().load() }.unwrap();
     logln!("Page tables:\n{new_tables:#}");
 
-    let mut proc = mem::vm::ProcessVm::new();
+    let mut proc = mem::vm::VmProcess::new();
     proc.test();
 
     logln!("Init VirtMemoryManager");

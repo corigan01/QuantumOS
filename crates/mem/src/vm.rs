@@ -27,9 +27,10 @@ extern crate alloc;
 use core::error::Error;
 
 use crate::{
+    MemoryError,
     addr::{AlignedTo, VirtAddr},
     page::{PhysPage, VirtPage},
-    paging::{PageCorrelationError, Virt2PhysMapping, VmPermissions},
+    paging::{PageCorrelationError, Virt2PhysMapping, VmOptions, VmPermissions},
     pmm::SharedPhysPage,
 };
 use alloc::{boxed::Box, collections::BTreeMap, sync::Arc, vec::Vec};
@@ -79,11 +80,16 @@ impl VmRegion {
         self.start >= page && self.end <= page
     }
 
-    // Get an iterator of the pages contained within this region
-    pub fn pages_iter(&self) -> impl Iterator<Item = VirtPage> {
+    /// Get an iterator of the pages contained within this region
+    pub fn pages_iter(&self) -> impl Iterator<Item = VirtPage> + use<> {
         (self.start.page()..=self.end.page())
             .into_iter()
             .map(|raw_page| VirtPage::new(raw_page))
+    }
+
+    /// Does this other VmRegion overlap with our VmObject
+    pub fn overlaps_with(&self, rhs: &Self) -> bool {
+        self.does_contain_page(rhs.start) || self.does_contain_page(rhs.end)
     }
 }
 
@@ -110,7 +116,7 @@ pub trait VmInjectFillAction: core::fmt::Debug {
 
     /// Should all pages be filled immediately when this object is created?
     #[allow(unused_variables)]
-    fn requests_all_pages_filled(&self, parent_object: &VmObject, process: &VmProcess) -> bool {
+    fn requests_all_pages_filled(&self, parent_object: &VmObject) -> bool {
         false
     }
 
@@ -153,6 +159,82 @@ pub enum VmFillAction {
     InjectWith(Arc<RwLock<dyn VmInjectFillAction>>),
 }
 
+/// Scrub the vpage's memory with the given pattern.
+///
+/// The vpage must be kernel accessable before calling this function.
+pub unsafe fn scrub_page(vpage: VirtPage, pattern: u8) {
+    let slice = unsafe { core::slice::from_raw_parts_mut(vpage.addr().as_mut_ptr(), 4096) };
+    slice.fill(pattern);
+}
+
+impl VmInjectFillAction for VmFillAction {
+    fn populate_page(
+        &mut self,
+        parent_object: &VmObject,
+        process: &VmProcess,
+        relative_index: usize,
+        vpage: VirtPage,
+        ppage: PhysPage,
+    ) -> PopulationReponse {
+        match self {
+            VmFillAction::Nothing => PopulationReponse::Okay,
+            VmFillAction::Scrub(pattern) => {
+                unsafe { scrub_page(vpage, *pattern) };
+                PopulationReponse::Okay
+            }
+            VmFillAction::InjectWith(rw_lock) => {
+                rw_lock
+                    .write()
+                    .populate_page(parent_object, process, relative_index, vpage, ppage)
+            }
+        }
+    }
+
+    fn requests_all_pages_filled(&self, parent_object: &VmObject) -> bool {
+        match self {
+            VmFillAction::Nothing => false,
+            VmFillAction::Scrub(_) => false,
+            VmFillAction::InjectWith(rw_lock) => {
+                rw_lock.read().requests_all_pages_filled(parent_object)
+            }
+        }
+    }
+
+    fn page_safely_releasable(
+        &self,
+        parent_object: &VmObject,
+        process: &VmProcess,
+        vpage: VirtPage,
+    ) -> bool {
+        match self {
+            VmFillAction::Nothing => false,
+            VmFillAction::Scrub(_) => false,
+            VmFillAction::InjectWith(rw_lock) => {
+                rw_lock
+                    .read()
+                    .page_safely_releasable(parent_object, process, vpage)
+            }
+        }
+    }
+
+    fn page_fault_handler(
+        &mut self,
+        parent_object: &VmObject,
+        process: &VmProcess,
+        info: PageFaultInfo,
+    ) -> PageFaultReponse {
+        match self {
+            VmFillAction::Nothing => PageFaultReponse::NotAttachedHandler,
+            VmFillAction::Scrub(_) => PageFaultReponse::NotAttachedHandler,
+            VmFillAction::InjectWith(rw_lock) => {
+                rw_lock
+                    .write()
+                    .page_fault_handler(parent_object, process, info)
+            }
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct VmObject {
     // TODO: Support VmObject sharing
@@ -169,26 +251,238 @@ pub struct VmObject {
     /// Permissions of this object
     pub permissions: VmPermissions,
     /// What to do wiht this vm object
-    pub fill_action: VmFillAction,
+    pub fill_action: RwLock<VmFillAction>,
+}
+
+/// The type of error given when making a new page
+#[derive(Debug)]
+pub enum NewVmObjectError {
+    /// Failed to Map this page
+    MappingErr(VmObjectMappingError),
+}
+
+/// The type of error given when trying to map a page with a VmObject
+#[derive(Debug)]
+pub enum VmObjectMappingError {
+    /// Cannot map this page
+    MappingError(PageCorrelationError),
+    /// Failed to get a physical page
+    CannotGetPhysicalPage(MemoryError),
+    /// Tried to call map_page with a page not in the region
+    PageNotContainedWithinRegion {
+        region: VmRegion,
+        requested_vpage: VirtPage,
+    },
+}
+
+/// Options to apply to a page when populating it
+const KERNEL_POPULATE_OPT: VmOptions = VmOptions::none()
+    .set_overwrite_flag(true)
+    .set_increase_perm_flag(true)
+    .set_reduce_perm_flag(true);
+/// Permissions to apply to a page when populating it
+const KERNEL_POPULATE_PERM: VmPermissions = VmPermissions::none()
+    .set_exec_flag(false)
+    .set_read_flag(true)
+    .set_write_flag(true)
+    .set_user_flag(false);
+
+impl VmObject {
+    /// Create a new VmObject
+    pub fn new(
+        vm_process: &VmProcess,
+        region: VmRegion,
+        permissions: VmPermissions,
+        fill_action: VmFillAction,
+    ) -> Result<Arc<RwLock<Self>>, NewVmObjectError> {
+        let mut new_self = Self {
+            region,
+            mappings: BTreeMap::new(),
+            permissions,
+            fill_action: RwLock::new(fill_action),
+        };
+
+        // If this region requests all of its pages to be filled now, we need to fill them
+        if new_self
+            .fill_action
+            .read()
+            .requests_all_pages_filled(&new_self)
+        {
+            logln!("This vmobject requests all pages filled now!");
+            for vpage in new_self.region.pages_iter() {
+                new_self
+                    .map_new_page(vm_process, vpage)
+                    .map_err(|err| NewVmObjectError::MappingErr(err))?;
+            }
+        }
+        todo!()
+    }
+
+    /// Do the mapping of a virtual page
+    ///
+    /// This function should flush this page to the VmProcess's page tables.
+    pub fn map_new_page(
+        &mut self,
+        vm_process: &VmProcess,
+        vpage: VirtPage,
+    ) -> Result<(), VmObjectMappingError> {
+        logln!("Asking this VmObject to map {:?}", vpage);
+
+        // if this page isnt within our mapping, we cannot map it
+        if !self.region.does_contain_page(vpage) {
+            return Err(VmObjectMappingError::PageNotContainedWithinRegion {
+                region: self.region,
+                requested_vpage: vpage,
+            });
+        }
+
+        // Get a new backing page for this vpage
+        let backing_page = SharedPhysPage::allocate_anywhere()
+            .map_err(|err| VmObjectMappingError::CannotGetPhysicalPage(err))?;
+
+        // Map the page with kernel option first to ensure we can write to this page
+        vm_process
+            .page_tables
+            .correlate_page(
+                vpage,
+                *backing_page,
+                KERNEL_POPULATE_OPT,
+                KERNEL_POPULATE_PERM,
+            )
+            .map_err(|err| VmObjectMappingError::MappingError(err))?;
+
+        // Attempt to populate the page
+        match self
+            .fill_action
+            .write()
+            .populate_page(self, vm_process, 0, vpage, *backing_page)
+        {
+            PopulationReponse::Okay => (),
+            PopulationReponse::MappingError(page_correlation_error) => {
+                return Err(VmObjectMappingError::MappingError(page_correlation_error));
+            }
+        }
+
+        // Finally map the page back to the user when done
+        vm_process
+            .page_tables
+            .correlate_page(
+                vpage,
+                *backing_page,
+                VmOptions::none()
+                    .set_only_commit_permissions_flag(true)
+                    .set_increase_perm_flag(true)
+                    .set_overwrite_flag(true),
+                self.permissions,
+            )
+            .map_err(|err| VmObjectMappingError::MappingError(err))?;
+
+        Ok(())
+    }
+}
+
+/// A possible reponse to inserting a VmObject into a VmProcess
+#[derive(Debug)]
+pub enum InsertVmObjectError {
+    /// This new region overlaps with an existing region
+    Overlapping {
+        /// The region is overlaps with
+        existing: VmRegion,
+        /// The region attempted to be added
+        attempted: VmRegion,
+    },
+    /// Thew new vm object failed
+    VmObjectError(NewVmObjectError),
 }
 
 /// Repr a virtual 'Address Space' for which a processes exists in
+///
+/// This struct is fully locked internally, so it can be accessed via '&self'
 #[derive(Debug)]
 pub struct VmProcess {
-    objects: Vec<VmObject>,
-    page_tables: Virt2PhysMapping,
+    /// The objects that make up this VmProcess
+    ///
+    /// Since these objects can and be shared, we must lock and ref-count them
+    objects: RwLock<Vec<Arc<RwLock<VmObject>>>>,
+    /// The page tables in this process
+    pub page_tables: Virt2PhysMapping,
 }
 
 impl VmProcess {
-    // Init an empty ProcessVM (const fn)
+    /// Init an empty ProcessVM (const fn)
     pub const fn new() -> Self {
         Self {
-            objects: Vec::new(),
+            objects: RwLock::new(Vec::new()),
             page_tables: Virt2PhysMapping::empty(),
         }
     }
 
-    pub fn test(&mut self) {}
+    /// Does this VmRegion overlap with any of the VmObjects in this Process?
+    ///
+    /// If it returns the region that is overlapping.
+    pub fn check_overlapping(&self, region: &VmRegion) -> Option<VmRegion> {
+        self.objects.read().iter().find_map(|vm_object| {
+            let locked = vm_object.read();
+
+            if locked.region.overlaps_with(&region) {
+                Some(locked.region)
+            } else {
+                None
+            }
+        })
+    }
+
+    /// Add a mapping to this process
+    pub fn insert_vm_object(
+        &self,
+        object: Arc<RwLock<VmObject>>,
+    ) -> Result<(), InsertVmObjectError> {
+        let locked = object.read();
+
+        // If there is already a region that exists on that virtual address
+        if let Some(existing) = self.check_overlapping(&locked.region) {
+            return Err(InsertVmObjectError::Overlapping {
+                existing,
+                attempted: locked.region,
+            });
+        }
+
+        // Finally insert the object into the process
+        drop(locked);
+        self.objects.write().push(object);
+
+        Ok(())
+    }
+
+    /// Make a new vm object from this process. This will both insert the object
+    /// and return a new Arc<..> ptr to it.
+    pub fn inplace_new_vmobject(
+        &self,
+        region: VmRegion,
+        permissions: VmPermissions,
+        fill_action: VmFillAction,
+    ) -> Result<Arc<RwLock<VmObject>>, InsertVmObjectError> {
+        // If there is already a region that exists on that virtual address
+        //
+        // Even though this is checked again once the object gets inserted, we
+        // want to make sure this object is valid before we do the expensive work
+        // of creating it.
+        if let Some(existing) = self.check_overlapping(&region) {
+            return Err(InsertVmObjectError::Overlapping {
+                existing,
+                attempted: region,
+            });
+        }
+
+        // Construct the object
+        let obj = VmObject::new(self, region, permissions, fill_action)
+            .map_err(|obj_err| InsertVmObjectError::VmObjectError(obj_err))?;
+
+        // Insert the object
+        self.insert_vm_object(obj.clone())?;
+
+        Ok(obj)
+    }
 }
 
 /// Possible scenarios for a page fault to occur
