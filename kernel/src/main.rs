@@ -104,23 +104,8 @@ fn main(kbh: &KernelBootHeader) {
     logln!("Attached virt2phys provider!");
     init_virt2phys_provider();
 
-    let new_tables = Virt2PhysMapping::empty();
-    for i in 0..1024 {
-        new_tables
-            .correlate_page(
-                mem::page::VirtPage::new(10 + i),
-                PhysPage::new(1 + i),
-                VmOptions::none()
-                    .set_no_tlb_flush_flag(false)
-                    .set_increase_perm_flag(true),
-                mem::paging::VmPermissions::none()
-                    .set_read_flag(true)
-                    .set_write_flag(true)
-                    .set_exec_flag(true),
-            )
-            .unwrap();
-    }
-    // logln!("Page tables:\n{new_tables:#?}");
+    let new_tables = unsafe { Virt2PhysMapping::inhearit_bootloader() }.unwrap();
+    logln!("Page tables:\n{new_tables}");
 
     logln!("Init VirtMemoryManager");
     let kernel_process = unsafe { VmProcess::new_from_bootloader() };

@@ -159,6 +159,7 @@ impl<S: PagingStructureSize> PhysPage<S> {
 }
 
 /// A structure representing a well aligned Virtual page
+#[derive(Clone, Copy)]
 pub struct VirtPage<Size: PagingStructureSize = Page4K> {
     id: usize,
     _ph: PhantomData<Size>,

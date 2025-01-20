@@ -24,7 +24,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 extern crate alloc;
-use core::ops::{BitOr, BitOrAssign};
+use core::ops::{Add, BitOr, BitOrAssign};
 
 use crate::{
     addr::{PhysAddr, VirtAddr},
@@ -215,6 +215,167 @@ impl Virt2PhysMapping {
         }
     }
 
+    /// Copy all entries from the bootloader's page tables
+    pub unsafe fn inhearit_bootloader() -> Result<Self, PageCorrelationError> {
+        let new_table = Self::empty();
+
+        // Since the bootloader identity maps itself, we can use that to read the page tables
+        // even though their PTRs are PhysAddr instead of VirtAddr.
+        let cr3_lvl4 =
+            arch::registers::cr3::get_page_directory_base_register() as *const PageMapLvl4;
+
+        let bootloader_lvl4 = unsafe { &*cr3_lvl4 };
+
+        // FIXME: Once we have Huge page table support, we should inhearit the whole thing,
+        //        but for right now we should skip the bootloader's identity mapping and just
+        //        try to map the kernel.
+        const SKIP_UNTIL_VADDR: usize = 0x100000000000;
+
+        // FIXME: We should protect the kernel's image once we get here instead of just
+        //        spamming perms until it works :)
+        const KERNEL_RWE: VmPermissions = VmPermissions::none()
+            .set_exec_flag(true)
+            .set_read_flag(true)
+            .set_write_flag(true)
+            .set_user_flag(false);
+
+        // Since we know 'new_table' is not loaded, we will eventually have to write it
+        // to cr3 so we dont need to invlpg.
+        //
+        // We are also making new page tables, so we shoulnt need any special options.
+        const KERNEL_OPT: VmOptions = VmOptions::none().set_no_tlb_flush_flag(true);
+
+        // Map a 1Gib page to our page table
+        fn map_1g(
+            mapping: &Virt2PhysMapping,
+            vpage: VirtPage,
+            ppage: PhysPage,
+        ) -> Result<(), PageCorrelationError> {
+            if vpage.addr().addr() < SKIP_UNTIL_VADDR {
+                return Ok(());
+            }
+
+            for page in 0..512 {
+                map_2m(
+                    mapping,
+                    vpage + VirtPage::new(page),
+                    ppage + PhysPage::new(page),
+                )?;
+            }
+
+            Ok(())
+        }
+
+        // Map a 2Mib page to our page table
+        fn map_2m(
+            mapping: &Virt2PhysMapping,
+            vpage: VirtPage,
+            ppage: PhysPage,
+        ) -> Result<(), PageCorrelationError> {
+            if vpage.addr().addr() < SKIP_UNTIL_VADDR {
+                return Ok(());
+            }
+
+            for page in 0..512 {
+                map_4k(
+                    mapping,
+                    vpage + VirtPage::new(page),
+                    ppage + PhysPage::new(page),
+                )?;
+            }
+
+            Ok(())
+        }
+
+        // Map a normal 4Kib page to our page table
+        fn map_4k(
+            mapping: &Virt2PhysMapping,
+            vpage: VirtPage,
+            ppage: PhysPage,
+        ) -> Result<(), PageCorrelationError> {
+            if vpage.addr().addr() < SKIP_UNTIL_VADDR {
+                return Ok(());
+            }
+
+            mapping.correlate_page(vpage, ppage, KERNEL_OPT, KERNEL_RWE)?;
+            Ok(())
+        }
+
+        for (lvl4_index, lvl4_entry) in bootloader_lvl4.entry_iter().enumerate() {
+            // Attempt to get the next (Lvl4) table entries
+            let Some(lvl3) = (unsafe { lvl4_entry.get_table() }) else {
+                continue;
+            };
+
+            for (lvl3_index, lvl3_entry) in lvl3.entry_iter().enumerate() {
+                // Attempt to get the next (Lvl3) table entries
+                let Some(lvl2) = (unsafe { lvl3_entry.get_table() }) else {
+                    // 1Gib Entry
+                    if lvl3_entry.is_present_set() && lvl3_entry.is_page_size_set() {
+                        map_1g(
+                            &new_table,
+                            // Convert the indexes back into a page id
+                            VirtPage::new(lvl4_index * 512 * 512 * 512 + lvl3_index * 512 * 512),
+                            PhysPage::containing_addr(PhysAddr::new(
+                                PageEntry1G::convert_entry(lvl3_entry)
+                                    .expect("Expected 1Gib entry")
+                                    .get_phy_address() as usize,
+                            )),
+                        )?;
+                    }
+                    continue;
+                };
+
+                for (lvl2_index, lvl2_entry) in lvl2.entry_iter().enumerate() {
+                    // Attempt to get the next (Lvl2) table entries
+                    let Some(lvl1) = (unsafe { lvl2_entry.get_table() }) else {
+                        // 2Mib Entry
+                        if lvl2_entry.is_present_set() && lvl2_entry.is_page_size_set() {
+                            map_2m(
+                                &new_table,
+                                // Convert the indexes back into a page id
+                                VirtPage::new(
+                                    lvl4_index * 512 * 512 * 512
+                                        + lvl3_index * 512 * 512
+                                        + lvl2_index * 512,
+                                ),
+                                PhysPage::containing_addr(PhysAddr::new(
+                                    PageEntry2M::convert_entry(lvl2_entry)
+                                        .expect("Expected 2Mib entry")
+                                        .get_phy_address()
+                                        as usize,
+                                )),
+                            )?;
+                        }
+                        continue;
+                    };
+
+                    for (lvl1_index, lvl1_entry) in lvl1.entry_iter().enumerate() {
+                        if !lvl1_entry.is_present_set() {
+                            continue;
+                        }
+
+                        map_4k(
+                            &new_table,
+                            // Convert the indexes back into a page id
+                            VirtPage::new(
+                                lvl4_index * 512 * 512 * 512
+                                    + lvl3_index * 512 * 512
+                                    + lvl2_index * 512
+                                    + lvl1_index,
+                            ),
+                            PhysPage::containing_addr(PhysAddr::new(
+                                lvl1_entry.get_phy_address() as usize
+                            )),
+                        )?;
+                    }
+                }
+            }
+        }
+
+        Ok(new_table)
+    }
+
     /// Get the physical address of the inner table
     fn inner_table_ptr(&self) -> Result<PhysAddr, PageTableLoadingError> {
         let mapping_inner = self.mapping.read();
@@ -325,10 +486,16 @@ impl Virt2PhysMapping {
         let (lvl4_index, lvl3_index, lvl2_index, lvl1_index) = table_indexes_for(vpage.addr());
 
         fn check_perms(
+            present: bool,
             prev_perm: VmPermissions,
             new_perm: VmPermissions,
             options: VmOptions,
         ) -> Option<PageCorrelationError> {
+            // If we are the ones making this table, there is no need to check permissions
+            if !present {
+                return None;
+            }
+
             // Unless we are told to upgrade permissions, fail
             if prev_perm < new_perm && !options.is_increase_perm_set() {
                 return Some(PageCorrelationError::ExistingPermissionsTooStrict {
@@ -353,7 +520,13 @@ impl Virt2PhysMapping {
         // fully locking the table.
         if let Some(err) = lock.as_ref().and_then(|ro_checks| {
             let lvl2 = |entry: &PageEntryLvl2, lower: &SafePageMapLvl1| {
-                check_perms(entry.get_permissions(), permissions, options).or_else(|| {
+                check_perms(
+                    entry.is_present_set(),
+                    entry.get_permissions(),
+                    permissions,
+                    options,
+                )
+                .or_else(|| {
                     let page_entry = lower.table.get(lvl1_index);
 
                     // Make sure we don't override unless we are told to
@@ -361,16 +534,31 @@ impl Virt2PhysMapping {
                         return Some(PageCorrelationError::PageAlreadyMapped);
                     }
 
-                    check_perms(page_entry.get_permissions(), permissions, options)
+                    check_perms(
+                        page_entry.is_present_set(),
+                        page_entry.get_permissions(),
+                        permissions,
+                        options,
+                    )
                 })
             };
             let lvl3 = |entry: &PageEntryLvl3, lower: &SafePageMapLvl2| {
-                check_perms(entry.get_permissions(), permissions, options)
-                    .or_else(|| lower.ref_at(lvl2_index, lvl2).flatten())
+                check_perms(
+                    entry.is_present_set(),
+                    entry.get_permissions(),
+                    permissions,
+                    options,
+                )
+                .or_else(|| lower.ref_at(lvl2_index, lvl2).flatten())
             };
             let lvl4 = |entry: &PageEntryLvl4, lower: &SafePageMapLvl3| {
-                check_perms(entry.get_permissions(), permissions, options)
-                    .or_else(|| lower.ref_at(lvl3_index, lvl3).flatten())
+                check_perms(
+                    entry.is_present_set(),
+                    entry.get_permissions(),
+                    permissions,
+                    options,
+                )
+                .or_else(|| lower.ref_at(lvl3_index, lvl3).flatten())
             };
 
             ro_checks.read().ref_at(lvl4_index, lvl4).flatten()
@@ -405,24 +593,30 @@ impl Virt2PhysMapping {
             let lvl2_fun = |entry: &mut PageEntryLvl2, table: &mut SafePageMapLvl1| {
                 let prev_permissions = entry.get_permissions();
 
-                // Unless we are told to upgrade permissions, fail
-                if prev_permissions < permissions && !options.is_increase_perm_set() {
-                    return Err(PageCorrelationError::ExistingPermissionsTooStrict {
-                        table_perms: entry.get_permissions(),
-                        requested_perms: permissions,
-                    });
-                } else if prev_permissions < permissions && options.is_increase_perm_set() {
+                // Zero entry if its not present
+                if !entry.is_present_set() {
+                    *entry = PageEntryLvl2::zero();
                     entry.add_permissions_from(permissions);
-                }
+                } else {
+                    // Unless we are told to upgrade permissions, fail
+                    if prev_permissions < permissions && !options.is_increase_perm_set() {
+                        return Err(PageCorrelationError::ExistingPermissionsTooStrict {
+                            table_perms: entry.get_permissions(),
+                            requested_perms: permissions,
+                        });
+                    } else if prev_permissions < permissions && options.is_increase_perm_set() {
+                        entry.add_permissions_from(permissions);
+                    }
 
-                // Unless we are told to reduce permissions, fail
-                if prev_permissions > permissions && !options.is_reduce_perm_set() {
-                    return Err(PageCorrelationError::ExistingPermissionsPermissive {
-                        table_perms: entry.get_permissions(),
-                        requested_perms: permissions,
-                    });
-                } else if prev_permissions < permissions && options.is_reduce_perm_set() {
-                    entry.reduce_permissions_to(permissions);
+                    // Unless we are told to reduce permissions, fail
+                    if prev_permissions > permissions && !options.is_reduce_perm_set() {
+                        return Err(PageCorrelationError::ExistingPermissionsPermissive {
+                            table_perms: entry.get_permissions(),
+                            requested_perms: permissions,
+                        });
+                    } else if prev_permissions < permissions && options.is_reduce_perm_set() {
+                        entry.reduce_permissions_to(permissions);
+                    }
                 }
 
                 // Set this flag to present if we have any flags enabled
@@ -449,24 +643,30 @@ impl Virt2PhysMapping {
             let lvl3_fun = |entry: &mut PageEntryLvl3, table: &mut SafePageMapLvl2| {
                 let prev_permissions = entry.get_permissions();
 
-                // Unless we are told to upgrade permissions, fail
-                if prev_permissions < permissions && !options.is_increase_perm_set() {
-                    return Err(PageCorrelationError::ExistingPermissionsTooStrict {
-                        table_perms: entry.get_permissions(),
-                        requested_perms: permissions,
-                    });
-                } else if prev_permissions < permissions && options.is_increase_perm_set() {
+                // Zero entry if its not present
+                if !entry.is_present_set() {
+                    *entry = PageEntryLvl3::zero();
                     entry.add_permissions_from(permissions);
-                }
+                } else {
+                    // Unless we are told to upgrade permissions, fail
+                    if prev_permissions < permissions && !options.is_increase_perm_set() {
+                        return Err(PageCorrelationError::ExistingPermissionsTooStrict {
+                            table_perms: entry.get_permissions(),
+                            requested_perms: permissions,
+                        });
+                    } else if prev_permissions < permissions && options.is_increase_perm_set() {
+                        entry.add_permissions_from(permissions);
+                    }
 
-                // Unless we are told to reduce permissions, fail
-                if prev_permissions > permissions && !options.is_reduce_perm_set() {
-                    return Err(PageCorrelationError::ExistingPermissionsPermissive {
-                        table_perms: entry.get_permissions(),
-                        requested_perms: permissions,
-                    });
-                } else if prev_permissions < permissions && options.is_reduce_perm_set() {
-                    entry.reduce_permissions_to(permissions);
+                    // Unless we are told to reduce permissions, fail
+                    if prev_permissions > permissions && !options.is_reduce_perm_set() {
+                        return Err(PageCorrelationError::ExistingPermissionsPermissive {
+                            table_perms: entry.get_permissions(),
+                            requested_perms: permissions,
+                        });
+                    } else if prev_permissions < permissions && options.is_reduce_perm_set() {
+                        entry.reduce_permissions_to(permissions);
+                    }
                 }
 
                 // Set this flag to present if we have any flags enabled
@@ -493,24 +693,30 @@ impl Virt2PhysMapping {
             let prev_page = lvl4_mut.ensured_mut_at(lvl4_index, |entry, table| {
                 let prev_permissions = entry.get_permissions();
 
-                // Unless we are told to upgrade permissions, fail
-                if prev_permissions < permissions && !options.is_increase_perm_set() {
-                    return Err(PageCorrelationError::ExistingPermissionsTooStrict {
-                        table_perms: entry.get_permissions(),
-                        requested_perms: permissions,
-                    });
-                } else if prev_permissions < permissions && options.is_increase_perm_set() {
+                // Zero entry if its not present
+                if !entry.is_present_set() {
+                    *entry = PageEntryLvl4::zero();
                     entry.add_permissions_from(permissions);
-                }
+                } else {
+                    // Unless we are told to upgrade permissions, fail
+                    if prev_permissions < permissions && !options.is_increase_perm_set() {
+                        return Err(PageCorrelationError::ExistingPermissionsTooStrict {
+                            table_perms: entry.get_permissions(),
+                            requested_perms: permissions,
+                        });
+                    } else if prev_permissions < permissions && options.is_increase_perm_set() {
+                        entry.add_permissions_from(permissions);
+                    }
 
-                // Unless we are told to reduce permissions, fail
-                if prev_permissions > permissions && !options.is_reduce_perm_set() {
-                    return Err(PageCorrelationError::ExistingPermissionsPermissive {
-                        table_perms: entry.get_permissions(),
-                        requested_perms: permissions,
-                    });
-                } else if prev_permissions < permissions && options.is_reduce_perm_set() {
-                    entry.reduce_permissions_to(permissions);
+                    // Unless we are told to reduce permissions, fail
+                    if prev_permissions > permissions && !options.is_reduce_perm_set() {
+                        return Err(PageCorrelationError::ExistingPermissionsPermissive {
+                            table_perms: entry.get_permissions(),
+                            requested_perms: permissions,
+                        });
+                    } else if prev_permissions < permissions && options.is_reduce_perm_set() {
+                        entry.reduce_permissions_to(permissions);
+                    }
                 }
 
                 // Set this flag to present if we have any flags enabled
