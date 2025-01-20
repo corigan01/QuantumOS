@@ -821,6 +821,8 @@ impl Virt2PhysMapping {
     field(RW, 4, pub reduce_perm),
     /// Just change permissions, dont change page mapping
     field(RW, 5, pub only_commit_permissions),
+    /// Force set permissions, regardless if they are higher or lower for the bottom most table only
+    field(RW, 5, pub force_permissions_on_page),
 )]
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct VmOptions(usize);
@@ -904,12 +906,29 @@ impl BitOrAssign for VmPermissions {
 
 impl PartialOrd for VmPermissions {
     fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
-        self.0.count_ones().partial_cmp(&other.0.count_ones())
+        if self.is_exec_set() && !other.is_exec_set() {
+            return Some(core::cmp::Ordering::Less);
+        }
+        if self.is_read_set() && !other.is_read_set() {
+            return Some(core::cmp::Ordering::Less);
+        }
+        if self.is_write_set() && !other.is_write_set() {
+            return Some(core::cmp::Ordering::Less);
+        }
+        if self.is_user_set() && !other.is_user_set() {
+            return Some(core::cmp::Ordering::Less);
+        }
+
+        if self.0 == other.0 {
+            return Some(core::cmp::Ordering::Equal);
+        }
+
+        Some(core::cmp::Ordering::Greater)
     }
 }
 impl Ord for VmPermissions {
     fn cmp(&self, other: &Self) -> core::cmp::Ordering {
-        self.0.count_ones().cmp(&other.0.count_ones())
+        self.partial_cmp(other).unwrap()
     }
 }
 
@@ -1162,12 +1181,17 @@ impl SafePageMapLvl1 {
             }
 
             // Unless we are told to reduce permissions, fail
-            if prev_permissions > permissions && !options.is_reduce_perm_set() {
+            if prev_permissions > permissions
+                && !options.is_reduce_perm_set()
+                && !options.is_force_permissions_on_page_set()
+            {
                 return Err(PageCorrelationError::ExistingPermissionsPermissive {
                     table_perms: entry.get_permissions(),
                     requested_perms: permissions,
                 });
-            } else if prev_permissions < permissions && options.is_reduce_perm_set() {
+            } else if prev_permissions < permissions && options.is_reduce_perm_set()
+                || options.is_force_permissions_on_page_set()
+            {
                 entry.reduce_permissions_to(permissions);
             }
         }

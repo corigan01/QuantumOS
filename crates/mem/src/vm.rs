@@ -24,12 +24,12 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 extern crate alloc;
-use core::error::Error;
+use core::{error::Error, fmt::Display};
 
 use crate::{
     MemoryError,
     addr::{AlignedTo, VirtAddr},
-    page::{PhysPage, VirtPage},
+    page::{Page4K, PhysPage, VirtPage},
     paging::{PageCorrelationError, Virt2PhysMapping, VmOptions, VmPermissions},
     pmm::SharedPhysPage,
 };
@@ -72,12 +72,12 @@ impl VmRegion {
 
     /// Is this virtual address contained within this VmRegion
     pub fn does_contain_addr(&self, addr: VirtAddr) -> bool {
-        self.start.addr() >= addr && (self.end.addr().offset(PAGE_4K - 1)) <= addr
+        self.start.addr() <= addr && (self.end.addr().offset(PAGE_4K - 1)) >= addr
     }
 
     /// Is this page contained within this VmRegion
     pub fn does_contain_page(&self, page: VirtPage) -> bool {
-        self.start >= page && self.end <= page
+        self.start <= page && self.end >= page
     }
 
     /// Get an iterator of the pages contained within this region
@@ -135,7 +135,7 @@ pub trait VmInjectFillAction: core::fmt::Debug {
     /// What to do when this region gets a page fault (if anything)
     #[allow(unused_variables)]
     fn page_fault_handler(
-        &mut self,
+        &self,
         parent_object: &VmObject,
         process: &VmProcess,
         info: PageFaultInfo,
@@ -218,14 +218,17 @@ impl VmInjectFillAction for VmFillAction {
     }
 
     fn page_fault_handler(
-        &mut self,
+        &self,
         parent_object: &VmObject,
         process: &VmProcess,
         info: PageFaultInfo,
     ) -> PageFaultReponse {
         match self {
-            VmFillAction::Nothing => PageFaultReponse::NotAttachedHandler,
-            VmFillAction::Scrub(_) => PageFaultReponse::NotAttachedHandler,
+            // If we return with 'Handled' we will later receive a call to map that page
+            //
+            // We should not do the mapping of the page in the page fault handler!
+            VmFillAction::Nothing => PageFaultReponse::Handled,
+            VmFillAction::Scrub(_) => PageFaultReponse::Handled,
             VmFillAction::InjectWith(rw_lock) => {
                 rw_lock
                     .write()
@@ -275,6 +278,13 @@ pub enum VmObjectMappingError {
     },
 }
 
+impl Error for VmObjectMappingError {}
+impl Display for VmObjectMappingError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        writeln!(f, "{:#?}", self)
+    }
+}
+
 /// Options to apply to a page when populating it
 const KERNEL_POPULATE_OPT: VmOptions = VmOptions::none()
     .set_overwrite_flag(true)
@@ -315,7 +325,8 @@ impl VmObject {
                     .map_err(|err| NewVmObjectError::MappingErr(err))?;
             }
         }
-        todo!()
+
+        Ok(Arc::new(RwLock::new(new_self)))
     }
 
     /// Do the mapping of a virtual page
@@ -372,12 +383,37 @@ impl VmObject {
                 VmOptions::none()
                     .set_only_commit_permissions_flag(true)
                     .set_increase_perm_flag(true)
+                    .set_force_permissions_on_page_flag(true)
                     .set_overwrite_flag(true),
                 self.permissions,
             )
             .map_err(|err| VmObjectMappingError::MappingError(err))?;
 
         Ok(())
+    }
+
+    /// The page fault handler for this VmObject
+    pub fn page_fault_handler(
+        &mut self,
+        vm_process: &VmProcess,
+        info: PageFaultInfo,
+    ) -> PageFaultReponse {
+        match self
+            .fill_action
+            .write()
+            .page_fault_handler(self, vm_process, info)
+        {
+            PageFaultReponse::Handled => (),
+            err => return err,
+        }
+
+        // If the FillAction returned 'Handled' we should call map_new_page() to let it allocate that page
+        match self.map_new_page(vm_process, VirtPage::containing_addr(info.vaddr)) {
+            Ok(_) => PageFaultReponse::Handled,
+            Err(page_mapping_err) => {
+                return PageFaultReponse::CriticalFault(Box::new(page_mapping_err));
+            }
+        }
     }
 }
 
@@ -414,6 +450,14 @@ impl VmProcess {
         Self {
             objects: RwLock::new(Vec::new()),
             page_tables: Virt2PhysMapping::empty(),
+        }
+    }
+
+    /// Inhearit the page tables from 'page_tables'
+    pub fn inhearit_page_tables(page_tables: &Virt2PhysMapping) -> Self {
+        Self {
+            objects: RwLock::new(Vec::new()),
+            page_tables: Virt2PhysMapping::inhearit_from(page_tables),
         }
     }
 
@@ -483,6 +527,23 @@ impl VmProcess {
 
         Ok(obj)
     }
+
+    /// The page fault handler for this VmProcess
+    pub fn page_fault_handler(&self, info: PageFaultInfo) -> PageFaultReponse {
+        let lock = self.objects.read();
+        let Some(object) = lock
+            .iter()
+            .find(|object| object.read().region.does_contain_addr(info.vaddr))
+        else {
+            logln!(
+                "Called PageFaultHandler, but could not find a region with that addr! {:#?}",
+                info
+            );
+            return PageFaultReponse::NotAttachedHandler;
+        };
+
+        object.write().page_fault_handler(self, info)
+    }
 }
 
 /// Possible scenarios for a page fault to occur
@@ -550,4 +611,34 @@ pub fn set_page_fault_handler(handler: SystemAttachedPageFaultFn) {
 /// Clear the function in the page fault handler, setting it to None
 pub fn remove_page_fault_handler() {
     *MAIN_PAGE_FAULT_HANDLER.write() = None;
+}
+
+// TODO: REMOVE THIS FUNCTION, its just for testing :)
+pub fn test() {
+    let proc = VmProcess::new();
+
+    proc.inplace_new_vmobject(
+        VmRegion::new(VirtPage::new(10), VirtPage::new(20)),
+        VmPermissions::none()
+            .set_read_flag(true)
+            .set_write_flag(true)
+            .set_user_flag(true),
+        VmFillAction::Nothing,
+    )
+    .unwrap();
+
+    logln!(
+        "{:#?}",
+        proc.page_fault_handler(PageFaultInfo {
+            is_present: false,
+            write_read_access: false,
+            execute_fault: false,
+            user_fault: false,
+            vaddr: VirtPage::<Page4K>::new(15).addr(),
+        })
+    );
+
+    logln!("{}", proc.page_tables);
+
+    todo!("Test Done!");
 }
