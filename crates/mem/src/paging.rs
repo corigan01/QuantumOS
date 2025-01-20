@@ -507,7 +507,10 @@ impl Virt2PhysMapping {
             }
 
             // Unless we are told to reduce permissions, fail
-            if prev_perm > new_perm && !options.is_reduce_perm_set() {
+            if prev_perm > new_perm
+                && !options.is_reduce_perm_from_tables_set()
+                && options.is_overwrite_set()
+            {
                 return Some(PageCorrelationError::ExistingPermissionsPermissive {
                     table_perms: prev_perm,
                     requested_perms: new_perm,
@@ -625,12 +628,18 @@ impl Virt2PhysMapping {
                     }
 
                     // Unless we are told to reduce permissions, fail
-                    if prev_permissions > permissions && !options.is_reduce_perm_set() {
+                    if prev_permissions > permissions
+                        && !options.is_reduce_perm_from_tables_set()
+                        && !options.is_overwrite_set()
+                    {
                         return Err(PageCorrelationError::ExistingPermissionsPermissive {
                             table_perms: entry.get_permissions(),
                             requested_perms: permissions,
                         });
-                    } else if prev_permissions < permissions && options.is_reduce_perm_set() {
+                    } else if prev_permissions < permissions
+                        && options.is_reduce_perm_from_tables_set()
+                        && options.is_overwrite_set()
+                    {
                         entry.reduce_permissions_to(permissions);
                     }
                 }
@@ -675,12 +684,18 @@ impl Virt2PhysMapping {
                     }
 
                     // Unless we are told to reduce permissions, fail
-                    if prev_permissions > permissions && !options.is_reduce_perm_set() {
+                    if prev_permissions > permissions
+                        && !options.is_reduce_perm_from_tables_set()
+                        && !options.is_overwrite_set()
+                    {
                         return Err(PageCorrelationError::ExistingPermissionsPermissive {
                             table_perms: entry.get_permissions(),
                             requested_perms: permissions,
                         });
-                    } else if prev_permissions < permissions && options.is_reduce_perm_set() {
+                    } else if prev_permissions < permissions
+                        && options.is_reduce_perm_from_tables_set()
+                        && options.is_overwrite_set()
+                    {
                         entry.reduce_permissions_to(permissions);
                     }
                 }
@@ -725,12 +740,18 @@ impl Virt2PhysMapping {
                     }
 
                     // Unless we are told to reduce permissions, fail
-                    if prev_permissions > permissions && !options.is_reduce_perm_set() {
+                    if prev_permissions > permissions
+                        && !options.is_reduce_perm_from_tables_set()
+                        && !options.is_overwrite_set()
+                    {
                         return Err(PageCorrelationError::ExistingPermissionsPermissive {
                             table_perms: entry.get_permissions(),
                             requested_perms: permissions,
                         });
-                    } else if prev_permissions < permissions && options.is_reduce_perm_set() {
+                    } else if prev_permissions < permissions
+                        && options.is_reduce_perm_from_tables_set()
+                        && options.is_overwrite_set()
+                    {
                         entry.reduce_permissions_to(permissions);
                     }
                 }
@@ -817,8 +838,8 @@ impl Virt2PhysMapping {
     field(RW, 2, pub dont_wait_for_lock),
     /// Don't flush 'Tlb' cache when mapping this page
     field(RW, 3, pub no_tlb_flush),
-    /// Reduce permissions to new permissions.
-    field(RW, 4, pub reduce_perm),
+    /// Reduce permissions to new permissions (only on tables, not page entries).
+    field(RW, 4, pub reduce_perm_from_tables),
     /// Just change permissions, dont change page mapping
     field(RW, 5, pub only_commit_permissions),
     /// Force set permissions, regardless if they are higher or lower for the bottom most table only
@@ -1182,16 +1203,14 @@ impl SafePageMapLvl1 {
 
             // Unless we are told to reduce permissions, fail
             if prev_permissions > permissions
-                && !options.is_reduce_perm_set()
+                && !options.is_overwrite_set()
                 && !options.is_force_permissions_on_page_set()
             {
                 return Err(PageCorrelationError::ExistingPermissionsPermissive {
                     table_perms: entry.get_permissions(),
                     requested_perms: permissions,
                 });
-            } else if prev_permissions < permissions && options.is_reduce_perm_set()
-                || options.is_force_permissions_on_page_set()
-            {
+            } else if prev_permissions < permissions && options.is_force_permissions_on_page_set() {
                 entry.reduce_permissions_to(permissions);
             }
         }

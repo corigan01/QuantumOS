@@ -289,7 +289,7 @@ impl Display for VmObjectMappingError {
 const KERNEL_POPULATE_OPT: VmOptions = VmOptions::none()
     .set_overwrite_flag(true)
     .set_increase_perm_flag(true)
-    .set_reduce_perm_flag(true);
+    .set_force_permissions_on_page_flag(true);
 /// Permissions to apply to a page when populating it
 const KERNEL_POPULATE_PERM: VmPermissions = VmPermissions::none()
     .set_exec_flag(false)
@@ -635,6 +635,16 @@ pub fn test() {
             execute_fault: false,
             user_fault: false,
             vaddr: VirtPage::<Page4K>::new(15).addr(),
+        })
+    );
+    logln!(
+        "{:#?}",
+        proc.page_fault_handler(PageFaultInfo {
+            is_present: false,
+            write_read_access: false,
+            execute_fault: false,
+            user_fault: false,
+            vaddr: VirtPage::<Page4K>::new(16).addr(),
         })
     );
 
