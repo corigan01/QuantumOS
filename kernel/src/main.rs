@@ -105,8 +105,8 @@ fn main(kbh: &KernelBootHeader) {
     init_virt2phys_provider();
 
     let new_tables = unsafe { Virt2PhysMapping::inhearit_bootloader() }.unwrap();
-    logln!("Page tables:\n{new_tables:#}");
     unsafe { new_tables.clone().load() }.unwrap();
+    logln!("Page tables:\n{new_tables:#}");
 
     logln!("Init VirtMemoryManager");
     let kernel_process = unsafe { VmProcess::new_from_bootloader() };

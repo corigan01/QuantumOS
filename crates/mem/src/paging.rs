@@ -1297,6 +1297,8 @@ impl core::fmt::Display for Virt2PhysMapping {
                         lvl1_entry.get_phy_address()
                     )?;
                 }
+            } else {
+                writeln!(f, " | | | |- <...>")?;
             }
 
             Ok(())
@@ -1354,14 +1356,13 @@ impl core::fmt::Display for Virt2PhysMapping {
 
             writeln!(
                 f,
-                " |-{lvl4_index:>3}. PageTableLvl3 {} :: [VirtRegion {:#016x}] {} ${:016x}",
+                " |-{lvl4_index:>3}. PageTableLvl3 {} :: [VirtRegion {:#016x}] {}",
                 lvl4_entry.get_permissions(),
                 lvl4_index * (PageMapLvl4::SIZE_PER_INDEX as usize),
                 lvl4_entry
                     .is_page_size_set()
                     .then_some("Huge Page")
                     .unwrap_or(""),
-                lvl4_entry.get_raw()
             )?;
 
             for lvl3_index in 0..512 {
