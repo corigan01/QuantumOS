@@ -87,6 +87,16 @@ pub unsafe fn flush_tlb(page: VirtPage) {
     todo!()
 }
 
+/// Returns the indexes into the page tables that would give this virtual address.
+const fn table_indexes_for(vaddr: VirtAddr) -> (usize, usize, usize, usize) {
+    let lvl4 = PageMapLvl4::addr2index(vaddr.addr() as u64).unwrap();
+    let lvl3 = PageMapLvl3::addr2index(vaddr.addr() as u64 % PageMapLvl4::SIZE_PER_INDEX).unwrap();
+    let lvl2 = PageMapLvl2::addr2index(vaddr.addr() as u64 % PageMapLvl3::SIZE_PER_INDEX).unwrap();
+    let lvl1 = PageMapLvl1::addr2index(vaddr.addr() as u64 % PageMapLvl2::SIZE_PER_INDEX).unwrap();
+
+    (lvl4, lvl3, lvl2, lvl1)
+}
+
 static CURRENTLY_LOADED_PAGE_TABLES: Virt2PhysMapping = Virt2PhysMapping::empty();
 
 #[derive(Clone, Copy, Debug)]
@@ -176,8 +186,212 @@ impl Virt2PhysMapping {
         options: VmOptions,
         permissions: VmPermissions,
     ) -> Result<Option<PhysPage>, PageCorrelationError> {
-        if options.is_o_no_wait_for_lock_set() {}
-        todo!()
+        // Grab a lock to this page table
+        let lock = if options.is_o_no_wait_for_lock_set() {
+            match self.mapping.try_upgradeable_read() {
+                Some(lock) => lock,
+                None => return Err(PageCorrelationError::AlreadyLocked),
+            }
+        } else {
+            self.mapping.upgradeable_read()
+        };
+
+        let (lvl4_index, lvl3_index, lvl2_index, lvl1_index) = table_indexes_for(vpage.addr());
+
+        fn check_perms(
+            prev_perm: VmPermissions,
+            new_perm: VmPermissions,
+            options: VmOptions,
+        ) -> Option<PageCorrelationError> {
+            // Unless we are told to upgrade permissions, fail
+            if prev_perm < new_perm && !options.is_o_check_perm_set() {
+                return Some(PageCorrelationError::ExistingPermissionsTooStrict {
+                    table_perms: prev_perm,
+                    requested_perms: new_perm,
+                });
+            }
+
+            // Unless we are told to reduce permissions, fail
+            if prev_perm > new_perm && !options.is_o_reduce_perm_set() {
+                return Some(PageCorrelationError::ExistingPermissionsPermissive {
+                    table_perms: prev_perm,
+                    requested_perms: new_perm,
+                });
+            }
+
+            // If we pass all checks we can continue
+            None
+        }
+
+        // We first try to do all the checks with RO before we commit to
+        // fully locking the table.
+        if let Some(err) = lock.as_ref().and_then(|ro_checks| {
+            let lvl2 = |entry: &PageEntryLvl2, lower: &SafePageMapLvl1| {
+                check_perms(entry.get_permissions(), permissions, options).or_else(|| {
+                    let page_entry = lower.table.get(lvl1_index);
+
+                    // Make sure we don't override unless we are told to
+                    if entry.is_present_set() && !options.is_o_override_set() {
+                        return Some(PageCorrelationError::PageAlreadyMapped);
+                    }
+
+                    check_perms(page_entry.get_permissions(), permissions, options)
+                })
+            };
+            let lvl3 = |entry: &PageEntryLvl3, lower: &SafePageMapLvl2| {
+                check_perms(entry.get_permissions(), permissions, options)
+                    .or_else(|| lower.ref_at(lvl2_index, lvl2).flatten())
+            };
+            let lvl4 = |entry: &PageEntryLvl4, lower: &SafePageMapLvl3| {
+                check_perms(entry.get_permissions(), permissions, options)
+                    .or_else(|| lower.ref_at(lvl3_index, lvl3).flatten())
+            };
+
+            ro_checks.read().ref_at(lvl4_index, lvl4).flatten()
+        }) {
+            return Err(err);
+        }
+
+        // Now that we are sure that our permissions/options are *mostly* correct, we
+        // can now perform the expensive locking.
+        //
+        // If we are the loaded table, we need to keep track of our phys ptrs and go back
+        // to write them. This is to prevent a deadlock with writing the table.
+        let is_loaded = self.is_loaded();
+        let mut vaddr3: Option<VirtAddr> = None;
+        let mut vaddr2: Option<VirtAddr> = None;
+        let mut vaddr1: Option<VirtAddr> = None;
+
+        // make sure to get back the ro_lock
+        let (ro_lock, prev_page) = {
+            // Ensure an entry exists
+            let lock = match lock.as_ref() {
+                None => {
+                    let mut upgraded_lock = lock.upgrade();
+                    *upgraded_lock = Some(Arc::new(RwLock::new(SafePageMapLvl4::empty())));
+                    upgraded_lock.downgrade_to_upgradeable()
+                }
+                _ => lock,
+            };
+
+            let mut lvl4_mut = lock.as_ref().unwrap().write();
+
+            let lvl2_fun = |entry: &mut PageEntryLvl2, table: &mut SafePageMapLvl1| {
+                // If this is a new entry and we are currently loaded, we save this addr for later
+                if is_loaded && !entry.is_present_set() {
+                    vaddr1 = Some(VirtAddr::new(table.table.table_ptr() as usize));
+                }
+                // If we are not currently loaded, and this is a new entry, we are safe to gather its
+                // PhysAddr.
+                else if !is_loaded && !entry.is_present_set() {
+                    entry.set_next_entry_phy_address(
+                        VirtAddr::new(table.table.table_ptr() as usize)
+                            .phys_addr()
+                            .map_err(|perr| PageCorrelationError::PhysTranslationErr(perr))?
+                            .addr() as u64,
+                    );
+                }
+                // Otherwise this isnt a new entry, and we don't care about finding its PhysAddr
+                table.inner_correlate_page(lvl1_index, vpage, ppage, options, permissions)
+            };
+
+            let lvl3_fun = |entry: &mut PageEntryLvl3, table: &mut SafePageMapLvl2| {
+                // If this is a new entry and we are currently loaded, we save this addr for later
+                if is_loaded && !entry.is_present_set() {
+                    vaddr2 = Some(VirtAddr::new(table.table.table_ptr() as usize));
+                }
+                // If we are not currently loaded, and this is a new entry, we are safe to gather its
+                // PhysAddr.
+                else if !is_loaded && !entry.is_present_set() {
+                    entry.set_next_entry_phy_address(
+                        VirtAddr::new(table.table.table_ptr() as usize)
+                            .phys_addr()
+                            .map_err(|perr| PageCorrelationError::PhysTranslationErr(perr))?
+                            .addr() as u64,
+                    );
+                }
+                // Otherwise this isnt a new entry, and we don't care about finding its PhysAddr
+                table.ensured_mut_at(lvl2_index, lvl2_fun)
+            };
+
+            let prev_page = lvl4_mut.ensured_mut_at(lvl4_index, |entry, table| {
+                // If this is a new entry and we are currently loaded, we save this addr for later
+                if is_loaded && !entry.is_present_set() {
+                    vaddr3 = Some(VirtAddr::new(table.table.table_ptr() as usize));
+                }
+                // If we are not currently loaded, and this is a new entry, we are safe to gather its
+                // PhysAddr.
+                else if !is_loaded && !entry.is_present_set() {
+                    entry.set_next_entry_phy_address(
+                        VirtAddr::new(table.table.table_ptr() as usize)
+                            .phys_addr()
+                            .map_err(|perr| PageCorrelationError::PhysTranslationErr(perr))?
+                            .addr() as u64,
+                    );
+                }
+                // Otherwise this isnt a new entry, and we don't care about finding its PhysAddr
+
+                table.ensured_mut_at(lvl3_index, lvl3_fun)
+            })?;
+
+            drop(lvl4_mut);
+            (lock, prev_page)
+        };
+
+        // If we are loaded and one of the page tables was just now created,
+        // we need to write back their physical addresses.
+        if is_loaded && (vaddr1.is_some() || vaddr2.is_some() || vaddr3.is_some()) {
+            // Convert addresses now that we released the lock
+            let paddr1 = match vaddr1 {
+                Some(vaddr1) => Some(
+                    vaddr1
+                        .phys_addr()
+                        .map_err(|perr| PageCorrelationError::PhysTranslationErr(perr))?,
+                ),
+                None => None,
+            };
+            let paddr2 = match vaddr2 {
+                Some(vaddr2) => Some(
+                    vaddr2
+                        .phys_addr()
+                        .map_err(|perr| PageCorrelationError::PhysTranslationErr(perr))?,
+                ),
+                None => None,
+            };
+            let paddr3 = match vaddr3 {
+                Some(vaddr3) => Some(
+                    vaddr3
+                        .phys_addr()
+                        .map_err(|perr| PageCorrelationError::PhysTranslationErr(perr))?,
+                ),
+                None => None,
+            };
+
+            // Re-acquire the 'R/W' lock
+            let mut lvl4_mut = ro_lock.as_ref().unwrap().write();
+
+            // Write back the physical address that we calculated
+            lvl4_mut.ensured_mut_at(lvl4_index, |entry, table| {
+                if let Some(paddr3) = paddr3 {
+                    entry.set_next_entry_phy_address(paddr3.addr() as u64);
+                }
+
+                table.ensured_mut_at(lvl3_index, |entry, table| {
+                    if let Some(paddr2) = paddr2 {
+                        entry.set_next_entry_phy_address(paddr2.addr() as u64);
+                    }
+
+                    table.ensured_mut_at(lvl2_index, |entry, _| {
+                        if let Some(paddr1) = paddr1 {
+                            entry.set_next_entry_phy_address(paddr1.addr() as u64);
+                        }
+                    })
+                })
+            });
+        }
+
+        // Finally we are done :)
+        Ok(prev_page)
     }
 }
 
@@ -197,6 +411,8 @@ impl Virt2PhysMapping {
     field(RW, 3, o_no_flush),
     /// Reduce permissions to new permissions.
     field(RW, 4, o_reduce_perm),
+    /// Just change permissions, dont change page mapping
+    field(RW, 5, o_only_perm),
 )]
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct VmOptions(usize);
@@ -216,21 +432,6 @@ pub struct VmOptions(usize);
 pub struct VmPermissions(u8);
 
 impl VmOptions {
-    /// If there is already a mapped page here, override it
-    pub const O_OVERRIDE: VmOptions = VmOptions(1 << 0);
-    /// If you are mapping a page entry with permissive options (say the USER bit)
-    /// the page tables that map it will also need that bit set. This enables that
-    /// bit to be set on higher level tables.
-    ///
-    /// If `O_REDUCE_PERM` is also set, it will reduce permissions of above tables.
-    pub const O_CHECK_PERM: VmOptions = VmOptions(1 << 1);
-    /// Try to lock if possible, but fail if the lock is already taken.
-    pub const O_NO_WAIT_FOR_LOCK: VmOptions = VmOptions(1 << 2);
-    /// Don't flush 'Tlb' cache when mapping this page
-    pub const O_NO_FLUSH: VmOptions = VmOptions(1 << 3);
-    /// Reduce permissions to new permissions.
-    pub const O_REDUCE_PERM: VmOptions = VmOptions(1 << 4);
-
     /// No Options
     pub const fn none() -> Self {
         Self(0)
@@ -549,8 +750,10 @@ impl SafePageMapLvl1 {
             }
         }
 
-        // do the actual linking of vpage -> ppage
-        entry.set_phy_address(ppage.addr().addr() as u64);
+        if !options.is_o_only_perm_set() {
+            // do the actual linking of vpage -> ppage
+            entry.set_phy_address(ppage.addr().addr() as u64);
+        }
 
         self.table.store(entry, local_table_index);
 
