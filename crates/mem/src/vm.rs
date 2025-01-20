@@ -34,7 +34,7 @@ use crate::{
     pmm::SharedPhysPage,
 };
 use alloc::{boxed::Box, collections::BTreeMap, sync::Arc, vec::Vec};
-use lldebug::logln;
+use lldebug::{hexdump::HexPrint, logln};
 use spin::RwLock;
 use util::consts::PAGE_4K;
 
@@ -381,7 +381,6 @@ impl VmObject {
                 vpage,
                 *backing_page,
                 VmOptions::none()
-                    .set_only_commit_permissions_flag(true)
                     .set_increase_perm_flag(true)
                     .set_force_permissions_on_page_flag(true)
                     .set_overwrite_flag(true),
@@ -623,7 +622,7 @@ pub fn test() {
             .set_read_flag(true)
             .set_write_flag(true)
             .set_user_flag(true),
-        VmFillAction::Nothing,
+        VmFillAction::Scrub(0xFF),
     )
     .unwrap();
 
@@ -649,6 +648,14 @@ pub fn test() {
     );
 
     logln!("{}", proc.page_tables);
+
+    logln!(
+        "{}",
+        unsafe {
+            core::slice::from_raw_parts(VirtPage::<Page4K>::new(16).addr().addr() as *const u8, 128)
+        }
+        .hexdump()
+    );
 
     todo!("Test Done!");
 }

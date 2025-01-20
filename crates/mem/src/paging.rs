@@ -843,7 +843,7 @@ impl Virt2PhysMapping {
     /// Just change permissions, dont change page mapping
     field(RW, 5, pub only_commit_permissions),
     /// Force set permissions, regardless if they are higher or lower for the bottom most table only
-    field(RW, 5, pub force_permissions_on_page),
+    field(RW, 6, pub force_permissions_on_page),
 )]
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct VmOptions(usize);
@@ -1214,9 +1214,6 @@ impl SafePageMapLvl1 {
                 entry.reduce_permissions_to(permissions);
             }
         }
-
-        // Set this flag to present if we have any flags enabled
-        entry.set_present_flag(permissions.0 != 0);
 
         if !options.is_only_commit_permissions_set() {
             // do the actual linking of vpage -> ppage
