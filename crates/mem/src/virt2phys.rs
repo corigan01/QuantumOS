@@ -72,7 +72,19 @@ pub fn virt2phys(phy_addr: VirtAddr) -> Result<PhysAddr, PhysPtrTranslationError
 pub type LookupFn = fn(phy_addr: VirtAddr) -> Result<PhysAddr, PhysPtrTranslationError>;
 
 impl<T: ObtainVirtAddr> ObtainPhysAddr for T {}
-impl<T: Into<VirtAddr>> ObtainVirtAddr for T {
+impl ObtainVirtAddr for VirtAddr {
+    fn virt_addr(&self) -> VirtAddr {
+        *self
+    }
+}
+
+impl<T> ObtainVirtAddr for *const T {
+    fn virt_addr(&self) -> VirtAddr {
+        self.into()
+    }
+}
+
+impl<T> ObtainVirtAddr for *mut T {
     fn virt_addr(&self) -> VirtAddr {
         self.into()
     }

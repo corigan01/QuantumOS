@@ -26,6 +26,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 use core::{fmt::Display, marker::PhantomPinned};
 
 use hw::make_hw;
+use util::consts::PAGE_4K;
 
 /// The max 'bits' of physical memory the system supports.
 pub const MAX_PHY_MEMORY_WIDTH: usize = 48;
@@ -468,6 +469,7 @@ impl PageMapLvl1 {
     }
 
     pub fn table_ptr(&self) -> u64 {
+        assert_eq!(self.0.as_ptr() as usize & (PAGE_4K - 1), 0, "Table is is not aligned! Table PTR reads will be invalid...");
         self.0.as_ptr() as u64
     }
 
@@ -509,6 +511,7 @@ impl PageMapLvl2 {
     }
 
     pub fn table_ptr(&self) -> u64 {
+        assert_eq!(self.0.as_ptr() as usize & (PAGE_4K - 1), 0, "Table is is not aligned! Table PTR reads will be invalid...");
         self.0.as_ptr() as u64
     }
 
@@ -550,6 +553,7 @@ impl PageMapLvl3 {
     }
 
     pub fn table_ptr(&self) -> u64 {
+        assert_eq!(self.0.as_ptr() as usize & (PAGE_4K - 1), 0, "Table is is not aligned! Table PTR reads will be invalid...");
         self.0.as_ptr() as u64
     }
 
@@ -591,6 +595,7 @@ impl PageMapLvl4 {
     }
 
     pub fn table_ptr(&self) -> u64 {
+        assert_eq!(self.0.as_ptr() as usize & (PAGE_4K - 1), 0, "Table is is not aligned! Table PTR reads will be invalid...");
         self.0.as_ptr() as u64
     }
 
@@ -632,6 +637,7 @@ impl PageMapLvl5 {
     }
 
     pub fn table_ptr(&self) -> u64 {
+        assert_eq!(self.0.as_ptr() as usize & (PAGE_4K - 1), 0, "Table is is not aligned! Table PTR reads will be invalid...");
         self.0.as_ptr() as u64
     }
 

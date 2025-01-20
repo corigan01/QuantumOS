@@ -274,6 +274,16 @@ macro_rules! make_addr {
                 self.addr & (alignment - 1) == 0
             }
 
+            /// Chop a component of bits from this address
+            pub const fn chop_bottom(&self, alignment: usize) -> usize {
+                if !alignment.is_power_of_two() {
+                    panic!("Alignment should be a power of 2!");
+                }
+
+                self.addr & (alignment - 1)
+            }
+
+
         }
 
         impl<const ALIGNMENT: usize> $ident<AlignedTo<ALIGNMENT>> {
@@ -333,6 +343,11 @@ macro_rules! make_addr {
                     addr: (self.addr() % chunk_size),
                     _ph: PhantomData
                 }
+            }
+
+            /// Add to this address (in bytes)
+            pub const fn extend_by(self, bytes: usize) -> Self {
+                Self::new(self.addr() + bytes)
             }
         }
 
