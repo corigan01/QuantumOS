@@ -9,23 +9,23 @@ pub struct CommandLine {
     pub option: Option<TaskOption>,
 
     /// Enable Qemu's KVM
-    #[arg(long, default_value_t = false)]
+    #[arg(short, long, default_value_t = false)]
     pub enable_kvm: bool,
 
     /// Print all interrupts to std out
-    #[arg(long = "log-int", default_value_t = false)]
+    #[arg(short, long = "log-int", default_value_t = false)]
     pub log_interrupts: bool,
 
     /// Print std out to command-line
-    #[arg(long = "nographic", default_value_t = false)]
+    #[arg(short, long = "nographic", default_value_t = false)]
     pub no_graphic: bool,
 
     /// Slow down the emulator
-    #[arg(long = "slow", default_value_t = false)]
+    #[arg(short, long = "slow", default_value_t = false)]
     pub slow_emulator: bool,
 
     /// Use the bochs emulator
-    #[arg(long = "bochs", default_value_t = false)]
+    #[arg(short, long = "bochs", default_value_t = false)]
     pub use_bochs: bool,
 }
 

@@ -25,6 +25,8 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 #![no_std]
 
+use core::fmt::Display;
+
 #[cfg(feature = "alloc")]
 pub mod elf_owned;
 pub mod tables;
@@ -35,6 +37,13 @@ pub enum ElfErrorKind {
     NotAligned,
     IncorrectBitMode,
     Invalid,
+}
+
+impl core::error::Error for ElfErrorKind {}
+impl Display for ElfErrorKind {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        writeln!(f, "Elf failed : {:?}", self)
+    }
 }
 
 pub type Result<T> = core::result::Result<T, ElfErrorKind>;

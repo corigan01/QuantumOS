@@ -24,7 +24,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 extern crate alloc;
-use core::ops::{BitOr, BitOrAssign};
+use core::ops::{Add, AddAssign, BitOr, BitOrAssign};
 
 use crate::{
     addr::{PhysAddr, VirtAddr},
@@ -869,6 +869,20 @@ impl VmOptions {
     }
 }
 
+impl Add for VmPermissions {
+    type Output = VmPermissions;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        Self(self.0 | rhs.0)
+    }
+}
+
+impl AddAssign for VmPermissions {
+    fn add_assign(&mut self, rhs: Self) {
+        self.0 |= rhs.0;
+    }
+}
+
 impl core::fmt::Debug for VmPermissions {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("VmPermissions")
@@ -1032,8 +1046,13 @@ impl SafePageMapLvl4 {
             index < 512,
             "Table index ({index}) was out of range for a PageTable (max=512)!"
         );
+        let is_zero = self.lower[index].is_none();
         let table_mut = self.lower[index].get_or_insert_with(|| Box::new(SafePageMapLvl3::empty()));
-        let mut entry_mut = self.table.get(index);
+        let mut entry_mut = if is_zero {
+            PageEntryLvl4::zero()
+        } else {
+            self.table.get(index)
+        };
 
         let reponse = f(&mut entry_mut, table_mut);
 
@@ -1081,8 +1100,13 @@ impl SafePageMapLvl3 {
             index < 512,
             "Table index ({index}) was out of range for a PageTable (max=512)!"
         );
+        let is_zero = self.lower[index].is_none();
         let table_mut = self.lower[index].get_or_insert_with(|| Box::new(SafePageMapLvl2::empty()));
-        let mut entry_mut = self.table.get(index);
+        let mut entry_mut = if is_zero {
+            PageEntryLvl3::zero()
+        } else {
+            self.table.get(index)
+        };
 
         let reponse = f(&mut entry_mut, table_mut);
 
@@ -1130,8 +1154,13 @@ impl SafePageMapLvl2 {
             index < 512,
             "Table index ({index}) was out of range for a PageTable (max=512)!"
         );
+        let is_zero = self.lower[index].is_none();
         let table_mut = self.lower[index].get_or_insert_with(|| Box::new(SafePageMapLvl1::empty()));
-        let mut entry_mut = self.table.get(index);
+        let mut entry_mut = if is_zero {
+            PageEntryLvl2::zero()
+        } else {
+            self.table.get(index)
+        };
 
         let reponse = f(&mut entry_mut, table_mut);
 

@@ -92,7 +92,10 @@ fn exception_handler(args: InterruptInfo) {
                 }
                 // panic
                 mem::vm::PageFaultReponse::NotAttachedHandler => {
-                    panic!("PageFault without attached handler!");
+                    panic!(
+                        "PageFault without attached handler!\n{:#016x?}\n{:#016x?}",
+                        info, args
+                    );
                 }
             }
         }

@@ -23,184 +23,219 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use alloc::{boxed::Box, vec::Vec};
-use elf::{elf_owned::ElfOwned, tables::SegmentKind};
+use alloc::{
+    boxed::Box,
+    collections::btree_map::BTreeMap,
+    vec::{self, Vec},
+};
+use elf::{ElfErrorKind, elf_owned::ElfOwned, tables::SegmentKind};
 use lldebug::{hexdump::HexPrint, logln};
 use mem::{
-    MemoryError,
-    page::PhysPage,
-    vmm::{
-        VirtPage, VmPermissions, VmProcess, VmRegion,
-        backing::{KernelVmObject, VmRegionObject},
+    addr::VirtAddr,
+    page::VirtPage,
+    paging::{Virt2PhysMapping, VmPermissions},
+    vm::{
+        InsertVmObjectError, PopulationReponse, VmFillAction, VmInjectFillAction, VmProcess,
+        VmRegion,
     },
 };
-use tar::Tar;
-use util::consts::{PAGE_2M, PAGE_4K};
+use util::consts::PAGE_4K;
 
-pub struct Process {
-    id: usize,
-    vm: VmProcess,
-}
-
-pub struct Scheduler {
-    kernel: Process,
-    process_list: Vec<Process>,
-}
-
-const EXPECTED_START_ADDR: usize = 0x00400000;
-const EXPECTED_STACK_ADDR: usize = 0x10000000;
-const EXPECTED_STACK_LEN: usize = 4096;
-
-const KERNEL_HANDLER_RSP: usize = 0x200000000000;
-
-impl Scheduler {
-    pub fn new(kernel_process: VmProcess) -> Self {
-        Self {
-            kernel: Process {
-                id: 0,
-                vm: kernel_process,
-            },
-            process_list: Vec::new(),
-        }
-    }
-
-    pub fn add_initfs(&mut self, initfs: &[u8]) -> Result<(), MemoryError> {
-        let tar_file = Tar::new(initfs);
-
-        for header in tar_file.iter() {
-            logln!("Found file: {:?}", header.filename());
-        }
-
-        logln!("Done!");
-
-        let elf_owned = ElfOwned::new_from_slice(
-            tar_file
-                .iter()
-                .find(|t| t.is_file("dummy"))
-                .map(|t| t.file().unwrap())
-                .unwrap(),
-        );
-
-        // Kernel Process Stack
-        self.kernel.vm.add_vm_object(KernelVmObject::new_boxed(
-            VmRegion {
-                start: VirtPage::containing_page((KERNEL_HANDLER_RSP - PAGE_2M) as u64),
-                end: VirtPage::containing_page((KERNEL_HANDLER_RSP + PAGE_4K) as u64),
-            },
-            VmPermissions::READ | VmPermissions::WRITE | VmPermissions::USER | VmPermissions::EXEC,
-            false,
-        ));
-        self.kernel.vm.map_all_now();
-
-        let (vaddr_low, vaddr_hi) = elf_owned
-            .elf()
-            .vaddr_range()
-            .map_err(|_| MemoryError::NotSupported)?;
-
-        let process = VmProcess::new_from(&self.kernel.vm);
-
-        process.add_vm_object(ElfBacked::new_boxed(
-            VmRegion::from_vaddr(vaddr_low as u64, vaddr_hi - vaddr_low),
-            VmPermissions::WRITE | VmPermissions::READ | VmPermissions::USER | VmPermissions::EXEC,
-            elf_owned,
-        ));
-        process.add_vm_object(NothingBacked::new_boxed(
-            VmRegion {
-                start: VirtPage(1),
-                end: VirtPage(11),
-            },
-            VmPermissions::WRITE | VmPermissions::READ | VmPermissions::USER,
-        ));
-
-        process.map_all_now()?;
-        logln!("{:#?}", process);
-        logln!(
-            "Initfs loading to : V{:#016x} -> V{:#016x} [{} - {}] \n{}",
-            vaddr_low,
-            vaddr_hi,
-            vaddr_low / PAGE_4K,
-            vaddr_hi / PAGE_4K,
-            unsafe {
-                core::slice::from_raw_parts(
-                    vaddr_low as *const u8,
-                    128, // Elf::new(initfs).exe_size().unwrap_or(0),
-                )
-            }
-            .hexdump()
-        );
-
-        Ok(())
-    }
-}
-
+/// A structure repr a running process on the system
 #[derive(Debug)]
-pub struct ElfBacked {
-    region: VmRegion,
-    permissions: VmPermissions,
-    // TODO: Make this global and ref to it instead of copying it a bunch of times
-    elf: ElfOwned,
+pub struct Process {
+    vm: VmProcess,
+    id: usize,
 }
 
-impl ElfBacked {
-    pub fn new_boxed(
-        region: VmRegion,
-        permissions: VmPermissions,
-        elf: ElfOwned,
-    ) -> Box<dyn VmRegionObject> {
-        Box::new(Self {
-            region,
-            permissions,
-            elf,
-        })
+/// A structure repr the errors that could happen with a process
+#[derive(Debug)]
+pub enum ProcessError {
+    /// There was a problem loading the elf file
+    ElfLoadingError(ElfErrorKind),
+    /// There was a problem mapping the VmObject
+    InsertVmObjectErr(InsertVmObjectError),
+}
+
+impl Process {
+    /// Create a new empty process
+    pub fn new(id: usize, table: &Virt2PhysMapping) -> Self {
+        Self {
+            vm: VmProcess::inhearit_page_tables(table),
+            id,
+        }
+    }
+
+    /// Add an elf to process's memory map
+    pub fn add_elf(&self, elf: ElfOwned) -> Result<(), ProcessError> {
+        elf.elf()
+            .program_headers()
+            .unwrap()
+            .iter()
+            .for_each(|header| logln!("{header:#?}"));
+        unsafe { self.vm.page_tables.clone().load() }.unwrap();
+        let elf_object = VmElfInject::new(elf);
+        let elf_sections = elf_object.load_segments()?;
+
+        let inject_el = VmFillAction::convert(elf_object);
+
+        for (region, perms) in elf_sections {
+            self.vm
+                .inplace_new_vmobject(region, perms, inject_el.clone())
+                .map_err(|err| ProcessError::InsertVmObjectErr(err))?;
+        }
+        logln!("{self:#?}");
+
+        // let elf_object =
+        // self.vm.inplace_new_vmobject(region, permissions, fill_action)
+        todo!()
     }
 }
 
-impl VmRegionObject for ElfBacked {
-    fn vm_region(&self) -> VmRegion {
-        self.region
+/// An elf backing object for a process's memory map
+#[derive(Debug)]
+pub struct VmElfInject {
+    file: ElfOwned,
+}
+
+impl VmElfInject {
+    /// Create a new VmElfInject
+    pub fn new(elf: ElfOwned) -> Self {
+        Self { file: elf }
     }
 
-    fn vm_permissions(&self) -> VmPermissions {
-        self.permissions
-    }
-
-    fn init_page(&mut self, vpage: VirtPage, _ppage: PhysPage) -> Result<(), MemoryError> {
-        let elf_headers = self
-            .elf
+    /// Get an iterator over the different regions that this elf file
+    /// needs to load.
+    pub fn load_regions(
+        &self,
+    ) -> Result<impl Iterator<Item = (VirtAddr, VirtAddr, VmPermissions)> + use<'_>, ProcessError>
+    {
+        Ok(self
+            .file
             .elf()
             .program_headers()
-            .map_err(|_| MemoryError::DidNotHandleException)?
+            .map_err(|elf_err| ProcessError::ElfLoadingError(elf_err))?
             .iter()
-            .enumerate()
-            .filter(|(_, h)| {
-                let expected_vpage_start = VirtPage::containing_page(h.expected_vaddr());
-                let expected_vpage_end =
-                    VirtPage::containing_page(h.expected_vaddr() + h.in_mem_size() as u64);
+            .filter(|h| h.segment_kind() == SegmentKind::Load)
+            .map(|h| {
+                let expected_vaddr = VirtAddr::new(h.expected_vaddr() as usize);
+                let perms = VmPermissions::none()
+                    .set_exec_flag(h.is_executable())
+                    .set_read_flag(h.is_readable())
+                    .set_write_flag(h.is_writable())
+                    .set_user_flag(true);
 
-                h.segment_kind() == SegmentKind::Load
-                    && expected_vpage_start <= vpage
-                    && expected_vpage_end >= vpage
+                (
+                    expected_vaddr,
+                    expected_vaddr.offset(h.in_mem_size()),
+                    perms,
+                )
+            }))
+    }
+
+    /// Get the load segments as aligned segments and permissions fixed
+    ///
+    /// Since elf exe don't have to have their segments perfectly page aligned
+    /// it is possible for two segments to overlap (in a page sense) so we
+    /// take the highest of the two and split them
+    pub fn load_segments(
+        &self,
+    ) -> Result<impl IntoIterator<Item = (VmRegion, VmPermissions)> + use<>, ProcessError> {
+        // FIXME: This is a realy bad impl of this, we should change this before anyone sees :)
+        let mut pages: BTreeMap<VirtPage, VmPermissions> = BTreeMap::new();
+
+        self.load_regions()?
+            .map(|(start, end, perm)| {
+                let vm_region = VmRegion::from_containing(start, end);
+                vm_region.pages_iter().map(move |page| (page, perm))
+            })
+            .flatten()
+            .inspect(|(page, perm)| {
+                logln!("LOAD PAGE [{:?}] - {}", page, perm);
+            })
+            .for_each(|(page, perm)| {
+                if let Some(already_existing_page) = pages.get_mut(&page) {
+                    *already_existing_page += perm;
+                } else {
+                    pages.insert(page, perm);
+                }
             });
 
-        let vbuffer =
-            unsafe { core::slice::from_raw_parts_mut((vpage.0 * PAGE_4K) as *mut u8, PAGE_4K) };
+        let mut acc: BTreeMap<VmPermissions, Vec<VirtPage>> = BTreeMap::new();
+        for (page, perm) in pages.into_iter() {
+            acc.entry(perm)
+                .and_modify(|old| old.push(page))
+                .or_insert(alloc::vec![page]);
+        }
 
-        for (i, header) in elf_headers {
-            let elf_memory_buffer = self
-                .elf
-                .elf()
-                .program_header_slice(&header)
-                .map_err(|_| MemoryError::DidNotHandleException)?;
+        Ok(acc.into_iter().map(|(perm, pages)| {
+            let mut region = VmRegion::new(pages[0], pages[0]);
 
-            let buf_start = (vpage.0 * PAGE_4K).saturating_sub(header.expected_vaddr() as usize);
+            for page in pages {
+                if page.page() - 1 == region.end.page() {
+                    region.end = VirtPage::new(region.end.page() + 1);
+                } else if page.page() + 1 == region.start.page() {
+                    region.start = VirtPage::new(region.start.page() - 1);
+                }
+            }
+
+            (region, perm)
+        }))
+    }
+
+    /// Convert this object into a FillAction
+    pub fn fill_action(self) -> VmFillAction {
+        VmFillAction::convert(self)
+    }
+}
+
+impl VmInjectFillAction for VmElfInject {
+    fn requests_all_pages_filled(&self, _parent_object: &mem::vm::VmObject) -> bool {
+        true
+    }
+
+    /// Put data into this page
+    fn populate_page(
+        &mut self,
+        _parent_object: &mem::vm::VmObject,
+        _process: &VmProcess,
+        _relative_index: usize,
+        vpage: mem::page::VirtPage,
+        _ppage: mem::page::PhysPage,
+    ) -> mem::vm::PopulationReponse {
+        let headers = match self.file.elf().program_headers() {
+            Ok(header) => header,
+            Err(header_err) => return PopulationReponse::InjectError(Box::new(header_err)),
+        };
+
+        let vbuffer = unsafe { core::slice::from_raw_parts_mut(vpage.addr().as_mut_ptr(), 4096) };
+        vbuffer.fill(0);
+
+        for header in headers.iter().filter(|header| {
+            let start_addr = header.expected_vaddr() as usize;
+            let end_addr = start_addr + header.in_mem_size();
+
+            (vpage.is_addr_contained_in_page(VirtAddr::new(start_addr))
+                || vpage.is_addr_contained_in_page(VirtAddr::new(end_addr)))
+                && header.segment_kind() == SegmentKind::Load
+        }) {
+            let elf_memory_buffer = match self.file.elf().program_header_slice(&header) {
+                Ok(o) => o,
+                Err(err) => return mem::vm::PopulationReponse::InjectError(Box::new(err)),
+            };
+
+            let buf_start = vpage
+                .addr()
+                .addr()
+                .saturating_sub(header.expected_vaddr() as usize);
             let vbuffer_offset = (header.expected_vaddr() as usize + buf_start) % PAGE_4K;
 
             let this_page_buffer = &elf_memory_buffer
                 [buf_start..(buf_start + (PAGE_4K - vbuffer_offset)).min(elf_memory_buffer.len())];
 
             logln!(
-                "ELF LOADING... [{}] {vbuffer_offset:>5}..{:<5} <-- {:>5}..{:<5}   id={i} [{:>16x} - {:<16x}]",
-                vpage.0,
+                "ELF LOADING... [{}] {vbuffer_offset:>5}..{:<5} <-- {:>5}..{:<5}   [{:>16x} - {:<16x}]",
+                vpage.page(),
                 vbuffer_offset + this_page_buffer.len(),
                 buf_start,
                 (buf_start + (PAGE_4K - vbuffer_offset)).min(elf_memory_buffer.len()),
@@ -211,32 +246,6 @@ impl VmRegionObject for ElfBacked {
             vbuffer[vbuffer_offset..vbuffer_offset + this_page_buffer.len()]
                 .copy_from_slice(this_page_buffer);
         }
-
-        Ok(())
-    }
-}
-
-#[derive(Debug)]
-pub struct NothingBacked {
-    region: VmRegion,
-    permissions: VmPermissions,
-}
-
-impl NothingBacked {
-    pub fn new_boxed(region: VmRegion, permissions: VmPermissions) -> Box<dyn VmRegionObject> {
-        Box::new(Self {
-            region,
-            permissions,
-        })
-    }
-}
-
-impl VmRegionObject for NothingBacked {
-    fn vm_region(&self) -> VmRegion {
-        self.region
-    }
-
-    fn vm_permissions(&self) -> VmPermissions {
-        self.permissions
+        mem::vm::PopulationReponse::Okay
     }
 }

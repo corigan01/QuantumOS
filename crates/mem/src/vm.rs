@@ -29,7 +29,7 @@ use core::{error::Error, fmt::Display};
 use crate::{
     MemoryError,
     addr::{AlignedTo, VirtAddr},
-    page::{Page4K, PhysPage, VirtPage},
+    page::{PhysPage, VirtPage},
     paging::{PageCorrelationError, Virt2PhysMapping, VmOptions, VmPermissions},
     pmm::SharedPhysPage,
 };
@@ -41,8 +41,8 @@ use util::consts::PAGE_4K;
 /// A region of virtual memory 'virtual in pages'
 #[derive(Debug, Clone, Copy)]
 pub struct VmRegion {
-    start: VirtPage,
-    end: VirtPage,
+    pub start: VirtPage,
+    pub end: VirtPage,
 }
 
 impl VmRegion {
@@ -101,6 +101,8 @@ pub enum PopulationReponse {
     Okay,
     /// There was a problem mapping this page
     MappingError(PageCorrelationError),
+    /// There was a problem mapping this page in the Inject action
+    InjectError(Box<dyn Error>),
 }
 
 pub trait VmInjectFillAction: core::fmt::Debug {
@@ -149,7 +151,7 @@ pub trait VmInjectFillAction: core::fmt::Debug {
 }
 
 /// What to do with this VmObject's memory. How should it be filled?
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum VmFillAction {
     /// Don't do anything after allocating a physical page
     Nothing,
@@ -157,6 +159,13 @@ pub enum VmFillAction {
     Scrub(u8),
     /// Do some more complex action with this page.
     InjectWith(Arc<RwLock<dyn VmInjectFillAction>>),
+}
+
+impl VmFillAction {
+    /// Convert a VmInjectFillAction into a VmFillAction
+    pub fn convert(thing: impl VmInjectFillAction + 'static) -> Self {
+        Self::InjectWith(Arc::new(RwLock::new(thing)))
+    }
 }
 
 /// Scrub the vpage's memory with the given pattern.
@@ -267,6 +276,8 @@ pub enum NewVmObjectError {
 /// The type of error given when trying to map a page with a VmObject
 #[derive(Debug)]
 pub enum VmObjectMappingError {
+    /// We cannot populate a page if this table is not loaded
+    PageTableNotLoaded,
     /// Cannot map this page
     MappingError(PageCorrelationError),
     /// Failed to get a physical page
@@ -276,6 +287,8 @@ pub enum VmObjectMappingError {
         region: VmRegion,
         requested_vpage: VirtPage,
     },
+    /// There was a problem populating this entry
+    InjectError(Box<dyn Error>),
 }
 
 impl Error for VmObjectMappingError {}
@@ -347,6 +360,11 @@ impl VmObject {
             });
         }
 
+        // We cannot populate page table while the table isnt loaded
+        if !vm_process.page_tables.is_loaded() {
+            return Err(VmObjectMappingError::PageTableNotLoaded);
+        }
+
         // Get a new backing page for this vpage
         let backing_page = SharedPhysPage::allocate_anywhere()
             .map_err(|err| VmObjectMappingError::CannotGetPhysicalPage(err))?;
@@ -371,6 +389,9 @@ impl VmObject {
             PopulationReponse::Okay => (),
             PopulationReponse::MappingError(page_correlation_error) => {
                 return Err(VmObjectMappingError::MappingError(page_correlation_error));
+            }
+            PopulationReponse::InjectError(inject) => {
+                return Err(VmObjectMappingError::InjectError(inject));
             }
         }
 
@@ -639,42 +660,42 @@ pub fn remove_page_fault_handler() {
     *MAIN_PAGE_FAULT_HANDLER.write() = None;
 }
 
-// TODO: REMOVE THIS FUNCTION, its just for testing :)
-pub fn test() {
-    let proc = VmProcess::new();
+// // TODO: REMOVE THIS FUNCTION, its just for testing :)
+// pub fn test() {
+//     let proc = VmProcess::new();
 
-    proc.inplace_new_vmobject(
-        VmRegion::new(VirtPage::new(10), VirtPage::new(20)),
-        VmPermissions::none()
-            .set_read_flag(true)
-            .set_write_flag(true)
-            .set_user_flag(true),
-        VmFillAction::Nothing,
-    )
-    .unwrap();
+//     proc.inplace_new_vmobject(
+//         VmRegion::new(VirtPage::new(10), VirtPage::new(20)),
+//         VmPermissions::none()
+//             .set_read_flag(true)
+//             .set_write_flag(true)
+//             .set_user_flag(true),
+//         VmFillAction::Nothing,
+//     )
+//     .unwrap();
 
-    logln!(
-        "{:#?}",
-        proc.page_fault_handler(PageFaultInfo {
-            is_present: false,
-            write_read_access: false,
-            execute_fault: false,
-            user_fault: false,
-            vaddr: VirtPage::<Page4K>::new(15).addr(),
-        })
-    );
-    logln!(
-        "{:#?}",
-        proc.page_fault_handler(PageFaultInfo {
-            is_present: false,
-            write_read_access: false,
-            execute_fault: false,
-            user_fault: false,
-            vaddr: VirtPage::<Page4K>::new(16).addr(),
-        })
-    );
+//     logln!(
+//         "{:#?}",
+//         proc.page_fault_handler(PageFaultInfo {
+//             is_present: false,
+//             write_read_access: false,
+//             execute_fault: false,
+//             user_fault: false,
+//             vaddr: VirtPage::<Page4K>::new(15).addr(),
+//         })
+//     );
+//     logln!(
+//         "{:#?}",
+//         proc.page_fault_handler(PageFaultInfo {
+//             is_present: false,
+//             write_read_access: false,
+//             execute_fault: false,
+//             user_fault: false,
+//             vaddr: VirtPage::<Page4K>::new(16).addr(),
+//         })
+//     );
 
-    logln!("{}", proc.page_tables);
+//     logln!("{}", proc.page_tables);
 
-    todo!("Test Done!");
-}
+//     todo!("Test Done!");
+// }

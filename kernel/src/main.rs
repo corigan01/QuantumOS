@@ -38,15 +38,17 @@ extern crate alloc;
 
 use arch::CpuPrivilege::Ring0;
 use bootloader::KernelBootHeader;
+use elf::elf_owned::ElfOwned;
 use lldebug::{debug_ready, logln, make_debug};
 use mem::{
+    addr::VirtAddr,
     alloc::{KernelAllocator, provide_init_region},
     paging::{Virt2PhysMapping, init_virt2phys_provider},
     pmm::Pmm,
-    vmm::{VirtPage, VmPermissions, VmProcess, VmRegion, backing::KernelVmObject},
 };
-use scheduler::Scheduler;
+use scheduler::Process;
 use serial::{Serial, baud::SerialBaud};
+use tar::Tar;
 use timer::kernel_ticks;
 use util::{bytes::HumanBytes, consts::PAGE_4K};
 
@@ -103,51 +105,23 @@ fn main(kbh: &KernelBootHeader) {
     logln!("Attached virt2phys provider!");
     init_virt2phys_provider();
 
-    mem::vm::test();
-
     logln!("Init VirtMemoryManager");
-    let kernel_process = unsafe { VmProcess::new_from_bootloader() };
 
-    kernel_process.add_vm_object(KernelVmObject::new_boxed(
-        VmRegion {
-            start: VirtPage::containing_page(kbh.kernel_elf.0),
-            end: VirtPage::containing_page(kbh.kernel_elf.0 + kbh.kernel_elf.1 as u64),
-        },
-        VmPermissions::READ,
-        true,
-    ));
-    kernel_process.add_vm_object(KernelVmObject::new_boxed(
-        VmRegion {
-            start: VirtPage::containing_page(kbh.kernel_exe.0),
-            end: VirtPage::containing_page(kbh.kernel_exe.0 + kbh.kernel_exe.1 as u64),
-        },
-        VmPermissions::READ | VmPermissions::EXEC,
-        true,
-    ));
-    kernel_process.add_vm_object(KernelVmObject::new_boxed(
-        VmRegion {
-            start: VirtPage::containing_page(kbh.kernel_stack.0),
-            end: VirtPage::containing_page(kbh.kernel_stack.0 + kbh.kernel_stack.1 as u64),
-        },
-        VmPermissions::READ | VmPermissions::WRITE,
-        true,
-    ));
-    kernel_process.add_vm_object(KernelVmObject::new_boxed(
-        VmRegion {
-            start: VirtPage::containing_page(kbh.kernel_init_heap.0),
-            end: VirtPage::containing_page(kbh.kernel_init_heap.0 + kbh.kernel_init_heap.1 as u64),
-        },
-        VmPermissions::READ | VmPermissions::WRITE,
-        true,
-    ));
-
-    let mut scheduler = Scheduler::new(kernel_process);
-
-    scheduler
-        .add_initfs(unsafe {
-            core::slice::from_raw_parts(kbh.initfs_ptr.0 as *const u8, kbh.initfs_ptr.1)
-        })
+    let initfs_slice =
+        unsafe { core::slice::from_raw_parts(kbh.initfs_ptr.0 as *const u8, kbh.initfs_ptr.1) };
+    let dummy_elf = Tar::new(initfs_slice)
+        .iter()
+        .find(|h| h.is_file("dummy"))
+        .unwrap()
+        .file()
         .unwrap();
+
+    let elf = ElfOwned::new_from_slice(dummy_elf);
+    let idk = unsafe { Virt2PhysMapping::inhearit_bootloader() }.unwrap();
+    unsafe { idk.clone().load() };
+
+    let process = Process::new(0, &idk);
+    process.add_elf(elf).unwrap();
 
     logln!("Attempting to jump to userspace!");
     unsafe { core::arch::asm!("int 0x31") };

@@ -156,6 +156,11 @@ impl<S: PagingStructureSize> PhysPage<S> {
     pub const fn page(&self) -> usize {
         self.id
     }
+
+    /// Check if this address is contained within this page
+    pub fn is_addr_contained_in_page(&self, addr: PhysAddr) -> bool {
+        self.addr() <= addr && self.addr().offset(S::N_BYTES) >= addr
+    }
 }
 
 /// A structure representing a well aligned Virtual page
@@ -233,6 +238,11 @@ impl<S: PagingStructureSize> VirtPage<S> {
         (lhs.id - self.id) * S::N_BYTES
     }
 
+    /// Offset this page by an offset of pages
+    pub const fn offset_by(self, offset: usize) -> Self {
+        Self::new(self.id + offset)
+    }
+
     /// Get the distance (in pages) from `self` to `lhs`.
     ///
     /// # Note
@@ -245,6 +255,11 @@ impl<S: PagingStructureSize> VirtPage<S> {
     /// Get the page id of this page.
     pub const fn page(&self) -> usize {
         self.id
+    }
+
+    /// Check if this address is contained within this page
+    pub fn is_addr_contained_in_page(&self, addr: VirtAddr) -> bool {
+        self.addr() <= addr && self.addr().offset(S::N_BYTES) >= addr
     }
 }
 
