@@ -6,6 +6,16 @@ SECTIONS {
     .start : {
         *(.start .start.*)
     }
+    . = 0x100000001000;
+    .stupid_data : {
+        LONG(0)
+        LONG(0)
+        LONG(0)
+        LONG(0)
+    }
+    
+    . = ALIGN(4K);
+
     .text : {
         *(.text .text.*)
     }

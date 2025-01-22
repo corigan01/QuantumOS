@@ -40,7 +40,7 @@ extern crate alloc;
 
 use arch::CpuPrivilege::Ring0;
 use bootloader::KernelBootHeader;
-use context::ProcessContext;
+use context::{KERNEL_RSP_PTR, ProcessContext, USERSPACE_RSP_PTR};
 use elf::elf_owned::ElfOwned;
 use lldebug::{debug_ready, logln, make_debug};
 use mem::{
@@ -54,7 +54,10 @@ use scheduler::Process;
 use serial::{Serial, baud::SerialBaud};
 use tar::Tar;
 use timer::kernel_ticks;
-use util::{bytes::HumanBytes, consts::PAGE_4K};
+use util::{
+    bytes::HumanBytes,
+    consts::{PAGE_2M, PAGE_4K},
+};
 
 #[global_allocator]
 static ALLOC: KernelAllocator = KernelAllocator::new();
@@ -85,7 +88,7 @@ fn main(kbh: &KernelBootHeader) {
     int::attach_interrupts();
     int::attach_syscall();
     int::enable_pic();
-    timer::init_timer();
+    // timer::init_timer();
 
     logln!(
         "Init Heap Region ({})",
@@ -129,7 +132,10 @@ fn main(kbh: &KernelBootHeader) {
     process.add_elf(elf).unwrap();
     process
         .add_anon(
-            VmRegion::from_containing(VirtAddr::new(4096), VirtAddr::new(4096 * 15)),
+            VmRegion::from_containing(
+                VirtAddr::new(0x00090000000),
+                VirtAddr::new(0x00090000000 + PAGE_4K * 20),
+            ),
             VmPermissions::none()
                 .set_exec_flag(true)
                 .set_read_flag(true)
@@ -141,7 +147,7 @@ fn main(kbh: &KernelBootHeader) {
         .add_anon(
             VmRegion::from_containing(
                 VirtAddr::new(0x200000000000 - (20 * PAGE_4K)),
-                VirtAddr::new(0x200000000000),
+                VirtAddr::new(0x200000000000 + PAGE_4K),
             ),
             VmPermissions::none()
                 .set_exec_flag(true)
@@ -152,6 +158,9 @@ fn main(kbh: &KernelBootHeader) {
         .unwrap();
     unsafe { process.load_tables() };
     logln!("{:#?}", process);
+
+    unsafe { *(KERNEL_RSP_PTR as *mut u64) = 0x200000000000 };
+    unsafe { *(USERSPACE_RSP_PTR as *mut u64) = 0x200000000030 };
 
     let mut test = ProcessContext {
         r15: 0,
@@ -174,10 +183,9 @@ fn main(kbh: &KernelBootHeader) {
         rflag: 0x200,
         rip: 0x00400000,
         exception_code: 0,
-        rsp: 0xb000,
+        rsp: (0x00090000000 + PAGE_4K * 20) as u64,
     };
 
     logln!("Attempting to jump to userspace!");
     unsafe { context::userspace_entry(&raw mut test) };
-    logln!("Finished in {}ms", kernel_ticks());
 }

@@ -56,84 +56,99 @@ pub struct ProcessContext {
     pub rsp: u64,
 }
 
-unsafe extern "C" {
-    pub fn kernel_entry();
+pub const KERNEL_RSP_PTR: u64 = 0x200000000010_u64;
+pub const USERSPACE_RSP_PTR: u64 = 0x200000000020_u64;
+
+#[naked]
+pub unsafe extern "C" fn kernel_entry() {
+    unsafe {
+        naked_asm!(
+            "
+            #  -- Save User's stack ptr, and restore our own
+            mov r10, {userspace_rsp_ptr}
+            mov [r10], rsp
+
+            mov r10, {kernel_rsp_ptr}
+            mov rsp, [r10]
+
+            #  -- Start building the processes `ProcessContext`
+
+            mov r10, {userspace_rsp_ptr}
+            push [r10]
+
+            push 0                         # This isn't an ISR, so we can just store 0 into its 'exception_code'
+            push rcx                       # rip is saved in rcx
+            push r11                       # rFLAGS is saved in r11
+            push 0x23
+            push 0x1b
+
+            push rax
+            push rbx
+            push rcx
+            push rdx
+            push rsi
+            push rdi
+            push rbp
+            push r8
+            push r9
+            push r10
+            push r11
+            push r12
+            push r13
+            push r14
+            push r15
+
+            #  -- Call the 'syscall_entry' function
+
+            mov r9, rax                    # We move rax (syscall number) into r9 (arg5 of callee)
+            call syscall_handler
+
+            #  -- Start restoring the processes `ProcessContext`
+        
+            pop r15
+            pop r14
+            pop r13
+            pop r12
+            pop r11
+            pop r10
+            pop r9
+            pop r8
+            pop rbp
+            pop rdi
+            pop rsi
+            pop rdx
+            pop rcx
+            pop rbx
+            pop rax
+
+            add rsp, 8                     # pop ss
+            add rsp, 8                     # pop ss
+            add rsp, 8                     # pop rsp
+            add rsp, 8                     # pop rflags
+            add rsp, 8                     # pop rip
+
+            #  -- Return back to userspace
+
+            cli
+            pop rsp
+            sysretq
+        
+        ",
+            // FIXME: For whatever reason, rust fails to compile with these symbol PTRs,
+            //        so for right now I will just make them part of the linker script and
+            //        use raw ptrs to these symbols.
+            // kernel_rsp_ptr = sym KERNEL_RSP,
+            // userspace_rsp_ptr = sym USERSPACE_RSP,
+
+            kernel_rsp_ptr = const { KERNEL_RSP_PTR },
+            userspace_rsp_ptr = const { USERSPACE_RSP_PTR },
+        )
+    };
 }
-
-global_asm!(
-    "
-        .global kernel_entry
-        kernel_entry:
-        #  -- Save User's stack ptr, and restore our own
-
-        mov [POOP], rsp
-        mov rsp, [POOP]
-
-        #  -- Start building the processes `ProcessContext`
-
-        push [0]
-        push 0                         # This isn't an ISR, so we can just store 0 into its 'exception_code'
-        push rcx                       # rip is saved in ecx
-        push r11                       # rFLAGS is saved in r11
-        push 0x23
-        push 0x1b
-
-        push rax
-        push rbx
-        push rcx
-        push rdx
-        push rsi
-        push rdi
-        push rbp
-        push r8
-        push r9
-        push r10
-        push r11
-        push r12
-        push r13
-        push r14
-        push r15
-
-        #  -- Call the 'syscall_entry' function
-
-        mov r9, rax                    # We move rax (syscall number) into r9 (arg5 of callee)
-        call syscall_entry
-
-        #  -- Start restoring the processes `ProcessContext`
-        
-        pop r15
-        pop r14
-        pop r13
-        pop r12
-        pop r11
-        pop r10
-        pop r9
-        pop r8
-        pop rbp
-        pop rdi
-        pop rsi
-        pop rdx
-        pop rcx
-        pop rbx
-        pop rax
-
-        sub rsp, 8                     # pop ss
-        sub rsp, 8                     # pop rsp
-        sub rsp, 8                     # pop rflags
-        sub rsp, 8                     # pop rip
-
-        #  -- Return back to userspace
-
-        cli
-        pop rsp
-        sysretq
-        
-    "
-);
 
 /// This is the entry for userspace
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn userspace_entry(context: *const ProcessContext) {
+pub unsafe extern "C" fn userspace_entry(context: *const ProcessContext) -> ! {
     unsafe {
         asm!(
             "
@@ -176,4 +191,5 @@ pub unsafe extern "C" fn userspace_entry(context: *const ProcessContext) {
             in("rdi") context
         )
     }
+    unreachable!("Should not return from iretq");
 }

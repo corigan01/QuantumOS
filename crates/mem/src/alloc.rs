@@ -105,7 +105,7 @@ impl BootStrapAlloc {
 
                 if !buddy_mut.free || buddy_mut.len < min_len {
                     let Some(buddy_next) = buddy_mut.next else {
-                        return Err(MemoryError::OutOfMemory);
+                        return Err(MemoryError::OutOfAllocMemory);
                     };
 
                     buddy = buddy_next;

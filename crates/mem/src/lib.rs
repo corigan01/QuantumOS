@@ -51,7 +51,7 @@ pub enum MemoryError {
     AlreadyUsed,
     TableNotSupported,
     PtrWasNull,
-    OutOfMemory,
+    OutOfAllocMemory,
     NotPhysicalPage,
     DoubleFree,
     NotFound,

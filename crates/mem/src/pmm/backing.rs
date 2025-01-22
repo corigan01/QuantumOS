@@ -283,13 +283,13 @@ impl TableImpl for TableFlat {
             .map_err(|_| MemoryError::NotPageAligned)?;
 
         if self.healthy_tables == 0 && self.dirty_tables == 0 {
-            return Err(MemoryError::OutOfMemory);
+            return Err(MemoryError::OutOfAllocMemory);
         }
 
         let atom_index = self
             .available
             .find_first_of(true)
-            .ok_or(MemoryError::OutOfMemory)?;
+            .ok_or(MemoryError::OutOfAllocMemory)?;
         let atom = &mut self.table[atom_index];
 
         let alloc_result = match atom {
@@ -327,7 +327,7 @@ impl TableImpl for TableFlat {
                 let inner = unsafe { ptr.as_mut() };
                 inner.request_page_from_higher()
             }
-            _ => return Err(MemoryError::OutOfMemory),
+            _ => return Err(MemoryError::OutOfAllocMemory),
         }?;
 
         match atom {
@@ -442,7 +442,7 @@ impl TableImpl for TableBits {
 
     fn request_page(&mut self, _el_size: usize) -> Result<AllocationResult, MemoryError> {
         if self.atom_size == 0 {
-            return Err(MemoryError::OutOfMemory);
+            return Err(MemoryError::OutOfAllocMemory);
         }
 
         match self.table.find_first_of(true) {
@@ -455,7 +455,7 @@ impl TableImpl for TableBits {
                     new_size: self.atom_size,
                 })
             }
-            Some(_) | None => Err(MemoryError::OutOfMemory),
+            Some(_) | None => Err(MemoryError::OutOfAllocMemory),
         }
     }
 
@@ -512,7 +512,7 @@ mod test {
         assert_eq!(mt.request_page(), Ok(PhysPage::new(7)));
         assert_eq!(mt.request_page(), Ok(PhysPage::new(8)));
         assert_eq!(mt.request_page(), Ok(PhysPage::new(9)));
-        assert_eq!(mt.request_page(), Err(MemoryError::OutOfMemory));
+        assert_eq!(mt.request_page(), Err(MemoryError::OutOfAllocMemory));
     }
 
     #[test]
@@ -539,7 +539,7 @@ mod test {
             assert!(own_pages.get(page_id));
             own_pages.set(page_id, false);
         }
-        assert_eq!(mt.request_page(), Err(MemoryError::OutOfMemory));
+        assert_eq!(mt.request_page(), Err(MemoryError::OutOfAllocMemory));
         assert_eq!(own_pages.find_first_of(true), None);
     }
 
@@ -568,7 +568,7 @@ mod test {
             assert!(own_pages.get(page_id));
             own_pages.set(page_id, false);
         }
-        assert_eq!(mt.request_page(), Err(MemoryError::OutOfMemory));
+        assert_eq!(mt.request_page(), Err(MemoryError::OutOfAllocMemory));
         assert_eq!(own_pages.find_first_of(true), None);
     }
 
@@ -598,7 +598,7 @@ mod test {
             assert!(own_pages.get(page_id));
             own_pages.set(page_id, false);
         }
-        assert_eq!(mt.request_page(), Err(MemoryError::OutOfMemory));
+        assert_eq!(mt.request_page(), Err(MemoryError::OutOfAllocMemory));
         assert_eq!(own_pages.find_first_of(true), None);
     }
 
@@ -625,7 +625,7 @@ mod test {
             assert!(own_pages.get(page_id));
             own_pages.set(page_id, false);
         }
-        assert_eq!(mt.request_page(), Err(MemoryError::OutOfMemory));
+        assert_eq!(mt.request_page(), Err(MemoryError::OutOfAllocMemory));
 
         for page in start.page()..end.page() {
             mt.free_page(PhysPage::new(page)).unwrap();

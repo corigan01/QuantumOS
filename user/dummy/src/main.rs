@@ -27,7 +27,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #![no_main]
 
 use core::panic::PanicInfo;
-use libq::{ExitCode, dbugln, exit};
+use libq::{ExitCode, dbugln, exit, raw_syscall};
 
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
@@ -38,8 +38,9 @@ fn panic(info: &PanicInfo) -> ! {
 #[unsafe(link_section = ".start")]
 #[unsafe(no_mangle)]
 extern "C" fn _start() {
-    let hello_world = "Hello World from UE!! ";
-    dbugln!("Hello World! -- {hello_world}");
+    // let hello_world = "Hello World from UE!! ";
+    // dbugln!("Hello World! -- {hello_world}");
 
-    exit(ExitCode::Success);
+    // exit(ExitCode::Success);
+    panic!("dingus {}", 1)
 }

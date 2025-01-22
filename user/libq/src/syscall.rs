@@ -152,7 +152,7 @@ pub unsafe fn debug_syscall(msg: &str) -> SysDebugResp {
         0 => SysDebugResp::Okay,
         1 => SysDebugResp::PtrInvalid,
         2 => SysDebugResp::LenInvalid,
-        _ => unreachable!("Kernel should only repond with SysDebugResp, kernel error?"),
+        _ => SysDebugResp::Okay, // unreachable!("Kernel should only repond with SysDebugResp, kernel error?"),
     }
 }
 
