@@ -167,7 +167,7 @@ pub fn attach_syscall() {
     // Now attach the 'SYSCALL' instruction handler
     unsafe {
         arch::registers::ia32_efer::set_syscall_extensions_flag(true);
-        arch::registers::amd_syscall::set_syscall_target_ptr(syscall_entry as u64);
+        arch::registers::amd_syscall::set_syscall_target_ptr(crate::context::kernel_entry as u64);
         arch::registers::amd_syscall::write_kernel_segments(
             Segment::new(1, CpuPrivilege::Ring0),
             Segment::new(2, CpuPrivilege::Ring0),

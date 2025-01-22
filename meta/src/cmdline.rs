@@ -27,6 +27,10 @@ pub struct CommandLine {
     /// Use the bochs emulator
     #[arg(short, long = "bochs", default_value_t = false)]
     pub use_bochs: bool,
+
+    /// Enable GDB for qemu
+    #[arg(long = "gdb", default_value_t = false)]
+    pub use_gdb: bool,
 }
 
 #[derive(Subcommand, Debug, Clone)]

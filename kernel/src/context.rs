@@ -24,7 +24,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 use core::{
-    arch::{asm, global_asm},
+    arch::{asm, global_asm, naked_asm},
     cell::SyncUnsafeCell,
     sync::atomic::{AtomicPtr, Ordering},
 };
@@ -56,102 +56,80 @@ pub struct ProcessContext {
     pub rsp: u64,
 }
 
-/// The current user's stack ptr
-#[unsafe(no_mangle)]
-static USER_STACK_PTR: AtomicPtr<u64> = AtomicPtr::new(0 as *mut u64);
-/// The current user's kernel stack ptr
-#[unsafe(no_mangle)]
-static KERN_STACK_PTR: AtomicPtr<u64> = AtomicPtr::new(0 as *mut u64);
-
-#[inline]
-fn read_user_stack_ptr() -> *mut u64 {
-    USER_STACK_PTR.load(Ordering::Relaxed)
+unsafe extern "C" {
+    pub fn kernel_entry();
 }
 
-#[inline]
-fn read_kernel_stack_ptr() -> *mut u64 {
-    KERN_STACK_PTR.load(Ordering::Relaxed)
-}
+global_asm!(
+    "
+        .global kernel_entry
+        kernel_entry:
+        #  -- Save User's stack ptr, and restore our own
 
-/// This is the entry of the kernel once being called from a syscall.
-#[unsafe(no_mangle)]
-unsafe extern "C" fn kernel_entry() {
-    unsafe {
-        let user_stack_ptr = read_user_stack_ptr();
-        let kernel_stack_ptr = read_kernel_stack_ptr();
+        mov [POOP], rsp
+        mov rsp, [POOP]
 
-        asm!(
-            "
-                #  -- Save User's stack ptr, and restore our own
+        #  -- Start building the processes `ProcessContext`
 
-                mov [{user_rsp}], rsp
-                mov rsp, [{kernel_rsp}]
+        push [0]
+        push 0                         # This isn't an ISR, so we can just store 0 into its 'exception_code'
+        push rcx                       # rip is saved in ecx
+        push r11                       # rFLAGS is saved in r11
+        push 0x23
+        push 0x1b
 
-                #  -- Start building the processes `ProcessContext`
+        push rax
+        push rbx
+        push rcx
+        push rdx
+        push rsi
+        push rdi
+        push rbp
+        push r8
+        push r9
+        push r10
+        push r11
+        push r12
+        push r13
+        push r14
+        push r15
 
-                push [{user_rsp}]
-                push 0                         # This isn't an ISR, so we can just store 0 into its 'exception_code'
-                push rcx                       # rip is saved in ecx
-                push r11                       # rFLAGS is saved in r11
-                push 0x23
-                push 0x1b
+        #  -- Call the 'syscall_entry' function
 
-                push rax
-                push rbx
-                push rcx
-                push rdx
-                push rsi
-                push rdi
-                push rbp
-                push r8
-                push r9
-                push r10
-                push r11
-                push r12
-                push r13
-                push r14
-                push r15
+        mov r9, rax                    # We move rax (syscall number) into r9 (arg5 of callee)
+        call syscall_entry
 
-                #  -- Call the 'syscall_entry' function
+        #  -- Start restoring the processes `ProcessContext`
+        
+        pop r15
+        pop r14
+        pop r13
+        pop r12
+        pop r11
+        pop r10
+        pop r9
+        pop r8
+        pop rbp
+        pop rdi
+        pop rsi
+        pop rdx
+        pop rcx
+        pop rbx
+        pop rax
 
-                mov r9, rax                    # We move rax (syscall number) into r9 (arg5 of callee)
-                call syscall_entry
+        sub rsp, 8                     # pop ss
+        sub rsp, 8                     # pop rsp
+        sub rsp, 8                     # pop rflags
+        sub rsp, 8                     # pop rip
 
-                #  -- Start restoring the processes `ProcessContext`
-                
-                pop r15
-                pop r14
-                pop r13
-                pop r12
-                pop r11
-                pop r10
-                pop r9
-                pop r8
-                pop rbp
-                pop rdi
-                pop rsi
-                pop rdx
-                pop rcx
-                pop rbx
-                pop rax
+        #  -- Return back to userspace
 
-                sub rsp, 8                     # pop ss
-                sub rsp, 8                     # pop rsp
-                sub rsp, 8                     # pop rflags
-                sub rsp, 8                     # pop rip
-
-                #  -- Return back to userspace
-
-                cli
-                pop rsp
-                sysretq
-                
-            ",
-            user_rsp = in(reg) user_stack_ptr,
-            kernel_rsp = in(reg) kernel_stack_ptr,
-        );
-    }
-}
+        cli
+        pop rsp
+        sysretq
+        
+    "
+);
 
 /// This is the entry for userspace
 #[unsafe(no_mangle)]

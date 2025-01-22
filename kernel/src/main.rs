@@ -46,8 +46,9 @@ use lldebug::{debug_ready, logln, make_debug};
 use mem::{
     addr::VirtAddr,
     alloc::{KernelAllocator, provide_init_region},
-    paging::{Virt2PhysMapping, init_virt2phys_provider},
+    paging::{Virt2PhysMapping, VmPermissions, init_virt2phys_provider},
     pmm::Pmm,
+    vm::VmRegion,
 };
 use scheduler::Process;
 use serial::{Serial, baud::SerialBaud};
@@ -123,6 +124,35 @@ fn main(kbh: &KernelBootHeader) {
     let idk = unsafe { Virt2PhysMapping::inhearit_bootloader() }.unwrap();
     unsafe { idk.clone().load() };
 
+    let process = Process::new(0, &idk);
+    unsafe { process.load_tables() };
+    process.add_elf(elf).unwrap();
+    process
+        .add_anon(
+            VmRegion::from_containing(VirtAddr::new(4096), VirtAddr::new(4096 * 15)),
+            VmPermissions::none()
+                .set_exec_flag(true)
+                .set_read_flag(true)
+                .set_write_flag(true)
+                .set_user_flag(true),
+        )
+        .unwrap();
+    process
+        .add_anon(
+            VmRegion::from_containing(
+                VirtAddr::new(0x200000000000 - (20 * PAGE_4K)),
+                VirtAddr::new(0x200000000000),
+            ),
+            VmPermissions::none()
+                .set_exec_flag(true)
+                .set_read_flag(true)
+                .set_write_flag(true)
+                .set_user_flag(false),
+        )
+        .unwrap();
+    unsafe { process.load_tables() };
+    logln!("{:#?}", process);
+
     let mut test = ProcessContext {
         r15: 0,
         r14: 0,
@@ -142,17 +172,12 @@ fn main(kbh: &KernelBootHeader) {
         cs: 0x1b,
         ss: 0x23,
         rflag: 0x200,
-        rip: 0x00000000400000,
+        rip: 0x00400000,
         exception_code: 0,
-        rsp: 0xa000,
+        rsp: 0xb000,
     };
-    unsafe { context::userspace_entry(&raw mut test) };
-
-    let process = Process::new(0, &idk);
-    unsafe { process.load_tables() };
-    process.add_elf(elf).unwrap();
 
     logln!("Attempting to jump to userspace!");
-    unsafe { core::arch::asm!("int 0x31") };
+    unsafe { context::userspace_entry(&raw mut test) };
     logln!("Finished in {}ms", kernel_ticks());
 }

@@ -30,7 +30,8 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 macro_rules! raw_syscall {
     (__priv_custom_asm, $($tt:tt)*) => {
         ::core::arch::asm!(
-            "int 0x80",
+            // "int 0x80",
+            "syscall",
             $($tt)*
             clobber_abi("system")
         );

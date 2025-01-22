@@ -107,7 +107,7 @@ overflow-checks = true
 [profile.dummy]
 inherits = "release"
 panic = "abort"
-opt-level=0
+opt-level=3
 strip = false
-debug = 1
-overflow-checks = true
+debug = 0
+overflow-checks = false

@@ -100,21 +100,49 @@ impl Process {
         // Page tables need to be loaded before we can map the elf into memory
         self.assert_loaded(true)?;
 
+        let (start, end) = elf.elf().vaddr_range().unwrap();
+
         let elf_object = VmElfInject::new(elf);
-        let elf_sections = elf_object.load_segments()?;
+        // let elf_sections = elf_object.load_segments()?;
 
         let inject_el = VmFillAction::convert(elf_object);
 
-        for (region, perms) in elf_sections {
-            self.vm
-                .inplace_new_vmobject(region, perms, inject_el.clone())
-                .map_err(|err| ProcessError::InsertVmObjectErr(err))?;
-        }
-        logln!("{self:#?}");
-
+        // for (region, perms) in elf_sections {
+        self.vm
+            .inplace_new_vmobject(
+                VmRegion::from_containing(VirtAddr::new(start), VirtAddr::new(end)),
+                VmPermissions::none()
+                    .set_exec_flag(true)
+                    .set_read_flag(true)
+                    .set_write_flag(true)
+                    .set_user_flag(true),
+                inject_el.clone(),
+            )
+            .map_err(|err| ProcessError::InsertVmObjectErr(err))?;
+        // }
+        logln!(
+            "{}",
+            unsafe { core::slice::from_raw_parts(start as *const u8, end - start) }.hexdump()
+        );
         // let elf_object =
         // self.vm.inplace_new_vmobject(region, permissions, fill_action)
-        todo!()
+        Ok(())
+    }
+
+    /// Map an anon zeroed region to this local process
+    pub fn add_anon(
+        &self,
+        region: VmRegion,
+        permissions: VmPermissions,
+    ) -> Result<(), ProcessError> {
+        // Page tables need to be loaded before we can map the elf into memory
+        self.assert_loaded(true)?;
+
+        self.vm
+            .inplace_new_vmobject(region, permissions, VmFillAction::Scrub(0))
+            .map_err(|err| ProcessError::InsertVmObjectErr(err))?;
+
+        Ok(())
     }
 }
 
@@ -146,9 +174,9 @@ impl VmElfInject {
             .map(|h| {
                 let expected_vaddr = VirtAddr::new(h.expected_vaddr() as usize);
                 let perms = VmPermissions::none()
-                    .set_exec_flag(h.is_executable())
-                    .set_read_flag(h.is_readable())
-                    .set_write_flag(h.is_writable())
+                    .set_exec_flag(h.is_executable() || true)
+                    .set_read_flag(h.is_readable() || true)
+                    .set_write_flag(h.is_writable() || true)
                     .set_user_flag(true);
 
                 (
@@ -241,8 +269,7 @@ impl VmInjectFillAction for VmElfInject {
             let start_addr = header.expected_vaddr() as usize;
             let end_addr = start_addr + header.in_mem_size();
 
-            (vpage.is_addr_contained_in_page(VirtAddr::new(start_addr))
-                || vpage.is_addr_contained_in_page(VirtAddr::new(end_addr)))
+            (start_addr <= vpage.addr().addr() + 4096 && end_addr >= vpage.addr().addr())
                 && header.segment_kind() == SegmentKind::Load
         }) {
             let elf_memory_buffer = match self.file.elf().program_header_slice(&header) {

@@ -103,6 +103,7 @@ fn run_qemu(
     enable_no_graphic: bool,
     log_interrupts: bool,
     slow_emu: bool,
+    use_gdb: bool,
     quick_boot: Option<QuickBootImages>,
 ) -> Result<()> {
     let kvm: &[&str] = if enable_kvm {
@@ -125,6 +126,7 @@ fn run_qemu(
     } else {
         &[]
     };
+    let gdb_mode: &[&str] = if use_gdb { &["-s", "-S"] } else { &[] };
     let fast_boot: &[&str] = if let Some(quick_boot) = quick_boot {
         &[
             // Stage32
@@ -229,6 +231,7 @@ fn run_qemu(
         .arg("-nic")
         .arg("none")
         .args(slow_emulator)
+        .args(gdb_mode)
         .arg("-drive")
         .arg(format!(
             "format=raw,file={}",
@@ -303,6 +306,7 @@ async fn main() -> Result<()> {
                     args.no_graphic,
                     args.log_interrupts,
                     args.slow_emulator,
+                    args.use_gdb,
                     None,
                 )?;
             } else {
@@ -328,6 +332,7 @@ async fn main() -> Result<()> {
                 args.no_graphic,
                 args.log_interrupts,
                 args.slow_emulator,
+                args.use_gdb,
                 Some(quick_boot),
             )?;
         }

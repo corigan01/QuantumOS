@@ -202,7 +202,7 @@ impl VmInjectFillAction for VmFillAction {
     fn requests_all_pages_filled(&self, parent_object: &VmObject) -> bool {
         match self {
             VmFillAction::Nothing => false,
-            VmFillAction::Scrub(_) => false,
+            VmFillAction::Scrub(_) => true,
             VmFillAction::InjectWith(rw_lock) => {
                 rw_lock.read().requests_all_pages_filled(parent_object)
             }
@@ -402,6 +402,7 @@ impl VmObject {
                 vpage,
                 *backing_page,
                 VmOptions::none()
+                    .set_reduce_perm_from_tables_flag(true)
                     .set_increase_perm_flag(true)
                     .set_force_permissions_on_page_flag(true)
                     .set_overwrite_flag(true),
@@ -659,43 +660,3 @@ pub fn set_page_fault_handler(handler: SystemAttachedPageFaultFn) {
 pub fn remove_page_fault_handler() {
     *MAIN_PAGE_FAULT_HANDLER.write() = None;
 }
-
-// // TODO: REMOVE THIS FUNCTION, its just for testing :)
-// pub fn test() {
-//     let proc = VmProcess::new();
-
-//     proc.inplace_new_vmobject(
-//         VmRegion::new(VirtPage::new(10), VirtPage::new(20)),
-//         VmPermissions::none()
-//             .set_read_flag(true)
-//             .set_write_flag(true)
-//             .set_user_flag(true),
-//         VmFillAction::Nothing,
-//     )
-//     .unwrap();
-
-//     logln!(
-//         "{:#?}",
-//         proc.page_fault_handler(PageFaultInfo {
-//             is_present: false,
-//             write_read_access: false,
-//             execute_fault: false,
-//             user_fault: false,
-//             vaddr: VirtPage::<Page4K>::new(15).addr(),
-//         })
-//     );
-//     logln!(
-//         "{:#?}",
-//         proc.page_fault_handler(PageFaultInfo {
-//             is_present: false,
-//             write_read_access: false,
-//             execute_fault: false,
-//             user_fault: false,
-//             vaddr: VirtPage::<Page4K>::new(16).addr(),
-//         })
-//     );
-
-//     logln!("{}", proc.page_tables);
-
-//     todo!("Test Done!");
-// }

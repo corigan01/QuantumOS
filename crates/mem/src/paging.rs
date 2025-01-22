@@ -623,7 +623,7 @@ impl Virt2PhysMapping {
                             table_perms: entry.get_permissions(),
                             requested_perms: permissions,
                         });
-                    } else if prev_permissions < permissions && options.is_increase_perm_set() {
+                    } else if options.is_increase_perm_set() {
                         entry.add_permissions_from(permissions);
                     }
 
@@ -679,7 +679,7 @@ impl Virt2PhysMapping {
                             table_perms: entry.get_permissions(),
                             requested_perms: permissions,
                         });
-                    } else if prev_permissions < permissions && options.is_increase_perm_set() {
+                    } else if options.is_increase_perm_set() {
                         entry.add_permissions_from(permissions);
                     }
 
@@ -735,7 +735,7 @@ impl Virt2PhysMapping {
                             table_perms: entry.get_permissions(),
                             requested_perms: permissions,
                         });
-                    } else if prev_permissions < permissions && options.is_increase_perm_set() {
+                    } else if options.is_increase_perm_set() {
                         entry.add_permissions_from(permissions);
                     }
 
@@ -1226,7 +1226,7 @@ impl SafePageMapLvl1 {
                     table_perms: entry.get_permissions(),
                     requested_perms: permissions,
                 });
-            } else if prev_permissions < permissions && options.is_increase_perm_set() {
+            } else if options.is_increase_perm_set() {
                 entry.add_permissions_from(permissions);
             }
 
