@@ -33,7 +33,7 @@ use lldebug::{hexdump::HexPrint, logln};
 use mem::{
     addr::VirtAddr,
     page::VirtPage,
-    paging::{Virt2PhysMapping, VmPermissions},
+    paging::{PageTableLoadingError, Virt2PhysMapping, VmPermissions},
     vm::{
         InsertVmObjectError, PopulationReponse, VmFillAction, VmInjectFillAction, VmProcess,
         VmRegion,
@@ -55,6 +55,13 @@ pub enum ProcessError {
     ElfLoadingError(ElfErrorKind),
     /// There was a problem mapping the VmObject
     InsertVmObjectErr(InsertVmObjectError),
+    /// There was a problem loading the page tables
+    PageTableLoadingErr(PageTableLoadingError),
+    /// Process required 'load' assertion error
+    ///
+    /// This flag tells you if the assertion was to have the table loaded (true)
+    /// or unloaded (false).
+    LoadedAssertionError(bool),
 }
 
 impl Process {
@@ -66,14 +73,33 @@ impl Process {
         }
     }
 
+    /// Loads this processes page tables into memory
+    pub unsafe fn load_tables(&self) -> Result<(), ProcessError> {
+        unsafe {
+            self.vm
+                .page_tables
+                .clone()
+                .load()
+                .map_err(|err| ProcessError::PageTableLoadingErr(err))
+        }
+    }
+
+    /// Asserts that this process should be the currently loaded process to do
+    /// the requested action. For example, when populating this processes pages
+    /// it needs to be activly loaded.
+    pub fn assert_loaded(&self, should_be_loaded: bool) -> Result<(), ProcessError> {
+        if self.vm.page_tables.is_loaded() == should_be_loaded {
+            Ok(())
+        } else {
+            Err(ProcessError::LoadedAssertionError(should_be_loaded))
+        }
+    }
+
     /// Add an elf to process's memory map
     pub fn add_elf(&self, elf: ElfOwned) -> Result<(), ProcessError> {
-        elf.elf()
-            .program_headers()
-            .unwrap()
-            .iter()
-            .for_each(|header| logln!("{header:#?}"));
-        unsafe { self.vm.page_tables.clone().load() }.unwrap();
+        // Page tables need to be loaded before we can map the elf into memory
+        self.assert_loaded(true)?;
+
         let elf_object = VmElfInject::new(elf);
         let elf_sections = elf_object.load_segments()?;
 
@@ -234,7 +260,7 @@ impl VmInjectFillAction for VmElfInject {
                 [buf_start..(buf_start + (PAGE_4K - vbuffer_offset)).min(elf_memory_buffer.len())];
 
             logln!(
-                "ELF LOADING... [{}] {vbuffer_offset:>5}..{:<5} <-- {:>5}..{:<5}   [{:>16x} - {:<16x}]",
+                "ELF: [{}] {vbuffer_offset:>5}..{:<5} <-- {:>5}..{:<5}   [{:>16x} - {:<16x}]",
                 vpage.page(),
                 vbuffer_offset + this_page_buffer.len(),
                 buf_start,

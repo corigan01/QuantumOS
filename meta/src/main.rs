@@ -30,8 +30,9 @@ struct BuildResult {
     quick_boot: Option<QuickBootImages>,
 }
 
-async fn build(multiboot_mode: bool) -> Result<BuildResult> {
-    let (artifacts, disk) = tokio::join!(build_project(multiboot_mode), DiskImgBaker::new());
+async fn build(multiboot_mode: bool, emit_asm: Option<String>) -> Result<BuildResult> {
+    let (artifacts, disk) =
+        tokio::join!(build_project(multiboot_mode, emit_asm), DiskImgBaker::new());
 
     let artifacts = artifacts.expect("Failed to build artifacts!");
     let mut disk = disk?;
@@ -292,12 +293,12 @@ async fn main() -> Result<()> {
 
     match args.option.unwrap_or(cmdline::TaskOption::Run) {
         cmdline::TaskOption::Build => {
-            build(false).await?;
+            build(false, None).await?;
         }
         cmdline::TaskOption::Run => {
             if !args.use_bochs {
                 run_qemu(
-                    &build(false).await?.disk_img,
+                    &build(false, None).await?.disk_img,
                     args.enable_kvm,
                     args.no_graphic,
                     args.log_interrupts,
@@ -305,7 +306,7 @@ async fn main() -> Result<()> {
                     None,
                 )?;
             } else {
-                run_bochs(&build(false).await?.disk_img).await?;
+                run_bochs(&build(false, None).await?.disk_img).await?;
             }
         }
         cmdline::TaskOption::RunQuick => {
@@ -316,7 +317,7 @@ async fn main() -> Result<()> {
             let BuildResult {
                 disk_img,
                 quick_boot: Some(quick_boot),
-            } = build(true).await?
+            } = build(true, None).await?
             else {
                 panic!("Build didn't return expected results!");
             };
@@ -331,10 +332,13 @@ async fn main() -> Result<()> {
             )?;
         }
         cmdline::TaskOption::BuildDisk => {
-            run_mk_image(&build(false).await?.disk_img).await?;
+            run_mk_image(&build(false, None).await?.disk_img).await?;
         }
         cmdline::TaskOption::Clean => {
             todo!("clean")
+        }
+        cmdline::TaskOption::EmitAsm { file } => {
+            build(false, Some(file)).await?;
         }
     }
 

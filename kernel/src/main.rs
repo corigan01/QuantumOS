@@ -28,7 +28,9 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #![feature(sync_unsafe_cell)]
 #![feature(abi_x86_interrupt)]
 #![feature(allocator_api)]
+#![feature(naked_functions)]
 
+mod context;
 mod gdt;
 mod int;
 mod panic;
@@ -38,6 +40,7 @@ extern crate alloc;
 
 use arch::CpuPrivilege::Ring0;
 use bootloader::KernelBootHeader;
+use context::ProcessContext;
 use elf::elf_owned::ElfOwned;
 use lldebug::{debug_ready, logln, make_debug};
 use mem::{
@@ -120,7 +123,33 @@ fn main(kbh: &KernelBootHeader) {
     let idk = unsafe { Virt2PhysMapping::inhearit_bootloader() }.unwrap();
     unsafe { idk.clone().load() };
 
+    let mut test = ProcessContext {
+        r15: 0,
+        r14: 0,
+        r13: 0,
+        r12: 0,
+        r11: 0,
+        r10: 0,
+        r9: 0,
+        r8: 0,
+        rbp: 0,
+        rdi: 0,
+        rsi: 0,
+        rdx: 0,
+        rcx: 0,
+        rbx: 0,
+        rax: 0,
+        cs: 0x1b,
+        ss: 0x23,
+        rflag: 0x200,
+        rip: 0x00000000400000,
+        exception_code: 0,
+        rsp: 0xa000,
+    };
+    unsafe { context::userspace_entry(&raw mut test) };
+
     let process = Process::new(0, &idk);
+    unsafe { process.load_tables() };
     process.add_elf(elf).unwrap();
 
     logln!("Attempting to jump to userspace!");

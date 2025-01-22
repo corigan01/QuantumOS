@@ -41,4 +41,6 @@ pub enum TaskOption {
     Clean,
     /// Build QMK Disk Image
     BuildDisk,
+    /// Emit asm for this crate using its normal build system
+    EmitAsm { file: String },
 }

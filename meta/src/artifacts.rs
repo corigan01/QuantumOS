@@ -22,6 +22,7 @@ pub struct Artifacts {
 }
 
 #[allow(unused)]
+#[derive(Clone, Copy, Debug)]
 enum ArchSelect {
     /// # Intel 368 (16bit mode)
     I386,
@@ -75,6 +76,7 @@ async fn cargo_helper(
     package: &str,
     arch: ArchSelect,
     feature_flags: Option<&str>,
+    should_emit_asm: bool,
 ) -> Result<PathBuf> {
     let compile_mode = profile.unwrap_or("release");
 
@@ -90,26 +92,50 @@ async fn cargo_helper(
         &[]
     };
 
+    let arch_string = arch.to_string();
+    let (pre_build_command, post_build_command): (&[&str], &[&str]) = if should_emit_asm {
+        (
+            &[
+                "rustc",
+                "--package",
+                package,
+                "--profile",
+                compile_mode,
+                "--target",
+                &arch_string,
+                "-Zbuild-std-features=compiler-builtins-mem",
+                "-Zunstable-options",
+            ],
+            &["--", "--emit", "asm"],
+        )
+    } else {
+        (
+            &[
+                "build",
+                "--package",
+                package,
+                "--profile",
+                compile_mode,
+                "--target",
+                &arch_string,
+                "--artifact-dir",
+                "./target/bin",
+                "-Zbuild-std-features=compiler-builtins-mem",
+                "-Zunstable-options",
+            ],
+            &[],
+        )
+    };
+
     Command::new("cargo")
         .env_remove("RUSTFLAGS")
         .env_remove("CARGO_ENCODED_RUSTFLAGS")
         .env_remove("RUSTC_WORKSPACE_WRAPPER")
         .env("CARGO_TERM_PROGRESS_WHEN", "never")
-        .args([
-            "build",
-            "--package",
-            package,
-            "--profile",
-            compile_mode,
-            "--target",
-            arch.to_string().as_str(),
-            "--artifact-dir",
-            "./target/bin",
-            "-Zbuild-std-features=compiler-builtins-mem",
-            "-Zunstable-options",
-        ])
+        .args(pre_build_command)
         .args(feature_flags)
         .args(build_std_options)
+        .args(post_build_command)
         .stdout(Stdio::null())
         .stderr(Stdio::inherit())
         .status()
@@ -201,7 +227,9 @@ pub async fn file_len_of(file: &Path) -> Result<usize> {
     Ok(file.metadata().await?.len() as usize)
 }
 
-pub async fn build_project(multiboot_mode: bool) -> Result<Artifacts> {
+// FIXME: This 'emit_asm' thing is kinda a hack just to get it working
+//        we should change this in the future.
+pub async fn build_project(multiboot_mode: bool, emit_asm: Option<String>) -> Result<Artifacts> {
     let (
         stage_bootsector,
         stage_16bit,
@@ -215,9 +243,16 @@ pub async fn build_project(multiboot_mode: bool) -> Result<Artifacts> {
             Some("stage-bootsector"),
             "stage-bootsector",
             ArchSelect::I386,
-            None
+            None,
+            emit_asm.as_ref().is_some_and(|s| s == "stage-bootsector")
         ),
-        cargo_helper(Some("stage-16bit"), "stage-16bit", ArchSelect::I386, None),
+        cargo_helper(
+            Some("stage-16bit"),
+            "stage-16bit",
+            ArchSelect::I386,
+            None,
+            emit_asm.as_ref().is_some_and(|s| s == "stage-16bit")
+        ),
         cargo_helper(
             Some("stage-32bit"),
             "stage-32bit",
@@ -226,11 +261,30 @@ pub async fn build_project(multiboot_mode: bool) -> Result<Artifacts> {
                 Some("multiboot")
             } else {
                 None
-            }
+            },
+            emit_asm.as_ref().is_some_and(|s| s == "stage-32bit")
         ),
-        cargo_helper(Some("stage-64bit"), "stage-64bit", ArchSelect::X64, None),
-        cargo_helper(Some("kernel"), "kernel", ArchSelect::Kernel, None),
-        cargo_helper(Some("dummy"), "dummy", ArchSelect::UserSpace, None),
+        cargo_helper(
+            Some("stage-64bit"),
+            "stage-64bit",
+            ArchSelect::X64,
+            None,
+            emit_asm.as_ref().is_some_and(|s| s == "stage-64bit")
+        ),
+        cargo_helper(
+            Some("kernel"),
+            "kernel",
+            ArchSelect::Kernel,
+            None,
+            emit_asm.as_ref().is_some_and(|s| s == "kernel")
+        ),
+        cargo_helper(
+            Some("dummy"),
+            "dummy",
+            ArchSelect::UserSpace,
+            None,
+            emit_asm.as_ref().is_some_and(|s| s == "dummy")
+        ),
         build_bootloader_config(),
     )?;
 
