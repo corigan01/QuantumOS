@@ -167,7 +167,7 @@ async fn convert_bin(path: &Path, arch: ArchSelect) -> Result<PathBuf> {
             arch,
             "-O",
             "binary",
-            &bin_path.as_path().to_str().unwrap(),
+            bin_path.as_path().to_str().unwrap(),
         ])
         .status()
         .await
@@ -185,6 +185,7 @@ async fn build_bootloader_config() -> Result<PathBuf> {
     let mut file = OpenOptions::new()
         .read(true)
         .create(true)
+        .truncate(true)
         .write(true)
         .open(&target_location)
         .await?;
@@ -318,4 +319,25 @@ pub async fn build_project(multiboot_mode: bool, emit_asm: Option<String>) -> Re
         kernel_len,
         initfs_len,
     })
+}
+
+pub async fn run_clippy(package: Option<&str>) -> Result<()> {
+    let package_args: &[&str] = if let Some(package) = package {
+        &["--package", package]
+    } else {
+        &["--workspace"]
+    };
+
+    Command::new("cargo")
+        .arg("clippy")
+        .args(package_args)
+        .stdout(Stdio::inherit())
+        .stderr(Stdio::inherit())
+        .status()
+        .await?
+        .success()
+        .then_some(())
+        .ok_or(Error::msg("Failed to run Cargo"))?;
+
+    Ok(())
 }

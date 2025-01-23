@@ -66,7 +66,9 @@ impl BiosStatus {
             Self::Success => (),
             _ => {
                 video::putc(b'b');
-                loop {}
+                loop {
+                    unsafe { core::arch::asm!("hlt") };
+                }
             }
         }
     }
@@ -163,6 +165,11 @@ macro_rules! bios_call {
 
 // FIXME: We should remove this function and add int0x15 into macro!
 //        However, currently the macro causes the bootloader to fail.
+/// Call bios interrupt '0x15' (Memory)
+///
+/// # Safety
+/// The caller must ensure that the register packet is properly formed for the
+/// call you are making to the bios.
 #[inline]
 pub unsafe fn int_0x15(reg: &mut Regs32, es: u16) -> BiosStatus {
     #[cfg(target_pointer_width = "32")]
@@ -290,6 +297,11 @@ pub mod video {
     pub struct VesaModeId(u16);
 
     impl VesaModeId {
+        /// Force the given ID as if it was properly aquired.
+        ///
+        /// # Safety
+        /// Vesa modes are not standard across all machines, and shouldn't be used. You should ensure that
+        /// this mode is correct and exists on the current system.
         pub unsafe fn force_mode(mode: u16) -> Self {
             Self(mode)
         }
@@ -367,7 +379,7 @@ pub mod video {
             }
 
             unsafe { core::slice::from_raw_parts(modes_ptr, mode_len) }
-                .into_iter()
+                .iter()
                 .copied()
         }
     }
@@ -405,6 +417,13 @@ pub mod disk {
         }
     }
 
+    /// Reads from the disk using DAP
+    ///
+    /// # Safety
+    /// The caller must ensure that the disk exists, and that the address is a valid 16-bit extended ptr.
+    ///
+    /// Also note, that the bios call will fail if the count is too large. It must remain a reasonable (~32 sectors) max
+    /// to ensure it works across most systems.
     pub unsafe fn raw_read(disk_id: u16, lba: u64, count: usize, ptr: *mut u8) -> BiosStatus {
         let package = DiskAccessPacket::new(count as u16, lba, ptr as u32);
 

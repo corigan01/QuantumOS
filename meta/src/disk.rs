@@ -158,7 +158,7 @@ impl DiskImgBaker {
                 .create_file(fat_path)
                 .context("Cannot create fat file")?;
             fat_file
-                .write_all(&mut file_data)
+                .write_all(&file_data)
                 .context("Failed to write real file data into fat file")?;
         }
 
@@ -185,6 +185,7 @@ async fn create_diskimg(name: &str, size: usize) -> Result<File> {
         .read(true)
         .write(true)
         .create(true)
+        .truncate(true)
         .open(&file_name)
         .await
         .context("failed to diskimg open file")?;
@@ -217,5 +218,5 @@ pub async fn create_bootloader_dir(
             .context("Failed to copy object to bootloader dir")?;
     }
 
-    Ok(target_dir.into())
+    Ok(target_dir)
 }

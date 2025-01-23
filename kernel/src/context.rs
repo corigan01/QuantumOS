@@ -24,10 +24,8 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 use core::{
-    arch::{asm, global_asm, naked_asm},
-    cell::SyncUnsafeCell,
+    arch::{asm, naked_asm},
     mem::offset_of,
-    sync::atomic::{AtomicPtr, Ordering},
 };
 
 /// CPUs context
@@ -228,6 +226,7 @@ pub unsafe fn context_of_caller() -> ProcessContext {
     unsafe {
         asm!(
             "
+                cli
                 mov [{pc_ptr} + {r15}], r15 
                 mov [{pc_ptr} + {r14}], r14 
                 mov [{pc_ptr} + {r13}], r13 
@@ -249,6 +248,7 @@ pub unsafe fn context_of_caller() -> ProcessContext {
                 pop rax
                 mov [{pc_ptr} + {rflags}], rax
                 mov [{pc_ptr} + {rsp}], rsp 
+                sti
             ",
           pc_ptr = in(reg) &raw mut pc,
           out("rax") _ ,

@@ -23,11 +23,16 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use arch::interrupts::disable_interrupts;
 use core::panic::PanicInfo;
 use lldebug::errorln;
 
+use crate::context::context_of_caller;
+
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
-    errorln!("PANIC! -- {}", info);
+    unsafe { disable_interrupts() };
+    let context = unsafe { context_of_caller() };
+    errorln!("{}\n{context:#016x?}", info);
     loop {}
 }

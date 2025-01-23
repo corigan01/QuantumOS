@@ -1,6 +1,7 @@
 #![feature(async_fn_traits)]
 
 use anyhow::{anyhow, Context, Result};
+use artifacts::run_clippy;
 use clap::Parser;
 use std::{
     path::{Path, PathBuf},
@@ -30,9 +31,22 @@ struct BuildResult {
     quick_boot: Option<QuickBootImages>,
 }
 
-async fn build(multiboot_mode: bool, emit_asm: Option<String>) -> Result<BuildResult> {
-    let (artifacts, disk) =
-        tokio::join!(build_project(multiboot_mode, emit_asm), DiskImgBaker::new());
+async fn build(
+    multiboot_mode: bool,
+    emit_asm: Option<String>,
+    should_run_clippy: bool,
+) -> Result<BuildResult> {
+    let (artifacts, disk) = if should_run_clippy {
+        let (a, d, _) = tokio::join!(
+            build_project(multiboot_mode, emit_asm),
+            DiskImgBaker::new(),
+            run_clippy(None)
+        );
+
+        (a, d)
+    } else {
+        tokio::join!(build_project(multiboot_mode, emit_asm), DiskImgBaker::new())
+    };
 
     let artifacts = artifacts.expect("Failed to build artifacts!");
     let mut disk = disk?;
@@ -157,14 +171,13 @@ fn run_qemu(
             "-device",
             &format!(
                 "loader,addr={},data={:#016x},data-len=8",
-                quick_boot.data_ptr + (8 * 0),
-                quick_boot.loader32.0
+                quick_boot.data_ptr, quick_boot.loader32.0
             ),
             // Write options into memory (Stage32_len)
             "-device",
             &format!(
                 "loader,addr={},data={:#016x},data-len=8",
-                quick_boot.data_ptr + (8 * 1),
+                quick_boot.data_ptr + 8,
                 quick_boot.loader32.1
             ),
             // Write options into memory (Stage64_ptr)
@@ -320,12 +333,12 @@ async fn main() -> Result<()> {
 
     match args.option.unwrap_or(cmdline::TaskOption::Run) {
         cmdline::TaskOption::Build => {
-            build(false, None).await?;
+            build(false, None, args.enable_clippy).await?;
         }
         cmdline::TaskOption::Run => {
             if !args.use_bochs {
                 run_qemu(
-                    &build(false, None).await?.disk_img,
+                    &build(false, None, args.enable_clippy).await?.disk_img,
                     args.enable_kvm,
                     args.no_graphic,
                     args.log_interrupts,
@@ -334,7 +347,7 @@ async fn main() -> Result<()> {
                     None,
                 )?;
             } else {
-                run_bochs(&build(false, None).await?.disk_img).await?;
+                run_bochs(&build(false, None, args.enable_clippy).await?.disk_img).await?;
             }
         }
         cmdline::TaskOption::RunQuick => {
@@ -345,7 +358,7 @@ async fn main() -> Result<()> {
             let BuildResult {
                 disk_img,
                 quick_boot: Some(quick_boot),
-            } = build(true, None).await?
+            } = build(true, None, args.enable_clippy).await?
             else {
                 panic!("Build didn't return expected results!");
             };
@@ -361,7 +374,7 @@ async fn main() -> Result<()> {
             )?;
         }
         cmdline::TaskOption::BuildDisk => {
-            run_mk_image(&build(false, None).await?.disk_img).await?;
+            run_mk_image(&build(false, None, args.enable_clippy).await?.disk_img).await?;
         }
         cmdline::TaskOption::Clean => {
             todo!("clean")

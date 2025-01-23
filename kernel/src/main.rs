@@ -40,7 +40,7 @@ extern crate alloc;
 
 use arch::CpuPrivilege::Ring0;
 use bootloader::KernelBootHeader;
-use context::{KERNEL_RSP_PTR, ProcessContext, USERSPACE_RSP_PTR, context_of_caller};
+use context::{KERNEL_RSP_PTR, ProcessContext, USERSPACE_RSP_PTR};
 use elf::elf_owned::ElfOwned;
 use lldebug::{debug_ready, logln, make_debug};
 use mem::{

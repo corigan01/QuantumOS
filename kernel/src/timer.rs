@@ -34,7 +34,7 @@ use lldebug::{log, logln};
 
 use crate::int::attach_irq_handler;
 
-const TIMER_HZ: f32 = 300_f32;
+const TIMER_HZ: f32 = 1000_f32;
 
 pub fn init_timer() {
     log!("Enabling PIT...");

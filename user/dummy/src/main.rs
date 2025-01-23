@@ -58,9 +58,7 @@ extern "C" fn _start() {
     };
     for i in 0..10 {
         let hello_world = "Hello World from UE!! ";
-        loop {
-            dbugln!("Hello World! -- {hello_world} {i:#016x} {test:#?}");
-        }
+        dbugln!("Hello World! -- {hello_world} {i:#016x} {test:#?}");
     }
 
     exit(ExitCode::Success);

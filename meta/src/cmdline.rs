@@ -31,6 +31,10 @@ pub struct CommandLine {
     /// Enable GDB for qemu
     #[arg(long = "gdb", default_value_t = false)]
     pub use_gdb: bool,
+
+    /// Run clippy durning build
+    #[arg(long = "clippy", default_value_t = false)]
+    pub enable_clippy: bool,
 }
 
 #[derive(Subcommand, Debug, Clone)]

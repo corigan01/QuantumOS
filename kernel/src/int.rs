@@ -182,13 +182,8 @@ extern "C" fn syscall_handler(
     _r8: u64,
     syscall_number: u64,
 ) -> u64 {
-    if unsafe { *(crate::context::USERSPACE_RSP_PTR as *const u8) } == 0 {
-        log!("?");
-    } else {
-        log!("|");
-    }
     match syscall_number {
-        0 => logln!("TODO: Exit syscall"),
+        0 => warnln!("TODO: Exit syscall"),
         69 => ::lldebug::priv_print(
             lldebug::LogKind::Log,
             "userspace",
@@ -204,15 +199,4 @@ extern "C" fn syscall_handler(
     }
 
     0
-}
-
-#[naked]
-pub unsafe extern "C" fn irq_0() {
-    unsafe {
-        core::arch::naked_asm!(
-            "
-                
-            "
-        );
-    }
 }
