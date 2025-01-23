@@ -148,12 +148,13 @@ pub fn attach_syscall() {
     unsafe {
         arch::registers::ia32_efer::set_syscall_extensions_flag(true);
         arch::registers::amd_syscall::set_syscall_target_ptr(crate::context::kernel_entry as u64);
+        arch::registers::amd_syscall::set_rflags_mask(0x257fd5);
         arch::registers::amd_syscall::write_kernel_segments(
             Segment::new(1, CpuPrivilege::Ring0),
             Segment::new(2, CpuPrivilege::Ring0),
         );
         arch::registers::amd_syscall::write_userspace_segments(
-            Segment::new(3, CpuPrivilege::Ring3),
+            Segment::new(5, CpuPrivilege::Ring3),
             Segment::new(4, CpuPrivilege::Ring3),
         );
     }
@@ -181,6 +182,11 @@ extern "C" fn syscall_handler(
     _r8: u64,
     syscall_number: u64,
 ) -> u64 {
+    if unsafe { *(crate::context::USERSPACE_RSP_PTR as *const u8) } == 0 {
+        log!("?");
+    } else {
+        log!("|");
+    }
     match syscall_number {
         0 => logln!("TODO: Exit syscall"),
         69 => ::lldebug::priv_print(
@@ -198,4 +204,15 @@ extern "C" fn syscall_handler(
     }
 
     0
+}
+
+#[naked]
+pub unsafe extern "C" fn irq_0() {
+    unsafe {
+        core::arch::naked_asm!(
+            "
+                
+            "
+        );
+    }
 }

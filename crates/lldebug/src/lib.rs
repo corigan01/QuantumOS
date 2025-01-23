@@ -26,6 +26,9 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #![no_std]
 
 use core::fmt::Write;
+use core::sync::atomic::AtomicBool;
+use core::sync::atomic::AtomicUsize;
+use core::sync::atomic::Ordering;
 
 // Re-export the macro
 pub use lldebug_macro::debug_ready;
@@ -47,18 +50,20 @@ pub enum LogKind {
 
 pub type OutputFn = fn(core::fmt::Arguments);
 
-static REQUIRES_HEADER_PRINT: sync::Mutex<bool> = sync::Mutex::new(true);
-static GLOBAL_PRINT_FN: sync::Mutex<Option<OutputFn>> = sync::Mutex::new(None);
+static REQUIRES_HEADER_PRINT: AtomicBool = AtomicBool::new(true);
+static GLOBAL_PRINT_FN: AtomicUsize = AtomicUsize::new(0);
 
 fn raw_print(args: core::fmt::Arguments) {
-    match GLOBAL_PRINT_FN.lock().as_ref() {
-        Some(output) => output(args),
-        None => (),
+    let ptr = GLOBAL_PRINT_FN.load(Ordering::Relaxed);
+    if ptr as usize != 0 {
+        let ptr: fn(core::fmt::Arguments) = unsafe { core::mem::transmute(ptr) };
+        ptr(args);
     }
 }
 
 pub fn set_global_debug_fn(function: OutputFn) {
-    *GLOBAL_PRINT_FN.lock() = Some(function);
+    let ptr = function as *const fn(core::fmt::Arguments) as usize;
+    GLOBAL_PRINT_FN.store(ptr, Ordering::Relaxed);
 }
 
 struct PrettyOutput<'a> {
@@ -77,12 +82,10 @@ impl core::fmt::Write for PrettyOutput<'_> {
 
     fn write_char(&mut self, c: char) -> core::fmt::Result {
         match c {
-            '\n' => *REQUIRES_HEADER_PRINT.lock() = true,
+            '\n' => REQUIRES_HEADER_PRINT.store(true, Ordering::Relaxed),
             c => {
-                let mut req_header = REQUIRES_HEADER_PRINT.lock();
-
-                if *req_header {
-                    *req_header = false;
+                if REQUIRES_HEADER_PRINT.load(Ordering::Relaxed) {
+                    REQUIRES_HEADER_PRINT.store(false, Ordering::Relaxed);
                     match self.kind {
                         LogKind::Log => {
                             raw_print(format_args!("\n{}+{}", color::LOG_STYLE, color::RESET))

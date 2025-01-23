@@ -30,7 +30,7 @@ use arch::{
 };
 use spin::RwLock;
 
-static KERNEL_GDT: RwLock<GlobalDescriptorTable<7>> = RwLock::new(GlobalDescriptorTable::new());
+static KERNEL_GDT: RwLock<GlobalDescriptorTable<10>> = RwLock::new(GlobalDescriptorTable::new());
 static KERNEL_TSS: RwLock<TaskStateSegment> = RwLock::new(TaskStateSegment::new());
 
 pub fn init_kernel_gdt() {
@@ -52,7 +52,7 @@ pub fn init_kernel_gdt() {
             .set_writable_flag(true),
     );
     gdt.store(
-        3,
+        5,
         CodeSegmentDesc::new64()
             .set_accessed_flag(true)
             .set_present_flag(true)
@@ -68,7 +68,7 @@ pub fn init_kernel_gdt() {
             .set_privilege_level(3),
     );
     gdt.store_tss(
-        5,
+        8,
         TaskStateSegmentPtr::new(unsafe { &*KERNEL_TSS.as_mut_ptr() }),
     );
 
@@ -90,5 +90,5 @@ pub fn set_tss_for_interrupt(rsp: *mut u8, ist_id: usize) {
 
 pub unsafe fn load_tss() {
     // TODO: Make this dynamic so that the TSS can be refrenced
-    unsafe { core::arch::asm!("mov ax, 0x28", "ltr ax",) }
+    unsafe { core::arch::asm!("mov ax, {tss}", "ltr ax", tss = const { (8 << 3) | 0 }) }
 }

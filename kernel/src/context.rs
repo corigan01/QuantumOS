@@ -58,27 +58,27 @@ pub struct ProcessContext {
     pub rsp: u64,
 }
 
-pub const KERNEL_RSP_PTR: u64 = 0x200000000010_u64;
-pub const USERSPACE_RSP_PTR: u64 = 0x200000000020_u64;
+pub const KERNEL_RSP_PTR: u64 = 0x100000001010;
+pub const USERSPACE_RSP_PTR: u64 = 0x100000001000;
 
 #[naked]
 pub unsafe extern "C" fn kernel_entry() {
     unsafe {
         naked_asm!(
             "
-            cli
             #  -- Save User's stack ptr, and restore our own
+
             mov r10, {userspace_rsp_ptr}
             mov [r10], rsp
 
             mov r10, {kernel_rsp_ptr}
             mov rsp, [r10]
-            mov r10, 0x10
 
             #  -- Start building the processes `ProcessContext`
 
             mov r10, {userspace_rsp_ptr}
             push [r10]
+            sti
 
             push 0                         # This isn't an ISR, so we can just store 0 into its 'exception_code'
             push rcx                       # rip is saved in rcx
@@ -125,17 +125,21 @@ pub unsafe extern "C" fn kernel_entry() {
             pop rbx
             pop rax
 
+            add rsp, 8                     # pop cs
             add rsp, 8                     # pop ss
-            add rsp, 8                     # pop ss
-            add rsp, 8                     # pop rsp
-            add rsp, 8                     # pop rflags
-            add rsp, 8                     # pop rip
+            add rsp, 8                     # pop r11
+            add rsp, 8                     # pop rcx
+            add rsp, 8                     # pop 0
 
             #  -- Return back to userspace
 
+            cli
             pop rsp
+
+            mov r10, {userspace_rsp_ptr}
+            mov qword ptr [r10], 0
+
             sysretq
-        
         ",
             // FIXME: For whatever reason, rust fails to compile with these symbol PTRs,
             //        so for right now I will just make them part of the linker script and
@@ -155,6 +159,7 @@ pub unsafe extern "C" fn userspace_entry(context: *const ProcessContext) {
     unsafe {
         asm!(
             "
+                cli
                 #  -- Restore Registers
 
                 mov r15, [rdi      ]
@@ -183,7 +188,7 @@ pub unsafe extern "C" fn userspace_entry(context: *const ProcessContext) {
 
                 push [rdi + 72 ]
                 pop rdi
-                
+
                 #  -- Return back to userspace
 
                 iretq

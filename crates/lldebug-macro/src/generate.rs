@@ -92,11 +92,10 @@ fn generate_print_each(var_name: &Ident, is_option: bool) -> proc_macro2::TokenS
     if is_option {
         quote! {
             unsafe {
-                match &mut *(#var_name).lock() {
-                    Some(inner) => {
+                if let Some(mut locked) = (#var_name).try_lock() {
+                    if let Some(inner) = &mut *locked {
                         let _ = inner.write_fmt(args);
-                    },
-                    _ => ()
+                    }
                 }
             }
         }

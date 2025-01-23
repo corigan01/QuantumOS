@@ -71,6 +71,9 @@ extern "C" fn _start(kbh: u64) -> ! {
 
 #[debug_ready]
 fn main(kbh: &KernelBootHeader) {
+    unsafe { *(KERNEL_RSP_PTR as *mut u64) = 0x200000000000 };
+    unsafe { *(USERSPACE_RSP_PTR as *mut u64) = 0 };
+
     logln!("Welcome to the Quantum Kernel!");
     logln!(
         "Free Memory : {}",
@@ -180,9 +183,6 @@ fn main(kbh: &KernelBootHeader) {
     unsafe { process.load_tables() };
     logln!("{:#?}", process);
 
-    unsafe { *(KERNEL_RSP_PTR as *mut u64) = 0x200000000000 };
-    unsafe { *(USERSPACE_RSP_PTR as *mut u64) = 0x400000000030 };
-
     let mut test = ProcessContext {
         r15: 0,
         r14: 0,
@@ -199,15 +199,15 @@ fn main(kbh: &KernelBootHeader) {
         rcx: 0,
         rbx: 0,
         rax: 0,
-        cs: 0x1b,
-        ss: 0x23,
+        cs: (5 << 3) | 3,
+        ss: (4 << 3) | 3,
         rflag: 0x200,
         rip: 0x00400000,
         exception_code: 0,
         rsp: (0x00090000000 + PAGE_4K * 20) as u64,
     };
 
-    logln!("Attempting to jump to userspace!");
+    logln!("Attempting to jump to userspace! -- {:#016x?}", test);
     unsafe { context::userspace_entry(&raw mut test) };
     loop {
         logln!("FINISH");

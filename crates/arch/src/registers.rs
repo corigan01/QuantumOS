@@ -532,9 +532,9 @@ pub mod amd_syscall {
     /// Set the entry point segments for userspace when a kernel syscall returns with 'sysret'
     pub unsafe fn write_userspace_segments(code_segment: Segment, stack_segment: Segment) {
         assert_eq!(
-            code_segment.gdt_index(),
-            stack_segment.gdt_index() - 1,
-            "The stack segment is always 1 index higher in the gdt from the code segment!"
+            code_segment.gdt_index() - 1,
+            stack_segment.gdt_index(),
+            "The stack segment is always 1 index lower in the gdt from the code segment!"
         );
         assert_eq!(
             code_segment.cpu_privl(),
@@ -547,7 +547,11 @@ pub mod amd_syscall {
             "Userspace stack segment should be of privilege RING3"
         );
 
-        unsafe { ia32_star::set_sysret_target_code_segment(code_segment.0) };
+        unsafe {
+            ia32_star::set_sysret_target_code_segment(
+                Segment::new(stack_segment.gdt_index() - 1, CpuPrivilege::Ring3).0,
+            )
+        };
     }
 
     /// Set the syscall entry point for when a userspace program calls 'syscall'.
