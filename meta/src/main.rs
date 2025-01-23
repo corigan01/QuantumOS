@@ -290,6 +290,30 @@ async fn run_mk_image(img_file: &Path) -> Result<()> {
     Ok(())
 }
 
+async fn run_object_dump(file: &Path, ip: usize) -> Result<()> {
+    let args = &[
+        "--disassembler-options=intel",
+        "--show-all-symbols",
+        "--demangle=rust",
+        "--disassembler-color=on",
+        "-D",
+        file.to_str().unwrap(),
+        "--visualize-jumps=extended-color",
+        &format!("--start-address={:#016x}", ip - 256),
+        &format!("--stop-address={:#016x}", ip + 50),
+    ];
+    Command::new("objdump")
+        .stdout(std::process::Stdio::inherit())
+        .args(args)
+        .status()
+        .context(anyhow!("Could not start objdump!"))?
+        .success()
+        .then_some(())
+        .ok_or(anyhow!("objdump Failed"))?;
+
+    Ok(())
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     let args = cmdline::CommandLine::parse();
@@ -342,8 +366,13 @@ async fn main() -> Result<()> {
         cmdline::TaskOption::Clean => {
             todo!("clean")
         }
-        cmdline::TaskOption::EmitAsm { file } => {
-            build(false, Some(file)).await?;
+        cmdline::TaskOption::AsmAt { file, ip } => {
+            let ip = if ip.contains("0x") {
+                usize::from_str_radix(ip.trim_start_matches("0x"), 16)?
+            } else {
+                ip.parse()?
+            };
+            run_object_dump(Path::new(&file), ip).await?;
         }
     }
 
