@@ -26,11 +26,13 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 use core::{
     arch::{asm, global_asm, naked_asm},
     cell::SyncUnsafeCell,
+    mem::offset_of,
     sync::atomic::{AtomicPtr, Ordering},
 };
 
 /// CPUs context
 #[repr(C)]
+#[derive(Clone, Copy, Debug)]
 pub struct ProcessContext {
     pub r15: u64,
     pub r14: u64,
@@ -64,12 +66,14 @@ pub unsafe extern "C" fn kernel_entry() {
     unsafe {
         naked_asm!(
             "
+            cli
             #  -- Save User's stack ptr, and restore our own
             mov r10, {userspace_rsp_ptr}
             mov [r10], rsp
 
             mov r10, {kernel_rsp_ptr}
             mov rsp, [r10]
+            mov r10, 0x10
 
             #  -- Start building the processes `ProcessContext`
 
@@ -129,7 +133,6 @@ pub unsafe extern "C" fn kernel_entry() {
 
             #  -- Return back to userspace
 
-            cli
             pop rsp
             sysretq
         
@@ -148,12 +151,10 @@ pub unsafe extern "C" fn kernel_entry() {
 
 /// This is the entry for userspace
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn userspace_entry(context: *const ProcessContext) -> ! {
+pub unsafe extern "C" fn userspace_entry(context: *const ProcessContext) {
     unsafe {
         asm!(
             "
-                cli
-
                 #  -- Restore Registers
 
                 mov r15, [rdi      ]
@@ -191,5 +192,82 @@ pub unsafe extern "C" fn userspace_entry(context: *const ProcessContext) -> ! {
             in("rdi") context
         )
     }
-    unreachable!("Should not return from iretq");
+    unreachable!("Should never return from userspace entry!");
+}
+
+pub unsafe fn context_of_caller() -> ProcessContext {
+    let mut pc = ProcessContext {
+        r15: 0,
+        r14: 0,
+        r13: 0,
+        r12: 0,
+        r11: 0,
+        r10: 0,
+        r9: 0,
+        r8: 0,
+        rbp: 0,
+        rdi: 0,
+        rsi: 0,
+        rdx: 0,
+        rcx: 0,
+        rbx: 0,
+        rax: 0,
+        cs: 0,
+        ss: 0,
+        rflag: 0,
+        rip: 0,
+        exception_code: 0,
+        rsp: 0,
+    };
+
+    unsafe {
+        asm!(
+            "
+                mov [{pc_ptr} + {r15}], r15 
+                mov [{pc_ptr} + {r14}], r14 
+                mov [{pc_ptr} + {r13}], r13 
+                mov [{pc_ptr} + {r12}], r12 
+                mov [{pc_ptr} + {r11}], r11 
+                mov [{pc_ptr} + {r10}], r10 
+                mov [{pc_ptr} + {r9}], r9 
+                mov [{pc_ptr} + {r8}], r8 
+                mov [{pc_ptr} + {rbp}], rbp 
+                mov [{pc_ptr} + {rdi}], rdi 
+                mov [{pc_ptr} + {rsi}], rsi 
+                mov [{pc_ptr} + {rdx}], rdx 
+                mov [{pc_ptr} + {rcx}], rcx 
+                mov [{pc_ptr} + {rbx}], rbx 
+                mov [{pc_ptr} + {rax}], rax 
+                mov [{pc_ptr} + {cs}], cs 
+                mov [{pc_ptr} + {ss}], ss 
+                pushf
+                pop rax
+                mov [{pc_ptr} + {rflags}], rax
+                mov [{pc_ptr} + {rsp}], rsp 
+            ",
+          pc_ptr = in(reg) &raw mut pc,
+          out("rax") _ ,
+          r15 = const { offset_of!(ProcessContext, r15) },
+          r14 = const { offset_of!(ProcessContext, r14) },
+          r13 = const { offset_of!(ProcessContext, r13) },
+          r12 = const { offset_of!(ProcessContext, r12) },
+          r11 = const { offset_of!(ProcessContext, r11) },
+          r10 = const { offset_of!(ProcessContext, r10) },
+          r9 = const { offset_of!(ProcessContext, r9) },
+          r8 = const { offset_of!(ProcessContext, r8) },
+          rbp = const { offset_of!(ProcessContext, rbp ) },
+          rdi = const { offset_of!(ProcessContext, rdi ) },
+          rsi = const { offset_of!(ProcessContext, rsi ) },
+          rdx = const { offset_of!(ProcessContext, rdx ) },
+          rcx = const { offset_of!(ProcessContext, rcx ) },
+          rbx = const { offset_of!(ProcessContext, rbx ) },
+          rax = const { offset_of!(ProcessContext, rax ) },
+          cs = const { offset_of!(ProcessContext, cs ) },
+          ss = const { offset_of!(ProcessContext, ss ) },
+          rflags = const { offset_of!(ProcessContext, rflag ) },
+          rsp = const { offset_of!(ProcessContext, rsp ) },
+        );
+    }
+
+    pc
 }

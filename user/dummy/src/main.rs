@@ -27,7 +27,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #![no_main]
 
 use core::panic::PanicInfo;
-use libq::{ExitCode, dbugln, exit, raw_syscall};
+use libq::{ExitCode, dbugln, exit};
 
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
@@ -35,12 +35,31 @@ fn panic(info: &PanicInfo) -> ! {
     loop {}
 }
 
+#[derive(Clone, Copy, Debug)]
+enum Foo {
+    Bar,
+    Bazz,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct Test<'a> {
+    a: u32,
+    b: &'a str,
+    c: Foo,
+}
+
 #[unsafe(link_section = ".start")]
 #[unsafe(no_mangle)]
 extern "C" fn _start() {
-    // let hello_world = "Hello World from UE!! ";
-    // dbugln!("Hello World! -- {hello_world}");
+    let test = Test {
+        a: 1203,
+        b: "idk",
+        c: Foo::Bazz,
+    };
+    for i in 0..10 {
+        let hello_world = "Hello World from UE!! ";
+        dbugln!("Hello World! -- {hello_world} {i:#016x} {test:#?}");
+    }
 
-    // exit(ExitCode::Success);
-    panic!("dingus {}", 1)
+    exit(ExitCode::Success);
 }

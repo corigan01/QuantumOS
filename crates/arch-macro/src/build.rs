@@ -113,7 +113,7 @@ fn gen_macro_functions(
                 tokens.push(quote_spanned! {fn_range.span()=>
                     extern "x86-interrupt" fn #ident(frame: ::arch::idt64::InterruptFrame) {
                         let int_info = ::arch::idt64::InterruptInfo::convert_from_ne(#irq_id, frame);
-                        #call_ident(int_info);
+                        #call_ident(&int_info);
                     }
                 });
             }
@@ -125,7 +125,7 @@ fn gen_macro_functions(
                 tokens.push(quote_spanned! {fn_range.span()=>
                     extern "x86-interrupt" fn #ident(frame: ::arch::idt64::InterruptFrame, error: u64) {
                         let int_info = ::arch::idt64::InterruptInfo::convert_from_e(#irq_id, frame, error);
-                        #call_ident(int_info);
+                        #call_ident(&int_info);
                     }
                 });
             }

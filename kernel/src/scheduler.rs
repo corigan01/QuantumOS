@@ -23,13 +23,8 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use alloc::{
-    boxed::Box,
-    collections::btree_map::BTreeMap,
-    vec::{self, Vec},
-};
+use alloc::{boxed::Box, collections::btree_map::BTreeMap, vec::Vec};
 use elf::{ElfErrorKind, elf_owned::ElfOwned, tables::SegmentKind};
-use lldebug::{hexdump::HexPrint, logln};
 use mem::{
     addr::VirtAddr,
     page::VirtPage,
@@ -101,13 +96,9 @@ impl Process {
         self.assert_loaded(true)?;
 
         let (start, end) = elf.elf().vaddr_range().unwrap();
-
         let elf_object = VmElfInject::new(elf);
-        // let elf_sections = elf_object.load_segments()?;
-
         let inject_el = VmFillAction::convert(elf_object);
 
-        // for (region, perms) in elf_sections {
         self.vm
             .inplace_new_vmobject(
                 VmRegion::from_containing(VirtAddr::new(start), VirtAddr::new(end)),
@@ -119,13 +110,7 @@ impl Process {
                 inject_el.clone(),
             )
             .map_err(|err| ProcessError::InsertVmObjectErr(err))?;
-        // }
-        logln!(
-            "{}",
-            unsafe { core::slice::from_raw_parts(start as *const u8, end - start) }.hexdump()
-        );
-        // let elf_object =
-        // self.vm.inplace_new_vmobject(region, permissions, fill_action)
+
         Ok(())
     }
 
@@ -204,9 +189,6 @@ impl VmElfInject {
                 vm_region.pages_iter().map(move |page| (page, perm))
             })
             .flatten()
-            .inspect(|(page, perm)| {
-                logln!("LOAD PAGE [{:?}] - {}", page, perm);
-            })
             .for_each(|(page, perm)| {
                 if let Some(already_existing_page) = pages.get_mut(&page) {
                     *already_existing_page += perm;
@@ -285,16 +267,6 @@ impl VmInjectFillAction for VmElfInject {
 
             let this_page_buffer = &elf_memory_buffer
                 [buf_start..(buf_start + (PAGE_4K - vbuffer_offset)).min(elf_memory_buffer.len())];
-
-            logln!(
-                "ELF: [{}] {vbuffer_offset:>5}..{:<5} <-- {:>5}..{:<5}   [{:>16x} - {:<16x}]",
-                vpage.page(),
-                vbuffer_offset + this_page_buffer.len(),
-                buf_start,
-                (buf_start + (PAGE_4K - vbuffer_offset)).min(elf_memory_buffer.len()),
-                header.expected_vaddr(),
-                header.expected_vaddr() as usize + header.in_elf_size(),
-            );
 
             vbuffer[vbuffer_offset..vbuffer_offset + this_page_buffer.len()]
                 .copy_from_slice(this_page_buffer);

@@ -40,7 +40,7 @@ extern crate alloc;
 
 use arch::CpuPrivilege::Ring0;
 use bootloader::KernelBootHeader;
-use context::{KERNEL_RSP_PTR, ProcessContext, USERSPACE_RSP_PTR};
+use context::{KERNEL_RSP_PTR, ProcessContext, USERSPACE_RSP_PTR, context_of_caller};
 use elf::elf_owned::ElfOwned;
 use lldebug::{debug_ready, logln, make_debug};
 use mem::{
@@ -53,11 +53,7 @@ use mem::{
 use scheduler::Process;
 use serial::{Serial, baud::SerialBaud};
 use tar::Tar;
-use timer::kernel_ticks;
-use util::{
-    bytes::HumanBytes,
-    consts::{PAGE_2M, PAGE_4K},
-};
+use util::{bytes::HumanBytes, consts::PAGE_4K};
 
 #[global_allocator]
 static ALLOC: KernelAllocator = KernelAllocator::new();
@@ -82,13 +78,12 @@ fn main(kbh: &KernelBootHeader) {
     );
 
     gdt::init_kernel_gdt();
-    gdt::set_stack_for_privl(0x200000000000 as *mut u8, Ring0);
-    // gdt::set_stack_for_privl(0x3000 as *mut u8, Ring0);
+    gdt::set_stack_for_privl(0x300000000000 as *mut u8, Ring0);
     unsafe { gdt::load_tss() };
     int::attach_interrupts();
     int::attach_syscall();
     int::enable_pic();
-    // timer::init_timer();
+    timer::init_timer();
 
     logln!(
         "Init Heap Region ({})",
@@ -146,8 +141,34 @@ fn main(kbh: &KernelBootHeader) {
     process
         .add_anon(
             VmRegion::from_containing(
-                VirtAddr::new(0x200000000000 - (20 * PAGE_4K)),
+                VirtAddr::new(0x200000000000 - (10 * PAGE_4K)),
                 VirtAddr::new(0x200000000000 + PAGE_4K),
+            ),
+            VmPermissions::none()
+                .set_exec_flag(true)
+                .set_read_flag(true)
+                .set_write_flag(true)
+                .set_user_flag(false),
+        )
+        .unwrap();
+    process
+        .add_anon(
+            VmRegion::from_containing(
+                VirtAddr::new(0x300000000000 - (10 * PAGE_4K)),
+                VirtAddr::new(0x300000000000 + PAGE_4K),
+            ),
+            VmPermissions::none()
+                .set_exec_flag(true)
+                .set_read_flag(true)
+                .set_write_flag(true)
+                .set_user_flag(false),
+        )
+        .unwrap();
+    process
+        .add_anon(
+            VmRegion::from_containing(
+                VirtAddr::new(0x400000000000),
+                VirtAddr::new(0x400000000000 + PAGE_4K),
             ),
             VmPermissions::none()
                 .set_exec_flag(true)
@@ -160,7 +181,7 @@ fn main(kbh: &KernelBootHeader) {
     logln!("{:#?}", process);
 
     unsafe { *(KERNEL_RSP_PTR as *mut u64) = 0x200000000000 };
-    unsafe { *(USERSPACE_RSP_PTR as *mut u64) = 0x200000000030 };
+    unsafe { *(USERSPACE_RSP_PTR as *mut u64) = 0x400000000030 };
 
     let mut test = ProcessContext {
         r15: 0,
@@ -188,4 +209,7 @@ fn main(kbh: &KernelBootHeader) {
 
     logln!("Attempting to jump to userspace!");
     unsafe { context::userspace_entry(&raw mut test) };
+    loop {
+        logln!("FINISH");
+    }
 }

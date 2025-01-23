@@ -180,7 +180,7 @@ pub struct InterruptFrame {
     pub code_seg: u64,
     pub flags: u64,
     pub stack_pointer: u64,
-    pub stack_segment: u16,
+    pub stack_segment: u64,
 }
 
 pub type RawHandlerFuncNe = extern "x86-interrupt" fn(InterruptFrame);
