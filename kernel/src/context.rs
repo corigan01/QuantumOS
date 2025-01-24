@@ -56,8 +56,8 @@ pub struct ProcessContext {
     pub rsp: u64,
 }
 
-pub const KERNEL_RSP_PTR: u64 = 0x100000001010;
-pub const USERSPACE_RSP_PTR: u64 = 0x100000001000;
+pub static mut KERNEL_RSP_PTR: u64 = 0x200000000000;
+pub static mut USERSPACE_RSP_PTR: u64 = 0x121212;
 
 #[naked]
 pub unsafe extern "C" fn kernel_entry() {
@@ -66,16 +66,12 @@ pub unsafe extern "C" fn kernel_entry() {
             "
             #  -- Save User's stack ptr, and restore our own
 
-            mov r10, {userspace_rsp_ptr}
-            mov [r10], rsp
-
-            mov r10, {kernel_rsp_ptr}
-            mov rsp, [r10]
+            mov [{userspace_rsp_ptr}], rsp
+            mov rsp, [{kernel_rsp_ptr}]
 
             #  -- Start building the processes `ProcessContext`
 
-            mov r10, {userspace_rsp_ptr}
-            push [r10]
+            push [{userspace_rsp_ptr}]
             sti
 
             push 0                         # This isn't an ISR, so we can just store 0 into its 'exception_code'
@@ -134,8 +130,7 @@ pub unsafe extern "C" fn kernel_entry() {
             cli
             pop rsp
 
-            mov r10, {userspace_rsp_ptr}
-            mov qword ptr [r10], 0
+            mov qword ptr [{userspace_rsp_ptr}], 0
 
             sysretq
         ",
@@ -145,8 +140,8 @@ pub unsafe extern "C" fn kernel_entry() {
             // kernel_rsp_ptr = sym KERNEL_RSP,
             // userspace_rsp_ptr = sym USERSPACE_RSP,
 
-            kernel_rsp_ptr = const { KERNEL_RSP_PTR },
-            userspace_rsp_ptr = const { USERSPACE_RSP_PTR },
+            kernel_rsp_ptr = sym KERNEL_RSP_PTR ,
+            userspace_rsp_ptr = sym USERSPACE_RSP_PTR ,
         )
     };
 }

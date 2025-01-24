@@ -76,7 +76,11 @@ fn main(stage_to_stage: &Stage32toStage64) {
         .expect("Unable to determine the size of the Kernel's exe!");
 
     logln!("Kernel Size     : {}", HumanBytes::from(kernel_exe_len));
-    let page_info = build_memory_map(stage_to_stage, kernel_exe_len);
+    let page_info = build_memory_map(
+        stage_to_stage,
+        elf.vaddr_range().unwrap_or((0, 0)).0 as u64,
+        kernel_exe_len,
+    );
     let virt_info = paging::build_page_tables(page_info);
 
     log!("Loading new page tables...");
@@ -166,7 +170,11 @@ unsafe fn jmp_to_kernel(
     unreachable!("Kernel should never return back to the bootloader!");
 }
 
-fn build_memory_map(s2s: &Stage32toStage64, kernel_exe_len: usize) -> paging::PageTableConfig {
+fn build_memory_map(
+    s2s: &Stage32toStage64,
+    kernel_exe_ptr: u64,
+    kernel_exe_len: usize,
+) -> paging::PageTableConfig {
     unsafe {
         let mm = &mut *MEMORY_MAP.get();
 
@@ -278,7 +286,7 @@ fn build_memory_map(s2s: &Stage32toStage64, kernel_exe_len: usize) -> paging::Pa
                 kernels_stack_pages.start.addr() as u64,
                 kernels_stack_pages.len() as usize,
             ),
-            kernel_virt: 0x100000000000,
+            kernel_virt: kernel_exe_ptr,
             kernel_init_phys: (
                 kernels_init_pages.start.addr() as u64,
                 kernels_init_pages.len() as usize,

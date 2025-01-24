@@ -131,9 +131,9 @@ pub fn build_page_tables(c: PageTableConfig) -> KernelVirtInfo {
     unsafe { (*TABLE_LVL4.get()).store(lvl4_entry, 0) };
 
     // KERNEL MAP (EXE)
-    let tbl2_offset = PageMapLvl2::addr2index(c.kernel_virt % PageMapLvl2::SIZE_FOR_TABLE).unwrap();
-    let tbl3_offset = PageMapLvl4::addr2index(c.kernel_virt % PageMapLvl3::SIZE_FOR_TABLE).unwrap();
     let tbl4_offset = PageMapLvl4::addr2index(c.kernel_virt % PageMapLvl4::SIZE_FOR_TABLE).unwrap();
+    let tbl3_offset = PageMapLvl3::addr2index(c.kernel_virt % PageMapLvl3::SIZE_FOR_TABLE).unwrap();
+    let tbl2_offset = PageMapLvl2::addr2index(c.kernel_virt % PageMapLvl2::SIZE_FOR_TABLE).unwrap();
 
     let exe_pages = ((c.kernel_exe_phys.1 - 1) / PAGE_2M) + 1;
     let stack_pages = ((c.kernel_stack_phys.1 - 1) / PAGE_2M) + 1;

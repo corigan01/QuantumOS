@@ -24,112 +24,16 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 use alloc::{boxed::Box, collections::btree_map::BTreeMap, vec::Vec};
-use elf::{ElfErrorKind, elf_owned::ElfOwned, tables::SegmentKind};
+use elf::{elf_owned::ElfOwned, tables::SegmentKind};
 use mem::{
     addr::VirtAddr,
     page::VirtPage,
-    paging::{PageTableLoadingError, Virt2PhysMapping, VmPermissions},
-    vm::{
-        InsertVmObjectError, PopulationReponse, VmFillAction, VmInjectFillAction, VmProcess,
-        VmRegion,
-    },
+    paging::VmPermissions,
+    vm::{PopulationReponse, VmFillAction, VmInjectFillAction, VmProcess, VmRegion},
 };
 use util::consts::PAGE_4K;
 
-/// A structure repr a running process on the system
-#[derive(Debug)]
-pub struct Process {
-    vm: VmProcess,
-    id: usize,
-}
-
-/// A structure repr the errors that could happen with a process
-#[derive(Debug)]
-pub enum ProcessError {
-    /// There was a problem loading the elf file
-    ElfLoadingError(ElfErrorKind),
-    /// There was a problem mapping the VmObject
-    InsertVmObjectErr(InsertVmObjectError),
-    /// There was a problem loading the page tables
-    PageTableLoadingErr(PageTableLoadingError),
-    /// Process required 'load' assertion error
-    ///
-    /// This flag tells you if the assertion was to have the table loaded (true)
-    /// or unloaded (false).
-    LoadedAssertionError(bool),
-}
-
-impl Process {
-    /// Create a new empty process
-    pub fn new(id: usize, table: &Virt2PhysMapping) -> Self {
-        Self {
-            vm: VmProcess::inhearit_page_tables(table),
-            id,
-        }
-    }
-
-    /// Loads this processes page tables into memory
-    pub unsafe fn load_tables(&self) -> Result<(), ProcessError> {
-        unsafe {
-            self.vm
-                .page_tables
-                .clone()
-                .load()
-                .map_err(|err| ProcessError::PageTableLoadingErr(err))
-        }
-    }
-
-    /// Asserts that this process should be the currently loaded process to do
-    /// the requested action. For example, when populating this processes pages
-    /// it needs to be activly loaded.
-    pub fn assert_loaded(&self, should_be_loaded: bool) -> Result<(), ProcessError> {
-        if self.vm.page_tables.is_loaded() == should_be_loaded {
-            Ok(())
-        } else {
-            Err(ProcessError::LoadedAssertionError(should_be_loaded))
-        }
-    }
-
-    /// Add an elf to process's memory map
-    pub fn add_elf(&self, elf: ElfOwned) -> Result<(), ProcessError> {
-        // Page tables need to be loaded before we can map the elf into memory
-        self.assert_loaded(true)?;
-
-        let (start, end) = elf.elf().vaddr_range().unwrap();
-        let elf_object = VmElfInject::new(elf);
-        let inject_el = VmFillAction::convert(elf_object);
-
-        self.vm
-            .inplace_new_vmobject(
-                VmRegion::from_containing(VirtAddr::new(start), VirtAddr::new(end)),
-                VmPermissions::none()
-                    .set_exec_flag(true)
-                    .set_read_flag(true)
-                    .set_write_flag(true)
-                    .set_user_flag(true),
-                inject_el.clone(),
-            )
-            .map_err(|err| ProcessError::InsertVmObjectErr(err))?;
-
-        Ok(())
-    }
-
-    /// Map an anon zeroed region to this local process
-    pub fn add_anon(
-        &self,
-        region: VmRegion,
-        permissions: VmPermissions,
-    ) -> Result<(), ProcessError> {
-        // Page tables need to be loaded before we can map the elf into memory
-        self.assert_loaded(true)?;
-
-        self.vm
-            .inplace_new_vmobject(region, permissions, VmFillAction::Scrub(0))
-            .map_err(|err| ProcessError::InsertVmObjectErr(err))?;
-
-        Ok(())
-    }
-}
+use super::ProcessError;
 
 /// An elf backing object for a process's memory map
 #[derive(Debug)]

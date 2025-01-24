@@ -103,6 +103,8 @@ pub enum PopulationReponse {
     MappingError(PageCorrelationError),
     /// There was a problem mapping this page in the Inject action
     InjectError(Box<dyn Error>),
+    /// PageTables where not loaded when attempting to populate a page
+    PageTablesNotLoaded,
 }
 
 pub trait VmInjectFillAction: core::fmt::Debug {
@@ -185,6 +187,11 @@ impl VmInjectFillAction for VmFillAction {
         vpage: VirtPage,
         ppage: PhysPage,
     ) -> PopulationReponse {
+        // If the table is not loaded, we cannot populate this page
+        if !process.page_tables.is_loaded() {
+            return PopulationReponse::PageTablesNotLoaded;
+        }
+
         match self {
             VmFillAction::Nothing => PopulationReponse::Okay,
             VmFillAction::Scrub(pattern) => {
@@ -331,7 +338,6 @@ impl VmObject {
             .read()
             .requests_all_pages_filled(&new_self)
         {
-            logln!("This vmobject requests all pages filled now!");
             for vpage in new_self.region.pages_iter() {
                 new_self
                     .map_new_page(vm_process, vpage)
@@ -392,6 +398,9 @@ impl VmObject {
             }
             PopulationReponse::InjectError(inject) => {
                 return Err(VmObjectMappingError::InjectError(inject));
+            }
+            PopulationReponse::PageTablesNotLoaded => {
+                return Err(VmObjectMappingError::PageTableNotLoaded);
             }
         }
 

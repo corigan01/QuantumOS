@@ -96,11 +96,11 @@ pub unsafe fn flush_tlb(page: VirtPage) {
 }
 
 /// Returns the indexes into the page tables that would give this virtual address.
-const fn table_indexes_for(vaddr: VirtAddr) -> (usize, usize, usize, usize) {
-    let lvl4 = PageMapLvl4::addr2index(vaddr.addr() as u64).unwrap();
-    let lvl3 = PageMapLvl3::addr2index(vaddr.addr() as u64 % PageMapLvl4::SIZE_PER_INDEX).unwrap();
-    let lvl2 = PageMapLvl2::addr2index(vaddr.addr() as u64 % PageMapLvl3::SIZE_PER_INDEX).unwrap();
-    let lvl1 = PageMapLvl1::addr2index(vaddr.addr() as u64 % PageMapLvl2::SIZE_PER_INDEX).unwrap();
+fn table_indexes_for(vaddr: VirtAddr) -> (usize, usize, usize, usize) {
+    let lvl4 = PageMapLvl4::addr2index(vaddr.addr() as u64 % PageMapLvl4::SIZE_FOR_TABLE).unwrap();
+    let lvl3 = PageMapLvl3::addr2index(vaddr.addr() as u64 % PageMapLvl3::SIZE_FOR_TABLE).unwrap();
+    let lvl2 = PageMapLvl2::addr2index(vaddr.addr() as u64 % PageMapLvl2::SIZE_FOR_TABLE).unwrap();
+    let lvl1 = PageMapLvl1::addr2index(vaddr.addr() as u64 % PageMapLvl1::SIZE_FOR_TABLE).unwrap();
 
     (lvl4, lvl3, lvl2, lvl1)
 }

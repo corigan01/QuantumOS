@@ -34,13 +34,13 @@ mod context;
 mod gdt;
 mod int;
 mod panic;
-mod scheduler;
+mod process;
 mod timer;
 extern crate alloc;
 
 use arch::{CpuPrivilege::Ring0, supports::cpu_vender};
 use bootloader::KernelBootHeader;
-use context::{KERNEL_RSP_PTR, ProcessContext, USERSPACE_RSP_PTR};
+use context::ProcessContext;
 use elf::elf_owned::ElfOwned;
 use lldebug::{debug_ready, logln, make_debug};
 use mem::{
@@ -50,7 +50,7 @@ use mem::{
     pmm::Pmm,
     vm::VmRegion,
 };
-use scheduler::Process;
+use process::Process;
 use serial::{Serial, baud::SerialBaud};
 use tar::Tar;
 use util::{bytes::HumanBytes, consts::PAGE_4K};
@@ -71,9 +71,6 @@ extern "C" fn _start(kbh: u64) -> ! {
 
 #[debug_ready]
 fn main(kbh: &KernelBootHeader) {
-    unsafe { *(KERNEL_RSP_PTR as *mut u64) = 0x200000000000 };
-    unsafe { *(USERSPACE_RSP_PTR as *mut u64) = 0 };
-
     logln!("Welcome to the Quantum Kernel!");
     logln!(
         "Free Memory : {}",

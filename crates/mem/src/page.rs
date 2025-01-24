@@ -221,6 +221,7 @@ impl<S: PagingStructureSize> VirtPage<S> {
     /// Get the address that this page represents.
     #[inline]
     pub const fn addr(&self) -> VirtAddr {
+        assert!(self.id < (usize::MAX / S::N_BYTES));
         // We know this is safe because we are of this alignment
         unsafe { VirtAddr::new_unchecked(self.id * S::N_BYTES) }
     }

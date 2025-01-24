@@ -47,6 +47,22 @@ impl<const ALIGNMENT: usize> core::fmt::Debug for AlignmentError<ALIGNMENT> {
     }
 }
 
+/// If this ptr is above 48bits, it truncates the ptr to -1
+#[cfg(target_pointer_width = "64")]
+pub const fn fix_ptr_higher(ptr: usize) -> usize {
+    if ptr > (1 << 47) {
+        (ptr & ((1 << 48) - 1)) | ((1_u128 << 64) - (1_u128 << 48)) as usize
+    } else {
+        ptr
+    }
+}
+
+/// If this is 32bit mode, we don't do anything
+#[cfg(not(target_pointer_width = "64"))]
+pub const fn fix_ptr_higher(ptr: usize) -> usize {
+    ptr
+}
+
 macro_rules! make_addr {
     (
         $(#[$attr:meta])*
@@ -189,7 +205,7 @@ macro_rules! make_addr {
             #[inline]
             pub const unsafe fn new_unchecked(value: usize) -> Self {
                Self {
-                  addr: value,
+                  addr: fix_ptr_higher(value),
                   _ph: PhantomData
                }
             }
@@ -238,11 +254,11 @@ macro_rules! make_addr {
                 let rmd = self.addr % ALIGNMENT;
 
                 $ident {
-                    addr: if rmd != 0 {
+                    addr: fix_ptr_higher(if rmd != 0 {
                         ALIGNMENT - rmd + self.addr
                     } else {
                         self.addr
-                    },
+                    }),
                     _ph: PhantomData,
                 }
             }
@@ -312,7 +328,7 @@ macro_rules! make_addr {
             pub const fn try_new(addr: usize) -> Self {
                 assert!(addr & (ALIGNMENT - 1) == 0, "Address not aligned");
                 Self {
-                    addr,
+                    addr: fix_ptr_higher(addr),
                     _ph: PhantomData
                 }
             }
@@ -323,14 +339,14 @@ macro_rules! make_addr {
             /// Make a new address.
             pub const fn new(addr: usize) -> Self {
                 Self {
-                    addr,
+                    addr: fix_ptr_higher(addr),
                     _ph: PhantomData
                 }
             }
 
             /// Offset this addr by `offset`.
             pub const fn offset(self, offset: usize) -> Self {
-                Self{ addr: self.addr + offset, _ph: PhantomData }
+                Self::new(self.addr + offset)
             }
 
             /// Get the 'realative' value based on the size of a chunk.
@@ -341,7 +357,7 @@ macro_rules! make_addr {
             /// this addresses alignment constraints.
             pub const fn realative_offset(self, chunk_size: usize) -> Self {
                 Self {
-                    addr: (self.addr() % chunk_size),
+                    addr: fix_ptr_higher(self.addr() % chunk_size),
                     _ph: PhantomData
                 }
             }
@@ -375,14 +391,14 @@ mod test {
 
     #[test]
     fn test_alignment_up_to() {
-        let mut addr = PhysAddr::from(120);
+        let addr = PhysAddr::from(120);
 
         assert_eq!(addr.align_up_to(256), PhysAddr::from(256));
     }
 
     #[test]
     fn test_alignment_down_to() {
-        let mut addr = PhysAddr::from(120);
+        let addr = PhysAddr::from(120);
 
         assert_eq!(addr.align_down_to(256), PhysAddr::from(0));
     }
