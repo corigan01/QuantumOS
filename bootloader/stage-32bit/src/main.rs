@@ -30,6 +30,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 use core::{arch::asm, cell::SyncUnsafeCell};
 
 use arch::{
+    ensure_support_for,
     gdt::{CodeSegmentDesc, DataSegmentDesc, GlobalDescriptorTable},
     registers::{Segment, SegmentRegisters},
 };
@@ -72,6 +73,9 @@ extern "C" fn _start() {
 
 #[debug_ready]
 fn main(stage_to_stage: &Stage16toStage32) {
+    // This cpu must support PAE
+    ensure_support_for!(arch::supports::CpuFeature::SupportsPae);
+
     if let Some(video_mode) = stage_to_stage.video_mode {
         let mut framebuffer = unsafe {
             Framebuffer::new_linear(

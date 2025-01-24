@@ -38,7 +38,7 @@ mod scheduler;
 mod timer;
 extern crate alloc;
 
-use arch::CpuPrivilege::Ring0;
+use arch::{CpuPrivilege::Ring0, supports::cpu_vender};
 use bootloader::KernelBootHeader;
 use context::{KERNEL_RSP_PTR, ProcessContext, USERSPACE_RSP_PTR};
 use elf::elf_owned::ElfOwned;
@@ -79,6 +79,7 @@ fn main(kbh: &KernelBootHeader) {
         "Free Memory : {}",
         HumanBytes::from(kbh.phys_mem_map.bytes_of(mem::phys::PhysMemoryKind::Free))
     );
+    logln!("Running on a(n) '{:?}' processor.", cpu_vender());
 
     gdt::init_kernel_gdt();
     gdt::set_stack_for_privl(0x300000000000 as *mut u8, Ring0);
