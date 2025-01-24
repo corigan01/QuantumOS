@@ -25,6 +25,10 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 use core::marker::PhantomData;
 
+/// The kernel start Virtual address
+#[cfg(target_pointer_width = "64")]
+pub const KERNEL_ADDR_START: VirtAddr = VirtAddr::new(0xffffffff80000000);
+
 /// A trait to enfore structs to be aligned
 pub trait AlignmentTo: Clone + Copy {}
 
@@ -369,6 +373,13 @@ macro_rules! make_addr {
         }
 
     };
+}
+
+impl<Align: AlignmentTo> VirtAddr<Align> {
+    /// Check if this virtual address is within the kernel
+    pub const fn is_kernel_addr(&self) -> bool {
+        self.addr() >= KERNEL_ADDR_START.addr()
+    }
 }
 
 make_addr! {
