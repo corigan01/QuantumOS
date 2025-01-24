@@ -23,13 +23,16 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use arch::{CpuPrivilege, registers::Segment};
 use elf::{ElfErrorKind, elf_owned::ElfOwned};
 use mem::{
     addr::VirtAddr,
     paging::{PageTableLoadingError, Virt2PhysMapping, VmPermissions},
-    vm::{InsertVmObjectError, VmFillAction, VmProcess, VmRegion},
+    vm::{InsertVmObjectError, PageFaultInfo, PageFaultReponse, VmFillAction, VmProcess, VmRegion},
 };
 use vm_elf::VmElfInject;
+
+use crate::context::{ProcessContext, userspace_entry};
 
 pub mod vm_elf;
 
@@ -38,6 +41,7 @@ pub mod vm_elf;
 pub struct Process {
     vm: VmProcess,
     id: usize,
+    context: ProcessContext,
 }
 
 /// A structure repr the errors that could happen with a process
@@ -54,14 +58,20 @@ pub enum ProcessError {
     /// This flag tells you if the assertion was to have the table loaded (true)
     /// or unloaded (false).
     LoadedAssertionError(bool),
+    /// The process should never return from the enter userspace function
+    ProcessShouldNotExit,
 }
 
 impl Process {
+    /// This is the start address that processes should base their stack from
+    const PROCESS_STACK_START_ADDR: VirtAddr = VirtAddr::new(0x7fff00000000);
+
     /// Create a new empty process
     pub fn new(id: usize, table: &Virt2PhysMapping) -> Self {
         Self {
             vm: VmProcess::inhearit_page_tables(table),
             id,
+            context: ProcessContext::new(),
         }
     }
 
@@ -76,25 +86,10 @@ impl Process {
         }
     }
 
-    /// Asserts that this process should be the currently loaded process to do
-    /// the requested action. For example, when populating this processes pages
-    /// it needs to be activly loaded.
-    pub fn assert_loaded(&self, should_be_loaded: bool) -> Result<(), ProcessError> {
-        if self.vm.page_tables.is_loaded() == should_be_loaded {
-            Ok(())
-        } else {
-            Err(ProcessError::LoadedAssertionError(should_be_loaded))
-        }
-    }
-
     /// Add an elf to process's memory map
     pub fn add_elf(&self, elf: ElfOwned) -> Result<(), ProcessError> {
-        // Page tables need to be loaded before we can map the elf into memory
-        self.assert_loaded(true)?;
-
         let (start, end) = elf.elf().vaddr_range().unwrap();
-        let elf_object = VmElfInject::new(elf);
-        let inject_el = VmFillAction::convert(elf_object);
+        let inject_el = VmFillAction::convert(VmElfInject::new(elf));
 
         self.vm
             .inplace_new_vmobject(
@@ -111,19 +106,45 @@ impl Process {
         Ok(())
     }
 
+    /// Init the process's context structure
+    pub fn init_context(&mut self, entry: VirtAddr, stack: VirtAddr) {
+        self.context = ProcessContext::new();
+        self.context.ss = Segment::new(4, CpuPrivilege::Ring3).0 as u64;
+        self.context.cs = Segment::new(5, CpuPrivilege::Ring3).0 as u64;
+        self.context.rip = entry.addr() as u64;
+        self.context.rsp = stack.addr() as u64;
+    }
+
     /// Map an anon zeroed scrubbed region to this local process
     pub fn add_anon(
         &self,
         region: VmRegion,
         permissions: VmPermissions,
     ) -> Result<(), ProcessError> {
-        // Page tables need to be loaded before we can map the elf into memory
-        self.assert_loaded(true)?;
-
         self.vm
             .inplace_new_vmobject(region, permissions, VmFillAction::Scrub(0))
             .map_err(|err| ProcessError::InsertVmObjectErr(err))?;
 
         Ok(())
+    }
+
+    /// Make a new process with elf
+    pub fn exec(elf: ElfOwned) -> Result<(), ProcessError> {
+        todo!()
+    }
+
+    /// This process's page fault handler
+    pub fn page_fault_handler(&self, info: PageFaultInfo) -> PageFaultReponse {
+        self.vm.page_fault_handler(info)
+    }
+
+    /// Context switch into this process
+    pub unsafe fn switch_into(&self) -> Result<(), ProcessError> {
+        if !self.vm.page_tables.is_loaded() {
+            return Err(ProcessError::LoadedAssertionError(true));
+        }
+
+        unsafe { userspace_entry(&raw const self.context) };
+        Err(ProcessError::ProcessShouldNotExit)
     }
 }

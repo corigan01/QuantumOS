@@ -56,6 +56,34 @@ pub struct ProcessContext {
     pub rsp: u64,
 }
 
+impl ProcessContext {
+    pub const fn new() -> Self {
+        Self {
+            r15: 0,
+            r14: 0,
+            r13: 0,
+            r12: 0,
+            r11: 0,
+            r10: 0,
+            r9: 0,
+            r8: 0,
+            rbp: 0,
+            rdi: 0,
+            rsi: 0,
+            rdx: 0,
+            rcx: 0,
+            rbx: 0,
+            rax: 0,
+            cs: 0,
+            ss: 0,
+            rflag: 0,
+            rip: 0,
+            exception_code: 0,
+            rsp: 0,
+        }
+    }
+}
+
 pub static mut KERNEL_RSP_PTR: u64 = 0x200000000000;
 pub static mut USERSPACE_RSP_PTR: u64 = 0x121212;
 
@@ -194,30 +222,7 @@ pub unsafe extern "C" fn userspace_entry(context: *const ProcessContext) {
 }
 
 pub unsafe fn context_of_caller() -> ProcessContext {
-    let mut pc = ProcessContext {
-        r15: 0,
-        r14: 0,
-        r13: 0,
-        r12: 0,
-        r11: 0,
-        r10: 0,
-        r9: 0,
-        r8: 0,
-        rbp: 0,
-        rdi: 0,
-        rsi: 0,
-        rdx: 0,
-        rcx: 0,
-        rbx: 0,
-        rax: 0,
-        cs: 0,
-        ss: 0,
-        rflag: 0,
-        rip: 0,
-        exception_code: 0,
-        rsp: 0,
-    };
-
+    let mut pc = ProcessContext::new();
     unsafe {
         asm!(
             "

@@ -130,10 +130,6 @@ impl VmElfInject {
 }
 
 impl VmInjectFillAction for VmElfInject {
-    fn requests_all_pages_filled(&self, _parent_object: &mem::vm::VmObject) -> bool {
-        true
-    }
-
     /// Put data into this page
     fn populate_page(
         &mut self,

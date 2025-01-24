@@ -209,7 +209,7 @@ impl VmInjectFillAction for VmFillAction {
     fn requests_all_pages_filled(&self, parent_object: &VmObject) -> bool {
         match self {
             VmFillAction::Nothing => false,
-            VmFillAction::Scrub(_) => true,
+            VmFillAction::Scrub(_) => false,
             VmFillAction::InjectWith(rw_lock) => {
                 rw_lock.read().requests_all_pages_filled(parent_object)
             }
