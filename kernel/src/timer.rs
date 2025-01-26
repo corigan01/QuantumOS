@@ -32,9 +32,12 @@ use arch::{
 };
 use lldebug::{log, logln};
 
-use crate::int::attach_irq_handler;
+use crate::{
+    int::attach_irq_handler,
+    process::{SchedulerEvent, send_scheduler_event},
+};
 
-const TIMER_HZ: f32 = 1000_f32;
+const TIMER_HZ: f32 = 100_f32;
 
 pub fn init_timer() {
     log!("Enabling PIT...");
@@ -58,8 +61,13 @@ pub fn init_timer() {
 
 static KERNEL_TICKS: AtomicU64 = AtomicU64::new(0);
 
-fn pit_interrupt_handler(_args: &InterruptInfo) {
+fn pit_interrupt_handler(_args: &InterruptInfo, called_from_ue: bool) {
     KERNEL_TICKS.fetch_add(1, Ordering::AcqRel);
+
+    // If we are in userspace, we tick the scheduler
+    if called_from_ue {
+        send_scheduler_event(SchedulerEvent::Tick);
+    }
 }
 
 pub fn kernel_ticks() -> u64 {

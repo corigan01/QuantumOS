@@ -29,7 +29,10 @@ use alloc::{
     string::String,
     sync::{Arc, Weak},
 };
-use arch::{CpuPrivilege, critcal_section, registers::Segment};
+use arch::{
+    CpuPrivilege, critcal_section, interrupts::disable_interrupts, pic8259::pic_eoi,
+    registers::Segment,
+};
 use boolvec::BoolVec;
 use elf::{ElfErrorKind, elf_owned::ElfOwned};
 use lldebug::{logln, warnln};
@@ -157,6 +160,7 @@ impl Process {
         self.context.cs = Segment::new(5, CpuPrivilege::Ring3).0 as u64;
         self.context.rip = entry.addr() as u64;
         self.context.rsp = stack.addr() as u64;
+        self.context.rflag = 0x200;
     }
 
     /// Map an anon zeroed scrubbed region to this local process
@@ -297,12 +301,28 @@ pub fn scheduler_page_fault_handler(info: PageFaultInfo) -> PageFaultReponse {
 
 /// Send the scheduler an event
 pub fn send_scheduler_event(event: SchedulerEvent) {
-    lock_mut_scheduler(|sc| sc.scheduler_event(event))
+    match event {
+        // Since the tick is low on priority, we don't try to lock
+        // if we are already locked!
+        SchedulerEvent::Tick => match THE_SCHEDULER.try_read() {
+            Some(e) if e.is_some() => {
+                drop(e);
+                lock_mut_scheduler(|sc| sc.scheduler_event(event));
+            }
+            _ => (),
+        },
+        _ => {
+            if THE_SCHEDULER.read().is_some() {
+                lock_mut_scheduler(|sc| sc.scheduler_event(event));
+            }
+        }
+    }
 }
 
 /// Trigger an event to happen on the scheduler
 #[derive(Debug)]
 pub enum SchedulerEvent {
+    None,
     /// This is fired by the kernel's timer, and will 'tick' the scheduler forward.
     Tick,
     /// This process requested to exit
@@ -495,14 +515,16 @@ impl Scheduler {
     pub fn scheduler_event(&mut self, event: SchedulerEvent) {
         match event {
             SchedulerEvent::Exit => {
-                let running_pid = self
+                let running = self
                     .running
                     .clone()
                     .expect("Expected a currently running process to issue 'Exit'")
                     .read()
-                    .id;
+                    .clone();
 
-                self.kill_proc(running_pid)
+                warnln!("Exiting '{}'", running.name);
+
+                self.kill_proc(running.id)
                     .expect("Expected to be able to kill running process");
                 self.pick_next_into_running();
 
@@ -538,6 +560,42 @@ impl Scheduler {
                 self.switch_to_running()
                     .expect("Cannot switch to next running process");
                 unreachable!("Should never return from switch to running!")
+            }
+            SchedulerEvent::Tick => {
+                let Some(_) = self.running else {
+                    // If there isn't a running process, there is nothing to tick
+                    return;
+                };
+                logln!("Tick");
+
+                // Since there should always be something in the que if there is
+                // something currently running, we can just expect.
+                let (quantum_remaining, _) = self.que.get_mut(0).expect(
+                    "Already verified running, there should always be something in the que!",
+                );
+
+                // Its time to switch to a new process!
+                if *quantum_remaining == 0 {
+                    self.pick_next_into_running();
+
+                    // Since this was a timer tick, we also need to send a EOI
+                    //
+                    // FIXME: we should have the fault handler do this, and call
+                    //        then wake the scheduler back up when its done :)
+                    unsafe { pic_eoi(0) };
+
+                    // Before we switch to the currently running process, we need
+                    // to release any locks on the scheduler that accumulated
+                    // when handling this event.
+                    unsafe { THE_SCHEDULER.force_write_unlock() };
+
+                    self.switch_to_running()
+                        .expect("Cannot switch to next running process");
+
+                    unreachable!("Should never return from switch to running!")
+                } else {
+                    *quantum_remaining -= 1;
+                }
             }
             e => todo!("{e:#?}"),
         }

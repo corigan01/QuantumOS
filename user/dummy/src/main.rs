@@ -51,14 +51,20 @@ struct Test<'a> {
 #[unsafe(link_section = ".start")]
 #[unsafe(no_mangle)]
 extern "C" fn _start() {
-    let test = Test {
-        a: 1203,
-        b: "idk",
-        c: Foo::Bazz,
-    };
+    let hello_world = "Hello World from UE!! ";
+
     for i in 0..10 {
-        let hello_world = "Hello World from UE!! ";
-        dbugln!("Hello World! -- {hello_world} {i:#016x} {test:#?}");
+        let mut b = 0;
+        for e in 0..10000 {
+            let a = hello_world
+                .chars()
+                .map(|c| c.to_ascii_uppercase())
+                .filter(|&c| c as u8 > (e as u8))
+                .count();
+            b += a;
+        }
+
+        dbugln!("Hello World! -- {hello_world} {i:#016x} {b}");
     }
 
     exit(ExitCode::Success);

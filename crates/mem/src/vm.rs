@@ -369,7 +369,7 @@ impl VmObject {
         vm_process: &VmProcess,
         vpage: VirtPage,
     ) -> Result<(), VmObjectMappingError> {
-        logln!("Asking this VmObject to map {:x?}", vpage);
+        // logln!("Asking this VmObject to map {:x?}", vpage);
 
         // if this page isnt within our mapping, we cannot map it
         if !self.region.does_contain_page(vpage) {

@@ -23,6 +23,8 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use core::sync::atomic::{AtomicBool, Ordering};
+
 use arch::{
     CpuPrivilege, attach_irq, critcal_section,
     idt64::{
@@ -38,18 +40,24 @@ use mem::{
     vm::{PageFaultInfo, call_page_fault_handler},
 };
 
-use crate::process::{ProcessError, SchedulerEvent, send_scheduler_event};
+use crate::{
+    context::IN_USERSPACE,
+    process::{ProcessError, SchedulerEvent, send_scheduler_event},
+};
 
 static INTERRUPT_TABLE: Mutex<InterruptDescTable> = Mutex::new(InterruptDescTable::new());
-static IRQ_HANDLERS: Mutex<[Option<fn(&InterruptInfo)>; 32]> = Mutex::new([None; 32]);
+static IRQ_HANDLERS: Mutex<[Option<fn(&InterruptInfo, bool)>; 32]> = Mutex::new([None; 32]);
+static SHOULD_INTERRUPTS_BE_ENABLED: AtomicBool = AtomicBool::new(false);
 
 #[interrupt(0..50)]
 fn exception_handler(args: &InterruptInfo) {
+    let called_from_ue = unsafe { core::ptr::read_volatile(&raw const IN_USERSPACE) };
+    unsafe { core::ptr::write_volatile(&raw mut IN_USERSPACE, 0) };
+
     match args.flags {
         // IRQ
         InterruptFlags::Irq(irq_num) if irq_num - PIC_IRQ_OFFSET <= 16 => {
-            call_attached_irq(irq_num - PIC_IRQ_OFFSET, &args);
-            unsafe { pic_eoi(irq_num - PIC_IRQ_OFFSET) };
+            call_attached_irq(irq_num - PIC_IRQ_OFFSET, &args, called_from_ue == 1);
         }
         InterruptFlags::PageFault {
             present,
@@ -105,21 +113,38 @@ fn exception_handler(args: &InterruptInfo) {
     if args.flags.exception_kind() == ExceptionKind::Abort {
         panic!("Interrupt -- {:?}", args.flags);
     }
+
+    if SHOULD_INTERRUPTS_BE_ENABLED.load(Ordering::Relaxed) {
+        unsafe { enable_interrupts() };
+    }
+
+    // Send End of interrupt
+    match args.flags {
+        InterruptFlags::Irq(irq) if irq - PIC_IRQ_OFFSET <= 16 => {
+            unsafe { pic_eoi(irq - PIC_IRQ_OFFSET) };
+        }
+        _ => (),
+    }
+
+    if called_from_ue == 1 {
+        unsafe { core::ptr::write_volatile(&raw mut IN_USERSPACE, 1) };
+    }
 }
 
-fn call_attached_irq(irq_id: u8, args: &InterruptInfo) {
+fn call_attached_irq(irq_id: u8, args: &InterruptInfo, called_from_ue: bool) {
     let irq_handler = IRQ_HANDLERS.lock();
 
     if let Some(handler) = irq_handler
         .get((irq_id) as usize)
         .and_then(|&handler| handler)
     {
-        handler(args);
+        drop(irq_handler);
+        handler(args, called_from_ue);
     }
 }
 
 /// Set a function to be called whenever an irq is triggered.
-pub fn attach_irq_handler(handler_fn: fn(&InterruptInfo), irq: u8) {
+pub fn attach_irq_handler(handler_fn: fn(&InterruptInfo, bool), irq: u8) {
     critcal_section! {
         let mut irq_handler = IRQ_HANDLERS.lock();
         let Some(handler) = irq_handler.get_mut(irq as usize) else {
@@ -172,6 +197,7 @@ pub fn enable_pic() {
     unsafe {
         pic_remap(PIC_IRQ_OFFSET, PIC_IRQ_OFFSET + 8);
         enable_interrupts();
+        SHOULD_INTERRUPTS_BE_ENABLED.store(true, Ordering::Relaxed);
     }
 }
 

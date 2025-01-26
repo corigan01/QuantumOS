@@ -90,6 +90,8 @@ impl ProcessContext {
 pub static mut KERNEL_RSP_PTR: u64 = Process::KERNEL_SYSCALL_STACK_ADDR.addr() as u64;
 /// A tmp for userspace's stack ptr while in kernel land
 pub static mut USERSPACE_RSP_PTR: u64 = 0x121212;
+/// A lock for timer ticks to not attempt to lock the scheduler
+pub static mut IN_USERSPACE: u8 = 0;
 
 #[naked]
 pub unsafe extern "C" fn kernel_entry() {
@@ -98,6 +100,7 @@ pub unsafe extern "C" fn kernel_entry() {
             "
             #  -- Save User's stack ptr, and restore our own
 
+            mov byte ptr [{user_lock}], 0
             mov [{userspace_rsp_ptr}], rsp
             mov rsp, [{kernel_rsp_ptr}]
 
@@ -163,7 +166,7 @@ pub unsafe extern "C" fn kernel_entry() {
             pop rsp
 
             mov qword ptr [{userspace_rsp_ptr}], 0
-
+            mov byte ptr [{user_lock}], 1
             sysretq
         ",
             // FIXME: For whatever reason, rust fails to compile with these symbol PTRs,
@@ -172,8 +175,9 @@ pub unsafe extern "C" fn kernel_entry() {
             // kernel_rsp_ptr = sym KERNEL_RSP,
             // userspace_rsp_ptr = sym USERSPACE_RSP,
 
-            kernel_rsp_ptr = sym KERNEL_RSP_PTR ,
-            userspace_rsp_ptr = sym USERSPACE_RSP_PTR ,
+            kernel_rsp_ptr = sym KERNEL_RSP_PTR,
+            userspace_rsp_ptr = sym USERSPACE_RSP_PTR,
+            user_lock = sym IN_USERSPACE,
         )
     };
 }
@@ -185,6 +189,7 @@ pub unsafe extern "C" fn userspace_entry(context: *const ProcessContext) {
         asm!(
             "
                 cli
+
                 #  -- Restore Registers
 
                 mov r15, [rdi      ]
@@ -216,10 +221,12 @@ pub unsafe extern "C" fn userspace_entry(context: *const ProcessContext) {
 
                 #  -- Return back to userspace
 
+                mov byte ptr [{user_lock}], 1
                 iretq
 
             ",
-            in("rdi") context
+            in("rdi") context,
+            user_lock = sym IN_USERSPACE
         )
     }
     unreachable!("Should never return from userspace entry!");
