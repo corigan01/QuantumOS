@@ -38,6 +38,8 @@ use mem::{
     vm::{PageFaultInfo, call_page_fault_handler},
 };
 
+use crate::process::{ProcessError, SchedulerEvent, send_scheduler_event};
+
 static INTERRUPT_TABLE: Mutex<InterruptDescTable> = Mutex::new(InterruptDescTable::new());
 static IRQ_HANDLERS: Mutex<[Option<fn(&InterruptInfo)>; 32]> = Mutex::new([None; 32]);
 
@@ -77,7 +79,8 @@ fn exception_handler(args: &InterruptInfo) {
                     request_perm,
                     page,
                 } => {
-                    todo!("crash process")
+                    warnln!("Process crash!");
+                    send_scheduler_event(SchedulerEvent::Fault(ProcessError::AccessViolation));
                 }
                 // panic
                 mem::vm::PageFaultReponse::CriticalFault(error) => {
@@ -183,7 +186,10 @@ extern "C" fn syscall_handler(
     syscall_number: u64,
 ) -> u64 {
     match syscall_number {
-        0 => warnln!("TODO: Exit syscall"),
+        0 => {
+            send_scheduler_event(SchedulerEvent::Exit);
+            unreachable!("Should not return from exit")
+        }
         69 => ::lldebug::priv_print(
             lldebug::LogKind::Log,
             "userspace",

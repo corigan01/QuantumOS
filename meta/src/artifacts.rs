@@ -290,7 +290,8 @@ pub async fn build_project(multiboot_mode: bool, emit_asm: Option<String>) -> Re
     )?;
 
     let ue_slice = [
-        (dummy_userspace, PathBuf::from("./dummy")),
+        (dummy_userspace.clone(), PathBuf::from("./dummy")),
+        (dummy_userspace, PathBuf::from("./dummy2")),
         (stage_16bit.clone(), PathBuf::from("./stage")),
     ];
 

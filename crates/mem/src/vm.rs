@@ -621,11 +621,15 @@ impl VmProcess {
             .iter()
             .find(|object| object.read().region.does_contain_addr(info.vaddr))
         else {
-            logln!(
-                "Called PageFaultHandler, but could not find a region with that addr! {:#?}",
-                info
-            );
-            return PageFaultReponse::NotAttachedHandler;
+            return PageFaultReponse::NoAccess {
+                page_perm: VmPermissions::none(),
+                request_perm: VmPermissions::none()
+                    .set_exec_flag(info.execute_fault)
+                    .set_read_flag(info.is_present)
+                    .set_write_flag(info.write_read_access)
+                    .set_user_flag(info.user_fault),
+                page: VirtPage::containing_addr(info.vaddr),
+            };
         };
 
         object.write().page_fault_handler(self, info)

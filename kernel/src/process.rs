@@ -27,13 +27,12 @@ use alloc::{
     boxed::Box,
     collections::{btree_map::BTreeMap, vec_deque::VecDeque},
     string::String,
-    sync::Arc,
-    vec::Vec,
+    sync::{Arc, Weak},
 };
 use arch::{CpuPrivilege, critcal_section, registers::Segment};
 use boolvec::BoolVec;
 use elf::{ElfErrorKind, elf_owned::ElfOwned};
-use lldebug::logln;
+use lldebug::{logln, warnln};
 use mem::{
     addr::VirtAddr,
     page::VirtPage,
@@ -82,6 +81,10 @@ pub enum ProcessError {
     InitFsError(TarError),
     /// An error with mapping virtual address regions to physical
     PageCorrelationErr(PageCorrelationError),
+    /// There was no such process for PID
+    NoSuchProcess(usize),
+    /// This process tried to access resources it does not have access to
+    AccessViolation,
 }
 
 impl core::fmt::Display for ProcessError {
@@ -217,6 +220,7 @@ impl Process {
 
     /// Context switch into this process
     pub unsafe fn switch_into(&self) -> Result<(), ProcessError> {
+        logln!("Switching to '{}'...", self.name);
         if !self.vm.page_tables.is_loaded() {
             return Err(ProcessError::LoadedAssertionError(true));
         }
@@ -226,6 +230,7 @@ impl Process {
     }
 }
 
+type WeakRefProcess = Weak<RwLock<Process>>;
 type RefProcess = Arc<RwLock<Process>>;
 type KernelTicks = usize;
 
@@ -252,7 +257,7 @@ where
     // We cannot hold the write lock and also keep interrupts enabled
     // since we could possibly deadlock trying to aquire the lock again
     critcal_section! {
-        if let Some(sch) = THE_SCHEDULER.write().as_mut() {
+        if let Some(sch) = THE_SCHEDULER.try_write().unwrap().as_mut() {
             func(sch)
         } else {
             panic!("The global scheduler has not been setup!")
@@ -290,11 +295,20 @@ pub fn scheduler_page_fault_handler(info: PageFaultInfo) -> PageFaultReponse {
     lock_ref_scheduler(|sc| sc.handle_page_fault(info))
 }
 
+/// Send the scheduler an event
+pub fn send_scheduler_event(event: SchedulerEvent) {
+    lock_mut_scheduler(|sc| sc.scheduler_event(event))
+}
+
 /// Trigger an event to happen on the scheduler
-#[derive(Clone, Copy, Debug)]
+#[derive(Debug)]
 pub enum SchedulerEvent {
     /// This is fired by the kernel's timer, and will 'tick' the scheduler forward.
     Tick,
+    /// This process requested to exit
+    Exit,
+    /// This process encourted a fault and needs to be killed
+    Fault(ProcessError),
 }
 
 #[derive(Debug)]
@@ -307,12 +321,12 @@ pub struct Scheduler {
     pid_bitmap: BoolVec,
     /// A Que of processes needing to be scheduled with the 'KernelTicks'
     /// being the time until that process should be woken up.
-    backlog_wake_up: VecDeque<(KernelTicks, RefProcess)>,
+    backlog_wake_up: VecDeque<(KernelTicks, WeakRefProcess)>,
     /// The que of processes needing/currently being scheduled.
     ///
     /// The `KernelTicks` here is the remaining time this process has to run before being
     /// send to the end of the que.
-    que: VecDeque<(KernelTicks, RefProcess)>,
+    que: VecDeque<(KernelTicks, WeakRefProcess)>,
     /// The process that is activly running
     running: Option<RefProcess>,
 }
@@ -355,7 +369,8 @@ impl Scheduler {
         self.alive.insert(next_pid, proc.clone());
 
         // Insert this process into the picking que
-        self.que.push_back((Self::DEFAULT_QUANTUM, proc));
+        self.que
+            .push_back((Self::DEFAULT_QUANTUM, Arc::downgrade(&proc)));
 
         Ok(())
     }
@@ -447,9 +462,85 @@ impl Scheduler {
         Ok(sc)
     }
 
+    /// Kill a process with its id
+    pub fn kill_proc(&mut self, pid: usize) -> Result<(), ProcessError> {
+        // Drop running process if its the pid we are looking for
+        if let Some(running) = self.running.clone() {
+            if running.read().id == pid {
+                self.running = None;
+            }
+        }
+
+        // Drop the process if its alive
+        if self.alive.remove(&pid).is_some() {
+            Ok(())
+        } else {
+            Err(ProcessError::NoSuchProcess(pid))
+        }
+    }
+
+    /// Pick the next process to be enqued
+    pub fn pick_next_into_running(&mut self) -> Result<(), ProcessError> {
+        // Release running proc
+        self.running = None;
+
+        // Get the next process
+        let next_head = self.cycle_head()?;
+        self.running = Some(next_head);
+
+        Ok(())
+    }
+
     /// Handle events with the scheduler
     pub fn scheduler_event(&mut self, event: SchedulerEvent) {
-        todo!()
+        match event {
+            SchedulerEvent::Exit => {
+                let running_pid = self
+                    .running
+                    .clone()
+                    .expect("Expected a currently running process to issue 'Exit'")
+                    .read()
+                    .id;
+
+                self.kill_proc(running_pid)
+                    .expect("Expected to be able to kill running process");
+                self.pick_next_into_running();
+
+                // Before we switch to the currently running process, we need
+                // to release any locks on the scheduler that accumulated
+                // when handling this event.
+                unsafe { THE_SCHEDULER.force_write_unlock() };
+                self.switch_to_running()
+                    .expect("Cannot switch to next running process");
+
+                unreachable!("Should never return from switch to running!")
+            }
+            SchedulerEvent::Fault(fault) => {
+                let running_pid = self
+                    .running
+                    .clone()
+                    .expect("Expected a currently running process to issue 'Fault'")
+                    .read()
+                    .id;
+
+                // TODO: We should figure out a way to pipe this fualt to userspace
+                //       so they can know why a process crashed!
+                warnln!("Process fault: {:#?}", fault);
+                self.kill_proc(running_pid)
+                    .expect("Was not able to kill fault process");
+                self.pick_next_into_running();
+
+                // Before we switch to the currently running process, we need
+                // to release any locks on the scheduler that accumulated
+                // when handling this event.
+                unsafe { THE_SCHEDULER.force_write_unlock() };
+
+                self.switch_to_running()
+                    .expect("Cannot switch to next running process");
+                unreachable!("Should never return from switch to running!")
+            }
+            e => todo!("{e:#?}"),
+        }
     }
 
     /// Switch to the running process
@@ -460,16 +551,60 @@ impl Scheduler {
         unsafe { running.read().switch_into() }
     }
 
+    /// Current/Next alive proc to be scheduled
+    pub fn head_proc(&mut self) -> Result<RefProcess, ProcessError> {
+        loop {
+            if let Some(next_proc) = self.que.get(0) {
+                if let Some(still_alive) = next_proc.1.upgrade() {
+                    return Ok(still_alive);
+                }
+
+                // Drop dead refs
+                let _ = self.que.pop_front();
+            } else {
+                // There are no processes left to be scheduled
+                return Err(ProcessError::NotAnyProcess);
+            }
+        }
+    }
+
+    /// Cycles the process que until it reaches a currently alive next process
+    ///
+    /// If the head of the process que is Weak(Dropped) we need to cycle
+    /// again until we reach a process that can be scheduled.
+    pub fn cycle_head(&mut self) -> Result<RefProcess, ProcessError> {
+        loop {
+            let Some(next_head) = self.que.pop_front() else {
+                // No more processes left in the que
+                return Err(ProcessError::NotAnyProcess);
+            };
+
+            // If this is still alive, we push it to the end and get the very next process
+            if next_head.1.strong_count() >= 1 {
+                // Reset its quantum
+                self.que.push_back((Self::DEFAULT_QUANTUM, next_head.1));
+            } else {
+                continue;
+            }
+
+            let (_, proc) = self.que.get(0).ok_or(ProcessError::NotAnyProcess)?;
+            return Ok(proc
+                .upgrade()
+                .expect("Just verified we should've had only alive processes"));
+        }
+    }
+
     /// Start scheduling
     unsafe fn begin(&mut self) -> ! {
-        let first_proc = &self.que.get(0).expect("Expected at least 1 process to be loaded into the schedule que before starting the scheduler!").1;
-        self.running.replace(first_proc.clone());
+        let head = self
+            .head_proc()
+            .expect("Expected there to be a process in the schedule que when starting scheduling!");
+        self.running.replace(head);
 
         self.switch_to_running()
             .expect_err("Unable to switch to the running proc");
 
-        logln!("{:#?}", self);
-        todo!()
+        unreachable!("Switching to the running executable should never exit!")
     }
 
     /// Handle an incoming page fault
