@@ -90,7 +90,7 @@ async fn build(
         let kernel_ptr = 0x00600000;
         let kernel_size = artifacts.kernel_len;
 
-        let initfs_ptr = kernel_ptr + kernel_size;
+        let initfs_ptr = (((kernel_ptr + kernel_size) / (1024 * 1024)) + 1) * (1024 * 1024);
         let initfs_len = artifacts.initfs_len;
 
         // `build_project` will emit different binaries depending on how its configured

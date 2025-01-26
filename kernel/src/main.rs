@@ -79,7 +79,7 @@ fn main(kbh: &KernelBootHeader) {
     logln!("Running on a(n) '{:?}' processor.", cpu_vender());
 
     gdt::init_kernel_gdt();
-    gdt::set_stack_for_privl(0x300000000000 as *mut u8, Ring0);
+    gdt::set_stack_for_privl(Process::KERNEL_IRQ_STACK_ADDR.as_mut_ptr(), Ring0);
     unsafe { gdt::load_tss() };
     int::attach_interrupts();
     int::attach_syscall();
@@ -137,6 +137,7 @@ fn main(kbh: &KernelBootHeader) {
                 .set_read_flag(true)
                 .set_write_flag(true)
                 .set_user_flag(true),
+            false,
         )
         .unwrap();
     process
@@ -150,6 +151,7 @@ fn main(kbh: &KernelBootHeader) {
                 .set_read_flag(true)
                 .set_write_flag(true)
                 .set_user_flag(false),
+            true,
         )
         .unwrap();
     process
@@ -163,6 +165,7 @@ fn main(kbh: &KernelBootHeader) {
                 .set_read_flag(true)
                 .set_write_flag(true)
                 .set_user_flag(false),
+            true,
         )
         .unwrap();
     process
@@ -176,6 +179,7 @@ fn main(kbh: &KernelBootHeader) {
                 .set_read_flag(true)
                 .set_write_flag(true)
                 .set_user_flag(false),
+            true,
         )
         .unwrap();
     unsafe { process.load_tables() };

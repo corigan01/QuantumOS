@@ -42,7 +42,8 @@ use serial::{Serial, baud::SerialBaud};
 use util::{
     align_to,
     bytes::HumanBytes,
-    consts::{MIB, PAGE_2M},
+    consts::{MIB, PAGE_2M, PAGE_4K},
+    is_align_to,
 };
 
 mod paging;
@@ -130,12 +131,12 @@ fn main(stage_to_stage: &Stage32toStage64) {
                 (virt_info.stack_end_virt - virt_info.stack_start_virt) as usize,
             ),
             kernel_init_heap: (
-                virt_info.init_start_virt,
-                (virt_info.init_end_virt - virt_info.init_start_virt) as usize,
+                virt_info.heap_start_virt,
+                (virt_info.heap_end_virt - virt_info.heap_start_virt) as usize,
             ),
             initfs_ptr: (
-                stage_to_stage.initfs_ptr.0,
-                stage_to_stage.initfs_ptr.1 as usize,
+                virt_info.initfs_start_virt,
+                (virt_info.initfs_end_virt - virt_info.initfs_start_virt) as usize,
             ),
         });
 
@@ -208,7 +209,12 @@ fn build_memory_map(
         })
         .expect("Unable to add elf to memory map");
 
-        let (initfs_start, initfs_len) = s2s.initfs_ptr;
+        let (initfs_start, mut initfs_len) = s2s.initfs_ptr;
+        assert!(
+            is_align_to(initfs_start, PAGE_2M),
+            "INITFS is not 2Mib page aligned, please ensure initfs is page aligned!"
+        );
+        initfs_len = align_to(initfs_len, PAGE_2M);
         mm.add_region(PhysMemoryEntry {
             kind: PhysMemoryKind::InitFs,
             start: (initfs_start as usize).into(),
@@ -261,7 +267,7 @@ fn build_memory_map(
             .expect("Unable to find region for kernel's stack pages");
         mm.add_region(kernels_stack_pages).unwrap();
 
-        let kernels_init_pages = mm
+        let kernels_heap_pages = mm
             .find_continuous_of(
                 PhysMemoryKind::Free,
                 PAGE_2M,
@@ -272,8 +278,8 @@ fn build_memory_map(
                 kind: PhysMemoryKind::KernelHeap,
                 ..p
             })
-            .expect("Unable to find region for kernel's stack pages");
-        mm.add_region(kernels_init_pages).unwrap();
+            .expect("Unable to find region for kernel's heap pages");
+        mm.add_region(kernels_heap_pages).unwrap();
 
         logln!("{}", mm);
 
@@ -287,10 +293,11 @@ fn build_memory_map(
                 kernels_stack_pages.len() as usize,
             ),
             kernel_virt: kernel_exe_ptr,
-            kernel_init_phys: (
-                kernels_init_pages.start.addr() as u64,
-                kernels_init_pages.len() as usize,
+            kernel_heap_phys: (
+                kernels_heap_pages.start.addr() as u64,
+                kernels_heap_pages.len() as usize,
             ),
+            kernel_initfs_phys: (initfs_start, initfs_len as usize),
         }
     }
 }

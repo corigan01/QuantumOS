@@ -223,6 +223,9 @@ fn main(disk_id: u16) -> ! {
 
     let stack_region = unsafe { alloc.allocate(1024 * 1024) }.unwrap();
 
+    // The initfs needs to be 2Mib page aligned
+    alloc.align_ptr_to(1024 * 1024);
+
     // Initfs region
     let mut initfs_file = fatfs
         .open(qconfig.initfs)

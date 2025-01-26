@@ -16,3 +16,4 @@ arch = {workspace = true}
 spin = "0.9.8"
 elf = {workspace = true, features = ["alloc"]}
 tar = { workspace = true }
+boolvec = {workspace = true}

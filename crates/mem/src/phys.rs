@@ -225,6 +225,8 @@ impl<const N: usize> PhysMemoryMap<N> {
             })
     }
 
+    // FIXME: This function should be remade, it was made quickly and I just wanted it to work.
+    //        I think at one point it failed to deoverlap some regions, so that could be possible.
     pub fn add_region(&mut self, region: impl MemoryDesc) -> Result<(), crate::MemoryError> {
         let kind = region.memory_kind();
         let start = region.memory_start();

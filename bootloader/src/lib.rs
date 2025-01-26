@@ -70,7 +70,7 @@ pub struct Stage32toStage64 {
 }
 
 /// # `Stage64` to `Kernel` Info Block
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct KernelBootHeader {
     pub phys_mem_map: &'static PhysMemoryMap<MEMORY_REGIONS>,
     pub video_mode: Option<(VesaModeId, VesaMode)>,

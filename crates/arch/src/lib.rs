@@ -60,7 +60,7 @@ pub mod interrupts {
 
     #[macro_export]
     macro_rules! critcal_section {
-        ($($tt:tt)*) => {
+        ($($tt:tt)*) => {{
             let _priv_interrupt_before_state =
                 ::arch::registers::eflags::is_interrupts_enable_set();
 
@@ -68,12 +68,16 @@ pub mod interrupts {
                 unsafe { ::arch::interrupts::disable_interrupts() };
             }
 
-            $($tt)*;
+            let r = {
+                $($tt)*
+            };
 
             if _priv_interrupt_before_state {
                 unsafe { ::arch::interrupts::enable_interrupts() };
             }
-        };
+
+            r
+        }};
     }
 }
 

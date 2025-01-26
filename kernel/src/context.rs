@@ -28,6 +28,8 @@ use core::{
     mem::offset_of,
 };
 
+use crate::process::Process;
+
 /// CPUs context
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
@@ -84,7 +86,9 @@ impl ProcessContext {
     }
 }
 
-pub static mut KERNEL_RSP_PTR: u64 = 0x200000000000;
+/// The kernel's syscall entry stack
+pub static mut KERNEL_RSP_PTR: u64 = Process::KERNEL_SYSCALL_STACK_ADDR.addr() as u64;
+/// A tmp for userspace's stack ptr while in kernel land
 pub static mut USERSPACE_RSP_PTR: u64 = 0x121212;
 
 #[naked]

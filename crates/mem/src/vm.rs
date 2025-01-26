@@ -107,7 +107,7 @@ pub enum PopulationReponse {
     PageTablesNotLoaded,
 }
 
-pub trait VmInjectFillAction: core::fmt::Debug {
+pub trait VmInjectFillAction: core::fmt::Debug + Sync + Send {
     /// Populate this page with content from this content's provider
     fn populate_page(
         &mut self,
@@ -273,6 +273,17 @@ pub struct VmObject {
     pub fill_action: RwLock<VmFillAction>,
 }
 
+impl Clone for VmObject {
+    fn clone(&self) -> Self {
+        Self {
+            region: self.region,
+            mappings: self.mappings.clone(),
+            permissions: self.permissions,
+            fill_action: RwLock::new(self.fill_action.read().clone()),
+        }
+    }
+}
+
 /// The type of error given when making a new page
 #[derive(Debug)]
 pub enum NewVmObjectError {
@@ -324,6 +335,7 @@ impl VmObject {
         region: VmRegion,
         permissions: VmPermissions,
         fill_action: VmFillAction,
+        override_and_fill: bool,
     ) -> Result<Arc<RwLock<Self>>, NewVmObjectError> {
         let mut new_self = Self {
             region,
@@ -337,6 +349,7 @@ impl VmObject {
             .fill_action
             .read()
             .requests_all_pages_filled(&new_self)
+            || override_and_fill
         {
             for vpage in new_self.region.pages_iter() {
                 new_self
@@ -501,6 +514,15 @@ pub struct VmProcess {
     pub page_tables: Virt2PhysMapping,
 }
 
+impl Clone for VmProcess {
+    fn clone(&self) -> Self {
+        Self {
+            objects: RwLock::new(self.objects.read().clone()),
+            page_tables: self.page_tables.clone(),
+        }
+    }
+}
+
 impl VmProcess {
     /// Init an empty ProcessVM (const fn)
     pub const fn new() -> Self {
@@ -562,6 +584,7 @@ impl VmProcess {
         region: VmRegion,
         permissions: VmPermissions,
         fill_action: VmFillAction,
+        override_and_fill_now: bool,
     ) -> Result<Arc<RwLock<VmObject>>, InsertVmObjectError> {
         // If there is already a region that exists on that virtual address
         //
@@ -576,8 +599,14 @@ impl VmProcess {
         }
 
         // Construct the object
-        let obj = VmObject::new(self, region, permissions, fill_action)
-            .map_err(|obj_err| InsertVmObjectError::VmObjectError(obj_err))?;
+        let obj = VmObject::new(
+            self,
+            region,
+            permissions,
+            fill_action,
+            override_and_fill_now,
+        )
+        .map_err(|obj_err| InsertVmObjectError::VmObjectError(obj_err))?;
 
         // Insert the object
         self.insert_vm_object(obj.clone())?;
