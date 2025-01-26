@@ -42,7 +42,7 @@ use serial::{Serial, baud::SerialBaud};
 use util::{
     align_to,
     bytes::HumanBytes,
-    consts::{MIB, PAGE_2M, PAGE_4K},
+    consts::{MIB, PAGE_2M},
     is_align_to,
 };
 
@@ -270,7 +270,7 @@ fn build_memory_map(
         let kernels_heap_pages = mm
             .find_continuous_of(
                 PhysMemoryKind::Free,
-                PAGE_2M,
+                PAGE_2M * 2,
                 PAGE_2M,
                 PhysAddr::from(1 * MIB),
             )

@@ -26,14 +26,17 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 use alloc::{
     boxed::Box,
     collections::{btree_map::BTreeMap, vec_deque::VecDeque},
+    string::String,
     sync::Arc,
     vec::Vec,
 };
 use arch::{CpuPrivilege, critcal_section, registers::Segment};
 use boolvec::BoolVec;
 use elf::{ElfErrorKind, elf_owned::ElfOwned};
+use lldebug::logln;
 use mem::{
     addr::VirtAddr,
+    page::VirtPage,
     paging::{PageCorrelationError, PageTableLoadingError, Virt2PhysMapping, VmPermissions},
     vm::{InsertVmObjectError, PageFaultInfo, PageFaultReponse, VmFillAction, VmProcess, VmRegion},
 };
@@ -49,6 +52,7 @@ pub mod vm_elf;
 /// A structure repr a running process on the system
 #[derive(Debug, Clone)]
 pub struct Process {
+    name: String,
     vm: VmProcess,
     id: usize,
     context: ProcessContext,
@@ -92,19 +96,22 @@ impl Process {
     /// This is the start address that processes should base their stack from
     pub const PROCESS_STACK_START_ADDR: VirtAddr = VirtAddr::new(0x7fff00000000);
     /// The stack at which the kernel's IRQ entries should point
-    pub const KERNEL_IRQ_STACK_ADDR: VirtAddr = VirtAddr::new(0xffffffff81000000);
+    pub const KERNEL_IRQ_STACK_ADDR: VirtAddr = VirtAddr::new(0xffffffff90000000);
     /// The stack at which the kernel's syscall entry should point
-    pub const KERNEL_SYSCALL_STACK_ADDR: VirtAddr = VirtAddr::new(0xffffffff82000000);
+    pub const KERNEL_SYSCALL_STACK_ADDR: VirtAddr = VirtAddr::new(0xffffffff92000000);
     /// The size of each of the kernel's stacks
-    pub const KERNEL_STACK_SIZE: usize = PAGE_4K * 16;
+    pub const KERNEL_STACK_SIZE: usize = PAGE_4K * 32;
+    /// The size of an userspace process stack
+    pub const USERSPACE_STACK_SIZE: usize = PAGE_4K * 16;
 
     /// Create a new empty process
-    pub fn new(id: usize, table: &Virt2PhysMapping) -> Self {
+    pub fn new(id: usize, name: String, table: Virt2PhysMapping) -> Self {
         Self {
             vm: VmProcess::inhearit_page_tables(table),
             id,
             context: ProcessContext::new(),
             cpu_time: 0,
+            name,
         }
     }
 
@@ -166,10 +173,41 @@ impl Process {
     /// Make a new process with elf
     pub fn new_exec(
         pid: usize,
-        table: &Virt2PhysMapping,
+        name: String,
+        table: Virt2PhysMapping,
         elf: ElfOwned,
     ) -> Result<Self, ProcessError> {
-        todo!()
+        let mut proc = Self::new(pid, name, table);
+
+        // Point to the entrypoint and the stack
+        proc.init_context(
+            elf.elf()
+                .entry_point()
+                .map_err(|err| ProcessError::ElfLoadingError(err))?
+                .into(),
+            Self::PROCESS_STACK_START_ADDR,
+        );
+
+        // Load the elf file
+        proc.add_elf(elf)?;
+
+        // Map process's stack
+        proc.add_anon(
+            VmRegion {
+                start: VirtPage::containing_addr(
+                    Self::PROCESS_STACK_START_ADDR.sub_offset(Self::USERSPACE_STACK_SIZE),
+                ),
+                end: VirtPage::containing_addr(Self::PROCESS_STACK_START_ADDR),
+            },
+            VmPermissions::none()
+                .set_exec_flag(true /*FIXME: We need to enable !exec support */)
+                .set_read_flag(true)
+                .set_write_flag(true)
+                .set_user_flag(true),
+            false,
+        )?;
+
+        Ok(proc)
     }
 
     /// This process's page fault handler
@@ -223,7 +261,7 @@ where
 }
 
 /// Set this object as the global scheduler
-pub fn set_global_scheduler(sc: Scheduler) {
+pub fn set_global_scheduler(sc: Scheduler) -> ! {
     critcal_section! {
         if let Some(old) = THE_SCHEDULER
             .try_write()
@@ -239,6 +277,12 @@ pub fn set_global_scheduler(sc: Scheduler) {
         // Also make sure to attach the page fault handler here too
         mem::vm::set_page_fault_handler(scheduler_page_fault_handler);
     }
+
+    // Now tell the scheduler to start picking a process to use
+    //
+    // This is only safe because we know we are the only ones who
+    // have access to the scheduler since we just placed it here.
+    unsafe { (&mut *THE_SCHEDULER.as_mut_ptr()).as_mut().unwrap().begin() };
 }
 
 /// The page fault handler for the scheduler
@@ -256,7 +300,7 @@ pub enum SchedulerEvent {
 #[derive(Debug)]
 pub struct Scheduler {
     /// The kernel's memory mappings
-    kernel_table: Virt2PhysMapping,
+    kernel_table: VmProcess,
     /// A vector of all processes running on the system
     alive: BTreeMap<usize, RefProcess>,
     /// A map of PIDs that are free for processes to use
@@ -285,7 +329,7 @@ impl Scheduler {
             pid_bitmap: BoolVec::new(),
             que: VecDeque::new(),
             running: None,
-            kernel_table: Virt2PhysMapping::empty(),
+            kernel_table: VmProcess::new(),
         }
     }
 
@@ -296,7 +340,7 @@ impl Scheduler {
     {
         let next_pid = self.pid_bitmap.find_first_of(false).unwrap_or(0);
 
-        let proc = Arc::new(RwLock::new(f(next_pid, &self.kernel_table)?));
+        let proc = Arc::new(RwLock::new(f(next_pid, &self.kernel_table.page_tables)?));
         self.pid_bitmap.set(next_pid, true);
 
         // We should never override a previous proc
@@ -316,6 +360,47 @@ impl Scheduler {
         Ok(())
     }
 
+    /// Setup kernel's memory, like stack, heap, etc...
+    fn setup_kernel_memory_regions(&mut self) -> Result<(), ProcessError> {
+        // kernel syscall stack
+        self.kernel_table
+            .inplace_new_vmobject(
+                VmRegion {
+                    start: VirtPage::containing_addr(
+                        Process::KERNEL_SYSCALL_STACK_ADDR.sub_offset(Process::KERNEL_STACK_SIZE),
+                    ),
+                    end: VirtPage::containing_addr(Process::KERNEL_SYSCALL_STACK_ADDR),
+                },
+                VmPermissions::none()
+                    .set_exec_flag(true)
+                    .set_read_flag(true)
+                    .set_write_flag(true),
+                VmFillAction::Scrub(0),
+                true,
+            )
+            .map_err(|err| ProcessError::InsertVmObjectErr(err))?;
+
+        // kernel irq stack
+        self.kernel_table
+            .inplace_new_vmobject(
+                VmRegion {
+                    start: VirtPage::containing_addr(
+                        Process::KERNEL_IRQ_STACK_ADDR.sub_offset(Process::KERNEL_STACK_SIZE),
+                    ),
+                    end: VirtPage::containing_addr(Process::KERNEL_IRQ_STACK_ADDR),
+                },
+                VmPermissions::none()
+                    .set_exec_flag(true)
+                    .set_read_flag(true)
+                    .set_write_flag(true),
+                VmFillAction::Scrub(0),
+                true,
+            )
+            .map_err(|err| ProcessError::InsertVmObjectErr(err))?;
+
+        Ok(())
+    }
+
     /// bootstrap the scheduler from boot
     ///
     /// This is the function called when the kernel is ready to start scheduling processes
@@ -323,29 +408,67 @@ impl Scheduler {
     pub fn bootstrap_scheduler(initfs: &'static [u8]) -> Result<Self, ProcessError> {
         let mut sc = Self::new();
 
-        // First thing todo is to load the bootloader's memory mappings
-        sc.kernel_table = unsafe { Virt2PhysMapping::inhearit_bootloader() }
-            .map_err(|err| ProcessError::PageCorrelationErr(err))?;
+        // 1. Copy the bootloader's memory mappings
+        sc.kernel_table = VmProcess::inhearit_page_tables(
+            unsafe { Virt2PhysMapping::inhearit_bootloader() }
+                .map_err(|err| ProcessError::PageCorrelationErr(err))?,
+        );
 
-        // Then enable those tables
-        unsafe { sc.kernel_table.clone().load() }
+        // 2. Enable those tables
+        unsafe { sc.kernel_table.page_tables.clone().load() }
             .map_err(|err| ProcessError::PageTableLoadingErr(err))?;
 
+        // 3. Map memory the kernel will normally use
+        sc.setup_kernel_memory_regions()?;
+
+        // 4. load all initfs's elf files
         let tar_file = Tar::new(&initfs);
         tar_file.iter().try_for_each(|tar_file| {
+            let filename = tar_file
+                .filename()
+                .map_err(|tar_err| ProcessError::InitFsError(tar_err))?;
+
+            logln!("loading initfs elf file: '{}'", filename);
+
             let file = tar_file
                 .file()
                 .map_err(|tar_err| ProcessError::InitFsError(tar_err))?;
 
             sc.add_process(|pid, kernel_table| {
-                Process::new_exec(pid, kernel_table, ElfOwned::new_from_slice(file))
+                Process::new_exec(
+                    pid,
+                    filename.into(),
+                    Virt2PhysMapping::inhearit_from(kernel_table),
+                    ElfOwned::new_from_slice(file),
+                )
             })
         })?;
 
+        Ok(sc)
+    }
+
+    /// Handle events with the scheduler
+    pub fn scheduler_event(&mut self, event: SchedulerEvent) {
         todo!()
     }
 
-    pub fn scheduler_event(&mut self, event: SchedulerEvent) {
+    /// Switch to the running process
+    pub fn switch_to_running(&mut self) -> Result<(), ProcessError> {
+        let running = self.running.as_ref().ok_or(ProcessError::NotAnyProcess)?;
+
+        unsafe { running.read().load_tables()? };
+        unsafe { running.read().switch_into() }
+    }
+
+    /// Start scheduling
+    unsafe fn begin(&mut self) -> ! {
+        let first_proc = &self.que.get(0).expect("Expected at least 1 process to be loaded into the schedule que before starting the scheduler!").1;
+        self.running.replace(first_proc.clone());
+
+        self.switch_to_running()
+            .expect_err("Unable to switch to the running proc");
+
+        logln!("{:#?}", self);
         todo!()
     }
 

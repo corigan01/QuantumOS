@@ -369,7 +369,7 @@ impl VmObject {
         vm_process: &VmProcess,
         vpage: VirtPage,
     ) -> Result<(), VmObjectMappingError> {
-        logln!("Asking this VmObject to map {:?}", vpage);
+        logln!("Asking this VmObject to map {:x?}", vpage);
 
         // if this page isnt within our mapping, we cannot map it
         if !self.region.does_contain_page(vpage) {
@@ -533,10 +533,10 @@ impl VmProcess {
     }
 
     /// Inhearit the page tables from 'page_tables'
-    pub fn inhearit_page_tables(page_tables: &Virt2PhysMapping) -> Self {
+    pub fn inhearit_page_tables(page_tables: Virt2PhysMapping) -> Self {
         Self {
             objects: RwLock::new(Vec::new()),
-            page_tables: Virt2PhysMapping::inhearit_from(page_tables),
+            page_tables,
         }
     }
 

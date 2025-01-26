@@ -40,19 +40,14 @@ extern crate alloc;
 
 use arch::{CpuPrivilege::Ring0, supports::cpu_vender};
 use bootloader::KernelBootHeader;
-use context::ProcessContext;
-use elf::elf_owned::ElfOwned;
 use lldebug::{debug_ready, logln, make_debug};
 use mem::{
-    addr::VirtAddr,
     alloc::{KernelAllocator, provide_init_region},
-    paging::{Virt2PhysMapping, VmPermissions, init_virt2phys_provider},
+    paging::init_virt2phys_provider,
     pmm::Pmm,
-    vm::VmRegion,
 };
-use process::Process;
+use process::{Process, Scheduler, set_global_scheduler};
 use serial::{Serial, baud::SerialBaud};
-use tar::Tar;
 use util::{bytes::HumanBytes, consts::PAGE_4K};
 
 #[global_allocator]
@@ -108,110 +103,14 @@ fn main(kbh: &KernelBootHeader) {
     logln!("Attached virt2phys provider!");
     init_virt2phys_provider();
 
-    logln!("Init VirtMemoryManager");
+    logln!("Init Scheduler ... ");
 
     let initfs_slice =
         unsafe { core::slice::from_raw_parts(kbh.initfs_ptr.0 as *const u8, kbh.initfs_ptr.1) };
-    let dummy_elf = Tar::new(initfs_slice)
-        .iter()
-        .find(|h| h.is_file("dummy"))
-        .unwrap()
-        .file()
-        .unwrap();
 
-    let elf = ElfOwned::new_from_slice(dummy_elf);
-    let idk = unsafe { Virt2PhysMapping::inhearit_bootloader() }.unwrap();
-    unsafe { idk.clone().load() };
+    let sc =
+        Scheduler::bootstrap_scheduler(&initfs_slice).expect("Unable to load kernel's scheduler");
 
-    let process = Process::new(0, &idk);
-    unsafe { process.load_tables() };
-    process.add_elf(elf).unwrap();
-    process
-        .add_anon(
-            VmRegion::from_containing(
-                VirtAddr::new(0x00090000000),
-                VirtAddr::new(0x00090000000 + PAGE_4K * 20),
-            ),
-            VmPermissions::none()
-                .set_exec_flag(true)
-                .set_read_flag(true)
-                .set_write_flag(true)
-                .set_user_flag(true),
-            false,
-        )
-        .unwrap();
-    process
-        .add_anon(
-            VmRegion::from_containing(
-                VirtAddr::new(0x200000000000 - (10 * PAGE_4K)),
-                VirtAddr::new(0x200000000000 + PAGE_4K),
-            ),
-            VmPermissions::none()
-                .set_exec_flag(true)
-                .set_read_flag(true)
-                .set_write_flag(true)
-                .set_user_flag(false),
-            true,
-        )
-        .unwrap();
-    process
-        .add_anon(
-            VmRegion::from_containing(
-                VirtAddr::new(0x300000000000 - (10 * PAGE_4K)),
-                VirtAddr::new(0x300000000000 + PAGE_4K),
-            ),
-            VmPermissions::none()
-                .set_exec_flag(true)
-                .set_read_flag(true)
-                .set_write_flag(true)
-                .set_user_flag(false),
-            true,
-        )
-        .unwrap();
-    process
-        .add_anon(
-            VmRegion::from_containing(
-                VirtAddr::new(0x400000000000),
-                VirtAddr::new(0x400000000000 + PAGE_4K),
-            ),
-            VmPermissions::none()
-                .set_exec_flag(true)
-                .set_read_flag(true)
-                .set_write_flag(true)
-                .set_user_flag(false),
-            true,
-        )
-        .unwrap();
-    unsafe { process.load_tables() };
-    logln!("{:#?}", process);
-
-    let mut test = ProcessContext {
-        r15: 0,
-        r14: 0,
-        r13: 0,
-        r12: 0,
-        r11: 0,
-        r10: 0,
-        r9: 0,
-        r8: 0,
-        rbp: 0,
-        rdi: 0,
-        rsi: 0,
-        rdx: 0,
-        rcx: 0,
-        rbx: 0,
-        rax: 0,
-        cs: (5 << 3) | 3,
-        ss: (4 << 3) | 3,
-        rflag: 0x200,
-        rip: 0x00400000,
-        exception_code: 0,
-        rsp: (0x00090000000 + PAGE_4K * 20) as u64,
-    };
-
-    logln!("Attempting to jump to userspace! -- {:#016x?}", test);
-    unsafe { context::userspace_entry(&raw mut test) };
-    loop {
-        logln!("FINISH");
-    }
+    // Start the scheduler
+    set_global_scheduler(sc);
 }

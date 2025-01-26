@@ -38,8 +38,6 @@ pub mod pmm;
 pub mod virt2phys;
 #[cfg(feature = "alloc")]
 pub mod vm;
-#[cfg(feature = "alloc")]
-pub mod vmm;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MemoryError {

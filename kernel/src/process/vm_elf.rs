@@ -130,6 +130,18 @@ impl VmElfInject {
 }
 
 impl VmInjectFillAction for VmElfInject {
+    // Since this is only called to check if we support paging this region, we are always going to say yes
+    //
+    // FIXME: We should do more checks on this region to ensure that it is correct
+    fn page_fault_handler(
+        &self,
+        _parent_object: &mem::vm::VmObject,
+        _process: &VmProcess,
+        _info: mem::vm::PageFaultInfo,
+    ) -> mem::vm::PageFaultReponse {
+        mem::vm::PageFaultReponse::Handled
+    }
+
     /// Put data into this page
     fn populate_page(
         &mut self,

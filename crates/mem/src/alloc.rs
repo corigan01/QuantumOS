@@ -285,6 +285,7 @@ static INNER_ALLOC: Mutex<InnerAllocator> = Mutex::new(InnerAllocator::new());
 /// Give bytes to the init alloc.
 pub fn provide_init_region(region: &'static mut [u8]) {
     let mut inner = INNER_ALLOC.lock();
+    lldebug::logln!("Kernel init heap ({} Bytes)", region.len());
     inner.init_alloc = Some(BootStrapAlloc::new(region));
 }
 

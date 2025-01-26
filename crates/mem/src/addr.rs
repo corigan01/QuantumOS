@@ -353,6 +353,11 @@ macro_rules! make_addr {
                 Self::new(self.addr + offset)
             }
 
+            /// Offset this addr by `offset`.
+            pub const fn sub_offset(self, offset: usize) -> Self {
+                Self::new(self.addr - offset)
+            }
+
             /// Get the 'realative' value based on the size of a chunk.
             ///
             /// This preforms `self.addr() % element_size` internally.
@@ -375,6 +380,7 @@ macro_rules! make_addr {
     };
 }
 
+#[cfg(target_pointer_width = "64")]
 impl<Align: AlignmentTo> VirtAddr<Align> {
     /// Check if this virtual address is within the kernel
     pub const fn is_kernel_addr(&self) -> bool {
