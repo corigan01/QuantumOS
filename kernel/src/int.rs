@@ -51,6 +51,8 @@ static SHOULD_INTERRUPTS_BE_ENABLED: AtomicBool = AtomicBool::new(false);
 
 #[interrupt(0..50)]
 fn exception_handler(args: &InterruptInfo) {
+    lldebug::logln!("{:#018x?}", args);
+    loop {}
     let called_from_ue = unsafe { core::ptr::read_volatile(&raw const IN_USERSPACE) };
     unsafe { core::ptr::write_volatile(&raw mut IN_USERSPACE, 0) };
 

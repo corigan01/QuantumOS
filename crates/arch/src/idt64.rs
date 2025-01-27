@@ -463,7 +463,6 @@ macro_rules! raw_int_asm {
                     push r15
 
                     mov rdi, rsp
-                    add rdi, {size_of_context}
                     call {handler}
 
                     pop r15
@@ -484,7 +483,6 @@ macro_rules! raw_int_asm {
                     add rsp, 8                     # pop 0
                     iretq
                 "#,
-                    size_of_context = const { size_of::<$crate::registers::ProcessContext>() },
                     handler = sym handler
                 );
             }
@@ -521,7 +519,6 @@ macro_rules! raw_int_asm {
                     push r15
 
                     mov rdi, rsp
-                    add rdi, {size_of_context}
                     call {handler}
 
                     pop r15
@@ -542,7 +539,6 @@ macro_rules! raw_int_asm {
 
                     iretq
                 "#,
-                    size_of_context = const { size_of::<$crate::registers::ProcessContext>() },
                     handler = sym handler
                 );
             }
