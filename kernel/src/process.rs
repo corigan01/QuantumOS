@@ -589,6 +589,14 @@ impl Scheduler {
 
                 // Its time to switch to a new process!
                 if *quantum_remaining == 0 {
+                    // Save its context
+                    self.running
+                        .as_ref()
+                        .expect("Expected a currently running process to issue `Tick`")
+                        .try_write()
+                        .unwrap()
+                        .context = *context;
+
                     self.pick_next_into_running();
 
                     // Since this was a timer tick, we also need to send a EOI
@@ -619,7 +627,7 @@ impl Scheduler {
         let running = self.running.as_ref().ok_or(ProcessError::NotAnyProcess)?;
 
         unsafe { running.read().load_tables()? };
-        unsafe { running.read().switch_into() }
+        unsafe { (&*running.as_mut_ptr()).switch_into() }
     }
 
     /// Current/Next alive proc to be scheduled
