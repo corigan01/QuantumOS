@@ -139,6 +139,11 @@ impl Process {
 
     /// Loads this processes page tables into memory
     pub unsafe fn load_tables(&self) -> Result<(), ProcessError> {
+        // If they are already loaded, we don't need to do anything :)
+        if self.vm.page_tables.is_loaded() {
+            return Ok(());
+        }
+
         unsafe {
             self.vm
                 .page_tables

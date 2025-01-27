@@ -99,10 +99,10 @@ overflow-checks = true
 [profile.kernel]
 inherits = "release"
 panic = "abort"
-opt-level=0
-strip = false
-debug = 1
-overflow-checks = true
+opt-level=3
+strip = true
+debug = 0
+overflow-checks = false
 
 [profile.dummy]
 inherits = "release"
