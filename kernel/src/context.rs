@@ -201,7 +201,7 @@ pub unsafe extern "C" fn userspace_entry(context: *const ProcessContext) {
     unreachable!("Should never return from userspace entry!");
 }
 
-pub unsafe fn context_of_caller() -> ProcessContext {
+pub unsafe fn _context_of_caller() -> ProcessContext {
     let mut pc = ProcessContext::new();
     unsafe {
         asm!(

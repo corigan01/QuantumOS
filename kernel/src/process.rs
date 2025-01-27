@@ -64,6 +64,7 @@ pub struct Process {
 }
 
 #[derive(Debug)]
+#[allow(unused)]
 pub enum AccessViolationReason {
     /// The user does not have access to this memory
     NoAccess {
@@ -77,6 +78,7 @@ pub enum AccessViolationReason {
 
 /// A structure repr the errors that could happen with a process
 #[derive(Debug)]
+#[allow(unused)]
 pub enum ProcessError {
     /// There was a problem loading the elf file
     ElfLoadingError(ElfErrorKind),
@@ -335,6 +337,7 @@ pub fn send_scheduler_event(event: SchedulerEvent) {
 
 /// Trigger an event to happen on the scheduler
 #[derive(Debug)]
+#[allow(unused)]
 pub enum SchedulerEvent<'a> {
     None,
     /// This is fired by the kernel's timer, and will 'tick' the scheduler forward.
@@ -540,7 +543,8 @@ impl Scheduler {
 
                 self.kill_proc(running.id)
                     .expect("Expected to be able to kill running process");
-                self.pick_next_into_running();
+                self.pick_next_into_running()
+                    .expect("Expected to be able to pick next process");
 
                 // Before we switch to the currently running process, we need
                 // to release any locks on the scheduler that accumulated
@@ -564,7 +568,8 @@ impl Scheduler {
                 warnln!("Process fault: {:#?}", fault);
                 self.kill_proc(running_pid)
                     .expect("Was not able to kill fault process");
-                self.pick_next_into_running();
+                self.pick_next_into_running()
+                    .expect("Expected to be able to pick next process");
 
                 // Before we switch to the currently running process, we need
                 // to release any locks on the scheduler that accumulated
@@ -597,7 +602,8 @@ impl Scheduler {
                         .unwrap()
                         .context = *context;
 
-                    self.pick_next_into_running();
+                    self.pick_next_into_running()
+                        .expect("Expected to be able to pick next process");
 
                     // Since this was a timer tick, we also need to send a EOI
                     //

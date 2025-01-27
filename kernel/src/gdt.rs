@@ -84,7 +84,7 @@ pub fn set_stack_for_privl(rsp: *mut u8, cpu_privl: CpuPrivilege) {
     KERNEL_TSS.write().set_stack_for_priv(rsp, cpu_privl);
 }
 
-pub fn set_tss_for_interrupt(rsp: *mut u8, ist_id: usize) {
+pub fn _set_stack_for_ist(rsp: *mut u8, ist_id: usize) {
     KERNEL_TSS.write().set_stack_for_ist(rsp, ist_id);
 }
 

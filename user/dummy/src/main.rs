@@ -35,36 +35,13 @@ fn panic(info: &PanicInfo) -> ! {
     loop {}
 }
 
-#[derive(Clone, Copy, Debug)]
-enum Foo {
-    Bar,
-    Bazz,
-}
-
-#[derive(Clone, Copy, Debug)]
-struct Test<'a> {
-    a: u32,
-    b: &'a str,
-    c: Foo,
-}
-
 #[unsafe(link_section = ".start")]
 #[unsafe(no_mangle)]
 extern "C" fn _start() {
     let hello_world = "Hello World from UE!! ";
 
     for i in 0..10 {
-        let mut b = 0;
-        for e in 0..10000 {
-            let a = hello_world
-                .chars()
-                .map(|c| c.to_ascii_uppercase())
-                .filter(|&c| c as u8 > (e as u8))
-                .count();
-            b += a;
-        }
-
-        dbugln!("Hello World! -- {hello_world} {i:#016x} {b}");
+        dbugln!("{hello_world} -> [{i}] ");
     }
 
     exit(ExitCode::Success);

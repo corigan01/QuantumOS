@@ -52,26 +52,10 @@ pub struct Virt2PhysMapping {
     mapping: RwLock<Option<Arc<RwLock<SafePageMapLvl4>>>>,
 }
 
-// #[derive(Clone)]
+#[derive(Clone)]
 struct SafePageMapLvl4 {
     table: PageMapLvl4,
     lower: [Option<Box<SafePageMapLvl3>>; 512],
-}
-
-impl Drop for SafePageMapLvl4 {
-    fn drop(&mut self) {
-        logln!("DROP LVL4 TABLE! -- {:#018x}", &raw const *self as u64);
-    }
-}
-
-impl Clone for SafePageMapLvl4 {
-    fn clone(&self) -> Self {
-        logln!("CLONE LVL4 TABLE!");
-        Self {
-            table: self.table.clone(),
-            lower: self.lower.clone(),
-        }
-    }
 }
 
 #[derive(Clone)]
