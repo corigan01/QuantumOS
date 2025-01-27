@@ -29,62 +29,7 @@ use core::{
 };
 
 use crate::process::Process;
-
-/// CPUs context
-#[repr(C)]
-#[derive(Clone, Copy, Debug)]
-pub struct ProcessContext {
-    pub r15: u64,
-    pub r14: u64,
-    pub r13: u64,
-    pub r12: u64,
-    pub r11: u64,
-    pub r10: u64,
-    pub r9: u64,
-    pub r8: u64,
-    pub rbp: u64,
-    pub rdi: u64,
-    pub rsi: u64,
-    pub rdx: u64,
-    pub rcx: u64,
-    pub rbx: u64,
-    pub rax: u64,
-
-    pub cs: u64,
-    pub ss: u64,
-    pub rflag: u64,
-    pub rip: u64,
-    pub exception_code: u64,
-    pub rsp: u64,
-}
-
-impl ProcessContext {
-    pub const fn new() -> Self {
-        Self {
-            r15: 0,
-            r14: 0,
-            r13: 0,
-            r12: 0,
-            r11: 0,
-            r10: 0,
-            r9: 0,
-            r8: 0,
-            rbp: 0,
-            rdi: 0,
-            rsi: 0,
-            rdx: 0,
-            rcx: 0,
-            rbx: 0,
-            rax: 0,
-            cs: 0,
-            ss: 0,
-            rflag: 0,
-            rip: 0,
-            exception_code: 0,
-            rsp: 0,
-        }
-    }
-}
+use arch::registers::ProcessContext;
 
 /// The kernel's syscall entry stack
 pub static mut KERNEL_RSP_PTR: u64 = Process::KERNEL_SYSCALL_STACK_ADDR.addr() as u64;
@@ -106,14 +51,14 @@ pub unsafe extern "C" fn kernel_entry() {
 
             #  -- Start building the processes `ProcessContext`
 
-            push [{userspace_rsp_ptr}]
             sti
 
-            push 0                         # This isn't an ISR, so we can just store 0 into its 'exception_code'
-            push rcx                       # rip is saved in rcx
+            push 0x1b
+            push [{userspace_rsp_ptr}]
             push r11                       # rFLAGS is saved in r11
             push 0x23
-            push 0x1b
+            push rcx                       # rip is saved in rcx
+            push 0                         # This isn't an ISR, so we can just store 0 into its 'exception_code'
 
             push rax
             push rbx
@@ -192,41 +137,63 @@ pub unsafe extern "C" fn userspace_entry(context: *const ProcessContext) {
 
                 #  -- Restore Registers
 
-                mov r15, [rdi      ]
-                mov r14, [rdi + 8  ]
-                mov r13, [rdi + 16 ]
-                mov r13, [rdi + 24 ]
-                mov r11, [rdi + 32 ]
-                mov r10, [rdi + 40 ]
-                mov r9,  [rdi + 48 ]
-                mov r8,  [rdi + 56 ]
-                mov rbp, [rdi + 64 ]
-                mov rsi, [rdi + 80 ]
-                mov rdx, [rdi + 88 ]
-                mov rcx, [rdi + 96 ]
-                mov rbx, [rdi + 104]
-                mov rax, [rdi + 112]
+                mov r15, [rdi + {r15_offset} ]
+                mov r14, [rdi + {r14_offset} ]
+                mov r13, [rdi + {r13_offset} ]
+                mov r13, [rdi + {r13_offset} ]
+                mov r12, [rdi + {r12_offset} ]
+                mov r11, [rdi + {r11_offset} ]
+                mov r10, [rdi + {r10_offset} ]
+                mov r9,  [rdi + {r9_offset}  ]
+                mov r8,  [rdi + {r8_offset}  ]
+                mov rbp, [rdi + {rbp_offset} ]
+                mov rsi, [rdi + {rsi_offset} ]
+                mov rdx, [rdi + {rdx_offset} ]
+                mov rcx, [rdi + {rcx_offset} ]
+                mov rbx, [rdi + {rbx_offset} ]
+                mov rax, [rdi + {rax_offset} ]
 
                 #  -- Restore TRAP frame
 
-                push [rdi + 152] # errno
-                push [rdi + 128] # ss
-                push [rdi + 160] # rsp
-                push [rdi + 136] # rflags
-                push [rdi + 120] # cs
-                push [rdi + 144] # rip
+                push [rdi + {errno_offset}   ] # errno
+                push [rdi + {ss_offset}      ] # ss
+                push [rdi + {rsp_offset}     ] # rsp
+                push [rdi + {rflags_offset}  ] # rflags
+                push [rdi + {cs_offset}      ] # cs
+                push [rdi + {rip_offset}     ] # rip
 
-                push [rdi + 72 ]
+                push [rdi + {rdi_offset}     ] # rdi
                 pop rdi
 
                 #  -- Return back to userspace
 
                 mov byte ptr [{user_lock}], 1
                 iretq
-
-            ",
+                ",
             in("rdi") context,
-            user_lock = sym IN_USERSPACE
+            user_lock = sym IN_USERSPACE,
+            rip_offset = const { offset_of!(ProcessContext, rip) },
+            r15_offset = const { offset_of!(ProcessContext, r15) },
+            r14_offset = const { offset_of!(ProcessContext, r14) },
+            r13_offset = const { offset_of!(ProcessContext, r13) },
+            r12_offset = const { offset_of!(ProcessContext, r12) },
+            r11_offset = const { offset_of!(ProcessContext, r11) },
+            r10_offset = const { offset_of!(ProcessContext, r10) },
+            r9_offset = const { offset_of!(ProcessContext, r9) },
+            r8_offset = const { offset_of!(ProcessContext, r8) },
+            rbp_offset = const { offset_of!(ProcessContext, rbp ) },
+            rdi_offset = const { offset_of!(ProcessContext, rdi ) },
+            rsi_offset = const { offset_of!(ProcessContext, rsi ) },
+            rdx_offset = const { offset_of!(ProcessContext, rdx ) },
+            rcx_offset = const { offset_of!(ProcessContext, rcx ) },
+            rbx_offset = const { offset_of!(ProcessContext, rbx ) },
+            rax_offset = const { offset_of!(ProcessContext, rax ) },
+            cs_offset = const { offset_of!(ProcessContext, cs ) },
+            ss_offset = const { offset_of!(ProcessContext, ss ) },
+            rflags_offset = const { offset_of!(ProcessContext, rflag ) },
+            rsp_offset = const { offset_of!(ProcessContext, rsp ) },
+            errno_offset = const { offset_of!(ProcessContext,  exception_code) },
+
         )
     }
     unreachable!("Should never return from userspace entry!");

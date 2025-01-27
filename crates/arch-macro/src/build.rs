@@ -81,9 +81,9 @@ fn gen_consts(
         .map(|(irq, ident)| quote! {(#irq, #ident)});
 
     quote_spanned! {fn_range.span()=>
-        pub const IRQ_FUNCTION_NE_PTRS: [(u8, ::arch::idt64::RawHandlerFuncNe); #ne_amount] = [#(#no_error_fns,)*];
-        pub const IRQ_FUNCTION_E_PTRS: [(u8, ::arch::idt64::RawHandlerFuncE); #e_amount] = [#(#error_fns,)*];
-        pub const IRQ_FUNCTION_RESERVED_PTRS: [(u8, ::arch::idt64::RawHandlerFuncNe); #r_amount] = [#(#reserved_fns,)*];
+        pub const IRQ_FUNCTION_NE_PTRS: [(u8, ::arch::idt64::ExRawHandlerFunc); #ne_amount] = [#(#no_error_fns,)*];
+        pub const IRQ_FUNCTION_E_PTRS: [(u8, ::arch::idt64::ExRawHandlerFunc); #e_amount] = [#(#error_fns,)*];
+        pub const IRQ_FUNCTION_RESERVED_PTRS: [(u8, ::arch::idt64::RawHandlerFuncNe ); #r_amount] = [#(#reserved_fns,)*];
     }
 }
 
@@ -110,11 +110,8 @@ fn gen_macro_functions(
                 let ident = format_ident!("irq_raw_{}_{irq_id}_ne", call_ident.to_string());
                 no_error.push((irq_id, ident.clone()));
 
-                tokens.push(quote_spanned! {fn_range.span()=>
-                    extern "x86-interrupt" fn #ident(frame: ::arch::idt64::InterruptFrame) {
-                        let int_info = ::arch::idt64::InterruptInfo::convert_from_ne(#irq_id, frame);
-                        #call_ident(&int_info);
-                    }
+                tokens.push(quote_spanned! {fn_range.span() =>
+                    ::arch::raw_int_asm!(NO ERROR: #irq_id, #ident, #call_ident);
                 });
             }
             // Yes Error
@@ -122,11 +119,8 @@ fn gen_macro_functions(
                 let ident = format_ident!("irq_raw_{}_{irq_id}_e", call_ident.to_string());
                 error.push((irq_id, ident.clone()));
 
-                tokens.push(quote_spanned! {fn_range.span()=>
-                    extern "x86-interrupt" fn #ident(frame: ::arch::idt64::InterruptFrame, error: u64) {
-                        let int_info = ::arch::idt64::InterruptInfo::convert_from_e(#irq_id, frame, error);
-                        #call_ident(&int_info);
-                    }
+                tokens.push(quote_spanned! {fn_range.span() =>
+                    ::arch::raw_int_asm!(ERROR: #irq_id, #ident, #call_ident);
                 });
             }
             // Reserved
@@ -134,7 +128,7 @@ fn gen_macro_functions(
                 let ident = format_ident!("irq_raw_{}_{irq_id}_reserved", call_ident.to_string());
                 reserved.push((irq_id, ident.clone()));
 
-                tokens.push(quote_spanned! {fn_range.span()=>
+                tokens.push(quote_spanned! {fn_range.span() =>
                     extern "x86-interrupt" fn #ident(frame: ::arch::idt64::InterruptFrame) {
                         panic!("Reserved interrupt (IRQ{}) called! -- {:#?}", #irq_id, frame);
                     }

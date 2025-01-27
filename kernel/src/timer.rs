@@ -61,12 +61,12 @@ pub fn init_timer() {
 
 static KERNEL_TICKS: AtomicU64 = AtomicU64::new(0);
 
-fn pit_interrupt_handler(_args: &InterruptInfo, called_from_ue: bool) {
+fn pit_interrupt_handler(args: &InterruptInfo, called_from_ue: bool) {
     KERNEL_TICKS.fetch_add(1, Ordering::AcqRel);
 
     // If we are in userspace, we tick the scheduler
     if called_from_ue {
-        send_scheduler_event(SchedulerEvent::Tick);
+        send_scheduler_event(SchedulerEvent::Tick(args.context));
     }
 }
 

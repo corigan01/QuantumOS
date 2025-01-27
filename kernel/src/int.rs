@@ -138,7 +138,11 @@ fn call_attached_irq(irq_id: u8, args: &InterruptInfo, called_from_ue: bool) {
         .get((irq_id) as usize)
         .and_then(|&handler| handler)
     {
+        // Release the lock on the irq handler since we
+        // don't know if the handler is ever going to return!
         drop(irq_handler);
+
+        // Finally call the handler
         handler(args, called_from_ue);
     }
 }

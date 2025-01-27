@@ -23,15 +23,13 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use core::fmt::Debug;
-
-use hw::make_hw;
-
 use crate::{
-    registers::{cr2, Segment},
+    registers::{cr2, ProcessContext, Segment},
     CpuPrivilege,
 };
 pub use arch_macro::interrupt;
+use core::fmt::Debug;
+use hw::make_hw;
 
 #[derive(Clone, Copy, Debug)]
 pub enum GateKind {
@@ -184,7 +182,7 @@ pub struct InterruptFrame {
 }
 
 pub type RawHandlerFuncNe = extern "x86-interrupt" fn(InterruptFrame);
-pub type RawHandlerFuncE = extern "x86-interrupt" fn(InterruptFrame, u64);
+pub type ExRawHandlerFunc = extern "C" fn();
 
 #[derive(Debug, Clone, Copy)]
 pub enum TableSelector {
@@ -355,23 +353,24 @@ impl InterruptFlags {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct InterruptInfo {
-    pub frame: InterruptFrame,
+pub struct InterruptInfo<'a> {
+    pub context: &'a ProcessContext,
     pub flags: InterruptFlags,
 }
 
-impl InterruptInfo {
-    pub fn convert_from_ne(irq_id: u8, frame: InterruptFrame) -> Self {
+impl InterruptInfo<'_> {
+    pub fn convert_from_ne(irq_id: u8, context: *const ProcessContext) -> Self {
         Self {
-            frame,
+            context: unsafe { &*context },
             flags: InterruptFlags::convert_from_interrupt(irq_id, 0),
         }
     }
 
-    pub fn convert_from_e(irq_id: u8, frame: InterruptFrame, error: u64) -> Self {
+    pub fn convert_from_e(irq_id: u8, context: *const ProcessContext) -> Self {
+        let context_ref = unsafe { &*context };
         Self {
-            frame,
-            flags: InterruptFlags::convert_from_interrupt(irq_id, error),
+            context: context_ref,
+            flags: InterruptFlags::convert_from_interrupt(irq_id, context_ref.exception_code),
         }
     }
 }
@@ -427,4 +426,127 @@ macro_rules! attach_irq {
 
 pub fn fire_debug_int() {
     unsafe { core::arch::asm!("int 0x01") };
+}
+
+/// A raw interrupt wrapper macro that does the interrupt
+/// stack unwrapping and creates a `ProcessContext`
+#[macro_export]
+macro_rules! raw_int_asm {
+    (NO ERROR: $irq_id: literal, $ident: ident, $calling: ident) => {
+        /// Interrupt wrapper (NO ERROR)
+        #[naked]
+        pub(crate) extern "C" fn $ident() {
+            extern "C" fn handler(context: *const $crate::registers::ProcessContext) {
+                let info = $crate::idt64::InterruptInfo::convert_from_ne($irq_id, context);
+                $calling(&info);
+            }
+
+            unsafe {
+                core::arch::naked_asm!(
+                    r#"
+                    cld
+                    push 0
+                    push rax
+                    push rbx
+                    push rcx
+                    push rdx
+                    push rsi
+                    push rdi
+                    push rbp
+                    push r8
+                    push r9
+                    push r10
+                    push r11
+                    push r12
+                    push r13
+                    push r14
+                    push r15
+
+                    mov rdi, rsp
+                    add rdi, {size_of_context}
+                    call {handler}
+
+                    pop r15
+                    pop r14
+                    pop r13
+                    pop r12
+                    pop r11
+                    pop r10
+                    pop r9
+                    pop r8
+                    pop rbp
+                    pop rdi
+                    pop rsi
+                    pop rdx
+                    pop rcx
+                    pop rbx
+                    pop rax
+                    add rsp, 8                     # pop 0
+                    iretq
+                "#,
+                    size_of_context = const { size_of::<$crate::registers::ProcessContext>() },
+                    handler = sym handler
+                );
+            }
+        }
+    };
+    (ERROR: $irq_id: literal, $ident: ident, $calling: ident) => {
+        /// Interrupt wrapper (YES ERROR)
+        #[naked]
+        pub(crate) extern "C" fn $ident() {
+            extern "C" fn handler(context: *const $crate::registers::ProcessContext) {
+                let info = ::arch::idt64::InterruptInfo::convert_from_e($irq_id, context);
+                $calling(&info);
+            }
+
+            unsafe {
+                core::arch::naked_asm!(
+                    r#"
+                    cld
+                    push 0
+                    push rax
+                    push rbx
+                    push rcx
+                    push rdx
+                    push rsi
+                    push rdi
+                    push rbp
+                    push r8
+                    push r9
+                    push r10
+                    push r11
+                    push r12
+                    push r13
+                    push r14
+                    push r15
+
+                    mov rdi, rsp
+                    add rdi, {size_of_context}
+                    call {handler}
+
+                    pop r15
+                    pop r14
+                    pop r13
+                    pop r12
+                    pop r11
+                    pop r10
+                    pop r9
+                    pop r8
+                    pop rbp
+                    pop rdi
+                    pop rsi
+                    pop rdx
+                    pop rcx
+                    pop rbx
+                    pop rax
+
+                    iretq
+                "#,
+                    size_of_context = const { size_of::<$crate::registers::ProcessContext>() },
+                    handler = sym handler
+                );
+            }
+        }
+
+    };
 }

@@ -23,6 +23,7 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use crate::context::userspace_entry;
 use alloc::{
     boxed::Box,
     collections::{btree_map::BTreeMap, vec_deque::VecDeque},
@@ -30,8 +31,9 @@ use alloc::{
     sync::{Arc, Weak},
 };
 use arch::{
-    CpuPrivilege, critcal_section, interrupts::disable_interrupts, pic8259::pic_eoi,
-    registers::Segment,
+    CpuPrivilege, critcal_section,
+    pic8259::pic_eoi,
+    registers::{ProcessContext, Segment},
 };
 use boolvec::BoolVec;
 use elf::{ElfErrorKind, elf_owned::ElfOwned};
@@ -46,8 +48,6 @@ use spin::RwLock;
 use tar::{Tar, TarError};
 use util::consts::PAGE_4K;
 use vm_elf::VmElfInject;
-
-use crate::context::{ProcessContext, userspace_entry};
 
 pub mod vm_elf;
 
@@ -304,7 +304,7 @@ pub fn send_scheduler_event(event: SchedulerEvent) {
     match event {
         // Since the tick is low on priority, we don't try to lock
         // if we are already locked!
-        SchedulerEvent::Tick => match THE_SCHEDULER.try_read() {
+        SchedulerEvent::Tick(_) => match THE_SCHEDULER.try_read() {
             Some(e) if e.is_some() => {
                 drop(e);
                 lock_mut_scheduler(|sc| sc.scheduler_event(event));
@@ -321,10 +321,10 @@ pub fn send_scheduler_event(event: SchedulerEvent) {
 
 /// Trigger an event to happen on the scheduler
 #[derive(Debug)]
-pub enum SchedulerEvent {
+pub enum SchedulerEvent<'a> {
     None,
     /// This is fired by the kernel's timer, and will 'tick' the scheduler forward.
-    Tick,
+    Tick(&'a ProcessContext),
     /// This process requested to exit
     Exit,
     /// This process encourted a fault and needs to be killed
@@ -561,12 +561,11 @@ impl Scheduler {
                     .expect("Cannot switch to next running process");
                 unreachable!("Should never return from switch to running!")
             }
-            SchedulerEvent::Tick => {
+            SchedulerEvent::Tick(context) => {
                 let Some(_) = self.running else {
                     // If there isn't a running process, there is nothing to tick
                     return;
                 };
-                logln!("Tick");
 
                 // Since there should always be something in the que if there is
                 // something currently running, we can just expect.
