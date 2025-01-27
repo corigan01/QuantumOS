@@ -53,6 +53,8 @@ pub unsafe extern "C" fn kernel_entry() {
 
             sti
 
+            push [{userspace_rsp_ptr}]
+
             push 0x1b
             push [{userspace_rsp_ptr}]
             push r11                       # rFLAGS is saved in r11
@@ -99,14 +101,14 @@ pub unsafe extern "C" fn kernel_entry() {
             pop rbx
             pop rax
 
-            add rsp, 8                     # pop cs
-            add rsp, 8                     # pop ss
-            add rsp, 8                     # pop r11
-            add rsp, 8                     # pop rcx
             add rsp, 8                     # pop 0
+            add rsp, 8                     # pop rip
+            add rsp, 8                     # pop cs
+            add rsp, 8                     # pop rflags
+            add rsp, 8                     # pop rsp
+            add rsp, 8                     # pop ss
 
             #  -- Return back to userspace
-
             cli
             pop rsp
 

@@ -501,7 +501,6 @@ macro_rules! raw_int_asm {
                 core::arch::naked_asm!(
                     r#"
                     cld
-                    push 0
                     push rax
                     push rbx
                     push rcx
@@ -519,7 +518,9 @@ macro_rules! raw_int_asm {
                     push r15
 
                     mov rdi, rsp
+                    sub rsp, 8
                     call {handler}
+                    add rsp, 8
 
                     pop r15
                     pop r14
@@ -536,6 +537,7 @@ macro_rules! raw_int_asm {
                     pop rcx
                     pop rbx
                     pop rax
+                    add rsp, 8                     # pop 0
 
                     iretq
                 "#,

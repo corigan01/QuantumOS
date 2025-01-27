@@ -23,6 +23,8 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use core::error::Error;
+
 use crate::context::userspace_entry;
 use alloc::{
     boxed::Box,
@@ -61,6 +63,18 @@ pub struct Process {
     cpu_time: u128,
 }
 
+#[derive(Debug)]
+pub enum AccessViolationReason {
+    /// The user does not have access to this memory
+    NoAccess {
+        page_perm: VmPermissions,
+        request_perm: VmPermissions,
+        page: VirtPage,
+    },
+    /// Other
+    Other(Box<dyn Error>),
+}
+
 /// A structure repr the errors that could happen with a process
 #[derive(Debug)]
 pub enum ProcessError {
@@ -87,7 +101,7 @@ pub enum ProcessError {
     /// There was no such process for PID
     NoSuchProcess(usize),
     /// This process tried to access resources it does not have access to
-    AccessViolation,
+    AccessViolation(AccessViolationReason),
 }
 
 impl core::fmt::Display for ProcessError {

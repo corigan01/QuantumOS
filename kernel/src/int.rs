@@ -42,7 +42,7 @@ use mem::{
 
 use crate::{
     context::IN_USERSPACE,
-    process::{ProcessError, SchedulerEvent, send_scheduler_event},
+    process::{AccessViolationReason, ProcessError, SchedulerEvent, send_scheduler_event},
 };
 
 static INTERRUPT_TABLE: Mutex<InterruptDescTable> = Mutex::new(InterruptDescTable::new());
@@ -51,8 +51,6 @@ static SHOULD_INTERRUPTS_BE_ENABLED: AtomicBool = AtomicBool::new(false);
 
 #[interrupt(0..50)]
 fn exception_handler(args: &InterruptInfo) {
-    lldebug::logln!("{:#018x?}", args);
-    loop {}
     let called_from_ue = unsafe { core::ptr::read_volatile(&raw const IN_USERSPACE) };
     unsafe { core::ptr::write_volatile(&raw mut IN_USERSPACE, 0) };
 
@@ -90,7 +88,13 @@ fn exception_handler(args: &InterruptInfo) {
                     page,
                 } => {
                     warnln!("Process crash!");
-                    send_scheduler_event(SchedulerEvent::Fault(ProcessError::AccessViolation));
+                    send_scheduler_event(SchedulerEvent::Fault(ProcessError::AccessViolation(
+                        AccessViolationReason::NoAccess {
+                            page_perm,
+                            request_perm,
+                            page,
+                        },
+                    )));
                 }
                 // panic
                 mem::vm::PageFaultReponse::CriticalFault(error) => {
