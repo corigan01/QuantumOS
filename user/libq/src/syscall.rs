@@ -167,7 +167,7 @@ pub enum SysExitCode {
 /// Exit the program
 ///
 /// # Note
-/// This syscall **CANNOT** fail, and will be guaranteed to exit the program!
+/// This syscall *cannot* fail, and will be guaranteed to exit the program!
 pub unsafe fn exit_syscall(exit_reason: SysExitCode) -> ! {
     let sys_exit_code: u64 = match exit_reason {
         SysExitCode::Success => 0,

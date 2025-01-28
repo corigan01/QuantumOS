@@ -265,7 +265,7 @@ pub struct VmObject {
     /// The region of memory this VmObject contains
     pub region: VmRegion,
     /// The physical page tables this VmObject has allocated
-    pub mappings: BTreeMap<VirtAddr, SharedPhysPage>,
+    pub mappings: BTreeMap<VirtPage, SharedPhysPage>,
     /// Permissions of this object
     pub permissions: VmPermissions,
     /// What to do wiht this vm object
@@ -430,6 +430,9 @@ impl VmObject {
                 self.permissions,
             )
             .map_err(|err| VmObjectMappingError::MappingError(err))?;
+
+        // Remember this page in our mapping table
+        self.mappings.insert(vpage, backing_page);
 
         Ok(())
     }

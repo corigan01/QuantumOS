@@ -472,7 +472,7 @@ impl TableImpl for TableBits {
             return Err(MemoryError::DoubleFree);
         }
 
-        self.table.set(page.page(), false);
+        self.table.set(page.page(), true);
         self.atom_size += 1;
 
         Ok(AllocationResult {

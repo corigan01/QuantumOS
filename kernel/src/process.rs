@@ -395,8 +395,8 @@ impl Scheduler {
         F: FnOnce(usize, &Virt2PhysMapping) -> Result<Process, ProcessError>,
     {
         let next_pid = self.pid_bitmap.find_first_of(false).unwrap_or(0);
-
         let proc = Arc::new(RwLock::new(f(next_pid, &self.kernel_table.page_tables)?));
+
         self.pid_bitmap.set(next_pid, true);
 
         // We should never override a previous proc
@@ -506,15 +506,9 @@ impl Scheduler {
 
     /// Kill a process with its id
     pub fn kill_proc(&mut self, pid: usize) -> Result<(), ProcessError> {
-        // Drop running process if its the pid we are looking for
-        if let Some(running) = self.running.clone() {
-            if running.read().id == pid {
-                self.running = None;
-            }
-        }
-
         // Drop the process if its alive
         if self.alive.remove(&pid).is_some() {
+            self.pid_bitmap.set(pid, false);
             Ok(())
         } else {
             Err(ProcessError::NoSuchProcess(pid))
