@@ -48,7 +48,7 @@ use mem::{
 };
 use spin::RwLock;
 use tar::{Tar, TarError};
-use util::consts::PAGE_4K;
+use util::consts::{PAGE_2M, PAGE_4K};
 use vm_elf::VmElfInject;
 
 pub mod vm_elf;
@@ -104,6 +104,8 @@ pub enum ProcessError {
     NoSuchProcess(usize),
     /// This process tried to access resources it does not have access to
     AccessViolation(AccessViolationReason),
+    /// There was no remaining Virtual Memory to allocate to this process
+    OutOfVirtualMemory,
 }
 
 impl core::fmt::Display for ProcessError {
@@ -182,6 +184,29 @@ impl Process {
         self.context.rip = entry.addr() as u64;
         self.context.rsp = stack.addr() as u64;
         self.context.rflag = 0x200;
+    }
+
+    /// Map memory anywhere
+    pub fn add_anywhere(
+        &self,
+        n_pages: usize,
+        permissions: VmPermissions,
+        populate_now: bool,
+    ) -> Result<VmRegion, ProcessError> {
+        logln!(
+            "'{}' is requesting memory! n_pages={}, perm={}",
+            self.name,
+            n_pages,
+            permissions
+        );
+
+        let region_free = self
+            .vm
+            .find_vm_free(VirtPage::containing_addr(VirtAddr::new(PAGE_2M)), n_pages)
+            .ok_or(ProcessError::OutOfVirtualMemory)?;
+
+        self.add_anon(region_free, permissions, populate_now)
+            .map(|_| region_free)
     }
 
     /// Map an anon zeroed scrubbed region to this local process
@@ -387,6 +412,11 @@ impl Scheduler {
             running: None,
             kernel_table: VmProcess::new(),
         }
+    }
+
+    /// Get a ref to the currently running process.
+    pub fn acquire_running_process(&self) -> Result<RefProcess, ProcessError> {
+        self.running.clone().ok_or(ProcessError::NotAnyProcess)
     }
 
     /// Insert a new process into the schedulers mapping, and get it ready to be scheduled

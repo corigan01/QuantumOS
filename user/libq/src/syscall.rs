@@ -120,6 +120,8 @@ macro_rules! raw_syscall {
 
 /// QuantumOS Exit SyscallID
 pub const QOS_SYSCALL_NUMBER_EXIT: usize = 0;
+/// QuantumOS Memory SyscallID
+pub const QOS_SYSCALL_NUMBER_MEMORY: usize = 1;
 /// QuantumOS Debug Output SyscallID
 pub const QOS_SYSCALL_NUMBER_DEBUG: usize = 69;
 
@@ -152,7 +154,8 @@ pub unsafe fn debug_syscall(msg: &str) -> SysDebugResp {
         0 => SysDebugResp::Okay,
         1 => SysDebugResp::PtrInvalid,
         2 => SysDebugResp::LenInvalid,
-        _ => SysDebugResp::Okay, // unreachable!("Kernel should only repond with SysDebugResp, kernel error?"),
+        // _ => unreachable!("Kernel should only repond with SysDebugResp, kernel error?"),
+        _ => SysDebugResp::Okay,
     }
 }
 
@@ -177,4 +180,50 @@ pub unsafe fn exit_syscall(exit_reason: SysExitCode) -> ! {
 
     unsafe { raw_syscall!(QOS_SYSCALL_NUMBER_EXIT, sys_exit_code) };
     unreachable!("Exit syscall should never return!")
+}
+
+#[repr(u64)]
+#[derive(Debug, Clone, Copy)]
+pub enum MemoryLocation {
+    Anywhere = 0,
+}
+
+#[repr(u64)]
+#[derive(Debug, Clone, Copy)]
+pub enum MemoryProtections {
+    None = 0,
+    ReadExecute = 1,
+    ReadOnly = 2,
+    ReadWrite = 3,
+}
+
+/// Possiable errors for `memory` system call.
+#[repr(u64)]
+#[derive(Debug, Clone, Copy)]
+pub enum SysMemoryError {
+    InvalidLength = 0,
+    InvalidRequest = 1,
+    OutOfMemory = 2,
+}
+
+pub unsafe fn map_memory(
+    loc: MemoryLocation,
+    prot: MemoryProtections,
+    length: usize,
+) -> Result<*mut u8, SysMemoryError> {
+    let arg0 = loc as u64;
+    let arg1 = prot as u64;
+    let arg2 = length as u64;
+
+    let resp = unsafe { raw_syscall!(QOS_SYSCALL_NUMBER_MEMORY, arg0, arg1, arg2) };
+
+    match resp {
+        // Since these are kernel PTRs, they should never be valid in userspace!
+        0 => Err(SysMemoryError::InvalidLength),
+        1 => Err(SysMemoryError::InvalidRequest),
+        2 => Err(SysMemoryError::OutOfMemory),
+        // Our stack ptr is the highest possible ptr in userspace
+        e if e < 0x7fffffffffff => Ok(e as *mut u8),
+        _ => unreachable!("Kernel should only repond with SysMemoryError, kernel error?"),
+    }
 }

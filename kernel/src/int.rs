@@ -37,12 +37,18 @@ use arch::{
 use lldebug::{log, logln, sync::Mutex, warnln};
 use mem::{
     addr::VirtAddr,
+    page::VirtPage,
+    paging::VmPermissions,
     vm::{PageFaultInfo, call_page_fault_handler},
 };
+use util::consts::PAGE_4K;
 
 use crate::{
     context::IN_USERSPACE,
-    process::{AccessViolationReason, ProcessError, SchedulerEvent, send_scheduler_event},
+    process::{
+        AccessViolationReason, ProcessError, SchedulerEvent, lock_ref_scheduler,
+        send_scheduler_event,
+    },
 };
 
 static INTERRUPT_TABLE: Mutex<InterruptDescTable> = Mutex::new(InterruptDescTable::new());
@@ -216,7 +222,7 @@ pub fn enable_pic() {
 extern "C" fn syscall_handler(
     rdi: u64,
     rsi: u64,
-    _rdx: u64,
+    rdx: u64,
     _rcx: u64,
     _r8: u64,
     syscall_number: u64,
@@ -225,6 +231,63 @@ extern "C" fn syscall_handler(
         0 => {
             send_scheduler_event(SchedulerEvent::Exit);
             unreachable!("Should not return from exit")
+        }
+        1 => {
+            let process = lock_ref_scheduler(|sc| sc.acquire_running_process())
+                .expect("Only a running process should be able to call syscalls!");
+
+            pub enum MemoryLocation {
+                Anywhere = 0,
+            }
+            pub enum MemoryProtections {
+                None = 0,
+                ReadExecute = 1,
+                ReadOnly = 2,
+                ReadWrite = 3,
+            }
+            pub enum SysMemoryError {
+                InvalidLength = 0,
+                InvalidRequest = 1,
+                OutOfMemory = 2,
+            }
+
+            let _location = match rdi {
+                0 => MemoryLocation::Anywhere,
+                _ => return SysMemoryError::InvalidRequest as u64,
+            };
+            let protection = match rsi {
+                0 => VmPermissions::none()
+                    .set_user_flag(true)
+                    .set_read_flag(false)
+                    .set_exec_flag(true /*FIXME: Exec flag always set*/),
+                1 => VmPermissions::none()
+                    .set_user_flag(true)
+                    .set_read_flag(true)
+                    .set_exec_flag(true),
+                2 => VmPermissions::none()
+                    .set_user_flag(true)
+                    .set_read_flag(true)
+                    .set_exec_flag(true),
+                3 => VmPermissions::none()
+                    .set_user_flag(true)
+                    .set_read_flag(true)
+                    .set_exec_flag(true)
+                    .set_write_flag(true),
+                _ => return SysMemoryError::InvalidRequest as u64,
+            };
+            let len = match rdx {
+                // TODO: This is just a random constraint, we should figure out
+                //       how much memory the system has.
+                ..16777216 => ((rdx as usize - 1) / PAGE_4K) + 1,
+                _ => return SysMemoryError::InvalidRequest as u64,
+            };
+
+            let region = process.read().add_anywhere(len, protection, false);
+            logln!("{:#?}", region);
+            return match region {
+                Ok(region) => region.start.addr().addr() as u64,
+                Err(_) => SysMemoryError::InvalidRequest as u64,
+            };
         }
         69 => ::lldebug::priv_print(
             lldebug::LogKind::Log,

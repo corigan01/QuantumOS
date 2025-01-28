@@ -99,7 +99,7 @@ pub unsafe extern "C" fn kernel_entry() {
             pop rdx
             pop rcx
             pop rbx
-            pop rax
+            add rsp, 8                     # pop rax
 
             add rsp, 8                     # pop 0
             add rsp, 8                     # pop rip

@@ -28,12 +28,13 @@ use core::{error::Error, fmt::Display};
 
 use crate::{
     MemoryError,
-    addr::{AlignedTo, VirtAddr},
+    addr::{AlignedTo, KERNEL_ADDR_START, VirtAddr},
     page::{PhysPage, VirtPage},
     paging::{PageCorrelationError, Virt2PhysMapping, VmOptions, VmPermissions},
     pmm::SharedPhysPage,
 };
 use alloc::{boxed::Box, collections::BTreeMap, sync::Arc, vec::Vec};
+use boolvec::BoolVec;
 use spin::RwLock;
 use util::consts::PAGE_4K;
 
@@ -557,15 +558,43 @@ impl VmProcess {
         })
     }
 
+    /// Find a region of virtual memory that is not being used
+    pub fn find_vm_free(&self, min_page: VirtPage, n_pages: usize) -> Option<VmRegion> {
+        let mut previous_index = VmRegion::from_containing(VirtAddr::new(0), VirtAddr::new(0));
+        let mut ideal_page = None;
+
+        for region in self
+            .objects
+            .read()
+            .iter()
+            .map(|obj| obj.read().region)
+            .skip_while(|region| region.end < min_page)
+            .take_while(|region| region.end < VirtPage::containing_addr(KERNEL_ADDR_START))
+        {
+            if region.start.page() - previous_index.end.page() >= n_pages {
+                ideal_page = Some(previous_index.end.offset_by(1));
+                break;
+            }
+            previous_index = region;
+        }
+
+        let start = ideal_page?;
+        Some(VmRegion {
+            start,
+            end: start.offset_by(n_pages - 1),
+        })
+    }
+
     /// Add a mapping to this process
     pub fn insert_vm_object(
         &self,
         object: Arc<RwLock<VmObject>>,
     ) -> Result<(), InsertVmObjectError> {
         let locked = object.read();
+        let region = locked.region;
 
         // If there is already a region that exists on that virtual address
-        if let Some(existing) = self.check_overlapping(&locked.region) {
+        if let Some(existing) = self.check_overlapping(&region) {
             return Err(InsertVmObjectError::Overlapping {
                 existing,
                 attempted: locked.region,
