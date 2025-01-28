@@ -37,7 +37,6 @@ use arch::{
 use lldebug::{log, logln, sync::Mutex, warnln};
 use mem::{
     addr::VirtAddr,
-    page::VirtPage,
     paging::VmPermissions,
     vm::{PageFaultInfo, call_page_fault_handler},
 };
@@ -282,9 +281,7 @@ extern "C" fn syscall_handler(
                 _ => return SysMemoryError::InvalidRequest as u64,
             };
 
-            let region = process.read().add_anywhere(len, protection, false);
-            logln!("{:#?}", region);
-            return match region {
+            return match process.read().add_anywhere(len, protection, false) {
                 Ok(region) => region.start.addr().addr() as u64,
                 Err(_) => SysMemoryError::InvalidRequest as u64,
             };

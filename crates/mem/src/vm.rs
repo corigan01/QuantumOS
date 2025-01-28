@@ -34,7 +34,6 @@ use crate::{
     pmm::SharedPhysPage,
 };
 use alloc::{boxed::Box, collections::BTreeMap, sync::Arc, vec::Vec};
-use boolvec::BoolVec;
 use spin::RwLock;
 use util::consts::PAGE_4K;
 
