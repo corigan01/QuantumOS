@@ -72,6 +72,12 @@ impl BoolVec {
         }
     }
 
+    pub fn set_many(&mut self, start: usize, len: usize, state: bool) {
+        for bit in start..(start + len) {
+            self.set(bit, state);
+        }
+    }
+
     pub fn get(&self, index: usize) -> bool {
         let (array_idx, bit_idx) = Self::index_of(index);
 
@@ -103,6 +109,136 @@ impl BoolVec {
                     for bit_idx in 0..BackingType::BITS {
                         if *el & (1 << bit_idx) == 0 {
                             return Some(Self::recombine_to(array_idx, bit_idx as usize));
+                        }
+                    }
+                }
+            }
+
+            return Some(Self::recombine_to(self.0.len(), 0));
+        }
+    }
+
+    pub fn find_first_of_many(&self, state: bool, count: usize) -> Option<usize> {
+        // FIXME: There is a better way to do this, but I need this working. Please
+        //        refactor to be less painful to look at :)
+        if count == 0 {
+            return None;
+        }
+
+        let mut found_index = None;
+
+        if state {
+            // Find a 1 in the array
+            for (array_idx, el) in self.0.iter().enumerate() {
+                if *el != 0 {
+                    for bit_idx in 0..BackingType::BITS {
+                        if *el & (1 << bit_idx) != 0 {
+                            if found_index.is_none() {
+                                found_index = Some(Self::recombine_to(array_idx, bit_idx as usize));
+                            }
+                        } else {
+                            found_index = None;
+                        }
+
+                        if let Some(prev_index) = found_index {
+                            if Self::recombine_to(array_idx, bit_idx as usize) - prev_index
+                                >= count - 1
+                            {
+                                return found_index;
+                            }
+                        }
+                    }
+                }
+            }
+            return found_index;
+        } else {
+            // Find a 0 in the array
+            for (array_idx, el) in self.0.iter().enumerate() {
+                if *el != BackingType::MAX {
+                    for bit_idx in 0..BackingType::BITS {
+                        if *el & (1 << bit_idx) == 0 {
+                            if found_index.is_none() {
+                                found_index = Some(Self::recombine_to(array_idx, bit_idx as usize));
+                            }
+                        } else {
+                            found_index = None;
+                        }
+
+                        if let Some(prev_index) = found_index {
+                            if Self::recombine_to(array_idx, bit_idx as usize) - prev_index
+                                >= count - 1
+                            {
+                                return found_index;
+                            }
+                        }
+                    }
+                }
+            }
+
+            return Some(Self::recombine_to(self.0.len(), 0));
+        }
+    }
+
+    pub fn find_first_of_many_skipping(
+        &self,
+        skip: usize,
+        state: bool,
+        count: usize,
+    ) -> Option<usize> {
+        // FIXME: There is a better way to do this, but I need this working. Please
+        //        refactor to be less painful to look at :)
+        if count == 0 {
+            return None;
+        }
+
+        let mut found_index = None;
+        let (array_offset, mut bit_offset) = Self::index_of(skip);
+
+        if state {
+            // Find a 1 in the array
+            for (array_idx, el) in self.0.iter().skip(array_offset).enumerate() {
+                if *el != 0 {
+                    for bit_idx in (bit_offset as u32)..BackingType::BITS {
+                        bit_offset = 0;
+                        if *el & (1 << bit_idx) != 0 {
+                            if found_index.is_none() {
+                                found_index = Some(Self::recombine_to(array_idx, bit_idx as usize));
+                            }
+                        } else {
+                            found_index = None;
+                        }
+
+                        if let Some(prev_index) = found_index {
+                            if Self::recombine_to(array_idx, bit_idx as usize) - prev_index
+                                >= count - 1
+                            {
+                                return found_index;
+                            }
+                        }
+                    }
+                }
+            }
+            return found_index;
+        } else {
+            // Find a 0 in the array
+            for (array_idx, el) in self.0.iter().skip(array_offset).enumerate() {
+                if *el != BackingType::MAX {
+                    for bit_idx in (bit_offset as u32)..BackingType::BITS {
+                        bit_offset = 0;
+                        if *el & (1 << bit_idx) == 0 {
+                            if found_index.is_none() {
+                                found_index = Some(Self::recombine_to(array_idx, bit_idx as usize));
+                            }
+                        } else {
+                            found_index = None;
+                        }
+
+                        if let Some(prev_index) = found_index {
+                            if Self::recombine_to(array_idx, bit_idx as usize) - prev_index
+                                >= count - 1
+                            {
+                                return found_index;
+                            }
                         }
                     }
                 }
@@ -191,5 +327,25 @@ mod test {
         v.set(7043, true);
 
         assert_eq!(v.find_first_of(true), Some(7043));
+    }
+
+    #[test]
+    fn test_find_first_of_many() {
+        let mut v = BoolVec::new();
+
+        v.set(1, true);
+        v.set(2, true);
+        v.set(4, true);
+        v.set(6, true);
+        v.set(7, true);
+        v.set(8, true);
+        v.set(11, true);
+
+        assert_eq!(v.find_first_of(true), Some(1));
+        assert_eq!(v.find_first_of(false), Some(0));
+        assert_eq!(v.find_first_of_many(false, 1), Some(0));
+        assert_eq!(v.find_first_of_many(true, 1), Some(1));
+        assert_eq!(v.find_first_of_many(true, 2), Some(1));
+        assert_eq!(v.find_first_of_many(false, 2), Some(9));
     }
 }
