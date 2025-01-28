@@ -80,6 +80,7 @@ impl<'a> Fields<'a> {
         let attributes = gen_info.attributes;
         tokens.push(quote! {
             #(#attributes)*
+            #[inline]
         });
 
         let vis = gen_info.vis;
@@ -187,6 +188,7 @@ impl<'a> Fields<'a> {
         let attributes = gen_info.attributes;
         tokens.push(quote! {
             #(#attributes)*
+            #[inline]
         });
 
         let vis = gen_info.vis;

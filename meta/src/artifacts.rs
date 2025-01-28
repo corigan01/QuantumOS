@@ -238,6 +238,7 @@ pub async fn build_project(multiboot_mode: bool, emit_asm: Option<String>) -> Re
         stage_64bit,
         kernel,
         dummy_userspace,
+        hello_server,
         boot_cfg,
     ) = tokio::try_join!(
         cargo_helper(
@@ -280,19 +281,26 @@ pub async fn build_project(multiboot_mode: bool, emit_asm: Option<String>) -> Re
             emit_asm.as_ref().is_some_and(|s| s == "kernel")
         ),
         cargo_helper(
-            Some("dummy"),
+            Some("userspace"),
             "dummy",
             ArchSelect::UserSpace,
             None,
             emit_asm.as_ref().is_some_and(|s| s == "dummy")
         ),
+        cargo_helper(
+            Some("userspace"),
+            "hello-server",
+            ArchSelect::UserSpace,
+            None,
+            emit_asm.as_ref().is_some_and(|s| s == "hello-server")
+        ),
         build_bootloader_config(),
     )?;
 
     let ue_slice = [
-        (dummy_userspace.clone(), PathBuf::from("./dummy")),
-        (dummy_userspace, PathBuf::from("./dummy2")),
-        (stage_16bit.clone(), PathBuf::from("./stage")),
+        (dummy_userspace, PathBuf::from("./dummy")),
+        (hello_server, PathBuf::from("./helloServ")),
+        (stage_16bit.clone(), PathBuf::from("./i_should_crash")),
     ];
 
     let (bootsector, stage_16, stage_32, stage_64, initfs) = tokio::try_join!(

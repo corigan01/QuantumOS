@@ -25,7 +25,8 @@ members = [
   "crates/boolvec",
   "user/dummy",
   "user/libq",
-  "crates/tar"
+  "crates/tar",
+  "user/hello-server"
 ]
 
 default-members = ["meta"]
@@ -104,10 +105,10 @@ strip = false
 debug = 1
 overflow-checks = true
 
-[profile.dummy]
+[profile.userspace]
 inherits = "release"
 panic = "abort"
-opt-level=0
+opt-level= 0
 strip = false
 debug = 1
 overflow-checks = true

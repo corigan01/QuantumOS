@@ -1,0 +1,10 @@
+[package]
+name = "hello-server"
+edition = "2024"
+version.workspace = true
+authors.workspace = true
+description.workspace = true
+documentation.workspace = true
+
+[dependencies]
+libq = { workspace = true }
