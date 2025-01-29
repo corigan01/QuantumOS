@@ -49,11 +49,10 @@ pub unsafe extern "C" fn kernel_entry() {
             mov [{userspace_rsp_ptr}], rsp
             mov rsp, [{kernel_rsp_ptr}]
 
-            #  -- Start building the processes `ProcessContext`
-
             sti
-
             push [{userspace_rsp_ptr}]
+
+            #  -- Start building the processes `ProcessContext`
 
             push 0x1b
             push [{userspace_rsp_ptr}]
@@ -78,7 +77,7 @@ pub unsafe extern "C" fn kernel_entry() {
             push r14
             push r15
 
-            #  -- Call the 'syscall_entry' function
+            #  -- Call the 'syscall_handler' function
 
             mov r9, rax                    # We move rax (syscall number) into r9 (arg5 of callee)
             call syscall_handler
@@ -99,16 +98,10 @@ pub unsafe extern "C" fn kernel_entry() {
             pop rdx
             pop rcx
             pop rbx
-            add rsp, 8                     # pop rax
-
-            add rsp, 8                     # pop 0
-            add rsp, 8                     # pop rip
-            add rsp, 8                     # pop cs
-            add rsp, 8                     # pop rflags
-            add rsp, 8                     # pop rsp
-            add rsp, 8                     # pop ss
+            add rsp, 56                    # pop rax , pop 0, pop rip, pop cs, pop rflags, pop rsp, pop ss
 
             #  -- Return back to userspace
+
             cli
             pop rsp
 
