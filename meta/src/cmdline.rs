@@ -20,9 +20,9 @@ pub struct CommandLine {
     #[arg(short, long = "nographic", default_value_t = false)]
     pub no_graphic: bool,
 
-    /// Slow down the emulator
-    #[arg(short, long = "slow", default_value_t = false)]
-    pub slow_emulator: bool,
+    /// Slow down the emulator with a modifier
+    #[arg(short, long = "slow")]
+    pub slow_emulator: Option<usize>,
 
     /// Use the bochs emulator
     #[arg(short, long = "bochs", default_value_t = false)]

@@ -116,7 +116,7 @@ fn run_qemu(
     enable_kvm: bool,
     enable_no_graphic: bool,
     log_interrupts: bool,
-    slow_emu: bool,
+    slow_emu: Option<usize>,
     use_gdb: bool,
     quick_boot: Option<QuickBootImages>,
 ) -> Result<()> {
@@ -135,8 +135,8 @@ fn run_qemu(
     } else {
         &["-d", "cpu_reset"]
     };
-    let slow_emulator: &[&str] = if slow_emu {
-        &["-icount", "10,align=on"]
+    let slow_emulator: &[&str] = if let Some(modify) = slow_emu {
+        &["-icount", &format!("{},align=on", modify)]
     } else {
         &[]
     };
