@@ -1,0 +1,10 @@
+[package]
+name = "portal"
+edition = "2024"
+version.workspace = true
+authors.workspace = true
+description.workspace = true
+documentation.workspace = true
+
+[dependencies]
+portal-macro = { workspace = true }

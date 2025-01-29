@@ -26,7 +26,9 @@ members = [
   "user/dummy",
   "user/libq",
   "crates/tar",
-  "user/hello-server"
+  "user/hello-server",
+  "crates/portal-macro",
+  "crates/portal"
 ]
 
 default-members = ["meta"]
@@ -58,6 +60,8 @@ mem = { path = "crates/mem" }
 boolvec = { path = "crates/boolvec" }
 libq = { path = "user/libq" }
 tar = { path = "crates/tar" }
+portal = { path = "crates/portal" }
+portal-macro = { path = "crates/portal-macro" }
 
 [profile.stage-bootsector]
 inherits = "release"
