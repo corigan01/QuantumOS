@@ -24,3 +24,9 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 #![no_std]
+
+pub use portal_macro::*;
+
+/// This is just for testing
+#[portal(global = true)]
+pub trait KernelPortal {}

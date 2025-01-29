@@ -22,3 +22,15 @@ NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FO
 DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+
+use proc_macro::TokenStream;
+use syn::{Attribute, parse_macro_input};
+
+mod portal_parse;
+
+#[proc_macro_attribute]
+pub fn portal(args: TokenStream, input: TokenStream) -> TokenStream {
+    let portal_args = parse_macro_input!(args as portal_parse::PortalArgs);
+    println!("{:#?}", portal_args);
+    todo!()
+}
