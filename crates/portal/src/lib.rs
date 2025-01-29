@@ -29,4 +29,13 @@ pub use portal_macro::*;
 
 /// This is just for testing
 #[portal(global = true)]
-pub trait KernelPortal {}
+pub trait KernelPortal {
+    #[stable(since = "0.1.0")]
+    #[event(id = 0)]
+    fn exit(exit_reson: ExitReason) -> ! {
+        enum ExitReason {
+            Success,
+            Failure,
+        }
+    }
+}

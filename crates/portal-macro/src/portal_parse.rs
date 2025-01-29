@@ -24,7 +24,10 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 use proc_macro2::Span;
-use syn::{LitBool, Token, parse::Parse};
+use syn::{
+    Attribute, FnArg, Ident, ItemFn, LitBool, ReturnType, Signature, Token, Visibility,
+    parse::Parse, punctuated::Punctuated, token,
+};
 
 #[derive(Clone, Copy, Debug)]
 pub enum ProtocolKind {
@@ -86,6 +89,63 @@ impl Parse for PortalArgs {
         Ok(Self {
             global,
             protocol: protocol.unwrap_or(ProtocolKind::Syscall(Span::call_site())),
+        })
+    }
+}
+
+#[derive(Debug)]
+pub struct PortalTrait {
+    attr: Vec<Attribute>,
+    vis: Visibility,
+    trait_token: Token![trait],
+    portal_name: Ident,
+    brace_token: token::Brace,
+    endpoints: Punctuated<PortalEndpoint, Token![;]>,
+}
+
+impl Parse for PortalTrait {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        let inner;
+        Ok(Self {
+            attr: input.call(Attribute::parse_outer)?,
+            vis: input.parse()?,
+            trait_token: input.parse()?,
+            portal_name: input.parse()?,
+            brace_token: syn::braced!(inner in input),
+            endpoints: inner.parse_terminated(PortalEndpoint::parse, Token![;])?,
+        })
+    }
+}
+
+/*
+  #[stable(since = "0.1.0")]
+  #[event(id = 0)]
+  fn exit(exit_reson: ExitReason) -> ! {
+    enum ExitReason {
+      Success,
+      Failure
+    }
+  }
+*/
+
+#[derive(Debug)]
+pub struct PortalEndpoint {
+    attr: Vec<Attribute>,
+    fn_ident: Ident,
+    input: Punctuated<FnArg, Token![,]>,
+    output: ReturnType,
+    is_unsafe: Option<Token![unsafe]>,
+}
+
+impl Parse for PortalEndpoint {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        let item_fn: ItemFn = input.parse()?;
+        Ok(Self {
+            attr: item_fn.attrs,
+            fn_ident: item_fn.sig.ident,
+            input: item_fn.sig.inputs,
+            output: item_fn.sig.output,
+            is_unsafe: item_fn.sig.unsafety,
         })
     }
 }

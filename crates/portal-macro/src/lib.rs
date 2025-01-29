@@ -31,6 +31,8 @@ mod portal_parse;
 #[proc_macro_attribute]
 pub fn portal(args: TokenStream, input: TokenStream) -> TokenStream {
     let portal_args = parse_macro_input!(args as portal_parse::PortalArgs);
-    println!("{:#?}", portal_args);
-    todo!()
+    let portal_body = parse_macro_input!(input as portal_parse::PortalTrait);
+    println!("{:#?}\n{:#?}", portal_args, portal_body);
+
+    quote::quote! {}.into()
 }
