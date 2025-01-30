@@ -28,7 +28,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 pub use portal_macro::*;
 
 /// This is just for testing
-#[portal(global = true, protocol = "syscall")]
+#[portal(global = true, protocol = "ipc")]
 pub trait KernelPortal {
     #[event = 1]
     fn exit(exit_reson: ExitReason) -> ! {

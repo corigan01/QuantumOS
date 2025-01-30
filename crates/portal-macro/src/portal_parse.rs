@@ -43,7 +43,9 @@ pub struct PortalMacroInput {
 
 #[derive(Clone, Copy, Debug)]
 pub enum ProtocolKind {
+    Unknown(Span),
     Syscall(Span),
+    Ipc(Span),
 }
 
 impl Parse for ProtocolKind {
@@ -53,8 +55,15 @@ impl Parse for ProtocolKind {
 
         if &str_value == "syscall" {
             Ok(Self::Syscall(input.span()))
+        } else if &str_value == "ipc" {
+            Ok(Self::Ipc(input.span()))
         } else {
-            abort!(string.span(), "Expected a protocol (ie.'syscall', ...)")
+            emit_error!(
+                string.span(),
+                "Expected a protocol kind ('syscall', 'ipc'), found '{}'",
+                str_value
+            );
+            Ok(Self::Unknown(input.span()))
         }
     }
 }

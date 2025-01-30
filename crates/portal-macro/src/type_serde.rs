@@ -24,11 +24,11 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 use proc_macro_error::emit_error;
-use proc_macro2::TokenStream;
+use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
-use syn::{Ident, spanned::Spanned};
+use syn::{FnArg, Ident, spanned::Spanned};
 
-use crate::portal_parse::{EndpointKind, PortalEndpoint, PortalMacroInput};
+use crate::portal_parse::{EndpointKind, PortalEndpoint, PortalMacroInput, ProtocolKind};
 
 fn to_module_name(ident: &Ident) -> Ident {
     let mut new_str = String::new();
@@ -46,15 +46,22 @@ fn to_module_name(ident: &Ident) -> Ident {
     Ident::new(&new_str, ident.span())
 }
 
-pub fn generate_ast_portal(portal: &PortalMacroInput) -> TokenStream {
+pub fn generate_ast_portal(portal: &PortalMacroInput) -> TokenStream2 {
     let portal_name = &portal.trait_input.portal_name;
     let portal_module_name = to_module_name(portal_name);
     let portal_vis = &portal.trait_input.vis;
 
-    let client_tokens = generate_client_trait(portal);
+    let input_enum_ident = Ident::new("KernelPortalInputs", portal.trait_input.portal_name.span());
+    let output_enum_ident =
+        Ident::new("KernelPortalOutputs", portal.trait_input.portal_name.span());
+
+    let client_tokens = generate_client_trait(portal, &input_enum_ident, &output_enum_ident);
+    let enums = generate_endpoint_enums(portal, &input_enum_ident, &output_enum_ident);
 
     quote! {
         #portal_vis mod #portal_module_name {
+            #enums
+
             /// Client side communication over this portal
             pub mod client {
                 #client_tokens
@@ -89,19 +96,8 @@ fn to_enum_name(fn_ident: &Ident) -> Ident {
     Ident::new(&new_str, fn_ident.span())
 }
 
-fn generate_endpoint_trait_sig(
-    endpoint: &PortalEndpoint,
-    portal_name: &Ident,
-    means_fn: &Ident,
-    input_enum_ident: &Ident,
-    output_enum_ident: &Ident,
-) -> TokenStream {
-    let docs = &endpoint.docs;
+fn endpoints_enum_input(endpoint: &PortalEndpoint, input_enum_ident: &Ident) -> TokenStream2 {
     let ident = &endpoint.fn_ident;
-    let unsafety = &endpoint.is_unsafe;
-    let inputs = endpoint.input.iter().cloned();
-    let outputs = &endpoint.output;
-
     let endpoint_enum_front = to_enum_name(ident);
 
     let input_argument_names = endpoint.input.iter().map(|e| match e {
@@ -119,13 +115,44 @@ fn generate_endpoint_trait_sig(
     });
 
     quote! {
+        super::#input_enum_ident::#endpoint_enum_front( #(#input_argument_names)* )
+    }
+}
+
+fn generate_endpoint_trait_sig(
+    endpoint: &PortalEndpoint,
+    portal_name: &Ident,
+    means_fn: &Ident,
+    input_enum_ident: &Ident,
+    output_enum_ident: &Ident,
+    portal_kind: ProtocolKind,
+) -> TokenStream2 {
+    let docs = &endpoint.docs;
+    let ident = &endpoint.fn_ident;
+    let unsafety = &endpoint.is_unsafe;
+    let inputs: Vec<FnArg> = match portal_kind {
+        ProtocolKind::Ipc(_) => {
+            let self_tokens: syn::FnArg = syn::parse_str("&self").unwrap();
+            [self_tokens]
+                .into_iter()
+                .chain(endpoint.input.iter().cloned())
+                .collect()
+        }
+        _ => endpoint.input.iter().cloned().collect(),
+    };
+    let outputs = &endpoint.output;
+
+    let endpoint_enum_front = to_enum_name(ident);
+    let input_enum = endpoints_enum_input(endpoint, input_enum_ident);
+
+    quote! {
         #(#docs)*
-        #unsafety fn #ident(#(#inputs)*) #outputs {
-            match #means_fn(#input_enum_ident::#endpoint_enum_front( #(#input_argument_names)* )) {
-                #output_enum_ident::#endpoint_enum_front(inner_fn_value) => inner_fn_value,
+        #unsafety fn #ident(#(#inputs),*) #outputs {
+            match #means_fn(#input_enum) {
+                super::#output_enum_ident::#endpoint_enum_front(inner_fn_value) => inner_fn_value,
                 inner_fn_value => unreachable!("Got `{:?}`, but expected '{}' for {}'s endpoint {}",
                     inner_fn_value,
-                    stringify!(#output_enum_ident::#endpoint_enum_front),
+                    stringify!(super::#output_enum_ident::#endpoint_enum_front),
                     stringify!(#portal_name),
                     stringify!(#ident)
                 ),
@@ -134,15 +161,66 @@ fn generate_endpoint_trait_sig(
     }
 }
 
-/// Defines all the events
-pub fn generate_client_trait(portal: &PortalMacroInput) -> TokenStream {
-    let means_fn_ident = Ident::new("means_fn", portal.trait_input.portal_name.span());
-    let input_enum_ident = Ident::new("KernelPortalInputs", portal.trait_input.portal_name.span());
-    let output_enum_ident =
-        Ident::new("KernelPortalOutputs", portal.trait_input.portal_name.span());
+fn generate_endpoint_enums(
+    portal: &PortalMacroInput,
+    input_enum_ident: &Ident,
+    output_enum_ident: &Ident,
+) -> TokenStream2 {
+    let all_input_types = portal
+        .trait_input
+        .endpoints
+        .iter()
+        .map(|endpoint| {
+            (
+                to_enum_name(&endpoint.fn_ident),
+                endpoint.input.iter().map(|input| match input {
+                    FnArg::Receiver(_) => Box::new(syn::parse_str("()").unwrap()),
+                    FnArg::Typed(pat_type) => pat_type.ty.clone(),
+                }),
+            )
+        })
+        .map(|(name, args)| {
+            quote! { #name( #(#args),* ) }
+        });
 
+    let all_output_types = portal
+        .trait_input
+        .endpoints
+        .iter()
+        .map(|endpoint| {
+            (
+                to_enum_name(&endpoint.fn_ident),
+                match endpoint.output.clone() {
+                    syn::ReturnType::Default => Box::new(syn::parse_str("()").unwrap()),
+                    syn::ReturnType::Type(_, ty) => ty,
+                },
+            )
+        })
+        .map(|(name, arg)| {
+            quote! { #name( #arg ) }
+        });
+
+    quote! {
+        pub enum #input_enum_ident {
+            #(#all_input_types),*
+        }
+
+        pub enum #output_enum_ident {
+            #(#all_output_types),*
+        }
+    }
+}
+
+/// Defines all the events
+pub fn generate_client_trait(
+    portal: &PortalMacroInput,
+    input_enum_ident: &Ident,
+    output_enum_ident: &Ident,
+) -> TokenStream2 {
+    let protocol_kind = portal.args.protocol;
+    let means_fn_ident = Ident::new("means_fn", portal.trait_input.portal_name.span());
     let portal_name = &portal.trait_input.portal_name;
-    let endpoints: Vec<TokenStream> = portal
+    let endpoints: Vec<TokenStream2> = portal
         .trait_input
         .endpoints
         .iter()
@@ -154,6 +232,7 @@ pub fn generate_client_trait(portal: &PortalMacroInput) -> TokenStream {
                 &means_fn_ident,
                 &input_enum_ident,
                 &output_enum_ident,
+                protocol_kind.clone(),
             )
         })
         .collect();
