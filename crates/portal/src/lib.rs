@@ -31,7 +31,7 @@ pub use portal_macro::*;
 #[portal(global = true, protocol = "ipc")]
 pub trait KernelPortal {
     #[event = 1]
-    fn exit(exit_reson: ExitReason) -> ! {
+    fn exit(exit_reson: ExitReason) {
         enum ExitReason {
             Success,
             Failure,
@@ -40,4 +40,24 @@ pub trait KernelPortal {
 
     #[event = 2]
     fn debug(msg: &str) -> i32 {}
+
+    #[event = 3]
+    fn memory_map(loc: MemoryLocation, prot: MemoryProtections) -> Result<*mut u8, SysMemoryError> {
+        pub enum MemoryLocation {
+            Anywhere,
+        }
+
+        pub enum MemoryProtections {
+            None,
+            ReadExecute,
+            ReadOnly,
+            ReadWrite,
+        }
+
+        pub enum SysMemoryError {
+            InvalidLength,
+            InvalidRequest,
+            OutOfMemory,
+        }
+    }
 }

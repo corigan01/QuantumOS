@@ -24,9 +24,9 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 use proc_macro_error::emit_error;
-use proc_macro2::TokenStream as TokenStream2;
+use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::quote;
-use syn::{FnArg, Ident, spanned::Spanned};
+use syn::{FnArg, Ident, Lifetime, spanned::Spanned};
 
 use crate::portal_parse::{EndpointKind, PortalEndpoint, PortalMacroInput, ProtocolKind};
 
@@ -69,7 +69,6 @@ pub fn generate_ast_portal(portal: &PortalMacroInput) -> TokenStream2 {
 
             /// Server side communication over this portal
             pub mod server {
-
             }
         }
     }
@@ -93,6 +92,7 @@ fn to_enum_name(fn_ident: &Ident) -> Ident {
         });
     }
 
+    new_str.push_str("Portal");
     Ident::new(&new_str, fn_ident.span())
 }
 
@@ -115,7 +115,7 @@ fn endpoints_enum_input(endpoint: &PortalEndpoint, input_enum_ident: &Ident) -> 
     });
 
     quote! {
-        super::#input_enum_ident::#endpoint_enum_front( #(#input_argument_names)* )
+        super::#input_enum_ident::#endpoint_enum_front( #(#input_argument_names),* )
     }
 }
 
@@ -173,9 +173,21 @@ fn generate_endpoint_enums(
         .map(|endpoint| {
             (
                 to_enum_name(&endpoint.fn_ident),
-                endpoint.input.iter().map(|input| match input {
-                    FnArg::Receiver(_) => Box::new(syn::parse_str("()").unwrap()),
-                    FnArg::Typed(pat_type) => pat_type.ty.clone(),
+                endpoint.input.iter().map(|input| -> Box<syn::Type> {
+                    match input.clone() {
+                        FnArg::Receiver(_) => Box::new(syn::parse_str("()").unwrap()),
+                        FnArg::Typed(mut pat_type) => {
+                            match pat_type.ty.as_mut() {
+                                syn::Type::Reference(type_reference) => {
+                                    type_reference.lifetime =
+                                        Some(Lifetime::new("'a", Span::call_site()));
+                                }
+                                _ => (),
+                            }
+
+                            pat_type.ty
+                        }
+                    }
                 }),
             )
         })
@@ -192,7 +204,19 @@ fn generate_endpoint_enums(
                 to_enum_name(&endpoint.fn_ident),
                 match endpoint.output.clone() {
                     syn::ReturnType::Default => Box::new(syn::parse_str("()").unwrap()),
-                    syn::ReturnType::Type(_, ty) => ty,
+                    syn::ReturnType::Type(_, mut ty) => {
+                        match ty.as_mut() {
+                            syn::Type::Reference(type_reference) => {
+                                emit_error!(
+                                    type_reference.span(),
+                                    "Values with lifetimes are not supported in endpoint's output"
+                                );
+                            }
+                            _ => (),
+                        }
+
+                        ty
+                    }
                 },
             )
         })
