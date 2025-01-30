@@ -23,93 +23,145 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use std::collections::HashMap;
+use proc_macro_error::emit_error;
+use proc_macro2::TokenStream;
+use quote::quote;
+use syn::{Ident, spanned::Spanned};
 
-use proc_macro2::{Span, TokenStream};
-use syn::Ident;
+use crate::portal_parse::{EndpointKind, PortalEndpoint, PortalMacroInput};
 
-#[derive(Debug)]
-pub enum PortalTypeKind {
-    Unit,
-    Bool,
-    PtrValue {
-        to_type: Box<PortalTypeKind>,
-    },
-    Str {
-        allowed_values: Vec<String>,
-        size_upper_limit: Option<usize>,
-        size_lower_limit: Option<usize>,
-    },
-    UnsignedInt8 {
-        lower_limit: Option<u8>,
-        upper_limit: Option<u8>,
-    },
-    UnsignedInt16 {
-        lower_limit: Option<u16>,
-        upper_limit: Option<u16>,
-    },
-    UnsignedInt32 {
-        lower_limit: Option<u32>,
-        upper_limit: Option<u32>,
-    },
-    UnsignedInt64 {
-        lower_limit: Option<u64>,
-        upper_limit: Option<u64>,
-    },
-    UnsignedInt128 {
-        lower_limit: Option<u128>,
-        upper_limit: Option<u128>,
-    },
-    SignedInt8 {
-        lower_limit: Option<i8>,
-        upper_limit: Option<i8>,
-    },
-    SignedInt16 {
-        lower_limit: Option<i16>,
-        upper_limit: Option<i16>,
-    },
-    SignedInt32 {
-        lower_limit: Option<i32>,
-        upper_limit: Option<i32>,
-    },
-    SignedInt64 {
-        lower_limit: Option<i64>,
-        upper_limit: Option<i64>,
-    },
-    SignedInt128 {
-        lower_limit: Option<i128>,
-        upper_limit: Option<i128>,
-    },
-    Enum {
-        type_name: String,
-        inner_values: HashMap<String, PortalType>,
-    },
-    Struct {
-        type_name: String,
-        inner_values: HashMap<String, PortalType>,
-    },
-    UnsupportedType {
-        ty: Box<syn::Type>,
-    },
+fn to_module_name(ident: &Ident) -> Ident {
+    let mut new_str = String::new();
+    for old_char in ident.to_string().chars() {
+        if old_char.is_uppercase() {
+            if !new_str.is_empty() {
+                new_str.push('_');
+            }
+            new_str.push(old_char.to_ascii_lowercase());
+        } else {
+            new_str.push(old_char);
+        }
+    }
+
+    Ident::new(&new_str, ident.span())
 }
 
-#[derive(Debug)]
-pub struct PortalType {
-    /// The name as its used in the input/output of a endpoint
-    used_as_name: Option<String>,
-    /// The kind and options of the value
-    kind: PortalTypeKind,
-    /// The span of the argument / value of this type
-    span: Span,
+pub fn generate_ast_portal(portal: &PortalMacroInput) -> TokenStream {
+    let portal_name = &portal.trait_input.portal_name;
+    let portal_module_name = to_module_name(portal_name);
+    let portal_vis = &portal.trait_input.vis;
+
+    let client_tokens = generate_client_trait(portal);
+
+    quote! {
+        #portal_vis mod #portal_module_name {
+            /// Client side communication over this portal
+            pub mod client {
+                #client_tokens
+            }
+
+            /// Server side communication over this portal
+            pub mod server {
+
+            }
+        }
+    }
 }
 
-pub fn generate_raw_input_enum(
-    ident: Ident,
-    inputs: HashMap<String, &[PortalType]>,
+fn to_enum_name(fn_ident: &Ident) -> Ident {
+    let mut new_str = String::new();
+    let mut next_char_should_be_upper = true;
+
+    for old_char in fn_ident.to_string().chars() {
+        if old_char == '_' {
+            next_char_should_be_upper = true;
+            continue;
+        }
+
+        new_str.push(if next_char_should_be_upper {
+            next_char_should_be_upper = false;
+            old_char.to_ascii_uppercase()
+        } else {
+            old_char.to_ascii_lowercase()
+        });
+    }
+
+    Ident::new(&new_str, fn_ident.span())
+}
+
+fn generate_endpoint_trait_sig(
+    endpoint: &PortalEndpoint,
+    portal_name: &Ident,
+    means_fn: &Ident,
+    input_enum_ident: &Ident,
+    output_enum_ident: &Ident,
 ) -> TokenStream {
-    todo!()
+    let docs = &endpoint.docs;
+    let ident = &endpoint.fn_ident;
+    let unsafety = &endpoint.is_unsafe;
+    let inputs = endpoint.input.iter().cloned();
+    let outputs = &endpoint.output;
+
+    let endpoint_enum_front = to_enum_name(ident);
+
+    let input_argument_names = endpoint.input.iter().map(|e| match e {
+        syn::FnArg::Typed(pat_type) => match pat_type.pat.as_ref() {
+            syn::Pat::Ident(pat_ident) => pat_ident.ident.clone(),
+            _ => {
+                emit_error!(
+                    pat_type,
+                    "This function argument input schema is not supported!"
+                );
+                Ident::new("not_supported", pat_type.span())
+            }
+        },
+        syn::FnArg::Receiver(receiver) => Ident::new("not_supported_self", receiver.span()),
+    });
+
+    quote! {
+        #(#docs)*
+        #unsafety fn #ident(#(#inputs)*) #outputs {
+            match #means_fn(#input_enum_ident::#endpoint_enum_front( #(#input_argument_names)* )) {
+                #output_enum_ident::#endpoint_enum_front(inner_fn_value) => inner_fn_value,
+                inner_fn_value => unreachable!("Got `{:?}`, but expected '{}' for {}'s endpoint {}",
+                    inner_fn_value,
+                    stringify!(#output_enum_ident::#endpoint_enum_front),
+                    stringify!(#portal_name),
+                    stringify!(#ident)
+                ),
+            }
+        }
+    }
 }
 
-pub fn generate_raw_adapter_fn(inputs: PortalType, outputs: PortalType) -> TokenStream {
-    todo!()
+/// Defines all the events
+pub fn generate_client_trait(portal: &PortalMacroInput) -> TokenStream {
+    let means_fn_ident = Ident::new("means_fn", portal.trait_input.portal_name.span());
+    let input_enum_ident = Ident::new("KernelPortalInputs", portal.trait_input.portal_name.span());
+    let output_enum_ident =
+        Ident::new("KernelPortalOutputs", portal.trait_input.portal_name.span());
+
+    let portal_name = &portal.trait_input.portal_name;
+    let endpoints: Vec<TokenStream> = portal
+        .trait_input
+        .endpoints
+        .iter()
+        .filter(|e| matches!(e.endpoint, EndpointKind::Event(_)))
+        .map(|endpoint| {
+            generate_endpoint_trait_sig(
+                endpoint,
+                portal_name,
+                &means_fn_ident,
+                &input_enum_ident,
+                &output_enum_ident,
+            )
+        })
+        .collect();
+
+    quote! {
+        pub trait #portal_name {
+            #(#endpoints)*
+
+        }
+    }
 }

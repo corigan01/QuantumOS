@@ -37,8 +37,8 @@ use syn::{
 
 #[derive(Debug)]
 pub struct PortalMacroInput {
-    args: PortalArgs,
-    trait_input: PortalTrait,
+    pub args: PortalArgs,
+    pub trait_input: PortalTrait,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -364,6 +364,17 @@ impl Parse for PortalEndpoint {
                 help = "Consider adding either `#[event = 0]` or `#[handle = 0]`",
             );
         }
+
+        item_fn.sig.inputs.iter().for_each(|a| match a {
+            FnArg::Receiver(receiver) => {
+                emit_error!(
+                    receiver,
+                    "Endpoints must not include `self` as an argument";
+                    help = "Remove `self` from endpoint",
+                );
+            }
+            _ => (),
+        });
 
         let endpoint = Self {
             docs,
