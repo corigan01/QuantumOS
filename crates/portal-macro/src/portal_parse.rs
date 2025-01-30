@@ -35,6 +35,12 @@ use syn::{
     token::{self},
 };
 
+#[derive(Debug)]
+pub struct PortalMacroInput {
+    args: PortalArgs,
+    trait_input: PortalTrait,
+}
+
 #[derive(Clone, Copy, Debug)]
 pub enum ProtocolKind {
     Syscall(Span),
@@ -55,8 +61,8 @@ impl Parse for ProtocolKind {
 
 #[derive(Debug)]
 pub struct PortalArgs {
-    global: Option<LitBool>,
-    protocol: ProtocolKind,
+    pub global: Option<LitBool>,
+    pub protocol: ProtocolKind,
 }
 
 mod portal_keywords {
@@ -102,12 +108,12 @@ impl Parse for PortalArgs {
 
 #[derive(Debug)]
 pub struct PortalTrait {
-    attr: Vec<Attribute>,
-    vis: Visibility,
-    trait_token: Token![trait],
-    portal_name: Ident,
-    brace_token: token::Brace,
-    endpoints: Vec<PortalEndpoint>,
+    pub attr: Vec<Attribute>,
+    pub vis: Visibility,
+    pub trait_token: Token![trait],
+    pub portal_name: Ident,
+    pub brace_token: token::Brace,
+    pub endpoints: Vec<PortalEndpoint>,
 }
 
 impl Parse for PortalTrait {
@@ -197,7 +203,6 @@ impl Parse for PortalTrait {
 }
 
 /*
-  #[stable(since = "0.1.0")]
   #[event(id = 0)]
   fn exit(exit_reson: ExitReason) -> ! {
     enum ExitReason {
@@ -209,8 +214,8 @@ impl Parse for PortalTrait {
 
 #[derive(Debug)]
 pub struct EventAttribute {
-    id: usize,
-    span: Span,
+    pub id: usize,
+    pub span: Span,
 }
 
 impl TryFrom<&Expr> for EventAttribute {
@@ -244,8 +249,8 @@ impl TryFrom<&Expr> for EventAttribute {
 
 #[derive(Debug)]
 pub struct HandleAttribute {
-    id: usize,
-    span: Span,
+    pub id: usize,
+    pub span: Span,
 }
 
 impl TryFrom<&Expr> for HandleAttribute {
@@ -286,12 +291,12 @@ pub enum EndpointKind {
 
 #[derive(Debug)]
 pub struct PortalEndpoint {
-    docs: Vec<Attribute>,
-    endpoint: EndpointKind,
-    fn_ident: Ident,
-    input: Punctuated<FnArg, Token![,]>,
-    output: ReturnType,
-    is_unsafe: Option<Token![unsafe]>,
+    pub docs: Vec<Attribute>,
+    pub endpoint: EndpointKind,
+    pub fn_ident: Ident,
+    pub input: Punctuated<FnArg, Token![,]>,
+    pub output: ReturnType,
+    pub is_unsafe: Option<Token![unsafe]>,
 }
 
 impl Parse for PortalEndpoint {
@@ -360,13 +365,16 @@ impl Parse for PortalEndpoint {
             );
         }
 
-        Ok(Self {
+        let endpoint = Self {
             docs,
             endpoint,
             fn_ident: item_fn.sig.ident,
             input: item_fn.sig.inputs,
             output: item_fn.sig.output,
             is_unsafe: item_fn.sig.unsafety,
-        })
+        };
+
+        // endpoint.verify_arguments_are_supported_or_defined();
+        Ok(endpoint)
     }
 }

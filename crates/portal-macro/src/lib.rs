@@ -25,9 +25,10 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 use proc_macro::TokenStream;
 use proc_macro_error::proc_macro_error;
-use syn::{Attribute, parse_macro_input};
+use syn::parse_macro_input;
 
 mod portal_parse;
+mod type_serde;
 
 #[proc_macro_error]
 #[proc_macro_attribute]
