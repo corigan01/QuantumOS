@@ -26,8 +26,12 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 use proc_macro_error::{abort, emit_error};
 use proc_macro2::Span;
 use syn::{
-    Attribute, Expr, FnArg, Ident, ItemFn, LitBool, LitStr, ReturnType, Signature, Token,
-    Visibility, parse::Parse, punctuated::Punctuated, spanned::Spanned, token,
+    Attribute, Expr, FnArg, Ident, ItemFn, ItemMod, LitBool, LitStr, ReturnType, Signature, Token,
+    Visibility,
+    parse::Parse,
+    punctuated::Punctuated,
+    spanned::Spanned,
+    token::{self, Brace},
 };
 
 #[derive(Clone, Copy, Debug)]
@@ -102,19 +106,52 @@ pub struct PortalTrait {
     trait_token: Token![trait],
     portal_name: Ident,
     brace_token: token::Brace,
-    endpoints: Punctuated<PortalEndpoint, Token![;]>,
+    endpoints: Vec<PortalEndpoint>,
 }
 
 impl Parse for PortalTrait {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        let attr = input.call(Attribute::parse_outer)?;
+        let vis = input.parse()?;
+        let trait_token = input.parse()?;
+        let portal_name = input.parse()?;
+
         let inner;
+        let brace_token = syn::braced!(inner in input);
+        let mut endpoints = Vec::new();
+
+        loop {
+            if inner.is_empty() {
+                break;
+            }
+
+            while inner.peek(Token![;]) {
+                inner.parse::<Token![;]>()?;
+            }
+
+            let item_fn: PortalEndpoint = match inner.parse() {
+                Ok(v) => v,
+                Err(err) => {
+                    emit_error!(
+                        err.span(),
+                        "Cannot parse endpoint function: {}",
+                        err.span().source_text().unwrap_or("??".into())
+                    );
+
+                    continue;
+                }
+            };
+
+            endpoints.push(item_fn);
+        }
+
         Ok(Self {
-            attr: input.call(Attribute::parse_outer)?,
-            vis: input.parse()?,
-            trait_token: input.parse()?,
-            portal_name: input.parse()?,
-            brace_token: syn::braced!(inner in input),
-            endpoints: inner.parse_terminated(PortalEndpoint::parse, Token![;])?,
+            attr,
+            vis,
+            trait_token,
+            portal_name,
+            brace_token,
+            endpoints,
         })
     }
 }
@@ -220,27 +257,26 @@ pub struct PortalEndpoint {
 impl Parse for PortalEndpoint {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         let item_fn: ItemFn = input.parse()?;
-        let fn_attributes = item_fn.attrs;
+        let fn_attributes = &item_fn.attrs;
 
         let mut docs = Vec::new();
         let mut endpoint = EndpointKind::None;
 
         for attr in fn_attributes {
-            let name_value_attr_inner = attr.meta.require_name_value()?;
-            if name_value_attr_inner.path.is_ident("doc") {
-                docs.push(attr);
-            } else if name_value_attr_inner.path.is_ident("event") {
-                if matches!(endpoint, EndpointKind::Event(_)) {
-                    emit_error!(
+            if attr.path().is_ident("doc") {
+                docs.push(attr.clone());
+            } else if attr.path().is_ident("event") {
+                let name_value_attr_inner = attr.meta.require_name_value()?;
+                match endpoint {
+                    EndpointKind::Event(_) => emit_error!(
                         attr.span(),
                         "Cannot define multiple #[event = ..] for a single event"
-                    );
-                }
-                if matches!(endpoint, EndpointKind::Handle(_)) {
-                    emit_error!(
+                    ),
+                    EndpointKind::Handle(_) => emit_error!(
                         attr.span(),
                         "A endpoint function can either be `event` or `handle` but never both"; help = "Remove either `#[event = ..]` or `#[handle = ..]`"
-                    );
+                    ),
+                    EndpointKind::None => (),
                 }
                 match (&name_value_attr_inner.value).try_into() {
                     Ok(value) => endpoint = EndpointKind::Event(value),
@@ -248,18 +284,18 @@ impl Parse for PortalEndpoint {
                         emit_error!(attr.span(), "Cannot parse #[event = ..] because {}", err)
                     }
                 }
-            } else if name_value_attr_inner.path.is_ident("handle") {
-                if matches!(endpoint, EndpointKind::Handle(_)) {
-                    emit_error!(
+            } else if attr.path().is_ident("handle") {
+                let name_value_attr_inner = attr.meta.require_name_value()?;
+                match endpoint {
+                    EndpointKind::Handle(_) => emit_error!(
                         attr.span(),
                         "Cannot define multiple #[handle = ..] for a single handle"
-                    );
-                }
-                if matches!(endpoint, EndpointKind::Event(_)) {
-                    emit_error!(
+                    ),
+                    EndpointKind::Event(_) => emit_error!(
                         attr.span(),
                         "A endpoint function can either be `event` or `handle` but never both"; help = "Remove either `#[event = ..]` or `#[handle = ..]`"
-                    );
+                    ),
+                    EndpointKind::None => (),
                 }
                 match (&name_value_attr_inner.value).try_into() {
                     Ok(value) => endpoint = EndpointKind::Handle(value),
@@ -267,7 +303,21 @@ impl Parse for PortalEndpoint {
                         emit_error!(attr.span(), "Cannot parse #[handle = ..] because {}", err)
                     }
                 }
+            } else {
+                emit_error!(
+                    attr.span(),
+                    "Unsupported attribute on portal: '{}'",
+                    attr.span().source_text().unwrap_or("??".into())
+                );
             }
+        }
+
+        if matches!(endpoint, EndpointKind::None) {
+            emit_error!(
+                item_fn.span(),
+                "This endpoint function must be either an event, or a handle.";
+                help = "Consider adding either `#[event = 0]` or `#[handle = 0]`",
+            );
         }
 
         Ok(Self {

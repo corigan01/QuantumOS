@@ -37,4 +37,6 @@ pub trait KernelPortal {
             Failure,
         }
     }
+
+    fn debug(msg: &str) -> i32 {}
 }
