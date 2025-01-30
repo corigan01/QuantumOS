@@ -28,10 +28,9 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 pub use portal_macro::*;
 
 /// This is just for testing
-#[portal(global = true)]
+#[portal(global = true, protocol = "syscall")]
 pub trait KernelPortal {
-    #[stable(since = "0.1.0")]
-    #[event(id = 0)]
+    #[event = 1]
     fn exit(exit_reson: ExitReason) -> ! {
         enum ExitReason {
             Success,

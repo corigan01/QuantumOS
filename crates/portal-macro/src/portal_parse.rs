@@ -23,10 +23,11 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use proc_macro_error::{abort, emit_error};
 use proc_macro2::Span;
 use syn::{
-    Attribute, FnArg, Ident, ItemFn, LitBool, ReturnType, Signature, Token, Visibility,
-    parse::Parse, punctuated::Punctuated, token,
+    Attribute, Expr, FnArg, Ident, ItemFn, LitBool, LitStr, ReturnType, Signature, Token,
+    Visibility, parse::Parse, punctuated::Punctuated, spanned::Spanned, token,
 };
 
 #[derive(Clone, Copy, Debug)]
@@ -36,13 +37,13 @@ pub enum ProtocolKind {
 
 impl Parse for ProtocolKind {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-        let lookahead = input.lookahead1();
+        let string: LitStr = input.parse()?;
+        let str_value = string.value();
 
-        if lookahead.peek(portal_keywords::syscall) {
-            let kw: portal_keywords::syscall = input.parse()?;
-            Ok(Self::Syscall(kw.span))
+        if &str_value == "syscall" {
+            Ok(Self::Syscall(input.span()))
         } else {
-            Err(lookahead.error())
+            abort!(string.span(), "Expected a protocol (ie.'syscall', ...)")
         }
     }
 }
@@ -57,9 +58,6 @@ mod portal_keywords {
     // Portal Args
     syn::custom_keyword!(global);
     syn::custom_keyword!(protocol);
-
-    // Protocol Kind
-    syn::custom_keyword!(syscall);
 }
 
 impl Parse for PortalArgs {
@@ -83,6 +81,10 @@ impl Parse for PortalArgs {
                 protocol = Some(input.parse()?);
             } else {
                 return Err(lookahead.error());
+            }
+
+            if input.peek(Token![,]) {
+                input.parse::<Token![,]>()?;
             }
         }
 
@@ -129,8 +131,86 @@ impl Parse for PortalTrait {
 */
 
 #[derive(Debug)]
+pub struct EventAttribute {
+    id: usize,
+    span: Span,
+}
+
+impl TryFrom<&Expr> for EventAttribute {
+    type Error = syn::Error;
+
+    fn try_from(value: &Expr) -> Result<Self, Self::Error> {
+        match value {
+            Expr::Lit(expr_lit) => match &expr_lit.lit {
+                syn::Lit::Int(lit_int) => Ok(Self {
+                    id: lit_int.base10_parse()?,
+                    span: expr_lit.span(),
+                }),
+                _ => Err(syn::Error::new(
+                    expr_lit.span(),
+                    format!(
+                        "expected integer literal, found '{}'",
+                        expr_lit.span().source_text().unwrap_or("??".into())
+                    ),
+                )),
+            },
+            _ => Err(syn::Error::new(
+                value.span(),
+                format!(
+                    "expected literal, found '{}'",
+                    value.span().source_text().unwrap_or("??".into())
+                ),
+            )),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct HandleAttribute {
+    id: usize,
+    span: Span,
+}
+
+impl TryFrom<&Expr> for HandleAttribute {
+    type Error = syn::Error;
+
+    fn try_from(value: &Expr) -> Result<Self, Self::Error> {
+        match value {
+            Expr::Lit(expr_lit) => match &expr_lit.lit {
+                syn::Lit::Int(lit_int) => Ok(Self {
+                    id: lit_int.base10_parse()?,
+                    span: expr_lit.span(),
+                }),
+                _ => Err(syn::Error::new(
+                    expr_lit.span(),
+                    format!(
+                        "expected integer literal, found '{}'",
+                        expr_lit.span().source_text().unwrap_or("??".into())
+                    ),
+                )),
+            },
+            _ => Err(syn::Error::new(
+                value.span(),
+                format!(
+                    "expected literal, found '{}'",
+                    value.span().source_text().unwrap_or("??".into())
+                ),
+            )),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum EndpointKind {
+    None,
+    Event(EventAttribute),
+    Handle(HandleAttribute),
+}
+
+#[derive(Debug)]
 pub struct PortalEndpoint {
-    attr: Vec<Attribute>,
+    docs: Vec<Attribute>,
+    endpoint: EndpointKind,
     fn_ident: Ident,
     input: Punctuated<FnArg, Token![,]>,
     output: ReturnType,
@@ -140,8 +220,59 @@ pub struct PortalEndpoint {
 impl Parse for PortalEndpoint {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         let item_fn: ItemFn = input.parse()?;
+        let fn_attributes = item_fn.attrs;
+
+        let mut docs = Vec::new();
+        let mut endpoint = EndpointKind::None;
+
+        for attr in fn_attributes {
+            let name_value_attr_inner = attr.meta.require_name_value()?;
+            if name_value_attr_inner.path.is_ident("doc") {
+                docs.push(attr);
+            } else if name_value_attr_inner.path.is_ident("event") {
+                if matches!(endpoint, EndpointKind::Event(_)) {
+                    emit_error!(
+                        attr.span(),
+                        "Cannot define multiple #[event = ..] for a single event"
+                    );
+                }
+                if matches!(endpoint, EndpointKind::Handle(_)) {
+                    emit_error!(
+                        attr.span(),
+                        "A endpoint function can either be `event` or `handle` but never both"; help = "Remove either `#[event = ..]` or `#[handle = ..]`"
+                    );
+                }
+                match (&name_value_attr_inner.value).try_into() {
+                    Ok(value) => endpoint = EndpointKind::Event(value),
+                    Err(err) => {
+                        emit_error!(attr.span(), "Cannot parse #[event = ..] because {}", err)
+                    }
+                }
+            } else if name_value_attr_inner.path.is_ident("handle") {
+                if matches!(endpoint, EndpointKind::Handle(_)) {
+                    emit_error!(
+                        attr.span(),
+                        "Cannot define multiple #[handle = ..] for a single handle"
+                    );
+                }
+                if matches!(endpoint, EndpointKind::Event(_)) {
+                    emit_error!(
+                        attr.span(),
+                        "A endpoint function can either be `event` or `handle` but never both"; help = "Remove either `#[event = ..]` or `#[handle = ..]`"
+                    );
+                }
+                match (&name_value_attr_inner.value).try_into() {
+                    Ok(value) => endpoint = EndpointKind::Handle(value),
+                    Err(err) => {
+                        emit_error!(attr.span(), "Cannot parse #[handle = ..] because {}", err)
+                    }
+                }
+            }
+        }
+
         Ok(Self {
-            attr: item_fn.attrs,
+            docs,
+            endpoint,
             fn_ident: item_fn.sig.ident,
             input: item_fn.sig.inputs,
             output: item_fn.sig.output,
