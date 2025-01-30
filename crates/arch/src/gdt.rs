@@ -24,7 +24,6 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 use core::arch::asm;
-use hw::make_hw;
 
 #[repr(C)]
 pub struct GlobalDescriptorTable<const TABLE_SIZE: usize>([u64; TABLE_SIZE]);
@@ -68,7 +67,7 @@ impl GdtPointer {
     }
 }
 
-#[make_hw(
+#[bits::bits(
     field(RW, 0..16, segment_limit_lo),
     field(RW, 16..32, base_address_lo),
     field(RW, 32..40, base_address_mi),
@@ -89,7 +88,7 @@ impl GdtPointer {
 #[derive(Clone, Copy)]
 pub struct DataSegmentDesc(u64);
 
-#[make_hw(
+#[bits::bits(
     field(RW, 0..16, segment_limit_lo),
     field(RW, 16..32, base_address_lo),
     field(RW, 32..40, base_address_mi),
@@ -144,7 +143,7 @@ impl SegmentEntry for DataSegmentDesc {
     }
 }
 
-#[make_hw(
+#[bits::bits(
     field(RW, 0..16, segment_limit_lo),
     field(RW, 16..32, base_address_lo),
     field(RW, 32..40, base_address_mi),

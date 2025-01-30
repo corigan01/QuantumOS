@@ -23,8 +23,6 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use hw::make_hw;
-
 use crate::CpuPrivilege;
 
 #[repr(C)]
@@ -195,7 +193,7 @@ impl SegmentRegisters {
     }
 }
 
-#[make_hw(
+#[bits::bits(
     field(RW, 0, pub protected_mode),
     field(RW, 1, pub monitor_co_processor),
     field(RW, 2, pub x87_fpu_emulation),
@@ -306,7 +304,7 @@ pub mod cr2 {
     }
 }
 
-#[make_hw(
+#[bits::bits(
     field(RW, 3, pub page_level_write_through),
     field(RW, 4, pub page_level_cache_disable),
     field(RWNS, 12..=63, pub page_directory_base_register)
@@ -360,7 +358,7 @@ pub mod cr3 {
     }
 }
 
-#[make_hw(
+#[bits::bits(
     field(RW, 0, pub v8086),
     field(RW, 1, pub protected_mode_virtual_interrupts),
     field(RW, 2, pub time_stamp_disable),
@@ -434,7 +432,7 @@ pub mod cr4 {
     }
 }
 
-#[make_hw(
+#[bits::bits(
     field(RO, 0, pub carry),
     field(RO, 2, pub parity),
     field(RO, 4, pub auxiliary),
@@ -515,7 +513,7 @@ pub unsafe fn write_msr(msr_number: u32, value: u64) {
     )
 }
 
-#[make_hw(
+#[bits::bits(
     field(RW, 0, pub syscall_extensions),
     field(RW, 8, pub long_mode_enable),
     field(RW, 10, pub long_mode_active),
@@ -542,13 +540,13 @@ pub mod ia32_efer {
 pub mod amd_syscall {
     use crate::CpuPrivilege;
 
-    use super::{make_hw, read_msr, write_msr, Segment};
+    use super::{read_msr, write_msr, Segment};
     const STAR: u32 = 0xC0000081;
     const LSTAR: u32 = 0xC0000082;
     const CSTAR: u32 = 0xC0000083;
     const SFMASK: u32 = 0xC0000084;
 
-    #[make_hw(
+    #[bits::bits(
         field(RW, 32..48, pub syscall_target_code_segment),
         field(RW, 48..64, pub sysret_target_code_segment),
     )]

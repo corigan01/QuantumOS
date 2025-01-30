@@ -35,7 +35,7 @@ pub(crate) mod make_hw_parse;
 pub(crate) mod provider_parse;
 
 #[proc_macro_attribute]
-pub fn make_hw(args: TokenStream, input: TokenStream) -> TokenStream {
+pub fn bits(args: TokenStream, input: TokenStream) -> TokenStream {
     let macro_fields = parse_macro_input!(args as make_hw_parse::MakeHwMacroInput);
 
     // Parse the Struct/Module

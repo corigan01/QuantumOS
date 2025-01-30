@@ -29,7 +29,6 @@ use crate::{
 };
 pub use arch_macro::interrupt;
 use core::fmt::Debug;
-use hw::make_hw;
 
 #[derive(Clone, Copy, Debug)]
 pub enum GateKind {
@@ -74,7 +73,7 @@ impl IdtPointer {
     }
 }
 
-#[make_hw(
+#[bits::bits(
     field(RW, 0..=15, offset_1),
     field(RW, 16..=31, segment_selector),
     field(RW, 32..=34, pub ist),

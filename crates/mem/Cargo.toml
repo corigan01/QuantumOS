@@ -11,7 +11,7 @@ lldebug = {workspace = true}
 util = {workspace = true}
 boolvec = {workspace = true, optional = true}
 arch = {workspace = true}
-hw = {workspace = true}
+bits = {workspace = true}
 spin = "0.9.8"
 
 [features]

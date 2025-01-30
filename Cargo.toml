@@ -16,8 +16,7 @@ members = [
   "crates/lldebug", 
   "crates/serial", 
   "crates/lldebug-macro", 
-  "crates/hw", 
-  "crates/hw-macro", 
+  "crates/bits-macro", 
   "crates/util", 
   "crates/elf", 
   "crates/mem",
@@ -52,8 +51,7 @@ bootgfx = { path = "crates/bootgfx" }
 serial = { path = "crates/serial" }
 lldebug = { path = "crates/lldebug" }
 lldebug-macro = { path = "crates/lldebug-macro" }
-hw = { path = "crates/hw" }
-hw-macro = { path = "crates/hw-macro" }
+bits-macro = { path = "crates/bits-macro" }
 util = { path = "crates/util" }
 elf = { path = "crates/elf" }
 mem = { path = "crates/mem" }

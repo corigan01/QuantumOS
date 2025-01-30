@@ -42,7 +42,6 @@ use arch::{
     },
     registers::cr3,
 };
-use hw::make_hw;
 use lldebug::logln;
 use spin::RwLock;
 use util::consts::PAGE_4K;
@@ -826,7 +825,7 @@ impl Virt2PhysMapping {
 }
 
 /// Options for mapping a page
-#[make_hw(
+#[bits::bits(
     /// If there is already a mapped page here, override it
     field(RW, 0, pub overwrite),
     /// If you are mapping a page entry with permissive options (say the USER bit)
@@ -850,7 +849,7 @@ impl Virt2PhysMapping {
 pub struct VmOptions(usize);
 
 /// Permissions for mapping a page
-#[make_hw(
+#[bits::bits(
     /// Make execute is possible
     field(RW, 0, pub exec),
     /// Make reading possible

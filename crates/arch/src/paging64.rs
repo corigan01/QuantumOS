@@ -24,14 +24,12 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 use core::{fmt::Display, marker::PhantomPinned};
-
-use hw::make_hw;
 use util::consts::PAGE_4K;
 
 /// The max 'bits' of physical memory the system supports.
 pub const MAX_PHY_MEMORY_WIDTH: usize = 48;
 
-#[make_hw(
+#[bits::bits(
     field(RW, 0, pub present),
     field(RW, 1, pub read_write),
     field(RW, 2, pub user_access),
@@ -62,7 +60,7 @@ impl PageEntry4K {
     }
 }
 
-#[make_hw(
+#[bits::bits(
     field(RW, 0, pub present),
     field(RW, 1, pub read_write),
     field(RW, 2, pub user_access),
@@ -103,7 +101,7 @@ impl PageEntry2M {
     }
 }
 
-#[make_hw(
+#[bits::bits(
     field(RW, 0, pub present),
     field(RW, 1, pub read_write),
     field(RW, 2, pub user_access),
@@ -160,7 +158,7 @@ impl PageEntry1G {
 /// It would be a good idea to verify that all 'bit' or options set in this entry  does exactly
 /// what you intend it to do before loading it. Page tables can cause the entire system to become
 /// unstable if mapped wrong -- **this is very important.**
-#[make_hw( 
+#[bits::bits( 
     field(RW, 0, pub present),
     field(RW, 1, pub read_write),
     field(RW, 2, pub user_access),
@@ -213,7 +211,7 @@ impl PageEntryLvl2 {
 /// It would be a good idea to verify that all 'bit' or options set in this entry  does exactly
 /// what you intend it to do before loading it. Page tables can cause the entire system to become
 /// unstable if mapped wrong -- **this is very important.**
-#[make_hw( 
+#[bits::bits( 
     field(RW, 0, pub present),
     field(RW, 1, pub read_write),
     field(RW, 2, pub user_access),
@@ -266,7 +264,7 @@ impl PageEntryLvl3 {
 /// It would be a good idea to verify that all 'bit' or options set in this entry  does exactly
 /// what you intend it to do before loading it. Page tables can cause the entire system to become
 /// unstable if mapped wrong -- **this is very important.**
-#[make_hw( 
+#[bits::bits( 
     field(RW, 0, pub present),
     field(RW, 1, pub read_write),
     field(RW, 2, pub user_access),
@@ -319,7 +317,7 @@ impl PageEntryLvl4 {
 /// It would be a good idea to verify that all 'bit' or options set in this entry  does exactly
 /// what you intend it to do before loading it. Page tables can cause the entire system to become
 /// unstable if mapped wrong -- **this is very important.**
-#[make_hw( 
+#[bits::bits( 
     field(RW, 0, pub present),
     field(RW, 1, pub read_write),
     field(RW, 2, pub user_access),

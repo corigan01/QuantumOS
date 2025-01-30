@@ -24,6 +24,8 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 #![no_std]
+
+pub use bits_macro::*;
 use core::ops::RangeBounds;
 
 /// # Bit Manipulation
