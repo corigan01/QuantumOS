@@ -23,15 +23,16 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use std::collections::HashMap;
+
 use proc_macro_error::{abort, emit_error};
 use proc_macro2::Span;
 use syn::{
-    Attribute, Expr, FnArg, Ident, ItemFn, ItemMod, LitBool, LitStr, ReturnType, Signature, Token,
-    Visibility,
+    Attribute, Expr, FnArg, Ident, ItemFn, LitBool, LitStr, ReturnType, Token, Visibility,
     parse::Parse,
     punctuated::Punctuated,
     spanned::Spanned,
-    token::{self, Brace},
+    token::{self},
 };
 
 #[derive(Clone, Copy, Debug)]
@@ -143,6 +144,45 @@ impl Parse for PortalTrait {
             };
 
             endpoints.push(item_fn);
+        }
+
+        // Check if all endpoints have seperate IDs
+        let mut ids_found: HashMap<usize, Span> = HashMap::new();
+
+        for endpoint in &endpoints {
+            match &endpoint.endpoint {
+                EndpointKind::None => (),
+                EndpointKind::Event(event_attribute) => {
+                    if let Some(other_span) = ids_found.get(&event_attribute.id) {
+                        let id = ids_found.keys().max().copied().unwrap_or(0) + 1;
+
+                        emit_error!(
+                            event_attribute.span,
+                            "Cannot have two endpoint functions with the same ID ({})",
+                            event_attribute.id;
+                            help = "Try changing this ID to {}.", id;
+                            node = other_span.span() => "Previous use of the ID {} here", event_attribute.id;
+                        );
+                    } else {
+                        ids_found.insert(event_attribute.id, event_attribute.span);
+                    }
+                }
+                EndpointKind::Handle(handle_attribute) => {
+                    if let Some(other_span) = ids_found.get(&handle_attribute.id) {
+                        let id = ids_found.keys().max().copied().unwrap_or(0) + 1;
+
+                        emit_error!(
+                            handle_attribute.span,
+                            "Cannot have two endpoint functions with the same ID ({})",
+                            handle_attribute.id;
+                            help = "Try changing this ID to {}.", id;
+                            node = other_span.span() => "Previous use of the ID {} here", handle_attribute.id;
+                        );
+                    } else {
+                        ids_found.insert(handle_attribute.id, handle_attribute.span);
+                    }
+                }
+            }
         }
 
         Ok(Self {
@@ -269,11 +309,11 @@ impl Parse for PortalEndpoint {
                 let name_value_attr_inner = attr.meta.require_name_value()?;
                 match endpoint {
                     EndpointKind::Event(_) => emit_error!(
-                        attr.span(),
+                        attr,
                         "Cannot define multiple #[event = ..] for a single event"
                     ),
                     EndpointKind::Handle(_) => emit_error!(
-                        attr.span(),
+                        attr,
                         "A endpoint function can either be `event` or `handle` but never both"; help = "Remove either `#[event = ..]` or `#[handle = ..]`"
                     ),
                     EndpointKind::None => (),
@@ -281,18 +321,18 @@ impl Parse for PortalEndpoint {
                 match (&name_value_attr_inner.value).try_into() {
                     Ok(value) => endpoint = EndpointKind::Event(value),
                     Err(err) => {
-                        emit_error!(attr.span(), "Cannot parse #[event = ..] because {}", err)
+                        emit_error!(attr, "Cannot parse #[event = ..] because {}", err)
                     }
                 }
             } else if attr.path().is_ident("handle") {
                 let name_value_attr_inner = attr.meta.require_name_value()?;
                 match endpoint {
                     EndpointKind::Handle(_) => emit_error!(
-                        attr.span(),
+                        attr,
                         "Cannot define multiple #[handle = ..] for a single handle"
                     ),
                     EndpointKind::Event(_) => emit_error!(
-                        attr.span(),
+                        attr,
                         "A endpoint function can either be `event` or `handle` but never both"; help = "Remove either `#[event = ..]` or `#[handle = ..]`"
                     ),
                     EndpointKind::None => (),
@@ -300,12 +340,12 @@ impl Parse for PortalEndpoint {
                 match (&name_value_attr_inner.value).try_into() {
                     Ok(value) => endpoint = EndpointKind::Handle(value),
                     Err(err) => {
-                        emit_error!(attr.span(), "Cannot parse #[handle = ..] because {}", err)
+                        emit_error!(attr, "Cannot parse #[handle = ..] because {}", err)
                     }
                 }
             } else {
                 emit_error!(
-                    attr.span(),
+                    attr,
                     "Unsupported attribute on portal: '{}'",
                     attr.span().source_text().unwrap_or("??".into())
                 );
@@ -314,7 +354,7 @@ impl Parse for PortalEndpoint {
 
         if matches!(endpoint, EndpointKind::None) {
             emit_error!(
-                item_fn.span(),
+                item_fn,
                 "This endpoint function must be either an event, or a handle.";
                 help = "Consider adding either `#[event = 0]` or `#[handle = 0]`",
             );

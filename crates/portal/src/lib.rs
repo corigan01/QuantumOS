@@ -38,5 +38,6 @@ pub trait KernelPortal {
         }
     }
 
+    #[event = 2]
     fn debug(msg: &str) -> i32 {}
 }
