@@ -25,10 +25,92 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 use proc_macro_error::emit_error;
 use proc_macro2::{Span, TokenStream as TokenStream2};
-use quote::quote;
-use syn::{FnArg, Ident, Lifetime, spanned::Spanned};
+use quote::{quote, quote_spanned};
+use syn::{FnArg, Ident, Lifetime, Visibility, spanned::Spanned, token::Pub};
 
 use crate::portal_parse::{EndpointKind, PortalEndpoint, PortalMacroInput, ProtocolKind};
+
+#[derive(Debug)]
+struct PortalMetadata {
+    input_needs_lifetime: bool,
+    input_types: Vec<(Ident, Vec<Box<syn::Type>>)>,
+    output_type: Vec<(Ident, Box<syn::Type>)>,
+}
+
+impl PortalMetadata {
+    pub fn new(portal: &PortalMacroInput) -> Self {
+        let input_types: Vec<(Ident, Vec<Box<syn::Type>>)> = portal
+            .trait_input
+            .endpoints
+            .iter()
+            .map(|endpoint| {
+                (
+                    to_enum_name(&endpoint.fn_ident),
+                    endpoint
+                        .input
+                        .iter()
+                        .map(|input| -> Box<syn::Type> {
+                            match input.clone() {
+                                FnArg::Receiver(_) => Box::new(syn::parse_str("()").unwrap()),
+                                FnArg::Typed(mut pat_type) => {
+                                    match pat_type.ty.as_mut() {
+                                        syn::Type::Reference(type_reference) => {
+                                            type_reference.lifetime =
+                                                Some(Lifetime::new("'a", Span::call_site()));
+                                        }
+                                        _ => (),
+                                    }
+
+                                    pat_type.ty
+                                }
+                            }
+                        })
+                        .collect(),
+                )
+            })
+            .collect();
+
+        let output_type = portal
+        .trait_input
+        .endpoints
+        .iter()
+        .map(|endpoint| {
+            (
+                to_enum_name(&endpoint.fn_ident),
+                match endpoint.output.clone() {
+                    syn::ReturnType::Default => Box::new(syn::parse_str("()").unwrap()),
+                    syn::ReturnType::Type(_, mut ty) => {
+                        match ty.as_mut() {
+                            syn::Type::Reference(type_reference) => {
+                                emit_error!(
+                                    type_reference.span(),
+                                    "Values with lifetimes are not supported in endpoint's output"
+                                );
+                            }
+                            _ => (),
+                        }
+
+                        ty
+                    }
+                },
+            )
+        }).collect();
+
+        let mut input_needs_lifetime = false;
+        input_types.iter().for_each(|(_, ty_vec)| {
+            ty_vec.iter().for_each(|typ| match typ.as_ref() {
+                syn::Type::Path(_) => input_needs_lifetime = true,
+                _ => (),
+            })
+        });
+
+        Self {
+            input_needs_lifetime,
+            input_types,
+            output_type,
+        }
+    }
+}
 
 fn to_module_name(ident: &Ident) -> Ident {
     let mut new_str = String::new();
@@ -47,6 +129,7 @@ fn to_module_name(ident: &Ident) -> Ident {
 }
 
 pub fn generate_ast_portal(portal: &PortalMacroInput) -> TokenStream2 {
+    let metadata = PortalMetadata::new(portal);
     let portal_name = &portal.trait_input.portal_name;
     let portal_module_name = to_module_name(portal_name);
     let portal_vis = &portal.trait_input.vis;
@@ -55,16 +138,18 @@ pub fn generate_ast_portal(portal: &PortalMacroInput) -> TokenStream2 {
     let output_enum_ident =
         Ident::new("KernelPortalOutputs", portal.trait_input.portal_name.span());
 
-    let client_tokens = generate_client_trait(portal, &input_enum_ident, &output_enum_ident);
-    let enums = generate_endpoint_enums(portal, &input_enum_ident, &output_enum_ident);
+    let trait_tokens = generate_client_trait(portal, &input_enum_ident, &output_enum_ident);
+    let enums = generate_endpoint_enums(&input_enum_ident, &output_enum_ident, &metadata);
+    let defined_types = generate_functions_inner_types(&portal);
 
     quote! {
         #portal_vis mod #portal_module_name {
+            #defined_types
             #enums
+            #trait_tokens
 
             /// Client side communication over this portal
             pub mod client {
-                #client_tokens
             }
 
             /// Server side communication over this portal
@@ -115,7 +200,91 @@ fn endpoints_enum_input(endpoint: &PortalEndpoint, input_enum_ident: &Ident) -> 
     });
 
     quote! {
-        super::#input_enum_ident::#endpoint_enum_front( #(#input_argument_names),* )
+        #input_enum_ident::#endpoint_enum_front( #(#input_argument_names),* )
+    }
+}
+
+fn generate_functions_inner_types(portal: &PortalMacroInput) -> TokenStream2 {
+    let portal_types = portal
+        .trait_input
+        .endpoints
+        .iter()
+        .map(|endpoint| {
+            endpoint.fn_body.stmts.iter().map(|st| match st {
+                syn::Stmt::Item(item) => match item {
+                    syn::Item::Enum(item_enum) => {
+                        let mut item_enum = item_enum.clone();
+                        item_enum.vis = Visibility::Public(Pub {
+                            span: item_enum.span(),
+                        });
+
+                        quote! { #item_enum }
+                    }
+                    unsupported => {
+                        emit_error!(
+                            unsupported.span(),
+                            "Unsupported definition, currently `#[portal]` only supports `enum`"
+                        );
+                        quote! {}
+                    }
+                },
+                unsupported => {
+                    emit_error!(
+                        unsupported.span(),
+                        "Unsupported definition, currently `#[portal]` only supports `enum`"
+                    );
+                    quote! {}
+                }
+            })
+        })
+        .flatten();
+
+    quote! { #(#portal_types)* }
+}
+
+fn generate_endpoint_fn_body_syscall(
+    endpoint: &PortalEndpoint,
+    portal_name: &Ident,
+    means_fn: &Ident,
+    input_enum_ident: &Ident,
+    output_enum_ident: &Ident,
+) -> TokenStream2 {
+    let ident = &endpoint.fn_ident;
+    let endpoint_enum_front = to_enum_name(ident);
+    let input_enum = endpoints_enum_input(endpoint, input_enum_ident);
+
+    quote! {match Self::#means_fn(#input_enum) {
+            #output_enum_ident::#endpoint_enum_front(inner_fn_value) => inner_fn_value,
+            inner_fn_value => unreachable!("Got `{:?}`, but expected '{}' for {}'s endpoint {}",
+                inner_fn_value,
+                stringify!(#output_enum_ident::#endpoint_enum_front),
+                stringify!(#portal_name),
+                stringify!(#ident)
+            ),
+        }
+    }
+}
+
+fn generate_endpoint_fn_body_ipc(
+    endpoint: &PortalEndpoint,
+    portal_name: &Ident,
+    means_fn: &Ident,
+    input_enum_ident: &Ident,
+    output_enum_ident: &Ident,
+) -> TokenStream2 {
+    let ident = &endpoint.fn_ident;
+    let endpoint_enum_front = to_enum_name(ident);
+    let input_enum = endpoints_enum_input(endpoint, input_enum_ident);
+
+    quote! {match self.#means_fn(#input_enum) {
+            #output_enum_ident::#endpoint_enum_front(inner_fn_value) => inner_fn_value,
+            inner_fn_value => unreachable!("Got `{:?}`, but expected '{}' for {}'s endpoint {}",
+                inner_fn_value,
+                stringify!(#output_enum_ident::#endpoint_enum_front),
+                stringify!(#portal_name),
+                stringify!(#ident)
+            ),
+        }
     }
 }
 
@@ -142,90 +311,53 @@ fn generate_endpoint_trait_sig(
     };
     let outputs = &endpoint.output;
 
-    let endpoint_enum_front = to_enum_name(ident);
-    let input_enum = endpoints_enum_input(endpoint, input_enum_ident);
+    let fn_body = match portal_kind {
+        ProtocolKind::Unknown(_) => quote! {},
+        ProtocolKind::Syscall(_) => generate_endpoint_fn_body_syscall(
+            endpoint,
+            portal_name,
+            means_fn,
+            input_enum_ident,
+            output_enum_ident,
+        ),
+        ProtocolKind::Ipc(_) => generate_endpoint_fn_body_ipc(
+            endpoint,
+            portal_name,
+            means_fn,
+            input_enum_ident,
+            output_enum_ident,
+        ),
+    };
 
     quote! {
         #(#docs)*
         #unsafety fn #ident(#(#inputs),*) #outputs {
-            match #means_fn(#input_enum) {
-                super::#output_enum_ident::#endpoint_enum_front(inner_fn_value) => inner_fn_value,
-                inner_fn_value => unreachable!("Got `{:?}`, but expected '{}' for {}'s endpoint {}",
-                    inner_fn_value,
-                    stringify!(super::#output_enum_ident::#endpoint_enum_front),
-                    stringify!(#portal_name),
-                    stringify!(#ident)
-                ),
-            }
+            #fn_body
         }
     }
 }
 
 fn generate_endpoint_enums(
-    portal: &PortalMacroInput,
     input_enum_ident: &Ident,
     output_enum_ident: &Ident,
+    metadata: &PortalMetadata,
 ) -> TokenStream2 {
-    let all_input_types = portal
-        .trait_input
-        .endpoints
-        .iter()
-        .map(|endpoint| {
-            (
-                to_enum_name(&endpoint.fn_ident),
-                endpoint.input.iter().map(|input| -> Box<syn::Type> {
-                    match input.clone() {
-                        FnArg::Receiver(_) => Box::new(syn::parse_str("()").unwrap()),
-                        FnArg::Typed(mut pat_type) => {
-                            match pat_type.ty.as_mut() {
-                                syn::Type::Reference(type_reference) => {
-                                    type_reference.lifetime =
-                                        Some(Lifetime::new("'a", Span::call_site()));
-                                }
-                                _ => (),
-                            }
+    let all_input_types = metadata.input_types.iter().map(|(ident, arguments)| {
+        quote_spanned! {ident.span()=> #ident(#(#arguments),*) }
+    });
 
-                            pat_type.ty
-                        }
-                    }
-                }),
-            )
-        })
-        .map(|(name, args)| {
-            quote! { #name( #(#args),* ) }
-        });
+    let all_output_types = metadata.output_type.iter().map(|(ident, argument)| {
+        quote_spanned! {ident.span()=> #ident(#argument) }
+    });
 
-    let all_output_types = portal
-        .trait_input
-        .endpoints
-        .iter()
-        .map(|endpoint| {
-            (
-                to_enum_name(&endpoint.fn_ident),
-                match endpoint.output.clone() {
-                    syn::ReturnType::Default => Box::new(syn::parse_str("()").unwrap()),
-                    syn::ReturnType::Type(_, mut ty) => {
-                        match ty.as_mut() {
-                            syn::Type::Reference(type_reference) => {
-                                emit_error!(
-                                    type_reference.span(),
-                                    "Values with lifetimes are not supported in endpoint's output"
-                                );
-                            }
-                            _ => (),
-                        }
-
-                        ty
-                    }
-                },
-            )
-        })
-        .map(|(name, arg)| {
-            quote! { #name( #arg ) }
-        });
+    let input_enum_sig = if metadata.input_needs_lifetime {
+        quote_spanned! {input_enum_ident.span()=> pub enum #input_enum_ident<'a> }
+    } else {
+        quote_spanned! {input_enum_ident.span()=> pub enum #input_enum_ident }
+    };
 
     quote! {
-        pub enum #input_enum_ident {
+        #input_enum_sig {
             #(#all_input_types),*
         }
 
@@ -236,13 +368,13 @@ fn generate_endpoint_enums(
 }
 
 /// Defines all the events
-pub fn generate_client_trait(
+fn generate_client_trait(
     portal: &PortalMacroInput,
     input_enum_ident: &Ident,
     output_enum_ident: &Ident,
 ) -> TokenStream2 {
     let protocol_kind = portal.args.protocol;
-    let means_fn_ident = Ident::new("means_fn", portal.trait_input.portal_name.span());
+    let into_portal_ident = Ident::new("into_portal", portal.trait_input.portal_name.span());
     let portal_name = &portal.trait_input.portal_name;
     let endpoints: Vec<TokenStream2> = portal
         .trait_input
@@ -253,7 +385,7 @@ pub fn generate_client_trait(
             generate_endpoint_trait_sig(
                 endpoint,
                 portal_name,
-                &means_fn_ident,
+                &into_portal_ident,
                 &input_enum_ident,
                 &output_enum_ident,
                 protocol_kind.clone(),

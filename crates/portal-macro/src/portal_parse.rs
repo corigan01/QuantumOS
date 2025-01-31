@@ -25,10 +25,10 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 use std::collections::HashMap;
 
-use proc_macro_error::{abort, emit_error};
+use proc_macro_error::emit_error;
 use proc_macro2::Span;
 use syn::{
-    Attribute, Expr, FnArg, Ident, ItemFn, LitBool, LitStr, ReturnType, Token, Visibility,
+    Attribute, Block, Expr, FnArg, Ident, ItemFn, LitBool, LitStr, ReturnType, Token, Visibility,
     parse::Parse,
     punctuated::Punctuated,
     spanned::Spanned,
@@ -306,6 +306,7 @@ pub struct PortalEndpoint {
     pub input: Punctuated<FnArg, Token![,]>,
     pub output: ReturnType,
     pub is_unsafe: Option<Token![unsafe]>,
+    pub fn_body: Box<Block>,
 }
 
 impl Parse for PortalEndpoint {
@@ -392,9 +393,9 @@ impl Parse for PortalEndpoint {
             input: item_fn.sig.inputs,
             output: item_fn.sig.output,
             is_unsafe: item_fn.sig.unsafety,
+            fn_body: item_fn.block,
         };
 
-        // endpoint.verify_arguments_are_supported_or_defined();
         Ok(endpoint)
     }
 }

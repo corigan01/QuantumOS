@@ -28,7 +28,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 pub use portal_macro::*;
 
 /// This is just for testing
-#[portal(global = true, protocol = "ipc")]
+#[portal(global = true, protocol = "syscall")]
 pub trait KernelPortal {
     #[event = 1]
     fn exit(exit_reson: ExitReason) {
@@ -42,7 +42,11 @@ pub trait KernelPortal {
     fn debug(msg: &str) -> i32 {}
 
     #[event = 3]
-    fn memory_map(loc: MemoryLocation, prot: MemoryProtections) -> Result<*mut u8, SysMemoryError> {
+    fn memory_map(
+        loc: MemoryLocation,
+        prot: MemoryProtections,
+        bytes: usize,
+    ) -> Result<*mut u8, SysMemoryError> {
         pub enum MemoryLocation {
             Anywhere,
         }
