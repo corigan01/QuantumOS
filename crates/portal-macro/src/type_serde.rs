@@ -151,18 +151,11 @@ pub fn generate_ast_portal(portal: &PortalMacroInput) -> TokenStream2 {
 
     quote! {
         #portal_vis mod #portal_module_name {
+            #consts
             #defined_types
             #enums
+
             #trait_tokens
-            #consts
-
-            /// Client side communication over this portal
-            pub mod client {
-            }
-
-            /// Server side communication over this portal
-            pub mod server {
-            }
         }
     }
 }
@@ -207,8 +200,14 @@ fn endpoints_enum_input(endpoint: &PortalEndpoint, input_enum_ident: &Ident) -> 
         syn::FnArg::Receiver(receiver) => Ident::new("not_supported_self", receiver.span()),
     });
 
-    quote! {
-        #input_enum_ident::#endpoint_enum_front( #(#input_argument_names),* )
+    if endpoint.input.is_empty() {
+        quote! {
+            #input_enum_ident::#endpoint_enum_front
+        }
+    } else {
+        quote! {
+            #input_enum_ident::#endpoint_enum_front( #(#input_argument_names),* )
+        }
     }
 }
 
@@ -395,7 +394,11 @@ fn generate_endpoint_enums(
     metadata: &PortalMetadata,
 ) -> TokenStream2 {
     let all_input_types = metadata.input_types.iter().map(|(ident, arguments)| {
-        quote_spanned! {ident.span()=> #ident(#(#arguments),*) }
+        if arguments.is_empty() {
+            quote_spanned! {ident.span()=> #ident }
+        } else {
+            quote_spanned! {ident.span()=> #ident(#(#arguments),*) }
+        }
     });
 
     let all_output_types = metadata.output_type.iter().map(|(ident, argument)| {

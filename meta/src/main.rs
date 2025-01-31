@@ -48,7 +48,7 @@ async fn build(
         tokio::join!(build_project(multiboot_mode, emit_asm), DiskImgBaker::new())
     };
 
-    let artifacts = artifacts.expect("Failed to build artifacts!");
+    let artifacts = artifacts?;
     let mut disk = disk?;
 
     disk.write_bootsector(&artifacts.bootsector).await?;

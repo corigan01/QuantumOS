@@ -32,6 +32,10 @@ pub trait HelloPortal {
     #[event = 1]
     fn ping_hello_server() -> bool {}
 
+    /// Test 2
     #[event = 2]
     fn get_hello() -> u32 {}
+    
+    #[event = 3]
+    fn something_hello() {}
 }
