@@ -42,6 +42,7 @@ pub struct PortalMacroInput {
 }
 
 #[derive(Clone, Copy, Debug)]
+#[allow(dead_code)]
 pub enum ProtocolKind {
     Unknown(Span),
     Syscall(Span),
@@ -116,6 +117,7 @@ impl Parse for PortalArgs {
 }
 
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct PortalTrait {
     pub attr: Vec<Attribute>,
     pub vis: Visibility,

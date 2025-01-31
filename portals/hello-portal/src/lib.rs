@@ -23,21 +23,15 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use portal_parse::PortalMacroInput;
-use proc_macro::TokenStream;
-use proc_macro_error::proc_macro_error;
-use syn::parse_macro_input;
-use type_serde::generate_ast_portal;
+#![no_std]
 
-mod portal_parse;
-mod type_serde;
+use portal::portal;
 
-#[proc_macro_error]
-#[proc_macro_attribute]
-pub fn portal(args: TokenStream, input: TokenStream) -> TokenStream {
-    let args = parse_macro_input!(args as portal_parse::PortalArgs);
-    let trait_input = parse_macro_input!(input as portal_parse::PortalTrait);
-    let portal_macro = PortalMacroInput { args, trait_input };
+#[portal(protocol = "ipc")]
+pub trait HelloPortal {
+    #[event = 1]
+    fn ping_hello_server() -> bool {}
 
-    generate_ast_portal(&portal_macro).into()
+    #[event = 2]
+    fn get_hello() -> u32 {}
 }

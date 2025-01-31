@@ -1,5 +1,5 @@
 [package]
-name = "hello-server"
+name = "hello-portal"
 edition = "2024"
 version.workspace = true
 authors.workspace = true
@@ -7,5 +7,4 @@ description.workspace = true
 documentation.workspace = true
 
 [dependencies]
-libq = { workspace = true }
-hello-portal = { workspace = true }
+portal = {workspace = true}

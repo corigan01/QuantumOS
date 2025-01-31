@@ -27,7 +27,8 @@ members = [
   "crates/tar",
   "user/hello-server",
   "crates/portal-macro",
-  "crates/portal"
+  "crates/portal",
+  "portals/hello-portal"
 ]
 
 default-members = ["meta"]
@@ -60,6 +61,7 @@ libq = { path = "user/libq" }
 tar = { path = "crates/tar" }
 portal = { path = "crates/portal" }
 portal-macro = { path = "crates/portal-macro" }
+hello-portal = { path = "portals/hello-portal" }
 
 [profile.stage-bootsector]
 inherits = "release"

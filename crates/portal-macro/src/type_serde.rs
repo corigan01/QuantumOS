@@ -99,7 +99,7 @@ impl PortalMetadata {
         let mut input_needs_lifetime = false;
         input_types.iter().for_each(|(_, ty_vec)| {
             ty_vec.iter().for_each(|typ| match typ.as_ref() {
-                syn::Type::Path(_) => input_needs_lifetime = true,
+                syn::Type::Reference(_) => input_needs_lifetime = true,
                 _ => (),
             })
         });
@@ -134,9 +134,14 @@ pub fn generate_ast_portal(portal: &PortalMacroInput) -> TokenStream2 {
     let portal_module_name = to_module_name(portal_name);
     let portal_vis = &portal.trait_input.vis;
 
-    let input_enum_ident = Ident::new("KernelPortalInputs", portal.trait_input.portal_name.span());
-    let output_enum_ident =
-        Ident::new("KernelPortalOutputs", portal.trait_input.portal_name.span());
+    let input_enum_ident = Ident::new(
+        &format!("{}Inputs", portal.trait_input.portal_name.to_string()),
+        portal.trait_input.portal_name.span(),
+    );
+    let output_enum_ident = Ident::new(
+        &format!("{}Output", portal.trait_input.portal_name.to_string()),
+        portal.trait_input.portal_name.span(),
+    );
 
     let trait_tokens =
         generate_client_trait(portal, &input_enum_ident, &output_enum_ident, &metadata);
