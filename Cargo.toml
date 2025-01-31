@@ -28,7 +28,8 @@ members = [
   "user/hello-server",
   "crates/portal-macro",
   "crates/portal",
-  "portals/hello-portal"
+  "portals/hello-portal",
+  "portals/quantum-portal"
 ]
 
 default-members = ["meta"]
@@ -62,6 +63,7 @@ tar = { path = "crates/tar" }
 portal = { path = "crates/portal" }
 portal-macro = { path = "crates/portal-macro" }
 hello-portal = { path = "portals/hello-portal" }
+hello-portal = { path = "portals/quantum-portal" }
 
 [profile.stage-bootsector]
 inherits = "release"
