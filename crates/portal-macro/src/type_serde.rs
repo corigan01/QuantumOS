@@ -138,15 +138,18 @@ pub fn generate_ast_portal(portal: &PortalMacroInput) -> TokenStream2 {
     let output_enum_ident =
         Ident::new("KernelPortalOutputs", portal.trait_input.portal_name.span());
 
-    let trait_tokens = generate_client_trait(portal, &input_enum_ident, &output_enum_ident);
+    let trait_tokens =
+        generate_client_trait(portal, &input_enum_ident, &output_enum_ident, &metadata);
     let enums = generate_endpoint_enums(&input_enum_ident, &output_enum_ident, &metadata);
     let defined_types = generate_functions_inner_types(&portal);
+    let consts = generate_endpoint_consts(portal);
 
     quote! {
         #portal_vis mod #portal_module_name {
             #defined_types
             #enums
             #trait_tokens
+            #consts
 
             /// Client side communication over this portal
             pub mod client {
@@ -218,7 +221,11 @@ fn generate_functions_inner_types(portal: &PortalMacroInput) -> TokenStream2 {
                             span: item_enum.span(),
                         });
 
-                        quote! { #item_enum }
+                        quote! {
+                            /// Part of an endpoint
+                            #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+                            #item_enum
+                        }
                     }
                     unsupported => {
                         emit_error!(
@@ -337,6 +344,46 @@ fn generate_endpoint_trait_sig(
     }
 }
 
+fn to_const_name(fn_ident: &Ident, extra: &str) -> Ident {
+    let mut new_str = String::new();
+
+    for old_char in fn_ident.to_string().chars() {
+        new_str.push(old_char.to_ascii_uppercase());
+    }
+
+    new_str.push_str("_ID_");
+    new_str.push_str(extra);
+    Ident::new(&new_str, fn_ident.span())
+}
+
+fn generate_endpoint_consts(portal: &PortalMacroInput) -> TokenStream2 {
+    let consts = portal
+        .trait_input
+        .endpoints
+        .iter()
+        .map(|endpoint| match &endpoint.endpoint {
+            EndpointKind::None => quote! {},
+            EndpointKind::Event(event_attribute) => {
+                let id = event_attribute.id;
+                let ident = to_const_name(&endpoint.fn_ident, "EVENT");
+
+                quote! {
+                    pub const #ident: usize = #id;
+                }
+            }
+            EndpointKind::Handle(handle_attribute) => {
+                let id = handle_attribute.id;
+                let ident = to_const_name(&endpoint.fn_ident, "HANDLE");
+
+                quote! {
+                    pub const #ident: usize = #id;
+                }
+            }
+        });
+
+    quote! { #(#consts)* }
+}
+
 fn generate_endpoint_enums(
     input_enum_ident: &Ident,
     output_enum_ident: &Ident,
@@ -357,13 +404,45 @@ fn generate_endpoint_enums(
     };
 
     quote! {
+        #[derive(Debug)]
         #input_enum_sig {
             #(#all_input_types),*
         }
 
+        #[derive(Debug)]
         pub enum #output_enum_ident {
             #(#all_output_types),*
         }
+    }
+}
+
+fn generate_into_portal_function(
+    into_portal_ident: &Ident,
+    input_enum_ident: &Ident,
+    output_enum_ident: &Ident,
+    metadata: &PortalMetadata,
+    portal_kind: ProtocolKind,
+) -> TokenStream2 {
+    match portal_kind {
+        ProtocolKind::Unknown(_) => quote! {},
+        ProtocolKind::Syscall(_) if metadata.input_needs_lifetime => {
+            quote! {
+                fn #into_portal_ident<'a>(input: #input_enum_ident<'a>) -> #output_enum_ident;
+            }
+        }
+        ProtocolKind::Syscall(_) => {
+            quote! {
+                fn #into_portal_ident(input: #input_enum_ident) -> #output_enum_ident;
+            }
+        }
+        ProtocolKind::Ipc(_) if metadata.input_needs_lifetime => {
+            quote! {
+                fn #into_portal_ident<'a>(&self, input: #input_enum_ident<'a>) -> #output_enum_ident;
+            }
+        }
+        ProtocolKind::Ipc(_) => quote! {
+                fn #into_portal_ident(&self, input: #input_enum_ident) -> #output_enum_ident;
+        },
     }
 }
 
@@ -372,6 +451,7 @@ fn generate_client_trait(
     portal: &PortalMacroInput,
     input_enum_ident: &Ident,
     output_enum_ident: &Ident,
+    metadata: &PortalMetadata,
 ) -> TokenStream2 {
     let protocol_kind = portal.args.protocol;
     let into_portal_ident = Ident::new("into_portal", portal.trait_input.portal_name.span());
@@ -393,8 +473,18 @@ fn generate_client_trait(
         })
         .collect();
 
+    let into_portal_fn = generate_into_portal_function(
+        &into_portal_ident,
+        input_enum_ident,
+        output_enum_ident,
+        metadata,
+        portal.args.protocol,
+    );
+
     quote! {
         pub trait #portal_name {
+            #into_portal_fn
+
             #(#endpoints)*
 
         }
