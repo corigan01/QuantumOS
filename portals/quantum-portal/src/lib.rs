@@ -24,3 +24,39 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 #![no_std]
+
+use portal::portal;
+
+#[portal(protocol = "syscall", global = true)]
+pub trait QuantumPortal {
+    #[event = 0]
+    fn exit(exit_reason: ExitReason) -> ! {
+        enum ExitReason {
+            Success,
+            // TODO: Failure should maybe take an Error of some sort
+            //       to propagate errors from one process to another
+            Failure,
+        }
+    }
+
+    #[event = 1]
+    fn map_memory(
+        location: MemoryLocation,
+        protections: MemoryProtections,
+        bytes: usize,
+    ) -> Result<*mut u8, MapMemoryError> {
+        enum MemoryLocation {
+            Anywhere,
+        }
+        enum MemoryProtections {
+            ReadOnly,
+            ReadWrite,
+            ReadExecute,
+            None,
+        }
+        enum MapMemoryError {
+            InvalidLength(usize),
+            OutOfMemory,
+        }
+    }
+}

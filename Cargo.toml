@@ -63,7 +63,7 @@ tar = { path = "crates/tar" }
 portal = { path = "crates/portal" }
 portal-macro = { path = "crates/portal-macro" }
 hello-portal = { path = "portals/hello-portal" }
-hello-portal = { path = "portals/quantum-portal" }
+quantum-portal = { path = "portals/quantum-portal" }
 
 [profile.stage-bootsector]
 inherits = "release"

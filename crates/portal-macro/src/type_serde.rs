@@ -34,7 +34,7 @@ use crate::portal_parse::{EndpointKind, PortalEndpoint, PortalMacroInput, Protoc
 struct PortalMetadata {
     input_needs_lifetime: bool,
     input_types: Vec<(Ident, Vec<Box<syn::Type>>)>,
-    output_type: Vec<(Ident, Box<syn::Type>)>,
+    output_type: Vec<(Ident, Option<Box<syn::Type>>)>,
 }
 
 impl PortalMetadata {
@@ -49,21 +49,17 @@ impl PortalMetadata {
                     endpoint
                         .input
                         .iter()
-                        .map(|input| -> Box<syn::Type> {
-                            match input.clone() {
-                                FnArg::Receiver(_) => Box::new(syn::parse_str("()").unwrap()),
-                                FnArg::Typed(mut pat_type) => {
-                                    match pat_type.ty.as_mut() {
-                                        syn::Type::Reference(type_reference) => {
-                                            type_reference.lifetime =
-                                                Some(Lifetime::new("'a", Span::call_site()));
-                                        }
-                                        _ => (),
-                                    }
-
-                                    pat_type.ty
+                        .filter_map(|input| match input.clone() {
+                            FnArg::Receiver(_) => None,
+                            FnArg::Typed(mut pat_type) => match pat_type.ty.as_mut() {
+                                syn::Type::Reference(type_reference) => {
+                                    type_reference.lifetime =
+                                        Some(Lifetime::new("'a", Span::call_site()));
+                                    Some(pat_type.ty)
                                 }
-                            }
+                                syn::Type::Never(_) => None,
+                                _ => Some(pat_type.ty),
+                            },
                         })
                         .collect(),
                 )
@@ -71,30 +67,30 @@ impl PortalMetadata {
             .collect();
 
         let output_type = portal
-        .trait_input
-        .endpoints
-        .iter()
-        .map(|endpoint| {
-            (
-                to_enum_name(&endpoint.fn_ident),
-                match endpoint.output.clone() {
-                    syn::ReturnType::Default => Box::new(syn::parse_str("()").unwrap()),
-                    syn::ReturnType::Type(_, mut ty) => {
-                        match ty.as_mut() {
+            .trait_input
+            .endpoints
+            .iter()
+            .map(|endpoint| {
+                (
+                    to_enum_name(&endpoint.fn_ident),
+                    match endpoint.output.clone() {
+                        syn::ReturnType::Default => Some(Box::new(syn::parse_str("()").unwrap())),
+                        syn::ReturnType::Type(_, mut ty) => match ty.as_mut() {
                             syn::Type::Reference(type_reference) => {
                                 emit_error!(
                                     type_reference.span(),
                                     "Values with lifetimes are not supported in endpoint's output"
                                 );
-                            }
-                            _ => (),
-                        }
 
-                        ty
-                    }
-                },
-            )
-        }).collect();
+                                None
+                            }
+                            syn::Type::Never(_) => None,
+                            _ => Some(ty),
+                        },
+                    },
+                )
+            })
+            .collect();
 
         let mut input_needs_lifetime = false;
         input_types.iter().for_each(|(_, ty_vec)| {
@@ -253,6 +249,29 @@ fn generate_functions_inner_types(portal: &PortalMacroInput) -> TokenStream2 {
     quote! { #(#portal_types)* }
 }
 
+fn generate_output_enum_branch(
+    endpoint: &PortalEndpoint,
+    output_enum_ident: &Ident,
+) -> TokenStream2 {
+    let ident = &endpoint.fn_ident;
+    let endpoint_enum_front = to_enum_name(ident);
+
+    match &endpoint.output {
+        syn::ReturnType::Type(_, ty) if matches!(ty.as_ref(), syn::Type::Never(_)) => {
+            quote! {
+                #output_enum_ident::#endpoint_enum_front => {
+                    unreachable!("Should never return from '{}'", stringify!(#ident));
+                },
+            }
+        }
+        _ => {
+            quote! {
+                #output_enum_ident::#endpoint_enum_front(inner_fn_value) => inner_fn_value,
+            }
+        }
+    }
+}
+
 fn generate_endpoint_fn_body_syscall(
     endpoint: &PortalEndpoint,
     portal_name: &Ident,
@@ -261,11 +280,12 @@ fn generate_endpoint_fn_body_syscall(
     output_enum_ident: &Ident,
 ) -> TokenStream2 {
     let ident = &endpoint.fn_ident;
-    let endpoint_enum_front = to_enum_name(ident);
     let input_enum = endpoints_enum_input(endpoint, input_enum_ident);
+    let output_branch = generate_output_enum_branch(endpoint, output_enum_ident);
+    let endpoint_enum_front = to_enum_name(ident);
 
     quote! {match Self::#means_fn(#input_enum) {
-            #output_enum_ident::#endpoint_enum_front(inner_fn_value) => inner_fn_value,
+            #output_branch
             inner_fn_value => unreachable!("Got `{:?}`, but expected '{}' for {}'s endpoint {}",
                 inner_fn_value,
                 stringify!(#output_enum_ident::#endpoint_enum_front),
@@ -284,11 +304,12 @@ fn generate_endpoint_fn_body_ipc(
     output_enum_ident: &Ident,
 ) -> TokenStream2 {
     let ident = &endpoint.fn_ident;
-    let endpoint_enum_front = to_enum_name(ident);
     let input_enum = endpoints_enum_input(endpoint, input_enum_ident);
+    let output_branch = generate_output_enum_branch(endpoint, output_enum_ident);
+    let endpoint_enum_front = to_enum_name(ident);
 
     quote! {match self.#means_fn(#input_enum) {
-            #output_enum_ident::#endpoint_enum_front(inner_fn_value) => inner_fn_value,
+            #output_branch
             inner_fn_value => unreachable!("Got `{:?}`, but expected '{}' for {}'s endpoint {}",
                 inner_fn_value,
                 stringify!(#output_enum_ident::#endpoint_enum_front),
@@ -402,7 +423,11 @@ fn generate_endpoint_enums(
     });
 
     let all_output_types = metadata.output_type.iter().map(|(ident, argument)| {
-        quote_spanned! {ident.span()=> #ident(#argument) }
+        if argument.is_some() {
+            quote_spanned! {ident.span()=> #ident(#argument) }
+        } else {
+            quote_spanned! {ident.span()=> #ident }
+        }
     });
 
     let input_enum_sig = if metadata.input_needs_lifetime {
