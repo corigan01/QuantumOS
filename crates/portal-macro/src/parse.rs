@@ -23,13 +23,13 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use std::collections::HashMap;
+use std::{collections::HashMap, rc::Rc};
 
 use crate::ast;
 use proc_macro_error::emit_error;
 use proc_macro2::Span;
 use syn::{
-    Attribute, Field, Fields, FnArg, Ident, ItemEnum, ItemFn, LitBool, LitStr, ReturnType, Token,
+    Attribute, Fields, FnArg, Ident, ItemEnum, ItemFn, LitBool, LitStr, ReturnType, Token,
     parse::Parse, spanned::Spanned,
 };
 
@@ -224,7 +224,7 @@ impl Parse for ast::ProtocolEndpoint {
         for statement in block.stmts.iter() {
             match statement {
                 syn::Stmt::Item(syn::Item::Enum(enum_statement)) => body.push(
-                    ast::ProtocolDefine::DefinedEnum(Box::new(enum_statement.try_into()?)),
+                    ast::ProtocolDefine::DefinedEnum(Rc::new(enum_statement.try_into()?)),
                 ),
                 stmt => {
                     emit_error!(
@@ -339,10 +339,7 @@ impl TryFrom<&syn::Type> for ast::ProtocolVarType {
                     "u64" => Ok(Self::Unsigned64(path.span())),
                     "usize" => Ok(Self::UnsignedSize(path.span())),
                     "str" => Ok(Self::Str(path.span())),
-                    user_defined => Ok(Self::UserDefined(Ident::new(
-                        user_defined,
-                        type_path.span(),
-                    ))),
+                    user_defined => Ok(Self::Unknown(Ident::new(user_defined, type_path.span()))),
                 }
             }
             syn::Type::Ptr(type_ptr) => Ok(Self::PtrTo {

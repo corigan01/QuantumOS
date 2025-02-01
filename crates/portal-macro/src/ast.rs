@@ -23,10 +23,9 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use std::collections::HashMap;
-
 use proc_macro2::Span;
-use syn::{Attribute, Ident, ItemEnum, Visibility};
+use std::{collections::HashMap, rc::Rc};
+use syn::{Attribute, Ident, Visibility};
 
 #[derive(Debug)]
 #[allow(unused)]
@@ -84,7 +83,8 @@ pub enum ProtocolVarType {
     Unsigned32(Span),
     Unsigned64(Span),
     UnsignedSize(Span),
-    UserDefined(Ident),
+    Unknown(Ident),
+    UserDefined(ProtocolDefine),
     Str(Span),
     RefTo {
         is_mut: bool,
@@ -115,7 +115,7 @@ pub enum ProtocolEndpointKind {
 #[derive(Debug)]
 #[allow(unused)]
 pub enum ProtocolDefine {
-    DefinedEnum(Box<ProtocolEnumDef>),
+    DefinedEnum(Rc<ProtocolEnumDef>),
 }
 
 #[derive(Debug)]
