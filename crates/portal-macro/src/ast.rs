@@ -87,10 +87,12 @@ pub enum ProtocolVarType {
     UserDefined(ProtocolDefine),
     Str(Span),
     RefTo {
+        span: Span,
         is_mut: bool,
         to: Box<ProtocolVarType>,
     },
     PtrTo {
+        span: Span,
         is_mut: bool,
         to: Box<ProtocolVarType>,
     },
@@ -168,8 +170,16 @@ impl ProtocolVarType {
                 }
                 None
             }
-            ProtocolVarType::RefTo { is_mut: _, to } => to.search(f),
-            ProtocolVarType::PtrTo { is_mut: _, to } => to.search(f),
+            ProtocolVarType::RefTo {
+                to,
+                span: _,
+                is_mut: _,
+            } => to.search(f),
+            ProtocolVarType::PtrTo {
+                to,
+                span: _,
+                is_mut: _,
+            } => to.search(f),
             _ => None,
         } {
             return Some(value);

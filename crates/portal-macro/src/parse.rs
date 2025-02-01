@@ -343,10 +343,12 @@ impl TryFrom<&syn::Type> for ast::ProtocolVarType {
                 }
             }
             syn::Type::Ptr(type_ptr) => Ok(Self::PtrTo {
+                span: type_ptr.span(),
                 is_mut: type_ptr.mutability.is_some(),
                 to: Box::new(Self::try_from(type_ptr.elem.as_ref())?),
             }),
             syn::Type::Reference(type_reference) => Ok(Self::RefTo {
+                span: type_reference.span(),
                 is_mut: type_reference.mutability.is_some(),
                 to: Box::new(Self::try_from(type_reference.elem.as_ref())?),
             }),
