@@ -25,10 +25,13 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 use portal_parse::PortalMacroInput;
 use proc_macro::TokenStream;
-use proc_macro_error::{proc_macro_error, abort_if_dirty};
+use proc_macro_error::{abort_if_dirty, proc_macro_error};
+use quote::quote;
 use syn::parse_macro_input;
 use type_serde::generate_ast_portal;
 
+mod ast;
+mod parse;
 mod portal_parse;
 mod type_serde;
 
@@ -41,4 +44,16 @@ pub fn portal(args: TokenStream, input: TokenStream) -> TokenStream {
 
     abort_if_dirty();
     generate_ast_portal(&portal_macro).into()
+}
+
+#[proc_macro_error]
+#[proc_macro_attribute]
+pub fn portal2(args: TokenStream, input: TokenStream) -> TokenStream {
+    let args = parse_macro_input!(args as ast::PortalMacroArgs);
+    let mut trait_input = parse_macro_input!(input as ast::PortalMacro);
+    trait_input.args = Some(args);
+    println!("{:#?}", trait_input);
+
+    abort_if_dirty();
+    quote! {}.into()
 }

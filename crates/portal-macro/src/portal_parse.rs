@@ -29,10 +29,7 @@ use proc_macro_error::emit_error;
 use proc_macro2::Span;
 use syn::{
     Attribute, Block, Expr, FnArg, Ident, ItemFn, LitBool, LitStr, ReturnType, Token, Visibility,
-    parse::Parse,
-    punctuated::Punctuated,
-    spanned::Spanned,
-    token::{self},
+    parse::Parse, punctuated::Punctuated, spanned::Spanned,
 };
 
 #[derive(Debug)]
@@ -70,6 +67,7 @@ impl Parse for ProtocolKind {
 }
 
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct PortalArgs {
     pub global: Option<LitBool>,
     pub protocol: ProtocolKind,
@@ -121,9 +119,7 @@ impl Parse for PortalArgs {
 pub struct PortalTrait {
     pub attr: Vec<Attribute>,
     pub vis: Visibility,
-    pub trait_token: Token![trait],
     pub portal_name: Ident,
-    pub brace_token: token::Brace,
     pub endpoints: Vec<PortalEndpoint>,
 }
 
@@ -131,11 +127,11 @@ impl Parse for PortalTrait {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         let attr = input.call(Attribute::parse_outer)?;
         let vis = input.parse()?;
-        let trait_token = input.parse()?;
+        let _trait_token: Token![trait] = input.parse()?;
         let portal_name = input.parse()?;
 
         let inner;
-        let brace_token = syn::braced!(inner in input);
+        let _brace_token = syn::braced!(inner in input);
         let mut endpoints = Vec::new();
 
         loop {
@@ -205,9 +201,7 @@ impl Parse for PortalTrait {
         Ok(Self {
             attr,
             vis,
-            trait_token,
             portal_name,
-            brace_token,
             endpoints,
         })
     }

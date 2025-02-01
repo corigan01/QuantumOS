@@ -25,9 +25,9 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 #![no_std]
 
-use portal::portal;
+use portal::{portal, portal2};
 
-#[portal(protocol = "syscall", global = true)]
+#[portal2(protocol = "syscall", global = true)]
 pub trait QuantumPortal {
     #[event = 0]
     fn exit(exit_reason: ExitReason) -> ! {
@@ -57,6 +57,14 @@ pub trait QuantumPortal {
         enum MapMemoryError {
             InvalidLength(usize),
             OutOfMemory,
+        }
+    }
+
+    #[event = 69]
+    fn debug_msg(msg: &str) -> Result<(), DebugMsgError> {
+        enum DebugMsgError {
+            InvalidPtr(*const u8),
+            InvalidLength(usize),
         }
     }
 }
