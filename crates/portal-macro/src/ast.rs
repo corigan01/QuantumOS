@@ -23,10 +23,13 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use std::collections::HashMap;
+
 use proc_macro2::Span;
-use syn::{Attribute, FnArg, Ident, ItemEnum, ReturnType, Visibility};
+use syn::{Attribute, Ident, ItemEnum, Visibility};
 
 #[derive(Debug)]
+#[allow(unused)]
 pub struct PortalMacro {
     pub doc_attributes: Vec<Attribute>,
     pub args: Option<PortalMacroArgs>,
@@ -36,6 +39,7 @@ pub struct PortalMacro {
 }
 
 #[derive(Debug)]
+#[allow(unused)]
 pub struct PortalMacroArgs {
     pub protocol_kind: ProtocolKind,
     pub is_global: bool,
@@ -49,6 +53,7 @@ pub enum ProtocolKind {
 }
 
 #[derive(Debug)]
+#[allow(unused)]
 pub struct ProtocolEndpoint {
     pub doc_attributes: Vec<Attribute>,
     pub portal_id: (usize, Span),
@@ -61,20 +66,26 @@ pub struct ProtocolEndpoint {
 }
 
 #[derive(Debug)]
+#[allow(unused)]
 pub enum ProtocolVarType {
-    ResultKind(Box<ProtocolVarType>, Box<ProtocolVarType>),
-    Never,
-    Unit,
-    Signed8,
-    Signed16,
-    Signed32,
-    Signed64,
-    Unsigned8,
-    Unsigned16,
-    Unsigned32,
-    Unsigned64,
+    ResultKind {
+        span: Span,
+        ok_ty: Box<ProtocolVarType>,
+        err_ty: Box<ProtocolVarType>,
+    },
+    Never(Span),
+    Unit(Span),
+    Signed8(Span),
+    Signed16(Span),
+    Signed32(Span),
+    Signed64(Span),
+    Unsigned8(Span),
+    Unsigned16(Span),
+    Unsigned32(Span),
+    Unsigned64(Span),
+    UnsignedSize(Span),
     UserDefined(Ident),
-    Str,
+    Str(Span),
     RefTo {
         is_mut: bool,
         to: Box<ProtocolVarType>,
@@ -86,12 +97,14 @@ pub enum ProtocolVarType {
 }
 
 #[derive(Debug)]
+#[allow(unused)]
 pub struct ProtocolInputArg {
     pub argument_ident: Ident,
     pub ty: ProtocolVarType,
 }
 
 #[derive(Debug)]
+#[allow(unused)]
 pub struct ProtocolOutputArg(pub ProtocolVarType);
 
 #[derive(Debug)]
@@ -100,8 +113,94 @@ pub enum ProtocolEndpointKind {
 }
 
 #[derive(Debug)]
+#[allow(unused)]
 pub enum ProtocolDefine {
-    DefinedEnum(Box<ItemEnum>),
+    DefinedEnum(Box<ProtocolEnumDef>),
+}
+
+#[derive(Debug)]
+#[allow(unused)]
+pub struct ProtocolEnumDef {
+    pub docs: Vec<Attribute>,
+    pub requires_lifetime: bool,
+    pub ident: Ident,
+    pub varients: Vec<ProtocolEnumVarient>,
+}
+
+#[derive(Debug)]
+#[allow(unused)]
+pub struct ProtocolEnumVarient {
+    pub ident: Ident,
+    pub fields: ProtocolEnumFields,
+}
+
+#[derive(Debug)]
+#[allow(unused)]
+pub enum ProtocolEnumFields {
+    None,
+    Unnamed(Vec<ProtocolVarType>),
+    Named(HashMap<Ident, ProtocolVarType>),
+}
+
+impl ProtocolVarType {
+    /// Runs `F` on the tree.
+    ///
+    /// Returns after the first `Some`
+    pub fn search<F, R>(&self, f: &F) -> Option<R>
+    where
+        F: Fn(&Self) -> Option<R>,
+    {
+        if let Some(value) = f(self) {
+            return Some(value);
+        }
+
+        if let Some(value) = match self {
+            ProtocolVarType::ResultKind {
+                span: _,
+                ok_ty,
+                err_ty,
+            } => {
+                if let Some(value) = ok_ty.search(f) {
+                    return Some(value);
+                }
+                if let Some(value) = err_ty.search(f) {
+                    return Some(value);
+                }
+                None
+            }
+            ProtocolVarType::RefTo { is_mut: _, to } => to.search(f),
+            ProtocolVarType::PtrTo { is_mut: _, to } => to.search(f),
+            _ => None,
+        } {
+            return Some(value);
+        }
+
+        None
+    }
+}
+
+impl ProtocolEnumFields {
+    pub fn requires_lifetime(&self) -> bool {
+        match self {
+            ProtocolEnumFields::None => false,
+            ProtocolEnumFields::Unnamed(protocol_var_types) => {
+                protocol_var_types.iter().any(|var| {
+                    var.search(&|ty| match ty {
+                        ProtocolVarType::RefTo { .. } => Some(true),
+                        _ => None,
+                    })
+                    .unwrap_or(false)
+                })
+            }
+            ProtocolEnumFields::Named(hash_map) => hash_map.values().any(|var| {
+                var.search(&|ty| match ty {
+                    ProtocolVarType::RefTo { .. } => Some(true),
+                    _ => None,
+                })
+                .unwrap_or(false)
+            }),
+        }
+    }
 }
 
 impl PortalMacro {
@@ -114,8 +213,11 @@ impl PortalMacro {
             .flat_map(|(our_index, endpoint)| {
                 let (our_id, our_span) = endpoint.portal_id;
 
-                self.endpoints.iter().enumerate().skip(our_index).find_map(
-                    |(_, other_endpoints)| {
+                self.endpoints
+                    .iter()
+                    .enumerate()
+                    .skip(our_index + 1)
+                    .find_map(|(_, other_endpoints)| {
                         let (other_id, other_span) = other_endpoints.portal_id;
 
                         if other_id == our_id {
@@ -123,8 +225,7 @@ impl PortalMacro {
                         } else {
                             None
                         }
-                    },
-                )
+                    })
             })
     }
 

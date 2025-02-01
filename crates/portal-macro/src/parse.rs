@@ -23,14 +23,14 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use std::ops::DerefMut;
+use std::collections::HashMap;
 
 use crate::ast;
 use proc_macro_error::emit_error;
 use proc_macro2::Span;
 use syn::{
-    Attribute, FnArg, Ident, ItemFn, LitBool, LitInt, LitStr, ReturnType, Token, parse::Parse,
-    spanned::Spanned,
+    Attribute, Field, Fields, FnArg, Ident, ItemEnum, ItemFn, LitBool, LitStr, ReturnType, Token,
+    parse::Parse, spanned::Spanned,
 };
 
 impl Parse for ast::ProtocolKind {
@@ -220,22 +220,20 @@ impl Parse for ast::ProtocolEndpoint {
             .collect::<syn::Result<_>>()?;
         let output_arg = sig.output.try_into()?;
 
-        let body = block
-            .stmts
-            .iter()
-            .flat_map(|statement| match statement {
-                syn::Stmt::Item(syn::Item::Enum(enum_statement)) => Some(
-                    ast::ProtocolDefine::DefinedEnum(Box::new(enum_statement.clone())),
+        let mut body = Vec::new();
+        for statement in block.stmts.iter() {
+            match statement {
+                syn::Stmt::Item(syn::Item::Enum(enum_statement)) => body.push(
+                    ast::ProtocolDefine::DefinedEnum(Box::new(enum_statement.try_into()?)),
                 ),
                 stmt => {
                     emit_error!(
                         stmt.span(),
                         "Only `enum` definitions are currently supported"
                     );
-                    None
                 }
-            })
-            .collect();
+            }
+        }
 
         Ok(Self {
             doc_attributes,
@@ -280,7 +278,7 @@ impl TryFrom<ReturnType> for ast::ProtocolOutputArg {
     type Error = syn::Error;
     fn try_from(value: ReturnType) -> Result<Self, Self::Error> {
         match value {
-            ReturnType::Default => Ok(Self(ast::ProtocolVarType::Unit)),
+            ReturnType::Default => Ok(Self(ast::ProtocolVarType::Unit(value.span()))),
             ReturnType::Type(_, ty) => Ok(Self(ty.as_ref().try_into()?)),
         }
     }
@@ -290,7 +288,7 @@ impl TryFrom<&syn::Type> for ast::ProtocolVarType {
     type Error = syn::Error;
     fn try_from(value: &syn::Type) -> Result<Self, Self::Error> {
         match value {
-            syn::Type::Never(_) => Ok(Self::Never),
+            syn::Type::Never(type_never) => Ok(Self::Never(type_never.span())),
             syn::Type::Path(type_path) => {
                 let path = type_path.path.segments.last().ok_or(syn::Error::new(
                     type_path.span(),
@@ -309,10 +307,11 @@ impl TryFrom<&syn::Type> for ast::ProtocolVarType {
                                     Some(syn::GenericArgument::Type(ok_ty)),
                                     Some(syn::GenericArgument::Type(err_ty)),
                                     None,
-                                ) => Ok(Self::ResultKind(
-                                    Box::new(Self::try_from(ok_ty)?),
-                                    Box::new(Self::try_from(err_ty)?),
-                                )),
+                                ) => Ok(Self::ResultKind {
+                                    span: path.span(),
+                                    ok_ty: Box::new(Self::try_from(ok_ty)?),
+                                    err_ty: Box::new(Self::try_from(err_ty)?),
+                                }),
                                 _ => Err(syn::Error::new(
                                     type_path.span(),
                                     format!(
@@ -330,15 +329,16 @@ impl TryFrom<&syn::Type> for ast::ProtocolVarType {
                             ),
                         )),
                     },
-                    "i8" => Ok(Self::Signed8),
-                    "i16" => Ok(Self::Signed16),
-                    "i32" => Ok(Self::Signed32),
-                    "i64" => Ok(Self::Signed64),
-                    "u8" => Ok(Self::Unsigned8),
-                    "u16" => Ok(Self::Unsigned16),
-                    "u32" => Ok(Self::Unsigned32),
-                    "u64" => Ok(Self::Unsigned64),
-                    "str" => Ok(Self::Str),
+                    "i8" => Ok(Self::Signed8(path.span())),
+                    "i16" => Ok(Self::Signed16(path.span())),
+                    "i32" => Ok(Self::Signed32(path.span())),
+                    "i64" => Ok(Self::Signed64(path.span())),
+                    "u8" => Ok(Self::Unsigned8(path.span())),
+                    "u16" => Ok(Self::Unsigned16(path.span())),
+                    "u32" => Ok(Self::Unsigned32(path.span())),
+                    "u64" => Ok(Self::Unsigned64(path.span())),
+                    "usize" => Ok(Self::UnsignedSize(path.span())),
+                    "str" => Ok(Self::Str(path.span())),
                     user_defined => Ok(Self::UserDefined(Ident::new(
                         user_defined,
                         type_path.span(),
@@ -355,7 +355,7 @@ impl TryFrom<&syn::Type> for ast::ProtocolVarType {
             }),
             syn::Type::Tuple(type_tuple) => {
                 if type_tuple.elems.is_empty() {
-                    Ok(Self::Unit)
+                    Ok(Self::Unit(type_tuple.span()))
                 } else {
                     Err(syn::Error::new(
                         type_tuple.span(),
@@ -373,6 +373,101 @@ impl TryFrom<&syn::Type> for ast::ProtocolVarType {
                     value.span().source_text().as_deref().unwrap_or("??")
                 ),
             )),
+        }
+    }
+}
+
+impl TryFrom<&ItemEnum> for ast::ProtocolEnumDef {
+    type Error = syn::Error;
+
+    fn try_from(value: &ItemEnum) -> Result<Self, Self::Error> {
+        let ItemEnum {
+            attrs,
+            vis: _,
+            enum_token: _,
+            ident,
+            generics,
+            brace_token: _,
+            variants,
+        } = value;
+
+        let mut docs = Vec::new();
+        for attr in attrs {
+            if attr.path().is_ident("doc") {
+                docs.push(attr.clone());
+            } else {
+                return Err(syn::Error::new(
+                    attr.span(),
+                    "Attribute not supported for portal defined enum",
+                ));
+            }
+        }
+
+        if !generics.params.is_empty() {
+            return Err(syn::Error::new(
+                generics.span(),
+                "Portal defined enum cannot have any generics",
+            ));
+        }
+
+        let mut requires_lifetime = false;
+        let mut parsed_varients = Vec::new();
+        for variant in variants.iter() {
+            let parsed: ast::ProtocolEnumVarient = variant.try_into()?;
+            if parsed.fields.requires_lifetime() {
+                requires_lifetime = true;
+            }
+
+            parsed_varients.push(parsed);
+        }
+
+        Ok(Self {
+            docs,
+            requires_lifetime,
+            ident: ident.clone(),
+            varients: parsed_varients,
+        })
+    }
+}
+
+impl TryFrom<&syn::Variant> for ast::ProtocolEnumVarient {
+    type Error = syn::Error;
+    fn try_from(value: &syn::Variant) -> Result<Self, Self::Error> {
+        let ident = value.ident.clone();
+        Ok(Self {
+            ident,
+            fields: (&value.fields).try_into()?,
+        })
+    }
+}
+
+impl TryFrom<&Fields> for ast::ProtocolEnumFields {
+    type Error = syn::Error;
+    fn try_from(value: &syn::Fields) -> Result<Self, Self::Error> {
+        match value {
+            Fields::Named(fields_named) => {
+                let mut map = HashMap::new();
+                for field in fields_named.named.iter() {
+                    map.insert(
+                        field.ident.clone().ok_or(syn::Error::new(
+                            fields_named.span(),
+                            "Expected named field to have an ident",
+                        ))?,
+                        (&field.ty).try_into()?,
+                    );
+                }
+
+                Ok(Self::Named(map))
+            }
+            Fields::Unnamed(fields_unnamed) => {
+                let mut vec = Vec::new();
+                for field in fields_unnamed.unnamed.iter() {
+                    vec.push((&field.ty).try_into()?);
+                }
+
+                Ok(Self::Unnamed(vec))
+            }
+            Fields::Unit => Ok(Self::None),
         }
     }
 }
