@@ -29,7 +29,7 @@ use crate::ast;
 use proc_macro_error::emit_error;
 use proc_macro2::Span;
 use syn::{
-    Attribute, Fields, FnArg, Ident, ItemEnum, ItemFn, LitBool, LitStr, ReturnType, Token,
+    Attribute, Fields, FnArg, Ident, ItemEnum, LitBool, LitStr, ReturnType, Token, TraitItemFn,
     parse::Parse, spanned::Spanned,
 };
 
@@ -184,11 +184,11 @@ fn convert_attribute_to_id_kind(
 
 impl Parse for ast::ProtocolEndpoint {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-        let ItemFn {
+        let TraitItemFn {
             attrs,
-            vis: _,
             sig,
-            block,
+            default,
+            semi_token: _,
         } = input.parse()?;
 
         let (doc_attributes, remaining): (Vec<_>, Vec<_>) = attrs
@@ -221,18 +221,20 @@ impl Parse for ast::ProtocolEndpoint {
         let output_arg = sig.output.try_into()?;
 
         let mut body = Vec::new();
-        for statement in block.stmts.iter() {
-            match statement {
-                syn::Stmt::Item(syn::Item::Enum(enum_statement)) => {
-                    body.push(ast::ProtocolDefine::DefinedEnum(Rc::new(RefCell::new(
-                        enum_statement.try_into()?,
-                    ))))
-                }
-                stmt => {
-                    emit_error!(
-                        stmt.span(),
-                        "Only `enum` definitions are currently supported"
-                    );
+        if let Some(block) = default {
+            for statement in block.stmts.iter() {
+                match statement {
+                    syn::Stmt::Item(syn::Item::Enum(enum_statement)) => {
+                        body.push(ast::ProtocolDefine::DefinedEnum(Rc::new(RefCell::new(
+                            enum_statement.try_into()?,
+                        ))))
+                    }
+                    stmt => {
+                        emit_error!(
+                            stmt.span(),
+                            "Only `enum` definitions are currently supported"
+                        );
+                    }
                 }
             }
         }
