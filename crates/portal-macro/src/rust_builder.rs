@@ -24,11 +24,14 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 use crate::ast;
+use proc_macro2::Span;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::ToTokens;
 use quote::TokenStreamExt;
+use quote::format_ident;
 use quote::quote;
 use quote::quote_spanned;
+use syn::Lifetime;
 
 /// A generator for the portal's trait
 pub struct PortalTrait<'a> {
@@ -52,6 +55,28 @@ impl<'a> PortalUserDefined<'a> {
     }
 }
 
+/// A generator for the enum that all functions will put their arguments
+pub struct PortalTranslationInputType<'a> {
+    portal: &'a ast::PortalMacro,
+}
+
+impl<'a> PortalTranslationInputType<'a> {
+    pub fn new(portal: &'a ast::PortalMacro) -> Self {
+        Self { portal }
+    }
+}
+
+pub struct LifetimedProtocolVarType<'a> {
+    lifetime_ident: &'a Lifetime,
+    ty: &'a ast::ProtocolVarType,
+}
+
+impl<'a> LifetimedProtocolVarType<'a> {
+    pub fn new(lifetime_ident: &'a Lifetime, ty: &'a ast::ProtocolVarType) -> Self {
+        Self { lifetime_ident, ty }
+    }
+}
+
 pub fn generate_rust_portal(portal: &ast::PortalMacro) -> TokenStream2 {
     portal.to_token_stream()
 }
@@ -60,6 +85,7 @@ impl ToTokens for ast::PortalMacro {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         let portal_trait = PortalTrait::new(self);
         let user_defined = PortalUserDefined::new(self);
+        let input = PortalTranslationInputType::new(self);
 
         let doc_attr = self.doc_attributes.iter();
         let portal_ident = self.get_mod_ident();
@@ -69,6 +95,7 @@ impl ToTokens for ast::PortalMacro {
             #(#doc_attr)*
             #vis mod #portal_ident {
                 #user_defined
+                #input
                 #portal_trait
             }
         });
@@ -194,6 +221,41 @@ impl ToTokens for ast::ProtocolEnumFields {
     }
 }
 
+impl<'a> ToTokens for PortalTranslationInputType<'a> {
+    fn to_tokens(&self, tokens: &mut TokenStream2) {
+        let lifetime = Lifetime::new("'a", Span::call_site());
+
+        let translation_ident = self.portal.get_input_enum_ident();
+        let varients = self.portal.endpoints.iter().map(|endpoint| {
+            let named_var = endpoint.input_args.iter().map(|input_arg| {
+                let ty = LifetimedProtocolVarType::new(&lifetime, &input_arg.ty);
+                let ident = &input_arg.argument_ident;
+
+                quote! {
+                    #ident : #ty
+                }
+            });
+            let endpoint_enum_name = format_ident!("{}Endpoint", endpoint.get_enum_ident());
+
+            let fields = if !endpoint.input_args.is_empty() {
+                quote! { { #(#named_var),* } }
+            } else {
+                quote! {}
+            };
+
+            quote! {
+                #endpoint_enum_name #fields
+            }
+        });
+
+        tokens.append_all(quote! {
+            pub enum #translation_ident<#lifetime> {
+                #(#varients),*
+            }
+        });
+    }
+}
+
 impl ToTokens for ast::ProtocolVarType {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         match self {
@@ -261,6 +323,48 @@ impl ToTokens for ast::ProtocolVarType {
             ast::ProtocolVarType::PtrTo { span, to, .. } => {
                 tokens.append_all(quote_spanned! {span.clone()=>*const #to})
             }
+        }
+    }
+}
+
+impl<'a> ToTokens for LifetimedProtocolVarType<'a> {
+    fn to_tokens(&self, tokens: &mut TokenStream2) {
+        match self.ty {
+            ast::ProtocolVarType::ResultKind {
+                span,
+                ok_ty,
+                err_ty,
+            } => {
+                let ok_ty = Self::new(&self.lifetime_ident, &ok_ty);
+                let err_ty = Self::new(&self.lifetime_ident, &err_ty);
+
+                tokens.append_all(quote_spanned! {span.clone()=>::core::result::Result});
+                tokens.append_all(quote! {<#ok_ty, #err_ty>});
+            }
+            ast::ProtocolVarType::RefTo { span, is_mut, to } => {
+                let lifetime = self.lifetime_ident;
+                tokens.append_all(quote_spanned! {span.clone()=>&});
+                tokens.append_all(quote! {#lifetime});
+
+                if *is_mut {
+                    tokens.append_all(quote! {mut});
+                }
+
+                let to = Self::new(&self.lifetime_ident, &to);
+                tokens.append_all(quote! { #to });
+            }
+            ast::ProtocolVarType::PtrTo { span, is_mut, to } => {
+                tokens.append_all(quote_spanned! {span.clone()=>*});
+                if *is_mut {
+                    tokens.append_all(quote! {mut});
+                } else {
+                    tokens.append_all(quote! {const});
+                }
+
+                let to = Self::new(&self.lifetime_ident, &to);
+                tokens.append_all(quote! { #to });
+            }
+            ty => ty.to_tokens(tokens),
         }
     }
 }

@@ -25,7 +25,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 #![no_std]
 
-use portal::{portal, portal2};
+use portal::portal2;
 
 #[portal2(protocol = "syscall", global = true)]
 pub trait QuantumPortal {

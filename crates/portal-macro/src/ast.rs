@@ -275,6 +275,29 @@ impl ProtocolDefine {
     }
 }
 
+impl ProtocolEndpoint {
+    pub fn get_enum_ident(&self) -> Ident {
+        let mut new_str = String::new();
+        let mut next_char_should_be_upper = true;
+
+        for old_char in self.fn_ident.to_string().chars() {
+            if old_char == '_' {
+                next_char_should_be_upper = true;
+                continue;
+            }
+
+            new_str.push(if next_char_should_be_upper {
+                next_char_should_be_upper = false;
+                old_char.to_ascii_uppercase()
+            } else {
+                old_char.to_ascii_lowercase()
+            });
+        }
+
+        Ident::new(&new_str, self.fn_ident.span())
+    }
+}
+
 impl ProtocolEnumFields {
     pub fn requires_lifetime(&self) -> bool {
         match self {
@@ -394,5 +417,12 @@ impl PortalMacro {
         }
 
         Ident::new(&new_str, self.trait_ident.span())
+    }
+
+    pub fn get_input_enum_ident(&self) -> Ident {
+        Ident::new(
+            &format!("{}PortalInput", self.trait_ident),
+            self.trait_ident.span(),
+        )
     }
 }
