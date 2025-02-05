@@ -23,7 +23,7 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use std::{collections::HashMap, rc::Rc};
+use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use crate::ast;
 use proc_macro_error::emit_error;
@@ -223,9 +223,11 @@ impl Parse for ast::ProtocolEndpoint {
         let mut body = Vec::new();
         for statement in block.stmts.iter() {
             match statement {
-                syn::Stmt::Item(syn::Item::Enum(enum_statement)) => body.push(
-                    ast::ProtocolDefine::DefinedEnum(Rc::new(enum_statement.try_into()?)),
-                ),
+                syn::Stmt::Item(syn::Item::Enum(enum_statement)) => {
+                    body.push(ast::ProtocolDefine::DefinedEnum(Rc::new(RefCell::new(
+                        enum_statement.try_into()?,
+                    ))))
+                }
                 stmt => {
                     emit_error!(
                         stmt.span(),

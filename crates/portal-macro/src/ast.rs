@@ -24,7 +24,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 use proc_macro2::Span;
-use std::{collections::HashMap, rc::Rc};
+use std::{cell::RefCell, collections::HashMap, rc::Rc};
 use syn::{Attribute, Ident, Visibility};
 
 #[derive(Debug)]
@@ -84,7 +84,10 @@ pub enum ProtocolVarType {
     Unsigned64(Span),
     UnsignedSize(Span),
     Unknown(Ident),
-    UserDefined(ProtocolDefine),
+    UserDefined {
+        span: Span,
+        to: ProtocolDefine,
+    },
     Str(Span),
     RefTo {
         span: Span,
@@ -114,10 +117,10 @@ pub enum ProtocolEndpointKind {
     Event,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 #[allow(unused)]
 pub enum ProtocolDefine {
-    DefinedEnum(Rc<ProtocolEnumDef>),
+    DefinedEnum(Rc<RefCell<ProtocolEnumDef>>),
 }
 
 #[derive(Debug)]
@@ -187,6 +190,80 @@ impl ProtocolVarType {
 
         None
     }
+
+    /// Runs `F` on the tree.
+    ///
+    /// Returns after the first `Some`
+    pub fn search_mut<F, R>(&mut self, f: &F) -> Option<R>
+    where
+        F: Fn(&Self) -> Option<R>,
+    {
+        if let Some(value) = f(self) {
+            return Some(value);
+        }
+
+        if let Some(value) = match self {
+            ProtocolVarType::ResultKind {
+                span: _,
+                ok_ty,
+                err_ty,
+            } => {
+                if let Some(value) = ok_ty.search_mut(f) {
+                    return Some(value);
+                }
+                if let Some(value) = err_ty.search_mut(f) {
+                    return Some(value);
+                }
+                None
+            }
+            ProtocolVarType::RefTo {
+                to,
+                span: _,
+                is_mut: _,
+            } => to.search(f),
+            ProtocolVarType::PtrTo {
+                to,
+                span: _,
+                is_mut: _,
+            } => to.search(f),
+            _ => None,
+        } {
+            return Some(value);
+        }
+
+        None
+    }
+
+    /// Check if this type is of the same type as some other user type.
+    pub fn is_unknown_of(&self, ident: &str) -> bool {
+        match self {
+            Self::Unknown(unknown) if unknown.to_string() == ident => true,
+            _ => false,
+        }
+    }
+
+    /// Get the span of this var type
+    pub fn span(&self) -> Span {
+        match self {
+            ProtocolVarType::ResultKind { span, .. } => span.clone(),
+            ProtocolVarType::Never(span) => span.clone(),
+            ProtocolVarType::Unit(span) => span.clone(),
+            ProtocolVarType::Signed8(span) => span.clone(),
+            ProtocolVarType::Signed16(span) => span.clone(),
+            ProtocolVarType::Signed32(span) => span.clone(),
+            ProtocolVarType::Signed64(span) => span.clone(),
+            ProtocolVarType::Unsigned8(span) => span.clone(),
+            ProtocolVarType::Unsigned16(span) => span.clone(),
+            ProtocolVarType::Unsigned32(span) => span.clone(),
+            ProtocolVarType::Unsigned64(span) => span.clone(),
+            ProtocolVarType::UnsignedSize(span) => span.clone(),
+            ProtocolVarType::Unknown(ident) => ident.span().clone(),
+            ProtocolVarType::UserDefined { span, .. } => span.clone(),
+            ProtocolVarType::Str(span) => span.clone(),
+            ProtocolVarType::RefTo { span, .. } => span.clone(),
+            ProtocolVarType::PtrTo { span, .. } => span.clone(),
+        }
+    }
 }
 
 impl ProtocolEnumFields {
@@ -246,5 +323,48 @@ impl PortalMacro {
             .map(|endpoint| endpoint.portal_id.0)
             .max()
             .unwrap_or(0)
+    }
+
+    /// Let types gather info about where they are used to figure out the best
+    /// way to generate them.
+    pub fn type_explore(&mut self) {
+        let protocol_defines: Vec<ProtocolDefine> = self
+            .endpoints
+            .iter()
+            .flat_map(|endpoint| endpoint.body.iter().cloned())
+            .collect();
+
+        self.endpoints
+            .iter_mut()
+            .flat_map(|endpoints| {
+                endpoints
+                    .input_args
+                    .iter_mut()
+                    .map(|input| &mut input.ty)
+                    .chain([&mut endpoints.output_arg.0].into_iter())
+            })
+            .for_each(|var_type| {
+                let found = var_type.search_mut(&|inner| {
+                    match inner {
+                        // We only want to look for types that are currently unknown
+                        ProtocolVarType::Unknown(_) => protocol_defines
+                            .iter()
+                            .find(|proto| match proto {
+                                ProtocolDefine::DefinedEnum(ref_cell) => {
+                                    inner.is_unknown_of(&ref_cell.borrow().ident.to_string())
+                                }
+                            })
+                            .cloned(),
+                        _ => None,
+                    }
+                });
+
+                if let Some(found) = found {
+                    *var_type = ProtocolVarType::UserDefined {
+                        span: var_type.span(),
+                        to: found,
+                    };
+                }
+            });
     }
 }

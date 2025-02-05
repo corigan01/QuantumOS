@@ -52,6 +52,10 @@ pub fn portal2(args: TokenStream, input: TokenStream) -> TokenStream {
     let args = parse_macro_input!(args as ast::PortalMacroArgs);
     let mut trait_input = parse_macro_input!(input as ast::PortalMacro);
     trait_input.args = Some(args);
+
+    // Let types expore where they are used
+    trait_input.type_explore();
+
     println!("{:#?}", trait_input);
 
     abort_if_dirty();
