@@ -66,6 +66,7 @@ impl<'a> PortalTranslationInputType<'a> {
     }
 }
 
+/// A generator for a type that requires a lifetime
 pub struct LifetimedProtocolVarType<'a> {
     lifetime_ident: &'a Lifetime,
     ty: &'a ast::ProtocolVarType,
@@ -74,6 +75,18 @@ pub struct LifetimedProtocolVarType<'a> {
 impl<'a> LifetimedProtocolVarType<'a> {
     pub fn new(lifetime_ident: &'a Lifetime, ty: &'a ast::ProtocolVarType) -> Self {
         Self { lifetime_ident, ty }
+    }
+}
+
+/// A generator for QuantumOS's into syscall
+/// (aka. The default type that will impl the portal's trait)
+pub struct IntoPortalImpl<'a> {
+    portal: &'a ast::PortalMacro,
+}
+
+impl<'a> IntoPortalImpl<'a> {
+    pub fn new(portal: &'a ast::PortalMacro) -> Self {
+        Self { portal }
     }
 }
 
@@ -86,6 +99,7 @@ impl ToTokens for ast::PortalMacro {
         let portal_trait = PortalTrait::new(self);
         let user_defined = PortalUserDefined::new(self);
         let input = PortalTranslationInputType::new(self);
+        let into_portal_impl = IntoPortalImpl::new(self);
 
         let doc_attr = self.doc_attributes.iter();
         let portal_ident = self.get_mod_ident();
@@ -97,6 +111,7 @@ impl ToTokens for ast::PortalMacro {
                 #user_defined
                 #input
                 #portal_trait
+                #into_portal_impl
             }
         });
     }
@@ -366,5 +381,35 @@ impl<'a> ToTokens for LifetimedProtocolVarType<'a> {
             }
             ty => ty.to_tokens(tokens),
         }
+    }
+}
+
+impl<'a> ToTokens for IntoPortalImpl<'a> {
+    fn to_tokens(&self, tokens: &mut TokenStream2) {
+        let ident = self.portal.get_quantum_os_impl_ident();
+        let trait_ident = &self.portal.trait_ident;
+
+        let endpoints = self.portal.endpoints.iter().map(|endpoint| {
+            let fn_ident = &endpoint.fn_ident;
+            let docs = &endpoint.doc_attributes;
+            let arguments = &endpoint.input_args;
+            let return_type = &endpoint.output_arg;
+
+            quote! {
+                #(#docs)*
+                fn #fn_ident(#(#arguments),*) #return_type {
+                    todo!()
+                }
+            }
+        });
+
+        tokens.append_all(quote! {
+            pub struct #ident {}
+        });
+        tokens.append_all(quote! {
+            impl #trait_ident for #ident {
+                #(#endpoints)*
+            }
+        });
     }
 }

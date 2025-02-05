@@ -24,6 +24,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 use proc_macro2::Span;
+use quote::format_ident;
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 use syn::{Attribute, Ident, Visibility};
 
@@ -421,8 +422,12 @@ impl PortalMacro {
 
     pub fn get_input_enum_ident(&self) -> Ident {
         Ident::new(
-            &format!("{}PortalInput", self.trait_ident),
+            &format!("{}InputArgs", self.trait_ident),
             self.trait_ident.span(),
         )
+    }
+
+    pub fn get_quantum_os_impl_ident(&self) -> Ident {
+        format_ident!("{}IntoImpl", self.trait_ident)
     }
 }

@@ -60,6 +60,9 @@ pub trait QuantumPortal {
         }
     }
 
+    #[event = 2]
+    fn get_pid() -> usize;
+
     #[event = 69]
     fn debug_msg(msg: &str) -> Result<(), DebugMsgError> {
         enum DebugMsgError {
