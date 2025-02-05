@@ -194,9 +194,9 @@ impl ProtocolVarType {
     /// Runs `F` on the tree.
     ///
     /// Returns after the first `Some`
-    pub fn search_mut<F, R>(&mut self, f: &F) -> Option<R>
+    pub fn search_mut<F, R>(&mut self, f: &mut F) -> Option<R>
     where
-        F: Fn(&Self) -> Option<R>,
+        F: FnMut(&mut Self) -> Option<R>,
     {
         if let Some(value) = f(self) {
             return Some(value);
@@ -220,12 +220,12 @@ impl ProtocolVarType {
                 to,
                 span: _,
                 is_mut: _,
-            } => to.search(f),
+            } => to.search_mut(f),
             ProtocolVarType::PtrTo {
                 to,
                 span: _,
                 is_mut: _,
-            } => to.search(f),
+            } => to.search_mut(f),
             _ => None,
         } {
             return Some(value);
@@ -344,8 +344,8 @@ impl PortalMacro {
                     .chain([&mut endpoints.output_arg.0].into_iter())
             })
             .for_each(|var_type| {
-                let found = var_type.search_mut(&|inner| {
-                    match inner {
+                var_type.search_mut(&mut |inner| {
+                    let maybe_defined = match inner {
                         // We only want to look for types that are currently unknown
                         ProtocolVarType::Unknown(_) => protocol_defines
                             .iter()
@@ -356,15 +356,34 @@ impl PortalMacro {
                             })
                             .cloned(),
                         _ => None,
-                    }
-                });
-
-                if let Some(found) = found {
-                    *var_type = ProtocolVarType::UserDefined {
-                        span: var_type.span(),
-                        to: found,
                     };
-                }
+
+                    if let Some(user_defined) = maybe_defined {
+                        *inner = ProtocolVarType::UserDefined {
+                            span: inner.span(),
+                            to: user_defined,
+                        };
+                    }
+
+                    None::<()>
+                });
             });
+    }
+
+    /// Get the name of this portal for modules
+    pub fn get_mod_ident(&self) -> Ident {
+        let mut new_str = String::new();
+        for old_char in self.trait_ident.to_string().chars() {
+            if old_char.is_uppercase() {
+                if !new_str.is_empty() {
+                    new_str.push('_');
+                }
+                new_str.push(old_char.to_ascii_lowercase());
+            } else {
+                new_str.push(old_char);
+            }
+        }
+
+        Ident::new(&new_str, self.trait_ident.span())
     }
 }

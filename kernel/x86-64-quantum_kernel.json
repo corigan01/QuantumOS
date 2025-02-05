@@ -28,5 +28,6 @@
     "kcfi",
     "kernel-address"
   ],
-  "target-pointer-width": "64"
+  "target-pointer-width": "64",
+  "rustc-abi": "x86-softfloat"
 }

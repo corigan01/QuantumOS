@@ -23,38 +23,29 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use portal_parse::PortalMacroInput;
-use proc_macro::TokenStream;
-use proc_macro_error::{abort_if_dirty, proc_macro_error};
-use syn::parse_macro_input;
-use type_serde::generate_ast_portal;
+use crate::ast;
+use proc_macro2::TokenStream as TokenStream2;
+use quote::ToTokens;
+use quote::TokenStreamExt;
+use quote::quote;
 
-mod ast;
-mod parse;
-mod portal_parse;
-mod rust_builder;
-mod type_serde;
-
-#[proc_macro_error]
-#[proc_macro_attribute]
-pub fn portal(args: TokenStream, input: TokenStream) -> TokenStream {
-    let args = parse_macro_input!(args as portal_parse::PortalArgs);
-    let trait_input = parse_macro_input!(input as portal_parse::PortalTrait);
-    let portal_macro = PortalMacroInput { args, trait_input };
-
-    abort_if_dirty();
-    generate_ast_portal(&portal_macro).into()
+pub fn generate_rust_portal(portal: &ast::PortalMacro) -> TokenStream2 {
+    quote! {
+        #portal
+    }
 }
 
-#[proc_macro_error]
-#[proc_macro_attribute]
-pub fn portal2(args: TokenStream, input: TokenStream) -> TokenStream {
-    let args = parse_macro_input!(args as ast::PortalMacroArgs);
-    let mut trait_input = parse_macro_input!(input as ast::PortalMacro);
-    trait_input.args = Some(args);
+impl ToTokens for ast::PortalMacro {
+    fn to_tokens(&self, tokens: &mut TokenStream2) {
+        let doc_attr = self.doc_attributes.iter();
+        let portal_ident = self.get_mod_ident();
+        let vis = &self.vis;
 
-    trait_input.type_explore();
+        tokens.append_all(quote! {
+            #(#doc_attr)*
+            #vis mod #portal_ident {
 
-    abort_if_dirty();
-    rust_builder::generate_rust_portal(&trait_input).into()
+            }
+        });
+    }
 }
