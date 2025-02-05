@@ -266,6 +266,15 @@ impl ProtocolVarType {
     }
 }
 
+impl ProtocolDefine {
+    /// Get the ident of the defined var
+    pub fn var_ident(&self) -> Ident {
+        match self {
+            ProtocolDefine::DefinedEnum(ref_cell) => ref_cell.borrow().ident.clone(),
+        }
+    }
+}
+
 impl ProtocolEnumFields {
     pub fn requires_lifetime(&self) -> bool {
         match self {
