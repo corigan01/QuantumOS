@@ -427,6 +427,13 @@ impl PortalMacro {
         )
     }
 
+    pub fn get_output_enum_ident(&self) -> Ident {
+        Ident::new(
+            &format!("{}OutputArgs", self.trait_ident),
+            self.trait_ident.span(),
+        )
+    }
+
     pub fn get_quantum_os_impl_ident(&self) -> Ident {
         format_ident!("{}IntoImpl", self.trait_ident)
     }

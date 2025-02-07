@@ -66,6 +66,17 @@ impl<'a> PortalTranslationInputType<'a> {
     }
 }
 
+/// A generator for the enum that all functions will output
+pub struct PortalTranslationOutputType<'a> {
+    portal: &'a ast::PortalMacro,
+}
+
+impl<'a> PortalTranslationOutputType<'a> {
+    pub fn new(portal: &'a ast::PortalMacro) -> Self {
+        Self { portal }
+    }
+}
+
 /// A generator for a type that requires a lifetime
 pub struct LifetimedProtocolVarType<'a> {
     lifetime_ident: &'a Lifetime,
@@ -99,6 +110,7 @@ impl ToTokens for ast::PortalMacro {
         let portal_trait = PortalTrait::new(self);
         let user_defined = PortalUserDefined::new(self);
         let input = PortalTranslationInputType::new(self);
+        let output = PortalTranslationOutputType::new(self);
         let into_portal_impl = IntoPortalImpl::new(self);
 
         let doc_attr = self.doc_attributes.iter();
@@ -110,6 +122,7 @@ impl ToTokens for ast::PortalMacro {
             #vis mod #portal_ident {
                 #user_defined
                 #input
+                #output
                 #portal_trait
                 #into_portal_impl
             }
@@ -255,17 +268,47 @@ impl<'a> ToTokens for PortalTranslationInputType<'a> {
             let fields = if !endpoint.input_args.is_empty() {
                 quote! { { #(#named_var),* } }
             } else {
+                quote! { }
+            };
+
+            quote! {
+                #endpoint_enum_name #fields,
+            }
+        });
+
+        // TODO: We should try and not emit this field in the future, and look to see if we
+        // actually need to use the lifetime.
+        tokens.append_all(quote! {
+            pub enum #translation_ident<#lifetime> {
+                #(#varients)*
+                UnusedPhantomData(core::marker::PhantomData<&#lifetime ()>)
+            }
+        });
+    }
+}
+
+
+impl<'a> ToTokens for PortalTranslationOutputType<'a> {
+    fn to_tokens(&self, tokens: &mut TokenStream2) {
+        let translation_ident = self.portal.get_output_enum_ident();
+        let varients = self.portal.endpoints.iter().map(|endpoint| {
+            let var_output = &endpoint.output_arg.0;
+            let endpoint_enum_name = format_ident!("{}Endpoint", endpoint.get_enum_ident());
+
+            let fields = if !matches!(var_output, ast::ProtocolVarType::Unit(_)) && !matches!(var_output, ast::ProtocolVarType::Never(_)) {
+                quote! { ( #var_output ) }
+            } else {
                 quote! {}
             };
 
             quote! {
-                #endpoint_enum_name #fields
+                #endpoint_enum_name #fields,
             }
         });
 
         tokens.append_all(quote! {
-            pub enum #translation_ident<#lifetime> {
-                #(#varients),*
+            pub enum #translation_ident {
+                #(#varients)*
             }
         });
     }
@@ -388,17 +431,52 @@ impl<'a> ToTokens for IntoPortalImpl<'a> {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         let ident = self.portal.get_quantum_os_impl_ident();
         let trait_ident = &self.portal.trait_ident;
+        let input_enum = self.portal.get_input_enum_ident();
+        let output_enum = self.portal.get_output_enum_ident();
 
         let endpoints = self.portal.endpoints.iter().map(|endpoint| {
             let fn_ident = &endpoint.fn_ident;
             let docs = &endpoint.doc_attributes;
             let arguments = &endpoint.input_args;
             let return_type = &endpoint.output_arg;
+            let enum_part = format_ident!("{}Endpoint", endpoint.get_enum_ident());
 
+            let syscall_part = if arguments.len() > 0 {
+                let argument_in_body = endpoint.input_args.iter().map(|input_arg| {
+                    let name = &input_arg.argument_ident;
+                   quote! { #name } 
+                });
+
+                quote! { match (unsafe { Self::call_syscall(#input_enum::#enum_part {#(#argument_in_body),*}) }) }
+            } else {
+                quote! { match (unsafe { Self::call_syscall(#input_enum::#enum_part) }) }
+            };
+
+            let fn_closing = if matches!(endpoint.output_arg.0, ast::ProtocolVarType::Never(_)) {
+                let fmt_string = format!("Portal Endpoint '{}' promised to never return, but yet returned!", fn_ident);
+                quote! {
+                    {
+                        #output_enum::#enum_part => { unreachable!(#fmt_string); }
+                        _ => todo!(),
+                    };
+                }
+            } else {
+                quote! {
+                    {
+                        _ => todo!(),
+                    };
+                }
+            };
+
+            // TODO: In the future we should try and reduce the need to put values into
+            //       the input argument enum, and instead try and serialize the values
+            //       into the ~6 CPU registers we have for syscalls. It would improve
+            //       performance, and be easier for C to call.
             quote! {
                 #(#docs)*
                 fn #fn_ident(#(#arguments),*) #return_type {
-                    todo!()
+                    #syscall_part
+                    #fn_closing
                 }
             }
         });
@@ -409,6 +487,13 @@ impl<'a> ToTokens for IntoPortalImpl<'a> {
         tokens.append_all(quote! {
             impl #trait_ident for #ident {
                 #(#endpoints)*
+            }
+        });
+        tokens.append_all(quote! {
+            impl #ident {
+                pub unsafe fn call_syscall<'syscall>(arguments: #input_enum<'syscall>) -> #output_enum {
+                    todo!()
+                }
             }
         });
     }
