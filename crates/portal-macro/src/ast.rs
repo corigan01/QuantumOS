@@ -435,6 +435,6 @@ impl PortalMacro {
     }
 
     pub fn get_quantum_os_impl_ident(&self) -> Ident {
-        format_ident!("{}IntoImpl", self.trait_ident)
+        format_ident!("{}Client", self.trait_ident)
     }
 }

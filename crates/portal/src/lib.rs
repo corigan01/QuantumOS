@@ -26,3 +26,71 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #![no_std]
 
 pub use portal_macro::*;
+
+/// The syscall number of the 'pass-by-enum' calling convention
+pub const SYSCALL_CALLER_ID: u64 = 1;
+/// Syscall Succeeded
+pub const SYSCALL_OKAY_RESP: u64 = 0;
+/// Syscall's inputs where not known by the kernel
+pub const SYSCALL_BAD_RESP: u64 = 1;
+
+#[cfg(feature = "client")]
+pub mod syscall {
+    use super::*;
+    use libsys::raw_syscall;
+
+    pub unsafe trait SyscallInput: Sized {
+        /// Version ID of this syscall argument, any new release should increment the syscall number.
+        fn version_id() -> u32;
+    }
+
+    pub unsafe trait SyscallOutput: Sized {
+        /// Version ID of this syscall argument, any new release should increment the syscall number.
+        fn version_id() -> u32;
+
+        /// Callable function to init this data structure to an 'invalid' but _valid_-enough state
+        /// for the kernel to put a response into.
+        unsafe fn before_call() -> Self {
+            unsafe { core::mem::zeroed() }
+        }
+    }
+
+    pub unsafe fn call_syscall<I: SyscallInput, O: SyscallOutput>(input: &I, output: &mut O) {
+        let syscall_input_ptr = input as *const I as u64;
+        let syscall_output_ptr = output as *mut O as u64;
+
+        let syscall_packed_len = ((size_of::<I>() as u64) << 32) | (size_of::<O>() as u64);
+        let syscall_packed_id = ((I::version_id() as u64) << 32) | (O::version_id() as u64);
+
+        if syscall_packed_id == SYSCALL_OKAY_RESP || syscall_packed_id == SYSCALL_BAD_RESP {
+            panic!(
+                "Syscall version  cannot be a reserved request ID, please use at least '1' for both (input/output)'s version id!"
+            );
+        };
+
+        match unsafe {
+            raw_syscall!(
+                super::SYSCALL_CALLER_ID,
+                syscall_input_ptr,
+                syscall_output_ptr,
+                syscall_packed_len,
+                syscall_packed_id
+            )
+        } {
+            SYSCALL_OKAY_RESP => (),
+            SYSCALL_BAD_RESP => panic!("QuantumOS did not understand this request!"),
+            version_mismatch => {
+                let kernel_version_input = version_mismatch >> 32;
+                let kernel_version_output = version_mismatch & (u32::MAX as u64);
+
+                panic!(
+                    "Portal Version ID Mismatch\nKernel: {{\n  input: {},\n  output: {}\n}}\nUser: {{\n  input: {},\n  output: {}\n\n}}",
+                    kernel_version_input,
+                    kernel_version_output,
+                    I::version_id(),
+                    O::version_id()
+                );
+            }
+        }
+    }
+}

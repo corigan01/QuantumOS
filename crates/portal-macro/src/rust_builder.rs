@@ -89,6 +89,19 @@ impl<'a> LifetimedProtocolVarType<'a> {
     }
 }
 
+/// A generator for all the functions if they are intended to be global
+pub struct GlobalFunctionImpl<'a> {
+    portal: &'a ast::PortalMacro
+}
+
+impl<'a> GlobalFunctionImpl<'a> {
+    pub fn new(portal: &'a ast::PortalMacro) -> Self {
+        Self {
+            portal,
+        }
+    }
+}
+
 /// A generator for QuantumOS's into syscall
 /// (aka. The default type that will impl the portal's trait)
 pub struct IntoPortalImpl<'a> {
@@ -112,20 +125,30 @@ impl ToTokens for ast::PortalMacro {
         let input = PortalTranslationInputType::new(self);
         let output = PortalTranslationOutputType::new(self);
         let into_portal_impl = IntoPortalImpl::new(self);
+        let global_fn = GlobalFunctionImpl::new(self);
 
-        let doc_attr = self.doc_attributes.iter();
-        let portal_ident = self.get_mod_ident();
-        let vis = &self.vis;
+
+        #[cfg(feature = "client")]
+        let client_tokens = quote! {
+            pub mod client {
+                use super::*;
+
+                #into_portal_impl
+                #global_fn
+            }
+        };
+
+        #[cfg(not(feature = "client"))]
+        let client_tokens = quote! {};
 
         tokens.append_all(quote! {
-            #(#doc_attr)*
-            #vis mod #portal_ident {
-                #user_defined
-                #input
-                #output
-                #portal_trait
-                #into_portal_impl
-            }
+            #user_defined
+            #input
+            #output
+            #portal_trait
+
+            #client_tokens
+
         });
     }
 }
@@ -281,7 +304,7 @@ impl<'a> ToTokens for PortalTranslationInputType<'a> {
         tokens.append_all(quote! {
             pub enum #translation_ident<#lifetime> {
                 #(#varients)*
-                UnusedPhantomData(core::marker::PhantomData<&#lifetime ()>)
+                _UnusedPhantomData(core::marker::PhantomData<&#lifetime ()>)
             }
         });
     }
@@ -454,17 +477,24 @@ impl<'a> ToTokens for IntoPortalImpl<'a> {
 
             let fn_closing = if matches!(endpoint.output_arg.0, ast::ProtocolVarType::Never(_)) {
                 let fmt_string = format!("Portal Endpoint '{}' promised to never return, but yet returned!", fn_ident);
+                let error_string = format!("Portal Endpoint '{}': '{}::call_syscall' was supposed to return '{}::{}'", fn_ident, ident, output_enum, enum_part);
                 quote! {
                     {
                         #output_enum::#enum_part => { unreachable!(#fmt_string); }
-                        _ => todo!(),
+                        _ => {
+                            unreachable!(#error_string)
+                        }
                     };
                 }
             } else {
+                let fmt_string = format!("Portal Endpoint '{}': '{}::call_syscall' was supposed to return '{}::{}'", fn_ident, ident, output_enum, enum_part);
                 quote! {
                     {
-                        _ => todo!(),
-                    };
+                        #output_enum::#enum_part (output_val) => { output_val }
+                        _ => {
+                            unreachable!(#fmt_string)
+                        }
+                    }
                 }
             };
 
@@ -491,10 +521,42 @@ impl<'a> ToTokens for IntoPortalImpl<'a> {
         });
         tokens.append_all(quote! {
             impl #ident {
-                pub unsafe fn call_syscall<'syscall>(arguments: #input_enum<'syscall>) -> #output_enum {
+                unsafe fn call_syscall<'syscall>(arguments: #input_enum<'syscall>) -> #output_enum {
                     todo!()
                 }
             }
+        });
+    }
+}
+
+impl<'a> ToTokens for GlobalFunctionImpl<'a> {
+    fn to_tokens(&self, tokens: &mut TokenStream2) {
+        if !self.portal.args.as_ref().is_some_and(|arg| arg.is_global) { return }
+        let into_impl = self.portal.get_quantum_os_impl_ident();
+        let trait_ident = &self.portal.trait_ident;
+
+        let endpoint_fn = self.portal.endpoints.iter().map(|endpoint|{
+            let fn_ident = &endpoint.fn_ident;
+            let docs = &endpoint.doc_attributes;
+            let arguments = &endpoint.input_args;
+            let return_type = &endpoint.output_arg;
+
+                let argument_in_body = endpoint.input_args.iter().map(|input_arg| {
+                    let name = &input_arg.argument_ident;
+                   quote! { #name } 
+                });
+
+                quote! {
+                    #(#docs)*
+                    pub fn #fn_ident(#(#arguments),*) #return_type {
+                        <#into_impl as super::#trait_ident>::#fn_ident(#(#argument_in_body),*)
+                    }
+                }
+        });
+
+        
+        tokens.append_all(quote!{
+            #(#endpoint_fn)*
         });
     }
 }

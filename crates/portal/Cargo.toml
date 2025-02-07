@@ -8,3 +8,9 @@ documentation.workspace = true
 
 [dependencies]
 portal-macro = { workspace = true }
+libsys = { workspace = true, optional = true }
+
+[features]
+default = ["client"]
+client = ["dep:libsys"]
+server = []
