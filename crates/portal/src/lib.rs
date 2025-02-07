@@ -34,35 +34,40 @@ pub const SYSCALL_OKAY_RESP: u64 = 0;
 /// Syscall's inputs where not known by the kernel
 pub const SYSCALL_BAD_RESP: u64 = 1;
 
+pub unsafe trait SyscallInput: Sized {
+    /// Version ID of this syscall argument, any new release should increment the syscall number.
+    fn version_id() -> u32;
+}
+
+pub unsafe trait SyscallOutput: Sized {
+    /// Version ID of this syscall argument, any new release should increment the syscall number.
+    fn version_id() -> u32;
+
+    /// Callable function to init this data structure to an 'invalid' but _valid_-enough state
+    /// for the kernel to put a response into.
+    unsafe fn before_call() -> Self {
+        unsafe { core::mem::zeroed() }
+    }
+}
+
 #[cfg(feature = "client")]
 pub mod syscall {
-    use super::*;
     use libsys::raw_syscall;
 
-    pub unsafe trait SyscallInput: Sized {
-        /// Version ID of this syscall argument, any new release should increment the syscall number.
-        fn version_id() -> u32;
-    }
-
-    pub unsafe trait SyscallOutput: Sized {
-        /// Version ID of this syscall argument, any new release should increment the syscall number.
-        fn version_id() -> u32;
-
-        /// Callable function to init this data structure to an 'invalid' but _valid_-enough state
-        /// for the kernel to put a response into.
-        unsafe fn before_call() -> Self {
-            unsafe { core::mem::zeroed() }
-        }
-    }
-
-    pub unsafe fn call_syscall<I: SyscallInput, O: SyscallOutput>(input: &I, output: &mut O) {
+    /// Convert a 'SyscallInput' and 'SyscallOutput' into the syscall interface, calling the kernel.
+    pub unsafe fn call_syscall<I: super::SyscallInput, O: super::SyscallOutput>(
+        input: &I,
+        output: &mut O,
+    ) {
         let syscall_input_ptr = input as *const I as u64;
         let syscall_output_ptr = output as *mut O as u64;
 
         let syscall_packed_len = ((size_of::<I>() as u64) << 32) | (size_of::<O>() as u64);
         let syscall_packed_id = ((I::version_id() as u64) << 32) | (O::version_id() as u64);
 
-        if syscall_packed_id == SYSCALL_OKAY_RESP || syscall_packed_id == SYSCALL_BAD_RESP {
+        if syscall_packed_id == super::SYSCALL_OKAY_RESP
+            || syscall_packed_id == super::SYSCALL_BAD_RESP
+        {
             panic!(
                 "Syscall version  cannot be a reserved request ID, please use at least '1' for both (input/output)'s version id!"
             );
@@ -77,8 +82,8 @@ pub mod syscall {
                 syscall_packed_id
             )
         } {
-            SYSCALL_OKAY_RESP => (),
-            SYSCALL_BAD_RESP => panic!("QuantumOS did not understand this request!"),
+            super::SYSCALL_OKAY_RESP => (),
+            super::SYSCALL_BAD_RESP => panic!("QuantumOS did not understand this request!"),
             version_mismatch => {
                 let kernel_version_input = version_mismatch >> 32;
                 let kernel_version_output = version_mismatch & (u32::MAX as u64);
@@ -92,5 +97,56 @@ pub mod syscall {
                 );
             }
         }
+    }
+}
+
+// #[cfg(feature = "server")]
+pub mod syscall_recv {
+    /// Convert out of the syscall interface, and back into 'SyscallInput' and 'SyscallOutput'.
+    ///
+    /// # Safety
+    /// The caller must ensure that the `syscall_input_ptr` is valid, and that the `syscall_output_ptr` is valid.
+    pub unsafe fn adapt_syscall<F, I: super::SyscallInput, O: super::SyscallOutput>(
+        kind: u64,
+        syscall_input_ptr: *const I,
+        syscall_output_ptr: *mut O,
+        syscall_packed_len: u64,
+        syscall_packed_id: u64,
+        callable: F,
+    ) -> u64
+    where
+        F: FnOnce(I) -> O,
+    {
+        // If the kind is not reconized
+        if kind != super::SYSCALL_CALLER_ID {
+            return super::SYSCALL_BAD_RESP;
+        }
+
+        let our_packed_len = ((size_of::<I>() as u64) << 32) | (size_of::<O>() as u64);
+        let our_packed_id = ((I::version_id() as u64) << 32) | (O::version_id() as u64);
+
+        // If our lengths don't match
+        if our_packed_len != syscall_packed_len {
+            return super::SYSCALL_BAD_RESP;
+        }
+
+        // If our IDs don't match
+        if our_packed_id != syscall_packed_id {
+            return our_packed_id;
+        }
+
+        // Check that our PTRs are aligned
+        if syscall_input_ptr.is_null()
+            || !syscall_input_ptr.is_aligned()
+            || syscall_output_ptr.is_null()
+            || !syscall_output_ptr.is_aligned()
+        {
+            return super::SYSCALL_BAD_RESP;
+        }
+
+        let input = unsafe { core::ptr::read(syscall_input_ptr) };
+        unsafe { *syscall_output_ptr = callable(input) };
+
+        super::SYSCALL_OKAY_RESP
     }
 }

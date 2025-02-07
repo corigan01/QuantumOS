@@ -114,6 +114,18 @@ impl<'a> IntoPortalImpl<'a> {
     }
 }
 
+/// A generator for QuantumOS's out of syscall
+pub struct OutPortalImpl<'a> {
+    portal: &'a ast::PortalMacro
+}
+
+
+impl<'a> OutPortalImpl<'a> {
+    pub fn new(portal: &'a ast::PortalMacro) -> Self {
+        Self { portal }
+    }
+}
+
 pub fn generate_rust_portal(portal: &ast::PortalMacro) -> TokenStream2 {
     portal.to_token_stream()
 }
@@ -146,6 +158,19 @@ impl ToTokens for ast::PortalMacro {
                     #global_fn
                 }
             });
+        };
+        #[cfg(feature = "server")]
+        {
+            let out_portal_impl = OutPortalImpl::new(self);
+
+            tokens.append_all(quote! {
+                pub mod server {
+                    use super::*;
+
+                    #out_portal_impl
+                }
+            });
+            
         };
     }
 }
@@ -304,6 +329,13 @@ impl<'a> ToTokens for PortalTranslationInputType<'a> {
                 _UnusedPhantomData(core::marker::PhantomData<&#lifetime ()>)
             }
         });
+        tokens.append_all(quote! {
+            unsafe impl<'input_lifetime> ::portal::SyscallInput for #translation_ident<'input_lifetime> {
+                fn version_id() -> u32 {
+                    1
+                }
+            }
+        });
     }
 }
 
@@ -329,6 +361,13 @@ impl<'a> ToTokens for PortalTranslationOutputType<'a> {
         tokens.append_all(quote! {
             pub enum #translation_ident {
                 #(#varients)*
+            }
+        });
+        tokens.append_all(quote! {
+            unsafe impl ::portal::SyscallOutput for #translation_ident {
+                fn version_id() -> u32 {
+                    1
+                }
             }
         });
     }
@@ -517,22 +556,10 @@ impl<'a> ToTokens for IntoPortalImpl<'a> {
             }
         });
         tokens.append_all(quote! {
-            unsafe impl<'input_lifetime> ::portal::syscall::SyscallInput for #input_enum<'input_lifetime> {
-                fn version_id() -> u32 {
-                    1
-                }
-            }
-            unsafe impl ::portal::syscall::SyscallOutput for #output_enum {
-                fn version_id() -> u32 {
-                    1
-                }
-            }
-        });
-        tokens.append_all(quote! {
             impl #ident {
                 #[inline]
                 unsafe fn call_syscall<'syscall>(arguments: #input_enum<'syscall>) -> #output_enum {
-                    let mut output = unsafe { <#output_enum as ::portal::syscall::SyscallOutput>::before_call() }; 
+                    let mut output = unsafe { <#output_enum as ::portal::SyscallOutput>::before_call() }; 
                     ::portal::syscall::call_syscall(&arguments, &mut output);
 
                     output
@@ -571,6 +598,77 @@ impl<'a> ToTokens for GlobalFunctionImpl<'a> {
         
         tokens.append_all(quote!{
             #(#endpoint_fn)*
+        });
+    }
+}
+
+impl<'a> ToTokens for OutPortalImpl<'a> {
+    fn to_tokens(&self, tokens: &mut TokenStream2) {
+        let output_ident = self.portal.get_quantum_os_out_ident();
+        let trait_ident = &self.portal.trait_ident;
+
+        let input_enum = self.portal.get_input_enum_ident();
+        let output_enum = self.portal.get_output_enum_ident();
+
+        let endpoints = self.portal.endpoints.iter().map(|endpoint| {
+            let enum_part = format_ident!("{}Endpoint", endpoint.get_enum_ident());
+            let fn_ident = &endpoint.fn_ident;
+
+            let (enum_args, function_args) = if endpoint.input_args.len() > 0 {
+                let argument_in_body: Vec<_> = endpoint.input_args.iter().map(|input_arg| {
+                    let name = &input_arg.argument_ident;
+                   quote! { #name } 
+                }).collect();
+
+                (quote! { { #(#argument_in_body),* } }, quote! { ( #(#argument_in_body),* ) })
+            } else {
+                (quote!{}, quote!{ () })
+            };
+
+            let output = if !matches!(endpoint.output_arg.0, ast::ProtocolVarType::Never(_)) && !matches!(endpoint.output_arg.0, ast::ProtocolVarType::Unit(_)) {
+                quote!{{
+                   super::#output_enum::#enum_part (<Self as #trait_ident>::#fn_ident #function_args)
+                }}
+            } else {
+                quote! {{
+                   <Self as #trait_ident>::#fn_ident #function_args;
+                   super::#output_enum::#enum_part
+                }}
+            };
+            
+
+           quote!{
+               super::#input_enum::#enum_part #enum_args => #output
+           } 
+        });
+
+        tokens.append_all(quote!{
+            pub trait #output_ident : #trait_ident {
+                #[inline]
+                #[allow(unreachable_code)]
+                unsafe fn from_syscall(kind: u64, arg0: u64, arg1: u64, arg2: u64, arg3: u64) -> u64 {
+                    let syscall_input_ptr = arg0 as *const super::#input_enum;
+                    let syscall_output_ptr = arg1 as *mut super::#output_enum;
+                    let syscall_packed_len = arg2;
+                    let syscall_packed_id = arg3;
+                    
+                    if !<Self as #output_ident>::verify_user_ptr(syscall_input_ptr) || !<Self as #output_ident>::verify_user_ptr(syscall_output_ptr) {
+                        return portal::SYSCALL_BAD_RESP;
+                    }
+
+                    unsafe {
+                        ::portal::syscall_recv::adapt_syscall(kind, syscall_input_ptr, syscall_output_ptr, syscall_packed_len, syscall_packed_id, |input| {
+                            match input {
+                                #(#endpoints)*
+                                _ => unreachable!("Should never get here?"),
+                            }
+                        })
+                    }
+                }
+
+                /// Check that the user's ptr is correct
+                fn verify_user_ptr<T: Sized>(ptr: *const T) -> bool;
+            }
         });
     }
 }
