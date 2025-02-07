@@ -124,22 +124,6 @@ impl ToTokens for ast::PortalMacro {
         let user_defined = PortalUserDefined::new(self);
         let input = PortalTranslationInputType::new(self);
         let output = PortalTranslationOutputType::new(self);
-        let into_portal_impl = IntoPortalImpl::new(self);
-        let global_fn = GlobalFunctionImpl::new(self);
-
-
-        #[cfg(feature = "client")]
-        let client_tokens = quote! {
-            pub mod client {
-                use super::*;
-
-                #into_portal_impl
-                #global_fn
-            }
-        };
-
-        #[cfg(not(feature = "client"))]
-        let client_tokens = quote! {};
 
         tokens.append_all(quote! {
             #user_defined
@@ -147,9 +131,22 @@ impl ToTokens for ast::PortalMacro {
             #output
             #portal_trait
 
-            #client_tokens
-
         });
+
+        #[cfg(feature = "client")]
+        {
+            let into_portal_impl = IntoPortalImpl::new(self);
+            let global_fn = GlobalFunctionImpl::new(self);
+
+            tokens.append_all(quote! {
+                pub mod client {
+                    use super::*;
+
+                    #into_portal_impl
+                    #global_fn
+                }
+            });
+        };
     }
 }
 
@@ -533,6 +530,7 @@ impl<'a> ToTokens for IntoPortalImpl<'a> {
         });
         tokens.append_all(quote! {
             impl #ident {
+                #[inline]
                 unsafe fn call_syscall<'syscall>(arguments: #input_enum<'syscall>) -> #output_enum {
                     let mut output = unsafe { <#output_enum as ::portal::syscall::SyscallOutput>::before_call() }; 
                     ::portal::syscall::call_syscall(&arguments, &mut output);
@@ -563,6 +561,7 @@ impl<'a> ToTokens for GlobalFunctionImpl<'a> {
 
                 quote! {
                     #(#docs)*
+                    #[inline]
                     pub fn #fn_ident(#(#arguments),*) #return_type {
                         <#into_impl as super::#trait_ident>::#fn_ident(#(#argument_in_body),*)
                     }

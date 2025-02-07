@@ -637,7 +637,7 @@ impl Scheduler {
                     // Since this was a timer tick, we also need to send a EOI
                     //
                     // FIXME: we should have the fault handler do this, and call
-                    //        then wake the scheduler back up when its done :)
+                    //        the scheduler back up when its done :)
                     unsafe { pic_eoi(0) };
 
                     // Before we switch to the currently running process, we need

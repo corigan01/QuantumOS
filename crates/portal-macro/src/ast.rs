@@ -404,7 +404,7 @@ impl PortalMacro {
     }
 
     /// Get the name of this portal for modules
-    pub fn get_mod_ident(&self) -> Ident {
+    pub fn _get_mod_ident(&self) -> Ident {
         let mut new_str = String::new();
         for old_char in self.trait_ident.to_string().chars() {
             if old_char.is_uppercase() {
