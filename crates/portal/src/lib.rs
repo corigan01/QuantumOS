@@ -100,7 +100,7 @@ pub mod syscall {
     }
 }
 
-// #[cfg(feature = "server")]
+#[cfg(feature = "server")]
 pub mod syscall_recv {
     /// Convert out of the syscall interface, and back into 'SyscallInput' and 'SyscallOutput'.
     ///

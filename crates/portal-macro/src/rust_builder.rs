@@ -104,10 +104,12 @@ impl<'a> GlobalFunctionImpl<'a> {
 
 /// A generator for QuantumOS's into syscall
 /// (aka. The default type that will impl the portal's trait)
+#[allow(unused)]
 pub struct IntoPortalImpl<'a> {
     portal: &'a ast::PortalMacro,
 }
 
+#[allow(unused)]
 impl<'a> IntoPortalImpl<'a> {
     pub fn new(portal: &'a ast::PortalMacro) -> Self {
         Self { portal }
@@ -115,11 +117,13 @@ impl<'a> IntoPortalImpl<'a> {
 }
 
 /// A generator for QuantumOS's out of syscall
+#[allow(unused)]
 pub struct OutPortalImpl<'a> {
     portal: &'a ast::PortalMacro
 }
 
 
+#[allow(unused)]
 impl<'a> OutPortalImpl<'a> {
     pub fn new(portal: &'a ast::PortalMacro) -> Self {
         Self { portal }

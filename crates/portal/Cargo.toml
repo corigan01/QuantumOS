@@ -12,5 +12,5 @@ libsys = { workspace = true, optional = true }
 
 [features]
 default = ["client"]
-client = ["dep:libsys"]
-server = []
+client = ["dep:libsys", "portal-macro/client"]
+server = ["portal-macro/server"]
