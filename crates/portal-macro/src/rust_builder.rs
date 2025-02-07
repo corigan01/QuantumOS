@@ -520,9 +520,24 @@ impl<'a> ToTokens for IntoPortalImpl<'a> {
             }
         });
         tokens.append_all(quote! {
+            unsafe impl<'input_lifetime> ::portal::syscall::SyscallInput for #input_enum<'input_lifetime> {
+                fn version_id() -> u32 {
+                    1
+                }
+            }
+            unsafe impl ::portal::syscall::SyscallOutput for #output_enum {
+                fn version_id() -> u32 {
+                    1
+                }
+            }
+        });
+        tokens.append_all(quote! {
             impl #ident {
                 unsafe fn call_syscall<'syscall>(arguments: #input_enum<'syscall>) -> #output_enum {
-                    todo!()
+                    let mut output = unsafe { <#output_enum as ::portal::syscall::SyscallOutput>::before_call() }; 
+                    ::portal::syscall::call_syscall(&arguments, &mut output);
+
+                    output
                 }
             }
         });
