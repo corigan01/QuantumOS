@@ -35,6 +35,7 @@ mod gdt;
 mod int;
 mod panic;
 mod process;
+mod syscall_handler;
 mod timer;
 extern crate alloc;
 

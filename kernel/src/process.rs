@@ -46,6 +46,7 @@ use mem::{
     paging::{PageCorrelationError, PageTableLoadingError, Virt2PhysMapping, VmPermissions},
     vm::{InsertVmObjectError, PageFaultInfo, PageFaultReponse, VmFillAction, VmProcess, VmRegion},
 };
+use quantum_portal::ExitReason;
 use spin::RwLock;
 use tar::{Tar, TarError};
 use util::consts::{PAGE_2M, PAGE_4K};
@@ -373,7 +374,7 @@ pub enum SchedulerEvent<'a> {
     /// This is fired by the kernel's timer, and will 'tick' the scheduler forward.
     Tick(&'a ProcessContext),
     /// This process requested to exit
-    Exit,
+    Exit(ExitReason),
     /// This process encourted a fault and needs to be killed
     Fault(ProcessError),
 }
@@ -560,7 +561,7 @@ impl Scheduler {
     /// Handle events with the scheduler
     pub fn scheduler_event(&mut self, event: SchedulerEvent) {
         match event {
-            SchedulerEvent::Exit => {
+            SchedulerEvent::Exit(_) => {
                 let running = self
                     .running
                     .clone()

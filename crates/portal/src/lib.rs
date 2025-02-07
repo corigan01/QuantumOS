@@ -79,6 +79,7 @@ pub mod syscall {
                 syscall_input_ptr,
                 syscall_output_ptr,
                 syscall_packed_len,
+                0,
                 syscall_packed_id
             )
         } {
@@ -102,6 +103,8 @@ pub mod syscall {
 
 #[cfg(feature = "server")]
 pub mod syscall_recv {
+    use lldebug::warnln;
+
     /// Convert out of the syscall interface, and back into 'SyscallInput' and 'SyscallOutput'.
     ///
     /// # Safety
@@ -119,6 +122,7 @@ pub mod syscall_recv {
     {
         // If the kind is not reconized
         if kind != super::SYSCALL_CALLER_ID {
+            warnln!("Not correct Kind");
             return super::SYSCALL_BAD_RESP;
         }
 
@@ -127,11 +131,13 @@ pub mod syscall_recv {
 
         // If our lengths don't match
         if our_packed_len != syscall_packed_len {
+            warnln!("Invalid len");
             return super::SYSCALL_BAD_RESP;
         }
 
         // If our IDs don't match
         if our_packed_id != syscall_packed_id {
+            warnln!("Invalid packed {our_packed_id:x} {syscall_packed_id:x}");
             return our_packed_id;
         }
 
@@ -141,6 +147,7 @@ pub mod syscall_recv {
             || syscall_output_ptr.is_null()
             || !syscall_output_ptr.is_aligned()
         {
+            warnln!("Invalid / Unaligned Ptr");
             return super::SYSCALL_BAD_RESP;
         }
 

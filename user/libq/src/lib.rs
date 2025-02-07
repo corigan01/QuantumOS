@@ -26,10 +26,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #![no_std]
 
 pub mod debug;
-pub mod syscall;
 
-// TODO: Replace this with rust's std in the future
-pub use syscall::SysExitCode as ExitCode;
-pub fn exit(exit_reason: syscall::SysExitCode) {
-    unsafe { syscall::exit_syscall(exit_reason) };
-}
+// Import syscall interface
+pub use quantum_portal::client::*;
+pub use quantum_portal::*;

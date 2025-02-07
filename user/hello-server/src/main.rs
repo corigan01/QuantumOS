@@ -27,10 +27,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #![no_main]
 
 use core::panic::PanicInfo;
-use libq::{
-    ExitCode, dbugln, exit,
-    syscall::{MemoryLocation, MemoryProtections, map_memory},
-};
+use libq::{dbugln, exit};
 
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
@@ -43,16 +40,5 @@ fn panic(info: &PanicInfo) -> ! {
 extern "C" fn _start() {
     dbugln!("Hello Server!");
 
-    let example_memory =
-        unsafe { map_memory(MemoryLocation::Anywhere, MemoryProtections::ReadWrite, 10) }.unwrap();
-
-    let slice = unsafe { core::slice::from_raw_parts_mut(example_memory, 10) };
-    slice
-        .iter_mut()
-        .enumerate()
-        .for_each(|(i, el)| *el = i as u8);
-
-    dbugln!("{:?}", slice);
-
-    exit(ExitCode::Success);
+    exit(libq::ExitReason::Success);
 }

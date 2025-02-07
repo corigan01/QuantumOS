@@ -27,7 +27,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #![no_main]
 
 use core::panic::PanicInfo;
-use libq::{ExitCode, dbugln, exit};
+use libq::{ExitReason, dbugln, exit};
 
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
@@ -44,5 +44,5 @@ extern "C" fn _start() {
         dbugln!("{hello_world} -> [{i}] ");
     }
 
-    exit(ExitCode::Success);
+    exit(ExitReason::Success);
 }

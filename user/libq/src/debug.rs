@@ -23,9 +23,9 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use crate::syscall::debug_syscall;
 use core::fmt::Error;
 use core::fmt::Write;
+use quantum_portal::client::debug_msg;
 
 /// Quantum OS's 'kernel' debug output.
 ///
@@ -36,11 +36,7 @@ pub struct DebugOut {}
 
 impl core::fmt::Write for DebugOut {
     fn write_str(&mut self, s: &str) -> core::fmt::Result {
-        match unsafe { debug_syscall(s) } {
-            crate::syscall::SysDebugResp::Okay => Ok(()),
-            crate::syscall::SysDebugResp::PtrInvalid => Err(Error {}),
-            crate::syscall::SysDebugResp::LenInvalid => Err(Error {}),
-        }
+        debug_msg(s).map_err(|_| Error {})
     }
 }
 
