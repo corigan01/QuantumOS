@@ -23,8 +23,6 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use core::sync::atomic::{AtomicBool, Ordering};
-
 use crate::{
     context::IN_USERSPACE,
     process::{
@@ -37,7 +35,6 @@ use arch::{
     idt64::{
         ExceptionKind, InterruptDescTable, InterruptFlags, InterruptInfo, fire_debug_int, interrupt,
     },
-    interrupts::enable_interrupts,
     pic8259::{pic_eoi, pic_remap},
     registers::Segment,
 };

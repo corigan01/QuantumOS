@@ -207,17 +207,18 @@ impl Process {
         permissions: VmPermissions,
         populate_now: bool,
     ) -> Result<VmRegion, ProcessError> {
-        logln!(
-            "'{}' is requesting memory! n_pages={}, perm={}",
-            self.name,
-            n_pages,
-            permissions
-        );
-
         let region_free = self
             .vm
             .find_vm_free(VirtPage::containing_addr(VirtAddr::new(PAGE_2M)), n_pages)
             .ok_or(ProcessError::OutOfVirtualMemory)?;
+
+        logln!(
+            "'{}' is requesting memory! n_pages={}, perm={} (page={})",
+            self.name,
+            n_pages,
+            permissions,
+            region_free.start.page()
+        );
 
         self.add_anon(region_free, permissions, populate_now)
             .map(|_| region_free)

@@ -559,7 +559,7 @@ impl VmProcess {
 
     /// Find a region of virtual memory that is not being used
     pub fn find_vm_free(&self, min_page: VirtPage, n_pages: usize) -> Option<VmRegion> {
-        let mut previous_index = VmRegion::from_containing(VirtAddr::new(0), VirtAddr::new(0));
+        let mut previous_index = VmRegion::new(min_page, min_page);
         let mut ideal_page = None;
 
         for region in self
@@ -567,10 +567,14 @@ impl VmProcess {
             .read()
             .iter()
             .map(|obj| obj.read().region)
-            .skip_while(|region| region.end < min_page)
-            .take_while(|region| region.end < VirtPage::containing_addr(KERNEL_ADDR_START))
+            .filter(|region| region.end < VirtPage::containing_addr(KERNEL_ADDR_START))
         {
-            if region.start.page() - previous_index.end.page() >= n_pages {
+            if region
+                .start
+                .page()
+                .saturating_sub(previous_index.end.page())
+                >= n_pages
+            {
                 ideal_page = Some(previous_index.end.offset_by(1));
                 break;
             }
