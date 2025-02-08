@@ -27,7 +27,10 @@ use core::sync::atomic::{AtomicBool, Ordering};
 
 use crate::{
     context::IN_USERSPACE,
-    process::{AccessViolationReason, ProcessError, SchedulerEvent, send_scheduler_event},
+    process::{
+        AccessViolationReason, ProcessError, SchedulerEvent, aquire_scheduler_biglock,
+        assert_scheduler_biglock, release_scheduler_biglock, send_scheduler_event,
+    },
 };
 use arch::{
     CpuPrivilege, attach_irq, critcal_section,
@@ -47,12 +50,12 @@ use quantum_portal::server::QuantumPortalServer;
 
 static INTERRUPT_TABLE: Mutex<InterruptDescTable> = Mutex::new(InterruptDescTable::new());
 static IRQ_HANDLERS: Mutex<[Option<fn(&InterruptInfo, bool)>; 32]> = Mutex::new([None; 32]);
-static SHOULD_INTERRUPTS_BE_ENABLED: AtomicBool = AtomicBool::new(false);
 
 #[interrupt(0..50)]
 fn exception_handler(args: &InterruptInfo) {
     let called_from_ue = unsafe { core::ptr::read_volatile(&raw const IN_USERSPACE) };
     unsafe { core::ptr::write_volatile(&raw mut IN_USERSPACE, 0) };
+    unsafe { aquire_scheduler_biglock() };
 
     match args.flags {
         // IRQ
@@ -120,9 +123,8 @@ fn exception_handler(args: &InterruptInfo) {
         panic!("Interrupt -- {:?}", args.flags);
     }
 
-    if SHOULD_INTERRUPTS_BE_ENABLED.load(Ordering::Relaxed) {
-        unsafe { enable_interrupts() };
-    }
+    // Release scheduler lock
+    unsafe { release_scheduler_biglock() };
 
     // Send End of interrupt
     match args.flags {
@@ -206,8 +208,6 @@ const PIC_IRQ_OFFSET: u8 = 0x20;
 pub fn enable_pic() {
     unsafe {
         pic_remap(PIC_IRQ_OFFSET, PIC_IRQ_OFFSET + 8);
-        enable_interrupts();
-        SHOULD_INTERRUPTS_BE_ENABLED.store(true, Ordering::Relaxed);
     }
 }
 
@@ -222,6 +222,18 @@ extern "C" fn syscall_handler(
     syscall_number: u64,
 ) -> u64 {
     unsafe {
-        crate::syscall_handler::KernelSyscalls::from_syscall(syscall_number, rdi, rsi, rdx, r8)
+        // One of the first things we need to do is aquire the scheduler biglock
+        // Each syscall handler is responsible for disabling the biglock once it
+        // aquires its process lock.
+        aquire_scheduler_biglock();
+
+        // Call the portal
+        let resp =
+            crate::syscall_handler::KernelSyscalls::from_syscall(syscall_number, rdi, rsi, rdx, r8);
+
+        // If the syscall handler did not release the biglock, it should be a fault
+        assert_scheduler_biglock(false);
+
+        resp
     }
 }

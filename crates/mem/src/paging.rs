@@ -919,6 +919,17 @@ impl VmPermissions {
     /// Make userspace accessable
     pub const USER: VmPermissions = VmPermissions(1 << 3);
 
+    pub const USER_R: VmPermissions = VmPermissions::none()
+        .set_read_flag(true)
+        .set_user_flag(true);
+    pub const USER_RW: VmPermissions = VmPermissions::none()
+        .set_read_flag(true)
+        .set_write_flag(true)
+        .set_user_flag(true);
+    pub const USER_RE: VmPermissions = VmPermissions::none()
+        .set_read_flag(true)
+        .set_exec_flag(true);
+
     /// No permissions
     pub const fn none() -> Self {
         Self(0)

@@ -109,6 +109,7 @@ pub mod syscall_recv {
     ///
     /// # Safety
     /// The caller must ensure that the `syscall_input_ptr` is valid, and that the `syscall_output_ptr` is valid.
+    #[inline]
     pub unsafe fn adapt_syscall<F, I: super::SyscallInput, O: super::SyscallOutput>(
         kind: u64,
         syscall_input_ptr: *const I,

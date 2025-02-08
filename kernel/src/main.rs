@@ -77,10 +77,11 @@ fn main(kbh: &KernelBootHeader) {
     gdt::init_kernel_gdt();
     gdt::set_stack_for_privl(Process::KERNEL_IRQ_STACK_ADDR.as_mut_ptr(), Ring0);
     unsafe { gdt::load_tss() };
+    int::enable_pic();
     int::attach_interrupts();
     int::attach_syscall();
-    int::enable_pic();
     timer::init_timer();
+    unsafe { arch::registers::ia32_efer::set_no_execute_flag(true) };
 
     logln!(
         "Init Heap Region ({})",

@@ -23,7 +23,10 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use core::error::Error;
+use core::{
+    error::Error,
+    sync::atomic::{AtomicBool, Ordering},
+};
 
 use crate::context::userspace_entry;
 use alloc::{
@@ -33,7 +36,7 @@ use alloc::{
     sync::{Arc, Weak},
 };
 use arch::{
-    CpuPrivilege, critcal_section,
+    CpuPrivilege, critcal_section, interrupts,
     pic8259::pic_eoi,
     registers::{ProcessContext, Segment},
 };
@@ -138,6 +141,16 @@ impl Process {
             cpu_time: 0,
             name,
         }
+    }
+
+    /// Get the name of the process
+    pub fn get_process_name(&self) -> &str {
+        &self.name
+    }
+
+    /// Get the Process ID
+    pub fn get_pid(&self) -> usize {
+        self.id
     }
 
     /// Loads this processes page tables into memory
@@ -276,6 +289,12 @@ impl Process {
             return Err(ProcessError::LoadedAssertionError(true));
         }
 
+        // Before we switch to the currently running process, we need
+        // to release any locks on the scheduler that accumulated
+        // when handling this event.
+        unsafe { THE_SCHEDULER.force_write_unlock() };
+        unsafe { release_scheduler_biglock() };
+
         unsafe { userspace_entry(&raw const self.context) };
         Err(ProcessError::ProcessShouldNotExit)
     }
@@ -287,6 +306,25 @@ type KernelTicks = usize;
 
 /// The main scheduler object
 pub static THE_SCHEDULER: RwLock<Option<Scheduler>> = RwLock::new(None);
+pub static IS_SCHEDULER_LOCKED: AtomicBool = AtomicBool::new(false);
+
+/// Force the kernel to lock the scheduler
+///
+/// # Safety
+/// This macro does not check if the scheduler is currently under a lock, and
+/// can only be used if the caller is sure the scheduler is not going to be
+/// used anywhere else.
+///
+/// This macro also disables interrupts, and effectively locks the kernel
+macro_rules! biglock {
+    ($($block:tt)*) => {{
+        unsafe { aquire_scheduler_biglock() };
+        let biglock_macro_return_value = { $($block)* };
+        unsafe { release_scheduler_biglock() };
+
+        biglock_macro_return_value
+    }};
+}
 
 /// Wait for lock and get a ref to the scheduler object
 pub fn lock_ref_scheduler<F, R>(func: F) -> R
@@ -300,39 +338,119 @@ where
     }
 }
 
-/// Wait for lock and get a ref to the scheduler object
+/// Get a mut ref to the scheduler.
+///
+/// # Note
+/// This function asserts that the big lock is already locked.
 pub fn lock_mut_scheduler<F, R>(func: F) -> R
 where
     F: FnOnce(&mut Scheduler) -> R,
 {
-    // We cannot hold the write lock and also keep interrupts enabled
-    // since we could possibly deadlock trying to aquire the lock again
-    critcal_section! {
-        if let Some(sch) = THE_SCHEDULER.try_write().unwrap().as_mut() {
-            func(sch)
-        } else {
-            panic!("The global scheduler has not been setup!")
+    assert_scheduler_biglock(true);
+    let mut sch = loop {
+        match THE_SCHEDULER.try_write() {
+            Some(aquired) => break aquired,
+            None => {
+                // Relax this kernel thread
+                todo!()
+            }
         }
+    };
+
+    if let Some(sch) = sch.as_mut() {
+        func(sch)
+    } else {
+        panic!("The global scheduler has not been setup!")
     }
+}
+
+/// Force the kernel to lock the scheduler
+///
+/// # Safety
+/// Can only be used if the caller is sure the scheduler is not going to be
+/// used anywhere else.
+///
+/// This function also disables interrupts, and effectively locks the kernel
+pub unsafe fn aquire_scheduler_biglock() {
+    unsafe { interrupts::disable_interrupts() };
+    assert_eq!(
+        IS_SCHEDULER_LOCKED.swap(true, Ordering::Acquire),
+        false,
+        "Cannot lock an already locked scheduler biglock"
+    );
+}
+
+/// Check if the scheduler is currently held in a big lock
+pub fn is_scheduler_biglocked() -> bool {
+    IS_SCHEDULER_LOCKED.load(Ordering::Relaxed)
+}
+
+/// Assert if the scheduler is locked/unlocked
+pub fn assert_scheduler_biglock(should_be_locked: bool) {
+    assert_eq!(
+        IS_SCHEDULER_LOCKED.load(Ordering::Relaxed),
+        should_be_locked,
+        "Expected the scheduler to be {}, but was {}!",
+        if should_be_locked {
+            "locked"
+        } else {
+            "unlocked"
+        },
+        if should_be_locked {
+            "unlocked"
+        } else {
+            "locked"
+        }
+    );
+}
+
+/// Force the kernel to unlock the scheduler
+///
+/// # Safety
+/// Since this function re-enables interrupts, you must be certain that you do not
+/// need the scheduler anymore.
+pub unsafe fn release_scheduler_biglock() {
+    interrupts::assert_interrupts(false);
+    assert_eq!(
+        IS_SCHEDULER_LOCKED.swap(false, Ordering::Release),
+        true,
+        "Cannot release scheduler biglock, when the scheduler is not currently locked!"
+    );
+    unsafe { interrupts::enable_interrupts() };
+}
+
+/// Aquire the currently running process
+///
+/// This function also releases the scheduler lock.
+///
+/// # Note
+/// This function **must** be called from the process itself.
+pub fn aquire_running_and_release_biglock() -> RefProcess {
+    let running =
+        lock_ref_scheduler(|s| s.running.clone()).expect("Cannot aquire running process!");
+    unsafe { release_scheduler_biglock() };
+
+    running
 }
 
 /// Set this object as the global scheduler
 pub fn set_global_scheduler(sc: Scheduler) -> ! {
-    critcal_section! {
-        if let Some(old) = THE_SCHEDULER
-            .try_write()
-            .expect("Should not be holding a read lock to the scheduler if we have not added one yet!")
-            .replace(sc)
-        {
-            panic!(
-                "Attempted to override the global scheduler object, maybe kernel bug? \n{:#?}",
-                old
-            );
-        };
+    // The biglock gets disabled when we switch back to userspace
+    unsafe { aquire_scheduler_biglock() };
 
-        // Also make sure to attach the page fault handler here too
-        mem::vm::set_page_fault_handler(scheduler_page_fault_handler);
-    }
+    if let Some(old) = THE_SCHEDULER
+        .try_write()
+        .expect("Should not be holding a read lock to the scheduler if we have not added one yet!")
+        .replace(sc)
+    {
+        panic!(
+            "Attempted to override the global scheduler object, maybe kernel bug? \n{:#?}",
+            old
+        );
+    };
+
+    // Also make sure to attach the page fault handler here too
+    mem::vm::set_page_fault_handler(scheduler_page_fault_handler);
 
     // Now tell the scheduler to start picking a process to use
     //
@@ -576,10 +694,6 @@ impl Scheduler {
                 self.pick_next_into_running()
                     .expect("Expected to be able to pick next process");
 
-                // Before we switch to the currently running process, we need
-                // to release any locks on the scheduler that accumulated
-                // when handling this event.
-                unsafe { THE_SCHEDULER.force_write_unlock() };
                 self.switch_to_running()
                     .expect("Cannot switch to next running process");
 
@@ -600,11 +714,6 @@ impl Scheduler {
                     .expect("Was not able to kill fault process");
                 self.pick_next_into_running()
                     .expect("Expected to be able to pick next process");
-
-                // Before we switch to the currently running process, we need
-                // to release any locks on the scheduler that accumulated
-                // when handling this event.
-                unsafe { THE_SCHEDULER.force_write_unlock() };
 
                 self.switch_to_running()
                     .expect("Cannot switch to next running process");
@@ -640,11 +749,6 @@ impl Scheduler {
                     // FIXME: we should have the fault handler do this, and call
                     //        the scheduler back up when its done :)
                     unsafe { pic_eoi(0) };
-
-                    // Before we switch to the currently running process, we need
-                    // to release any locks on the scheduler that accumulated
-                    // when handling this event.
-                    unsafe { THE_SCHEDULER.force_write_unlock() };
 
                     self.switch_to_running()
                         .expect("Cannot switch to next running process");

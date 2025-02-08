@@ -27,7 +27,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #![no_main]
 
 use core::panic::PanicInfo;
-use libq::{dbugln, exit};
+use libq::{dbugln, exit, map_memory};
 
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
@@ -39,6 +39,14 @@ fn panic(info: &PanicInfo) -> ! {
 #[unsafe(no_mangle)]
 extern "C" fn _start() {
     dbugln!("Hello Server!");
+
+    let memory = map_memory(
+        libq::MemoryLocation::Anywhere,
+        libq::MemoryProtections::ReadWrite,
+        4096 * 5,
+    )
+    .unwrap();
+    unsafe { memory.write_bytes(0xFF, 4096 * 5) };
 
     exit(libq::ExitReason::Success);
 }

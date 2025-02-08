@@ -57,6 +57,7 @@ pub trait QuantumPortal {
         enum MapMemoryError {
             InvalidLength(usize),
             OutOfMemory,
+            MappingMemoryError,
         }
     }
 

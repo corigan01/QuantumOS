@@ -23,24 +23,27 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use crate::process::{SchedulerEvent, aquire_running_and_release_biglock, send_scheduler_event};
+use alloc::format;
+use mem::paging::VmPermissions;
 use quantum_portal::{
-    DebugMsgError, ExitReason, MapMemoryError, MemoryLocation, MemoryProtections,
+    DebugMsgError, ExitReason, MapMemoryError, MemoryLocation, MemoryProtections, QuantumPortal,
+    server::QuantumPortalServer,
 };
-
-use crate::process::send_scheduler_event;
+use util::consts::PAGE_4K;
 
 pub struct KernelSyscalls {}
 
-impl quantum_portal::server::QuantumPortalServer for KernelSyscalls {
-    fn verify_user_ptr<T: Sized>(ptr: *const T) -> bool {
+impl QuantumPortalServer for KernelSyscalls {
+    fn verify_user_ptr<T: Sized>(_ptr: *const T) -> bool {
         // TODO: Add ptr verify
         true
     }
 }
 
-impl quantum_portal::QuantumPortal for KernelSyscalls {
+impl QuantumPortal for KernelSyscalls {
     fn exit(exit_reason: ExitReason) -> ! {
-        send_scheduler_event(crate::process::SchedulerEvent::Exit(exit_reason));
+        send_scheduler_event(SchedulerEvent::Exit(exit_reason));
         unreachable!("Should nerver return");
     }
 
@@ -49,15 +52,48 @@ impl quantum_portal::QuantumPortal for KernelSyscalls {
         protections: MemoryProtections,
         bytes: usize,
     ) -> ::core::result::Result<*mut u8, MapMemoryError> {
-        todo!()
+        let process = aquire_running_and_release_biglock();
+        let page_permissions = match protections {
+            MemoryProtections::ReadOnly => VmPermissions::USER_R,
+            MemoryProtections::ReadWrite => VmPermissions::USER_RW,
+            MemoryProtections::ReadExecute => VmPermissions::USER_RE,
+            MemoryProtections::None => VmPermissions::none(),
+        };
+        let page_amount = ((bytes - 1) / PAGE_4K) + 1;
+
+        // FIXME: We need to figure out a sane number of max pages.
+        if page_amount > 1024 || bytes == 0 {
+            return Err(MapMemoryError::InvalidLength(bytes));
+        }
+
+        let vm_region = match location {
+            MemoryLocation::Anywhere => process
+                .write()
+                .add_anywhere(page_amount, page_permissions, false)
+                .map_err(|err| match err {
+                    crate::process::ProcessError::OutOfVirtualMemory => MapMemoryError::OutOfMemory,
+                    _ => MapMemoryError::MappingMemoryError,
+                })?,
+        };
+
+        Ok(vm_region.start.addr().as_mut_ptr())
     }
 
     fn get_pid() -> usize {
-        todo!()
+        let process = aquire_running_and_release_biglock();
+        process.read().get_pid()
     }
 
     fn debug_msg(msg: &str) -> ::core::result::Result<(), DebugMsgError> {
-        ::lldebug::priv_print(lldebug::LogKind::Log, "userspace", format_args!("{}", msg));
+        let process = aquire_running_and_release_biglock();
+
+        let fmt_string = format!(
+            "{:<22}pid={:04}",
+            process.read().get_process_name(),
+            process.read().get_pid(),
+        );
+
+        ::lldebug::priv_print(lldebug::LogKind::Log, &fmt_string, format_args!("{}", msg));
 
         Ok(())
     }
