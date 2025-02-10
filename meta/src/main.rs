@@ -227,7 +227,7 @@ fn run_qemu(
         &[]
     };
 
-    Command::new("qemu-system-x86_64")
+    let qemu = Command::new("qemu-system-x86_64")
         .args(kvm)
         .args(no_graphic)
         .args(fast_boot)
@@ -252,10 +252,21 @@ fn run_qemu(
         ))
         .stdout(std::process::Stdio::inherit())
         .status()
-        .context(anyhow!("Could not start qemu-system-x86_64!"))?
-        .success()
-        .then_some(())
-        .ok_or(anyhow!("QEMU Failed"))?;
+        .context(anyhow!("Could not start qemu-system-x86_64!"))?;
+
+    println!("\n");
+    match qemu.code().unwrap_or(0) {
+        0 => (),
+        33 => {
+            println!("QuantumOS Success!")
+        }
+        35 => {
+            println!("QuantumOS Failure!");
+        }
+        code => {
+            println!("Unknown Qemu exit code {code}");
+        }
+    }
 
     Ok(())
 }

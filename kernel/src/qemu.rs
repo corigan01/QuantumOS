@@ -5,7 +5,7 @@
 \___\_\_,_/\_,_/_//_/\__/\_,_/_/_/_/ /_/|_|\__/_/ /_//_/\__/_/
   Part of the Quantum OS Kernel
 
-Copyright 2024 Gavin Kellam
+Copyright 2025 Gavin Kellam
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
 associated documentation files (the "Software"), to deal in the Software without restriction,
@@ -23,17 +23,32 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use arch::interrupts::disable_interrupts;
-use core::panic::PanicInfo;
-use lldebug::errorln;
+use arch::io::IOPort;
 
-use crate::qemu::{QemuExitStatus, exit_emulator};
+pub const QEMU_ISA_DEBUG_EXIT_IO_BASE: IOPort = IOPort::new(0xF4);
 
-#[panic_handler]
-fn panic(info: &PanicInfo) -> ! {
-    unsafe { disable_interrupts() };
-    errorln!("{}", info);
+#[repr(u8)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum QemuExitStatus {
+    Success = 0x10,
+    Failure = 0x11,
+}
 
-    // Close the emulator on panic
-    exit_emulator(QemuExitStatus::Failure);
+/// Close the emulator with the given status.
+///
+/// # Note
+/// `Success` does not close qemu with exit status '0' and instead
+/// closes the emulator with '33'. The meta script knows about this
+/// number and will treat it as if it did exit with status '0'.
+pub fn exit_emulator(exit_status: QemuExitStatus) -> ! {
+    let status = exit_status as u8;
+
+    unsafe {
+        QEMU_ISA_DEBUG_EXIT_IO_BASE.write_byte(status);
+
+        // Busy loop if we couldn't exit
+        loop {
+            core::arch::asm!("hlt");
+        }
+    }
 }
