@@ -292,7 +292,7 @@ impl ToTokens for ast::ProtocolEnumFields {
                 let var_defs = hash_map.iter().map(|(name, ty)| quote! { #name : #ty });
 
                 tokens.append_all(quote! {
-                    { #(#var_defs),* },
+                    { #(#var_defs),* }
                 });
             }
         }
