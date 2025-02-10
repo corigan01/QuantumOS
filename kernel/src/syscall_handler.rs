@@ -28,7 +28,7 @@ use alloc::format;
 use mem::paging::VmPermissions;
 use quantum_portal::{
     DebugMsgError, ExitReason, MapMemoryError, MemoryLocation, MemoryProtections, QuantumPortal,
-    server::QuantumPortalServer,
+    WaitCondition, WaitSignal, WaitingError, server::QuantumPortalServer,
 };
 use util::consts::PAGE_4K;
 
@@ -96,5 +96,12 @@ impl QuantumPortal for KernelSyscalls {
         ::lldebug::priv_print(lldebug::LogKind::Log, &fmt_string, format_args!("{}", msg));
 
         Ok(())
+    }
+
+    fn wait_for(
+        conditions: &[WaitCondition],
+        signal_buffer: &mut [WaitSignal],
+    ) -> ::core::result::Result<usize, WaitingError> {
+        todo!()
     }
 }
