@@ -64,6 +64,55 @@ pub trait QuantumPortal {
     #[event = 2]
     fn get_pid() -> usize;
 
+    #[event = 3]
+    fn wait_for(conditions: &[WaitCondition], signal_buffer: &mut [WaitSignal]) -> Result<usize, WaitingError> {
+        enum WaitCondition {
+            /// Wait for this handle to be ready to write
+            WaitToWrite(u64),
+            /// Wait for this handle to have bytes ready to read.
+            WaitToRead(u64),
+            /// Waits for any update
+            WaitAny(u64),
+            /// Sleep the process
+            SleepMs(u64),
+        }
+
+        enum WaitSignal {
+            /// Updates for handles
+            HandleUpdate {
+                kind: HandleUpdateKind,
+                handle: u64,
+                wait_index: usize,
+            },
+            /// Updates for sleep
+            SleepUpdate {
+                sleep_ms_duration: u64,
+                wait_index: usize,
+            },
+            /// Your process is requested to exit
+            TerminationRequest,
+        }
+
+        enum HandleUpdateKind {
+            /// This handle is ready for data to be written
+            WriteReady,
+            /// This handle is ready to read, and has bytes in que
+            ReadReady,
+            /// This handle has disconnected
+            Disconnected,
+            /// This handle has accepted a new connection
+            NewConnection { new_handle: u64 },
+        }
+
+        enum WaitingError {
+            UnknownHandle {
+                handle: u64,
+                array_index: usize
+            },
+            
+        }
+    }
+
     #[event = 69]
     fn debug_msg(msg: &str) -> Result<(), DebugMsgError> {
         enum DebugMsgError {

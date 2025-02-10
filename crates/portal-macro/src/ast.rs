@@ -90,6 +90,11 @@ pub enum ProtocolVarType {
         to: ProtocolDefine,
     },
     Str(Span),
+    Array {
+        span: Span,
+        to: Box<ProtocolVarType>,
+        len: Option<usize>,
+    },
     RefTo {
         span: Span,
         is_mut: bool,
@@ -161,6 +166,11 @@ impl ProtocolVarType {
         }
 
         if let Some(value) = match self {
+            ProtocolVarType::Array {
+                span: _,
+                to,
+                len: _,
+            } => to.search(f),
             ProtocolVarType::ResultKind {
                 span: _,
                 ok_ty,
@@ -204,6 +214,11 @@ impl ProtocolVarType {
         }
 
         if let Some(value) = match self {
+            ProtocolVarType::Array {
+                span: _,
+                to,
+                len: _,
+            } => to.search_mut(f),
             ProtocolVarType::ResultKind {
                 span: _,
                 ok_ty,
@@ -263,6 +278,7 @@ impl ProtocolVarType {
             ProtocolVarType::Str(span) => span.clone(),
             ProtocolVarType::RefTo { span, .. } => span.clone(),
             ProtocolVarType::PtrTo { span, .. } => span.clone(),
+            ProtocolVarType::Array { span, .. } => span.clone(),
         }
     }
 }
@@ -367,6 +383,34 @@ impl PortalMacro {
             .flat_map(|endpoint| endpoint.body.iter().cloned())
             .collect();
 
+        fn search_var_type(var_type: &mut ProtocolVarType, defines: &[ProtocolDefine]) {
+            var_type.search_mut(&mut |inner| {
+                let maybe_defined = match inner {
+                    // We only want to look for types that are currently unknown
+                    ProtocolVarType::Unknown(_) => defines
+                        .iter()
+                        .find(|proto| match proto {
+                            ProtocolDefine::DefinedEnum(ref_cell) => {
+                                ref_cell.try_borrow().is_ok_and(|ref_cell| {
+                                    inner.is_unknown_of(&ref_cell.ident.to_string())
+                                })
+                            }
+                        })
+                        .cloned(),
+                    _ => None,
+                };
+
+                if let Some(user_defined) = maybe_defined {
+                    *inner = ProtocolVarType::UserDefined {
+                        span: inner.span(),
+                        to: user_defined,
+                    };
+                }
+
+                None::<()>
+            });
+        }
+
         self.endpoints
             .iter_mut()
             .flat_map(|endpoints| {
@@ -376,30 +420,30 @@ impl PortalMacro {
                     .map(|input| &mut input.ty)
                     .chain([&mut endpoints.output_arg.0].into_iter())
             })
-            .for_each(|var_type| {
-                var_type.search_mut(&mut |inner| {
-                    let maybe_defined = match inner {
-                        // We only want to look for types that are currently unknown
-                        ProtocolVarType::Unknown(_) => protocol_defines
-                            .iter()
-                            .find(|proto| match proto {
-                                ProtocolDefine::DefinedEnum(ref_cell) => {
-                                    inner.is_unknown_of(&ref_cell.borrow().ident.to_string())
-                                }
-                            })
-                            .cloned(),
-                        _ => None,
-                    };
+            .for_each(|var_type| search_var_type(var_type, &protocol_defines));
 
-                    if let Some(user_defined) = maybe_defined {
-                        *inner = ProtocolVarType::UserDefined {
-                            span: inner.span(),
-                            to: user_defined,
-                        };
-                    }
-
-                    None::<()>
-                });
+        // Also we need to make sure we include the user defined types too
+        self.endpoints
+            .iter_mut()
+            .flat_map(|endpoint| endpoint.body.iter())
+            .for_each(|user_defined| match user_defined {
+                ProtocolDefine::DefinedEnum(ref_cell) => {
+                    let mut cell = ref_cell.borrow_mut();
+                    cell.varients
+                        .iter_mut()
+                        .for_each(|varient| match &mut varient.fields {
+                            ProtocolEnumFields::Unnamed(protocol_var_types) => {
+                                protocol_var_types.iter_mut().for_each(|var_type| {
+                                    search_var_type(var_type, &protocol_defines)
+                                });
+                            }
+                            ProtocolEnumFields::Named(hash_map) => hash_map
+                                .iter_mut()
+                                .map(|(_, value)| value)
+                                .for_each(|var_type| search_var_type(var_type, &protocol_defines)),
+                            _ => (),
+                        });
+                }
             });
     }
 

@@ -42,7 +42,7 @@ use arch::{
     },
     registers::cr3,
 };
-use lldebug::logln;
+use lldebug::warnln;
 use spin::RwLock;
 use util::consts::PAGE_4K;
 
@@ -171,7 +171,7 @@ pub fn virt_to_phys(virt: VirtAddr) -> Result<PhysAddr, PhysPtrTranslationError>
         Err(PhysPtrTranslationError::PageEntriesNotSetup) => {
             bootloader_convert_phys(virt.addr() as u64)
                 .inspect(|inner| {
-                    logln!("Virt2Phys (Bootloader) - V{:#016x} P{:#016x}", virt, inner)
+                    warnln!("Virt2Phys [Bootloader] V{:#016x} -> P{:#016x}", virt, inner)
                 })
                 .ok_or(PhysPtrTranslationError::VirtNotFound(virt))
                 .map(|phys_addr| PhysAddr::new(phys_addr as usize))

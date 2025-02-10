@@ -23,11 +23,6 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use core::{
-    error::Error,
-    sync::atomic::{AtomicBool, Ordering},
-};
-
 use crate::context::userspace_entry;
 use alloc::{
     boxed::Box,
@@ -36,11 +31,15 @@ use alloc::{
     sync::{Arc, Weak},
 };
 use arch::{
-    CpuPrivilege, critcal_section, interrupts,
+    CpuPrivilege, interrupts,
     pic8259::pic_eoi,
     registers::{ProcessContext, Segment},
 };
 use boolvec::BoolVec;
+use core::{
+    error::Error,
+    sync::atomic::{AtomicBool, Ordering},
+};
 use elf::{ElfErrorKind, elf_owned::ElfOwned};
 use lldebug::{logln, warnln};
 use mem::{

@@ -32,7 +32,7 @@ use libq::{dbugln, exit, map_memory};
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
     dbugln!("{}", info);
-    loop {}
+    exit(libq::ExitReason::Failure);
 }
 
 #[unsafe(link_section = ".start")]

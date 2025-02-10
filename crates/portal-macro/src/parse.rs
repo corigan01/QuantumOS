@@ -351,6 +351,35 @@ impl TryFrom<&syn::Type> for ast::ProtocolVarType {
                 is_mut: type_ptr.mutability.is_some(),
                 to: Box::new(Self::try_from(type_ptr.elem.as_ref())?),
             }),
+            syn::Type::Slice(type_slice) => Ok(Self::Array {
+                span: type_slice.span(),
+                to: Box::new(Self::try_from(type_slice.elem.as_ref())?),
+                len: None,
+            }),
+            syn::Type::Array(type_array) => Ok(Self::Array {
+                span: type_array.span(),
+                to: Box::new(Self::try_from(type_array.elem.as_ref())?),
+                len: Some(match &type_array.len {
+                    syn::Expr::Lit(syn::PatLit {
+                        attrs: _,
+                        lit: syn::Lit::Int(lit_int),
+                    }) => lit_int.base10_parse()?,
+                    _ => {
+                        return Err(syn::Error::new(
+                            type_array.span(),
+                            format!(
+                                "Expected Array's length must be a literal, found '{}'",
+                                type_array
+                                    .len
+                                    .span()
+                                    .source_text()
+                                    .as_deref()
+                                    .unwrap_or("??")
+                            ),
+                        ));
+                    }
+                }),
+            }),
             syn::Type::Reference(type_reference) => Ok(Self::RefTo {
                 span: type_reference.span(),
                 is_mut: type_reference.mutability.is_some(),
