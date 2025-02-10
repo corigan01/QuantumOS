@@ -256,19 +256,14 @@ fn run_qemu(
 
     println!("\n");
     match qemu.code().unwrap_or(0) {
-        0 => (),
+        0 => Ok(()),
         33 => {
-            println!("QuantumOS Success!")
+            println!("QuantumOS Success!");
+            Ok(())
         }
-        35 => {
-            println!("QuantumOS Failure!");
-        }
-        code => {
-            println!("Unknown Qemu exit code {code}");
-        }
+        35 => Err(anyhow!("QuantumOS Failure!")),
+        code => Err(anyhow!("Unknown Qemu exit code {code}")),
     }
-
-    Ok(())
 }
 
 async fn run_bochs(img_file: &Path) -> Result<()> {
