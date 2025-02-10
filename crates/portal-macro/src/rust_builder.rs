@@ -272,8 +272,10 @@ impl ToTokens for ast::ProtocolEnumVarient {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         let ident = &self.ident;
         let fields = &self.fields;
+        let docs = &self.docs;
 
         tokens.append_all(quote! {
+            #(#docs)*
             #ident #fields
         });
     }

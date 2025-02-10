@@ -466,9 +466,11 @@ impl TryFrom<&syn::Variant> for ast::ProtocolEnumVarient {
     type Error = syn::Error;
     fn try_from(value: &syn::Variant) -> Result<Self, Self::Error> {
         let ident = value.ident.clone();
+        let docs = value.attrs.clone();
         Ok(Self {
             ident,
             fields: (&value.fields).try_into()?,
+            docs,
         })
     }
 }

@@ -141,6 +141,7 @@ pub struct ProtocolEnumDef {
 #[derive(Debug)]
 #[allow(unused)]
 pub struct ProtocolEnumVarient {
+    pub docs: Vec<Attribute>,
     pub ident: Ident,
     pub fields: ProtocolEnumFields,
 }
