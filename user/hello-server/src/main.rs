@@ -27,7 +27,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #![no_main]
 
 use core::panic::PanicInfo;
-use libq::{dbugln, exit, map_memory};
+use libq::{WaitCondition, WaitSignal, dbugln, exit};
 
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
@@ -40,13 +40,10 @@ fn panic(info: &PanicInfo) -> ! {
 extern "C" fn _start() {
     dbugln!("Hello Server!");
 
-    let memory = map_memory(
-        libq::MemoryLocation::Anywhere,
-        libq::MemoryProtections::ReadWrite,
-        4096 * 5,
-    )
-    .unwrap();
-    unsafe { memory.write_bytes(0xFF, 4096 * 5) };
+    let mut signal_buffer = [const { WaitSignal::None }; 8];
+    while let Ok(wait_amount) = libq::wait_for(&[WaitCondition::SleepMs(100)], &mut signal_buffer) {
+        dbugln!("{:#?}", &signal_buffer[..wait_amount]);
+    }
 
     exit(libq::ExitReason::Success);
 }

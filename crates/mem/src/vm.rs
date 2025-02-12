@@ -117,6 +117,12 @@ pub trait VmInjectFillAction: core::fmt::Debug + Sync + Send {
         ppage: PhysPage,
     ) -> PopulationReponse;
 
+    /// Allocate a physical page for this virtual page
+    #[allow(unused_variables)]
+    fn alloc_physical_page(&mut self, vpage: VirtPage) -> Result<SharedPhysPage, MemoryError> {
+        SharedPhysPage::allocate_anywhere()
+    }
+
     /// Should all pages be filled immediately when this object is created?
     #[allow(unused_variables)]
     fn requests_all_pages_filled(&self, parent_object: &VmObject) -> bool {
@@ -202,6 +208,14 @@ impl VmInjectFillAction for VmFillAction {
                     .write()
                     .populate_page(parent_object, process, relative_index, vpage, ppage)
             }
+        }
+    }
+
+    fn alloc_physical_page(&mut self, vpage: VirtPage) -> Result<SharedPhysPage, MemoryError> {
+        match self {
+            VmFillAction::Nothing => SharedPhysPage::allocate_anywhere(),
+            VmFillAction::Scrub(_) => SharedPhysPage::allocate_anywhere(),
+            VmFillAction::InjectWith(rw_lock) => rw_lock.write().alloc_physical_page(vpage),
         }
     }
 
@@ -384,7 +398,10 @@ impl VmObject {
         }
 
         // Get a new backing page for this vpage
-        let backing_page = SharedPhysPage::allocate_anywhere()
+        let backing_page = self
+            .fill_action
+            .write()
+            .alloc_physical_page(vpage)
             .map_err(|err| VmObjectMappingError::CannotGetPhysicalPage(err))?;
 
         // Map the page with kernel option first to ensure we can write to this page
@@ -448,7 +465,7 @@ impl VmObject {
             return PageFaultReponse::NoAccess {
                 page_perm: self.permissions,
                 request_perm: VmPermissions::none().set_write_flag(true),
-                page: VirtPage::containing_addr(info.vaddr),
+                addr: info.vaddr,
             };
         }
 
@@ -457,7 +474,7 @@ impl VmObject {
             return PageFaultReponse::NoAccess {
                 page_perm: self.permissions,
                 request_perm: VmPermissions::none().set_exec_flag(true),
-                page: VirtPage::containing_addr(info.vaddr),
+                addr: info.vaddr,
             };
         }
 
@@ -466,7 +483,7 @@ impl VmObject {
             return PageFaultReponse::NoAccess {
                 page_perm: self.permissions,
                 request_perm: VmPermissions::none().set_user_flag(true),
-                page: VirtPage::containing_addr(info.vaddr),
+                addr: info.vaddr,
             };
         }
 
@@ -697,7 +714,7 @@ impl VmProcess {
                     .set_read_flag(info.is_present)
                     .set_write_flag(info.write_read_access)
                     .set_user_flag(info.user_fault),
-                page: VirtPage::containing_addr(info.vaddr),
+                addr: info.vaddr,
             };
         };
 
@@ -732,7 +749,7 @@ pub enum PageFaultReponse {
     NoAccess {
         page_perm: VmPermissions,
         request_perm: VmPermissions,
-        page: VirtPage,
+        addr: VirtAddr,
     },
     /// Something went wrong, and we need to panic!
     CriticalFault(Box<dyn Error>),

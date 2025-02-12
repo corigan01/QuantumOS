@@ -23,13 +23,7 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use crate::{
-    context::IN_USERSPACE,
-    process::{
-        AccessViolationReason, ProcessError, SchedulerEvent, aquire_scheduler_biglock,
-        assert_scheduler_biglock, release_scheduler_biglock, send_scheduler_event,
-    },
-};
+use crate::context::IN_USERSPACE;
 use arch::{
     CpuPrivilege, attach_irq, critcal_section,
     idt64::{
@@ -52,7 +46,6 @@ static IRQ_HANDLERS: Mutex<[Option<fn(&InterruptInfo, bool)>; 32]> = Mutex::new(
 fn exception_handler(args: &InterruptInfo) {
     let called_from_ue = unsafe { core::ptr::read_volatile(&raw const IN_USERSPACE) };
     unsafe { core::ptr::write_volatile(&raw mut IN_USERSPACE, 0) };
-    unsafe { aquire_scheduler_biglock() };
 
     match args.flags {
         // IRQ
@@ -85,16 +78,16 @@ fn exception_handler(args: &InterruptInfo) {
                 mem::vm::PageFaultReponse::NoAccess {
                     page_perm,
                     request_perm,
-                    page,
+                    addr,
                 } => {
                     warnln!("Process crash!");
-                    send_scheduler_event(SchedulerEvent::Fault(ProcessError::AccessViolation(
-                        AccessViolationReason::NoAccess {
-                            page_perm,
-                            request_perm,
-                            page,
-                        },
-                    )));
+                    // send_scheduler_event(SchedulerEvent::Fault(ProcessError::AccessViolation(
+                    //     AccessViolationReason::NoAccess {
+                    //         page_perm,
+                    //         request_perm,
+                    //         addr,
+                    //     },
+                    // )));
                 }
                 // panic
                 mem::vm::PageFaultReponse::CriticalFault(error) => {
@@ -119,9 +112,6 @@ fn exception_handler(args: &InterruptInfo) {
     if args.flags.exception_kind() == ExceptionKind::Abort {
         panic!("Interrupt -- {:?}", args.flags);
     }
-
-    // Release scheduler lock
-    unsafe { release_scheduler_biglock() };
 
     // Send End of interrupt
     match args.flags {
@@ -219,17 +209,9 @@ extern "C" fn syscall_handler(
     syscall_number: u64,
 ) -> u64 {
     unsafe {
-        // One of the first things we need to do is aquire the scheduler biglock
-        // Each syscall handler is responsible for disabling the biglock once it
-        // aquires its process lock.
-        aquire_scheduler_biglock();
-
         // Call the portal
         let resp =
             crate::syscall_handler::KernelSyscalls::from_syscall(syscall_number, rdi, rsi, rdx, r8);
-
-        // If the syscall handler did not release the biglock, it should be a fault
-        assert_scheduler_biglock(false);
 
         resp
     }

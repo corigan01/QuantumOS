@@ -65,7 +65,10 @@ pub trait QuantumPortal {
     fn get_pid() -> usize;
 
     #[event = 3]
-    fn wait_for(conditions: &[WaitCondition], signal_buffer: &mut [WaitSignal]) -> Result<usize, WaitingError> {
+    fn wait_for(
+        conditions: &[WaitCondition],
+        signal_buffer: &mut [WaitSignal],
+    ) -> Result<usize, WaitingError> {
         enum WaitCondition {
             /// Wait for this handle to be ready to write
             WaitToWrite(u64),
@@ -91,6 +94,8 @@ pub trait QuantumPortal {
             },
             /// Your process is requested to exit
             TerminationRequest,
+            /// There is no condition in this slot
+            None,
         }
 
         enum HandleUpdateKind {
@@ -105,11 +110,7 @@ pub trait QuantumPortal {
         }
 
         enum WaitingError {
-            UnknownHandle {
-                handle: u64,
-                array_index: usize
-            },
-            
+            UnknownHandle { handle: u64, array_index: usize },
         }
     }
 

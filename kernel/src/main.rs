@@ -35,6 +35,7 @@ mod gdt;
 mod int;
 mod panic;
 mod process;
+mod processor;
 mod qemu;
 mod syscall_handler;
 mod timer;
@@ -48,7 +49,7 @@ use mem::{
     paging::init_virt2phys_provider,
     pmm::Pmm,
 };
-use process::{Process, Scheduler, set_global_scheduler};
+use process::{Process, scheduler::Scheduler, scheduler::set_global_scheduler};
 use serial::{Serial, baud::SerialBaud};
 use util::{bytes::HumanBytes, consts::PAGE_4K};
 
@@ -112,7 +113,7 @@ fn main(kbh: &KernelBootHeader) {
         unsafe { core::slice::from_raw_parts(kbh.initfs_ptr.0 as *const u8, kbh.initfs_ptr.1) };
 
     let sc =
-        Scheduler::bootstrap_scheduler(&initfs_slice).expect("Unable to load kernel's scheduler");
+        Scheduler::bootstrap_scheduler(initfs_slice).expect("Unable to load kernel's scheduler");
 
     // Start the scheduler
     set_global_scheduler(sc);

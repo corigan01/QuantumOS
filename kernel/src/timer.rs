@@ -32,10 +32,7 @@ use arch::{
 };
 use lldebug::{log, logln};
 
-use crate::{
-    int::attach_irq_handler,
-    process::{SchedulerEvent, send_scheduler_event},
-};
+use crate::int::attach_irq_handler;
 
 const TIMER_HZ: f32 = 1000_f32;
 
@@ -65,9 +62,9 @@ fn pit_interrupt_handler(args: &InterruptInfo, called_from_ue: bool) {
     KERNEL_TICKS.fetch_add(1, Ordering::AcqRel);
 
     // If we are in userspace, we tick the scheduler
-    if called_from_ue {
-        send_scheduler_event(SchedulerEvent::Tick(args.context));
-    }
+    // if called_from_ue {
+    //     send_scheduler_event(SchedulerEvent::Tick(args.context));
+    // }
 }
 
 pub fn kernel_ticks() -> u64 {
