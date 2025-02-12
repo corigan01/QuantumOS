@@ -29,6 +29,7 @@ use arch::{
     idt64::{
         ExceptionKind, InterruptDescTable, InterruptFlags, InterruptInfo, fire_debug_int, interrupt,
     },
+    locks::interrupt_locks_held,
     pic8259::{pic_eoi, pic_remap},
     registers::Segment,
 };
@@ -40,17 +41,21 @@ use mem::{
 use quantum_portal::server::QuantumPortalServer;
 
 static INTERRUPT_TABLE: Mutex<InterruptDescTable> = Mutex::new(InterruptDescTable::new());
-static IRQ_HANDLERS: Mutex<[Option<fn(&InterruptInfo, bool)>; 32]> = Mutex::new([None; 32]);
+static IRQ_HANDLERS: Mutex<[Option<fn(&InterruptInfo)>; 32]> = Mutex::new([None; 32]);
 
 #[interrupt(0..50)]
 fn exception_handler(args: &InterruptInfo) {
     let called_from_ue = unsafe { core::ptr::read_volatile(&raw const IN_USERSPACE) };
-    unsafe { core::ptr::write_volatile(&raw mut IN_USERSPACE, 0) };
+    assert_eq!(
+        interrupt_locks_held(),
+        0,
+        "Should not be possible to call an interrupt while interrupt locks are held -- {args:#?}"
+    );
 
     match args.flags {
         // IRQ
         InterruptFlags::Irq(irq_num) if irq_num - PIC_IRQ_OFFSET <= 16 => {
-            call_attached_irq(irq_num - PIC_IRQ_OFFSET, &args, called_from_ue == 1);
+            call_attached_irq(irq_num - PIC_IRQ_OFFSET, &args);
         }
         InterruptFlags::PageFault {
             present,
@@ -120,13 +125,9 @@ fn exception_handler(args: &InterruptInfo) {
         }
         _ => (),
     }
-
-    if called_from_ue == 1 {
-        unsafe { core::ptr::write_volatile(&raw mut IN_USERSPACE, 1) };
-    }
 }
 
-fn call_attached_irq(irq_id: u8, args: &InterruptInfo, called_from_ue: bool) {
+fn call_attached_irq(irq_id: u8, args: &InterruptInfo) {
     let irq_handler = IRQ_HANDLERS.lock();
 
     if let Some(handler) = irq_handler
@@ -138,12 +139,12 @@ fn call_attached_irq(irq_id: u8, args: &InterruptInfo, called_from_ue: bool) {
         drop(irq_handler);
 
         // Finally call the handler
-        handler(args, called_from_ue);
+        handler(args);
     }
 }
 
 /// Set a function to be called whenever an irq is triggered.
-pub fn attach_irq_handler(handler_fn: fn(&InterruptInfo, bool), irq: u8) {
+pub fn attach_irq_handler(handler_fn: fn(&InterruptInfo), irq: u8) {
     critcal_section! {
         let mut irq_handler = IRQ_HANDLERS.lock();
         let Some(handler) = irq_handler.get_mut(irq as usize) else {

@@ -31,6 +31,7 @@ use alloc::{
 };
 use arch::CpuPrivilege;
 use arch::interrupts::disable_interrupts;
+use arch::locks::InterruptMutex;
 use boolvec::BoolVec;
 use core::error::Error;
 use elf::{ElfErrorKind, elf_owned::ElfOwned};
@@ -41,7 +42,6 @@ use mem::{
     paging::{PageCorrelationError, PageTableLoadingError, Virt2PhysMapping, VmPermissions},
     vm::{InsertVmObjectError, PageFaultInfo, PageFaultReponse, VmFillAction, VmProcess, VmRegion},
 };
-use spin::RwLock;
 use tar::TarError;
 use thread::Thread;
 use util::consts::{PAGE_2M, PAGE_4K};
@@ -53,8 +53,8 @@ pub mod scheduler;
 pub mod thread;
 pub mod vm_elf;
 
-type RefThread = Arc<RwLock<Thread>>;
-type WeakRefThread = Weak<RwLock<Thread>>;
+type RefThread = Arc<InterruptMutex<Thread>>;
+type WeakRefThread = Weak<InterruptMutex<Thread>>;
 
 /// A structure repr a running process on the system
 #[derive(Debug, Clone)]
@@ -392,7 +392,7 @@ impl Process {
             todo!()
         }
 
-        let ref_thrad = Arc::new(RwLock::new(new_thread));
+        let ref_thrad = Arc::new(InterruptMutex::new(new_thread));
         self.threads.push(ref_thrad.clone());
 
         Ok(ref_thrad)
@@ -409,7 +409,7 @@ impl Process {
             "Switching to '{}' (pid={}, tid={})...",
             self.name,
             self.id,
-            self.id
+            thread.lock().get_tid()
         );
 
         // Begin a critical section
@@ -417,7 +417,7 @@ impl Process {
         notify_begin_critical();
 
         // Set the global process ID
-        set_current_process_id(0);
+        set_current_process_id(self.id);
 
         // Page tables must be loaded to switch into the process
         if !self.vm.page_tables.is_loaded() {
@@ -428,6 +428,6 @@ impl Process {
     }
 }
 
-type WeakRefProcess = Weak<RwLock<Process>>;
-type RefProcess = Arc<RwLock<Process>>;
+type WeakRefProcess = Weak<InterruptMutex<Process>>;
+type RefProcess = Arc<InterruptMutex<Process>>;
 type KernelTicks = usize;

@@ -24,6 +24,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 use alloc::format;
+use lldebug::logln;
 use mem::paging::VmPermissions;
 use quantum_portal::{
     DebugMsgError, ExitReason, MapMemoryError, MemoryLocation, MemoryProtections, QuantumPortal,
@@ -38,7 +39,7 @@ impl QuantumPortalServer for KernelSyscalls {
     fn verify_user_ptr<T: Sized>(ptr: *const T) -> bool {
         let (proc, _) = current_process();
 
-        proc.read()
+        unsafe { &*proc.as_mut_ptr() }
             .check_addr(ptr.into(), VmPermissions::USER_RW)
             .is_ok()
     }
@@ -92,12 +93,16 @@ impl QuantumPortal for KernelSyscalls {
     fn debug_msg(msg: &str) -> Result<(), DebugMsgError> {
         let (process, thread) = current_process();
 
-        let fmt_string = format!(
-            "{:<23}t{:02x} p{:02x}",
-            process.read().get_process_name(),
-            thread.read().get_tid(),
-            process.read().get_pid(),
-        );
+        let fmt_string = {
+            let proc_lock = process.lock();
+            let thread_lock = thread.lock();
+            format!(
+                "{:<23}t{:02x} p{:02x}",
+                proc_lock.get_process_name(),
+                thread_lock.get_tid(),
+                proc_lock.get_pid(),
+            )
+        };
 
         ::lldebug::priv_print(lldebug::LogKind::Log, &fmt_string, format_args!("{}", msg));
 
@@ -108,11 +113,15 @@ impl QuantumPortal for KernelSyscalls {
         conditions: &[WaitCondition],
         signal_buffer: &mut [WaitSignal],
     ) -> Result<usize, WaitingError> {
-        // let process = aquire_running_and_keep_biglock();
-        // process.write().set_wait_conds(conditions);
+        logln!(
+            "Waiting - {:?} (signal return size = {})",
+            conditions,
+            signal_buffer.len()
+        );
 
-        // logln!("Adding waiting cond: {:?}", conditions);
-        // send_scheduler_event(SchedulerEvent::SyscallYeild);
+        if signal_buffer.len() == 0 {
+            return Err(WaitingError::InvalidSignalBuffer);
+        }
 
         todo!()
     }

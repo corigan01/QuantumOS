@@ -30,6 +30,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 pub mod gdt;
 pub mod idt64;
 pub mod io;
+pub mod locks;
 pub mod paging64;
 pub mod pic8259;
 pub mod pit825x;
@@ -38,6 +39,11 @@ pub mod supports;
 pub mod tss64;
 
 pub mod interrupts {
+    #[inline(always)]
+    pub fn are_interrupts_enabled() -> bool {
+        super::registers::eflags::is_interrupts_enable_set()
+    }
+
     #[inline(always)]
     pub unsafe fn enable_interrupts() {
         core::arch::asm!("sti");

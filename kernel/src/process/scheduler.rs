@@ -23,28 +23,29 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use core::{arch::asm, cell::SyncUnsafeCell};
-
+use super::{
+    KernelTicks, ProcessError, RefProcess, RefThread, WeakRefProcess, WeakRefThread, thread::Thread,
+};
 use crate::{
     process::Process,
     processor::{get_current_process_id, set_current_process_id},
 };
-
-use super::{KernelTicks, ProcessError, RefProcess, RefThread, WeakRefProcess, WeakRefThread};
 use alloc::{
     collections::{btree_map::BTreeMap, vec_deque::VecDeque},
     string::String,
     sync::Arc,
+    vec::Vec,
 };
-use arch::CpuPrivilege;
+use arch::{CpuPrivilege, locks::InterruptMutex, registers::ProcessContext};
 use boolvec::BoolVec;
+use core::arch::asm;
 use elf::elf_owned::ElfOwned;
 use lldebug::logln;
 use mem::{
     paging::Virt2PhysMapping,
     vm::{PageFaultInfo, PageFaultReponse},
 };
-use spin::RwLock;
+use quantum_portal::{WaitCondition, WaitSignal};
 use tar::Tar;
 
 #[derive(Debug)]
@@ -112,9 +113,9 @@ impl Scheduler {
         thread: Option<RefThread>,
     ) -> Result<(), ProcessError> {
         if let Some(thread) = thread {
-            proc.write().exit_thread(thread)
+            proc.lock().exit_thread(thread)
         } else {
-            let pid = proc.read().id;
+            let pid = proc.lock().id;
 
             if self.alive.remove(&pid).is_none() {
                 return Err(ProcessError::NoSuchProcess(pid));
@@ -122,7 +123,7 @@ impl Scheduler {
 
             // If we are the currently running process, we need to remove it
             if let Some((_, proc, _)) = self.running.clone() {
-                if proc.read().get_pid() == pid {
+                if proc.lock().get_pid() == pid {
                     self.running = None;
                 }
             }
@@ -167,7 +168,7 @@ impl Scheduler {
             None
         };
 
-        let ref_proc = Arc::new(RwLock::new(proc));
+        let ref_proc = Arc::new(InterruptMutex::new(proc));
 
         // 3. Add this process to the list of alive processes
         self.alive.insert(pid, ref_proc.clone());
@@ -236,15 +237,15 @@ impl Scheduler {
             return Err(ProcessError::NotAnyProcess);
         };
 
-        let pid = process.read().id;
+        let pid = process.lock().id;
         if get_current_process_id() == pid {
             assert!(
-                process.read().is_loaded(),
+                process.lock().is_loaded(),
                 "If last process is current, page tables should be loaded!"
             );
         } else {
             set_current_process_id(pid);
-            unsafe { process.read().load_tables()? };
+            unsafe { process.lock().load_tables()? };
         };
 
         unsafe { (&mut *process.as_mut_ptr()).switch_into(thread) }
@@ -253,7 +254,10 @@ impl Scheduler {
     /// Tick the scheduler
     ///
     /// Returns true when the scheduler changed the currently running process.
-    pub fn tick_scheduler(&mut self) -> Result<bool, ProcessError> {
+    pub fn tick_scheduler(
+        &mut self,
+        context: Option<&ProcessContext>,
+    ) -> Result<bool, ProcessError> {
         let last_running = self.running.as_mut();
 
         // Extract the last running process
@@ -267,6 +271,19 @@ impl Scheduler {
         if *ticks_remaining > 0 {
             *ticks_remaining -= 1;
             return Ok(false);
+        }
+
+        // Set its context
+        if let Some(context) = context {
+            match (context.cs >> 3) as u16 {
+                Thread::USERSPACE_CODE_SEGMENT => unsafe {
+                    (&mut *thread.as_mut_ptr()).set_userspace_context(*context)
+                },
+                Thread::KERNEL_CODE_SEGMENT => unsafe {
+                    (&mut *thread.as_mut_ptr()).set_kernel_context(*context)
+                },
+                segment => unreachable!("Unknown code segment {segment}"),
+            }
         }
 
         // Otherwise, move the currently active process to the end of the queue
@@ -305,19 +322,18 @@ impl Scheduler {
             return PageFaultReponse::NotAttachedHandler;
         };
 
-        proc.read().page_fault_handler(info)
+        proc.lock().page_fault_handler(info)
     }
 }
 
-static THE_SCHEDULER: SyncUnsafeCell<Option<Scheduler>> = SyncUnsafeCell::new(None);
+static THE_SCHEDULER: InterruptMutex<Option<Scheduler>> = InterruptMutex::new(None);
 
 pub fn ref_scheduler<F, R>(f: F) -> R
 where
     F: FnOnce(&Scheduler) -> R,
 {
-    let s_ref = unsafe { &*THE_SCHEDULER.get() }
-        .as_ref()
-        .expect("Scheduler has not been set!");
+    let lock = THE_SCHEDULER.lock();
+    let s_ref = lock.as_ref().expect("Scheduler has not been set!");
 
     f(s_ref)
 }
@@ -326,9 +342,8 @@ pub fn mut_scheduler<F, R>(f: F) -> R
 where
     F: FnOnce(&mut Scheduler) -> R,
 {
-    let s_ref = unsafe { &mut *THE_SCHEDULER.get() }
-        .as_mut()
-        .expect("Scheduler has not been set!");
+    let mut lock = THE_SCHEDULER.lock();
+    let s_ref = lock.as_mut().expect("Scheduler has not been set!");
 
     f(s_ref)
 }
@@ -337,7 +352,9 @@ pub fn mut_scheduler_no_exit<F>(f: F) -> !
 where
     F: FnOnce(&mut Scheduler),
 {
-    let s_ref = unsafe { &mut *THE_SCHEDULER.get() }
+    let lock = THE_SCHEDULER.lock();
+    // Release lock does not re-enable interrupts!
+    let s_ref = unsafe { lock.release_lock() }
         .as_mut()
         .expect("Scheduler has not been set!");
 
@@ -358,7 +375,7 @@ pub fn current_process() -> (RefProcess, RefThread) {
 
 /// Set this object as the global scheduler
 pub fn set_global_scheduler(sc: Scheduler) -> ! {
-    if let Some(old) = unsafe { &mut *THE_SCHEDULER.get() }.replace(sc) {
+    if let Some(old) = unsafe { &mut *THE_SCHEDULER.as_mut_ptr() }.replace(sc) {
         panic!(
             "Attempted to override the global scheduler object, maybe kernel bug? \n{:#?}",
             old
@@ -372,7 +389,7 @@ pub fn set_global_scheduler(sc: Scheduler) -> ! {
     //
     // This is only safe because we know we are the only ones who
     // have access to the scheduler since we just placed it here.
-    unsafe { (&mut *THE_SCHEDULER.get()).as_mut().unwrap().begin() };
+    unsafe { (&mut *THE_SCHEDULER.as_mut_ptr()).as_mut().unwrap().begin() };
 }
 
 /// The page fault handler for the scheduler
@@ -385,9 +402,26 @@ pub fn scheduler_exit_process(process: RefProcess) -> ! {
     mut_scheduler_no_exit(|s| {
         s.exit(process, None).expect("expected to exit process");
         assert!(
-            s.tick_scheduler().expect("Expected to tick scheduler"),
+            s.tick_scheduler(None).expect("Expected to tick scheduler"),
             "There should always be a switch of process after an exit"
         );
         unsafe { s.switch_to_running() }.expect("Could not switch to next proc")
     });
+}
+
+/// Tick the scheduler
+pub fn scheduler_tick(context: &ProcessContext) -> Result<(), ProcessError> {
+    // If we changed our running process, we need to switch to it
+    if mut_scheduler(|s| s.tick_scheduler(Some(context)))? {
+        mut_scheduler_no_exit(|s| unsafe { s.switch_to_running() }.unwrap());
+    }
+
+    Ok(())
+}
+
+/// Add thread waiting events
+pub fn scheduler_thread_wait(
+    waiting_conds: &[WaitCondition],
+) -> Result<Vec<WaitSignal>, ProcessError> {
+    todo!()
 }

@@ -27,8 +27,10 @@ use alloc::vec::Vec;
 use arch::{
     CpuPrivilege,
     interrupts::assert_interrupts,
+    locks::interrupt_locks_held,
     registers::{ProcessContext, Segment},
 };
+use lldebug::logln;
 use mem::addr::VirtAddr;
 use quantum_portal::{WaitCondition, WaitSignal};
 
@@ -52,6 +54,8 @@ pub struct Thread {
 impl Thread {
     pub const USERSPACE_STACK_SEGMENT: u16 = 4;
     pub const USERSPACE_CODE_SEGMENT: u16 = 5;
+    pub const KERNEL_STACK_SEGMENT: u16 = 2;
+    pub const KERNEL_CODE_SEGMENT: u16 = 1;
     pub const RFLAGS_DEFAULT: u64 = 0x200;
 
     /// Create a new empty thread
@@ -102,6 +106,12 @@ impl Thread {
     /// # Safety
     /// The process context should always point to valid memory.
     pub unsafe fn context_switch(&mut self) -> ! {
+        assert_eq!(
+            interrupt_locks_held(),
+            0,
+            "Cannot switch while locks are being held"
+        );
+
         assert_interrupts(false);
         assert_critical(true);
 
@@ -124,6 +134,7 @@ impl Thread {
         //
         // We also need to delete this context since we will be switching back to it.
         if let Some(kernel_context) = self.kn_context {
+            logln!("Switching to kernel context");
             self.kn_context = None;
 
             // FIXME: we should call this something else, because here we are just switching back into
@@ -131,6 +142,8 @@ impl Thread {
             unsafe { userspace_entry(&raw const kernel_context) };
             unreachable!("Kernel should never return back to `context_switch`")
         }
+
+        logln!("Switching to userspace context");
 
         // We must've previously been in userspace, so lets switch back into it
         unsafe { userspace_entry(&raw const self.ue_context) };

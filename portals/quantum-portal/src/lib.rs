@@ -111,6 +111,7 @@ pub trait QuantumPortal {
 
         enum WaitingError {
             UnknownHandle { handle: u64, array_index: usize },
+            InvalidSignalBuffer,
         }
     }
 
