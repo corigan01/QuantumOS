@@ -503,6 +503,20 @@ pub enum InsertVmObjectError {
     VmObjectError(NewVmObjectError),
 }
 
+/// The result from checking an addr within the region
+#[derive(Debug)]
+pub enum CheckAddrResult {
+    /// This address is not mapped
+    NotMapped,
+    /// This address is mapped, and the permissions match
+    MappedAndValidPerms,
+    /// This address is mapped, but the permissions do not match
+    MappedInvalidPerms {
+        expected: VmPermissions,
+        found: VmPermissions,
+    },
+}
+
 /// Repr a virtual 'Address Space' for which a processes exists in
 ///
 /// This struct is fully locked internally, so it can be accessed via '&self'
@@ -539,6 +553,27 @@ impl VmProcess {
         Self {
             objects: RwLock::new(Vec::new()),
             page_tables,
+        }
+    }
+
+    /// Check that this address follows some permissions
+    pub fn check_addr_perms(&self, addr: VirtAddr, perms: VmPermissions) -> CheckAddrResult {
+        let object_lock = self.objects.read();
+        let Some(region) = object_lock
+            .iter()
+            .find(|object| object.read().region.does_contain_addr(addr))
+        else {
+            return CheckAddrResult::NotMapped;
+        };
+
+        let region_perms = region.read().permissions;
+        if region_perms == perms {
+            CheckAddrResult::MappedAndValidPerms
+        } else {
+            CheckAddrResult::MappedInvalidPerms {
+                expected: perms,
+                found: region_perms,
+            }
         }
     }
 
