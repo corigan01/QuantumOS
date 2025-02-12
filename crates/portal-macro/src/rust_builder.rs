@@ -258,7 +258,7 @@ impl ToTokens for ast::ProtocolDefine {
 
                 tokens.append_all(quote! {
                     #(#docs)*
-                    #[derive(Debug)]
+                    #[derive(Debug, Clone)]
                     pub enum #ident #lifetime {
                         #(#varients),*
                     }
