@@ -34,6 +34,7 @@ use crate::{
     pmm::SharedPhysPage,
 };
 use alloc::{boxed::Box, collections::BTreeMap, sync::Arc, vec::Vec};
+use arch::locks::InterruptMutex;
 use spin::RwLock;
 use util::consts::PAGE_4K;
 
@@ -761,7 +762,8 @@ pub enum PageFaultReponse {
 type SystemAttachedPageFaultFn = fn(PageFaultInfo) -> PageFaultReponse;
 
 /// The handler the system will call
-static MAIN_PAGE_FAULT_HANDLER: RwLock<Option<SystemAttachedPageFaultFn>> = RwLock::new(None);
+static MAIN_PAGE_FAULT_HANDLER: InterruptMutex<Option<SystemAttachedPageFaultFn>> =
+    InterruptMutex::new(None);
 
 /// System page fault entry handler
 ///
@@ -769,7 +771,7 @@ static MAIN_PAGE_FAULT_HANDLER: RwLock<Option<SystemAttachedPageFaultFn>> = RwLo
 pub fn call_page_fault_handler(info: PageFaultInfo) -> PageFaultReponse {
     // FIXME: This lock will deadlock if we fault setting the page fault handler, we
     //        should fix this in the future!
-    let locked = MAIN_PAGE_FAULT_HANDLER.read();
+    let locked = MAIN_PAGE_FAULT_HANDLER.lock();
     if let Some(locked) = locked.as_ref() {
         // call the handler function if its enabled
         locked(info)
@@ -781,10 +783,10 @@ pub fn call_page_fault_handler(info: PageFaultInfo) -> PageFaultReponse {
 
 /// Set this function to be the page fault handler
 pub fn set_page_fault_handler(handler: SystemAttachedPageFaultFn) {
-    *MAIN_PAGE_FAULT_HANDLER.write() = Some(handler);
+    *MAIN_PAGE_FAULT_HANDLER.lock() = Some(handler);
 }
 
 /// Clear the function in the page fault handler, setting it to None
 pub fn remove_page_fault_handler() {
-    *MAIN_PAGE_FAULT_HANDLER.write() = None;
+    *MAIN_PAGE_FAULT_HANDLER.lock() = None;
 }

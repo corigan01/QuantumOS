@@ -38,6 +38,9 @@ pub mod registers;
 pub mod supports;
 pub mod tss64;
 
+#[cfg(target_pointer_width = "64")]
+pub mod processor;
+
 pub mod interrupts {
     #[inline(always)]
     pub fn are_interrupts_enabled() -> bool {

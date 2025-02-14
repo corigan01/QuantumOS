@@ -24,8 +24,8 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 use alloc::{boxed::Box, sync::Arc};
+use arch::locks::InterruptMutex;
 use core::ops::Deref;
-use spin::RwLock;
 use util::consts::PAGE_4K;
 
 use crate::{
@@ -38,17 +38,17 @@ extern crate alloc;
 
 mod backing;
 
-static THE_PHYSICAL_PAGE_MANAGER: RwLock<Option<Pmm>> = RwLock::new(None);
+static THE_PHYSICAL_PAGE_MANAGER: InterruptMutex<Option<Pmm>> = InterruptMutex::new(None);
 
 pub fn set_physical_memory_manager(pmm: Pmm) {
-    *THE_PHYSICAL_PAGE_MANAGER.write() = Some(pmm);
+    *THE_PHYSICAL_PAGE_MANAGER.lock() = Some(pmm);
 }
 
 pub fn use_pmm_mut<F, R>(func: F) -> R
 where
     F: FnOnce(&mut Pmm) -> R,
 {
-    let mut pmm = THE_PHYSICAL_PAGE_MANAGER.write();
+    let mut pmm = THE_PHYSICAL_PAGE_MANAGER.lock();
     func(
         &mut *pmm
             .as_mut()
@@ -60,7 +60,7 @@ pub fn use_pmm_ref<F, R>(func: F) -> R
 where
     F: FnOnce(&Pmm) -> R,
 {
-    let pmm = THE_PHYSICAL_PAGE_MANAGER.read();
+    let pmm = THE_PHYSICAL_PAGE_MANAGER.lock();
     func(
         &*pmm
             .as_ref()

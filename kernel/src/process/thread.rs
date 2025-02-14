@@ -30,14 +30,15 @@ use arch::{
     locks::interrupt_locks_held,
     registers::{ProcessContext, Segment},
 };
-use lldebug::logln;
+use lldebug::{log, logln};
 use mem::addr::VirtAddr;
 use quantum_portal::{WaitCondition, WaitSignal};
 
 use crate::{
     context::userspace_entry,
     processor::{
-        assert_critical, get_current_thread_id, notify_end_critical, set_current_thread_id,
+        assert_critical, get_current_thread_id, is_within_irq, notify_end_critical,
+        set_current_thread_id,
     },
 };
 
@@ -111,6 +112,10 @@ impl Thread {
             0,
             "Cannot switch while locks are being held"
         );
+        assert!(
+            !is_within_irq(),
+            "Must clear IRQ status before switching into a new context!"
+        );
 
         assert_interrupts(false);
         assert_critical(true);
@@ -134,8 +139,8 @@ impl Thread {
         //
         // We also need to delete this context since we will be switching back to it.
         if let Some(kernel_context) = self.kn_context {
-            logln!("Switching to kernel context");
             self.kn_context = None;
+            log!("+");
 
             // FIXME: we should call this something else, because here we are just switching back into
             // the kernel.
@@ -143,9 +148,8 @@ impl Thread {
             unreachable!("Kernel should never return back to `context_switch`")
         }
 
-        logln!("Switching to userspace context");
-
         // We must've previously been in userspace, so lets switch back into it
+        log!("-");
         unsafe { userspace_entry(&raw const self.ue_context) };
         unreachable!("Userspace should never return back to `context_switch`");
     }

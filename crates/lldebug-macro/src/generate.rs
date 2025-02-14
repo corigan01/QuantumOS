@@ -84,7 +84,7 @@ pub fn generate_stream(enumeration: usize, stream: &DebugStream) -> proc_macro2:
     let stream_init = &stream.init_expr;
 
     quote! {
-        static mut #name: ::core::cell::LazyCell<::lldebug::sync::Mutex<#stream_type>> = ::core::cell::LazyCell::new(|| ::lldebug::sync::Mutex::new(#stream_init));
+        pub static mut #name: ::core::cell::LazyCell<::lldebug::sync::Mutex<#stream_type>> = ::core::cell::LazyCell::new(|| ::lldebug::sync::Mutex::new(#stream_init));
     }
 }
 

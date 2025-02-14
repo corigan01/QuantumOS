@@ -405,13 +405,6 @@ impl Process {
 
     /// Context switch into this process
     pub unsafe fn switch_into(&mut self, thread: RefThread) -> Result<(), ProcessError> {
-        logln!(
-            "Switching to '{}' (pid={}, tid={})...",
-            self.name,
-            self.id,
-            thread.lock().get_tid()
-        );
-
         // Begin a critical section
         unsafe { disable_interrupts() };
         notify_begin_critical();

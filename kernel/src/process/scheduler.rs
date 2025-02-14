@@ -28,7 +28,10 @@ use super::{
 };
 use crate::{
     process::Process,
-    processor::{get_current_process_id, set_current_process_id},
+    processor::{
+        get_current_process_id, is_within_critical, is_within_irq, notify_end_irq,
+        set_current_process_id,
+    },
 };
 use alloc::{
     collections::{btree_map::BTreeMap, vec_deque::VecDeque},
@@ -36,11 +39,13 @@ use alloc::{
     sync::Arc,
     vec::Vec,
 };
-use arch::{CpuPrivilege, locks::InterruptMutex, registers::ProcessContext};
+use arch::{
+    CpuPrivilege, interrupts, locks::InterruptMutex, pic8259::pic_eoi, registers::ProcessContext,
+};
 use boolvec::BoolVec;
 use core::arch::asm;
 use elf::elf_owned::ElfOwned;
-use lldebug::logln;
+use lldebug::{log, logln, warnln};
 use mem::{
     paging::Virt2PhysMapping,
     vm::{PageFaultInfo, PageFaultReponse},
@@ -232,10 +237,26 @@ impl Scheduler {
     }
 
     /// Jump into the running process
-    pub unsafe fn switch_to_running(&mut self) -> Result<(), ProcessError> {
+    pub unsafe fn switch_to_running(
+        &mut self,
+        old_context: Option<(RefThread, ProcessContext)>,
+    ) -> Result<(), ProcessError> {
         let Some((_, process, thread)) = self.running.clone() else {
             return Err(ProcessError::NotAnyProcess);
         };
+
+        // Set old's context
+        if let Some((thread, context)) = old_context {
+            match (context.cs >> 3) as u16 {
+                Thread::USERSPACE_CODE_SEGMENT => unsafe {
+                    (&mut *thread.as_mut_ptr()).set_userspace_context(context)
+                },
+                Thread::KERNEL_CODE_SEGMENT => unsafe {
+                    (&mut *thread.as_mut_ptr()).set_kernel_context(context)
+                },
+                segment => unreachable!("Unknown code segment {segment}"),
+            }
+        }
 
         let pid = process.lock().id;
         if get_current_process_id() == pid {
@@ -254,10 +275,7 @@ impl Scheduler {
     /// Tick the scheduler
     ///
     /// Returns true when the scheduler changed the currently running process.
-    pub fn tick_scheduler(
-        &mut self,
-        context: Option<&ProcessContext>,
-    ) -> Result<bool, ProcessError> {
+    pub fn tick_scheduler(&mut self) -> Result<bool, ProcessError> {
         let last_running = self.running.as_mut();
 
         // Extract the last running process
@@ -273,16 +291,15 @@ impl Scheduler {
             return Ok(false);
         }
 
-        // Set its context
-        if let Some(context) = context {
-            match (context.cs >> 3) as u16 {
-                Thread::USERSPACE_CODE_SEGMENT => unsafe {
-                    (&mut *thread.as_mut_ptr()).set_userspace_context(*context)
-                },
-                Thread::KERNEL_CODE_SEGMENT => unsafe {
-                    (&mut *thread.as_mut_ptr()).set_kernel_context(*context)
-                },
-                segment => unreachable!("Unknown code segment {segment}"),
+        // Check if this is the next process in the queue
+        if let Some(next) = self.queue.get(0) {
+            if next
+                .1
+                .upgrade()
+                .is_some_and(|other_proc| other_proc.lock().id == proc.lock().id)
+            {
+                logln!("!");
+                return Ok(false);
             }
         }
 
@@ -309,7 +326,7 @@ impl Scheduler {
 
         self.running = Some((ticks, process.clone(), thread.clone()));
         unsafe {
-            self.switch_to_running()
+            self.switch_to_running(None)
                 .expect("Expected to be able to switch to the running process")
         };
 
@@ -352,8 +369,8 @@ pub fn mut_scheduler_no_exit<F>(f: F) -> !
 where
     F: FnOnce(&mut Scheduler),
 {
-    let lock = THE_SCHEDULER.lock();
-    // Release lock does not re-enable interrupts!
+    let mut lock = THE_SCHEDULER.lock();
+    lock.stop_restore();
     let s_ref = unsafe { lock.release_lock() }
         .as_mut()
         .expect("Scheduler has not been set!");
@@ -369,6 +386,7 @@ pub fn current_process() -> (RefProcess, RefThread) {
             .clone()
             .expect("Expected a currently running process")
     });
+    unsafe { interrupts::enable_interrupts() };
 
     (proc, thread)
 }
@@ -402,18 +420,33 @@ pub fn scheduler_exit_process(process: RefProcess) -> ! {
     mut_scheduler_no_exit(|s| {
         s.exit(process, None).expect("expected to exit process");
         assert!(
-            s.tick_scheduler(None).expect("Expected to tick scheduler"),
+            s.tick_scheduler().expect("Expected to tick scheduler"),
             "There should always be a switch of process after an exit"
         );
-        unsafe { s.switch_to_running() }.expect("Could not switch to next proc")
+        unsafe { s.switch_to_running(None) }.expect("Could not switch to next proc")
     });
 }
 
 /// Tick the scheduler
 pub fn scheduler_tick(context: &ProcessContext) -> Result<(), ProcessError> {
+    if is_within_critical() {
+        logln!("C");
+        return Ok(());
+    }
+    log!(".");
+    let (_, thread) = current_process();
+
     // If we changed our running process, we need to switch to it
-    if mut_scheduler(|s| s.tick_scheduler(Some(context)))? {
-        mut_scheduler_no_exit(|s| unsafe { s.switch_to_running() }.unwrap());
+    if mut_scheduler(|s| s.tick_scheduler())? {
+        mut_scheduler_no_exit(|s| unsafe {
+            if is_within_irq() {
+                // FIXME: this should be moved to somewhere it makes sense to send an EOI
+                notify_end_irq();
+                pic_eoi(0);
+            }
+
+            s.switch_to_running(Some((thread, *context))).unwrap();
+        });
     }
 
     Ok(())
@@ -424,4 +457,22 @@ pub fn scheduler_thread_wait(
     waiting_conds: &[WaitCondition],
 ) -> Result<Vec<WaitSignal>, ProcessError> {
     todo!()
+}
+
+pub fn scheduler_process_crash(process: RefProcess, reason: ProcessError) {
+    mut_scheduler_no_exit(|s| {
+        warnln!("Process crash! - {reason:#?}");
+        s.exit(process, None).expect("expected to exit process");
+        assert!(
+            s.tick_scheduler().expect("Expected to tick scheduler"),
+            "There should always be a switch of process after an exit"
+        );
+
+        // If called from a page fault, we need to clear the flag
+        if is_within_irq() {
+            notify_end_irq();
+        }
+
+        unsafe { s.switch_to_running(None) }.expect("Could not switch to next proc")
+    });
 }

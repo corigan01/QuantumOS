@@ -23,7 +23,14 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use crate::context::IN_USERSPACE;
+use crate::{
+    context::IN_USERSPACE,
+    process::{
+        AccessViolationReason, ProcessError,
+        scheduler::{current_process, scheduler_process_crash},
+    },
+    processor::{notify_begin_irq, notify_end_irq},
+};
 use arch::{
     CpuPrivilege, attach_irq, critcal_section,
     idt64::{
@@ -33,7 +40,7 @@ use arch::{
     pic8259::{pic_eoi, pic_remap},
     registers::Segment,
 };
-use lldebug::{log, logln, sync::Mutex, warnln};
+use lldebug::{log, logln, sync::Mutex};
 use mem::{
     addr::VirtAddr,
     vm::{PageFaultInfo, call_page_fault_handler},
@@ -51,6 +58,7 @@ fn exception_handler(args: &InterruptInfo) {
         0,
         "Should not be possible to call an interrupt while interrupt locks are held -- {args:#?}"
     );
+    notify_begin_irq();
 
     match args.flags {
         // IRQ
@@ -76,6 +84,7 @@ fn exception_handler(args: &InterruptInfo) {
                 user_fault: user,
                 vaddr,
             };
+            log!("*");
             match call_page_fault_handler(info) {
                 // If this page fault was handled, we dont need to do anything!
                 mem::vm::PageFaultReponse::Handled => (),
@@ -85,14 +94,15 @@ fn exception_handler(args: &InterruptInfo) {
                     request_perm,
                     addr,
                 } => {
-                    warnln!("Process crash!");
-                    // send_scheduler_event(SchedulerEvent::Fault(ProcessError::AccessViolation(
-                    //     AccessViolationReason::NoAccess {
-                    //         page_perm,
-                    //         request_perm,
-                    //         addr,
-                    //     },
-                    // )));
+                    let (proc, _) = current_process();
+                    scheduler_process_crash(
+                        proc,
+                        ProcessError::AccessViolation(AccessViolationReason::NoAccess {
+                            page_perm,
+                            request_perm,
+                            addr,
+                        }),
+                    );
                 }
                 // panic
                 mem::vm::PageFaultReponse::CriticalFault(error) => {
@@ -125,6 +135,9 @@ fn exception_handler(args: &InterruptInfo) {
         }
         _ => (),
     }
+
+    notify_end_irq();
+    log!("$");
 }
 
 fn call_attached_irq(irq_id: u8, args: &InterruptInfo) {

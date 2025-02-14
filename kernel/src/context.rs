@@ -43,13 +43,13 @@ pub unsafe extern "C" fn kernel_entry() {
     unsafe {
         naked_asm!(
             "
+            cli
             #  -- Save User's stack ptr, and restore our own
 
             mov byte ptr [{user_lock}], 0
             mov [{userspace_rsp_ptr}], rsp
             mov rsp, [{kernel_rsp_ptr}]
-
-            sti
+            
             push [{userspace_rsp_ptr}]
 
             #  -- Start building the processes `ProcessContext`

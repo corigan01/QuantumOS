@@ -1,9 +1,9 @@
 /*
-  ____                 __               __  __
- / __ \__ _____ ____  / /___ ____ _    / / / /__ ___ ____
-/ /_/ / // / _ `/ _ \/ __/ // /  ' \  / /_/ (_-</ -_) __/
-\___\_\_,_/\_,_/_//_/\__/\_,_/_/_/_/  \____/___/\__/_/
-  Part of the Quantum OS Kernel
+  ____                 __               __   _ __
+ / __ \__ _____ ____  / /___ ____ _    / /  (_) /
+/ /_/ / // / _ `/ _ \/ __/ // /  ' \  / /__/ / _ \
+\___\_\_,_/\_,_/_//_/\__/\_,_/_/_/_/ /____/_/_.__/
+    Part of the Quantum OS Project
 
 Copyright 2025 Gavin Kellam
 
@@ -23,27 +23,14 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-#![no_std]
-#![no_main]
+pub const MAX_PROCESSORS: usize = 1;
 
-use core::panic::PanicInfo;
-use libq::{WaitCondition, WaitSignal, dbugln, exit};
+static PROCESSORS: [Processor; MAX_PROCESSORS] = [Processor::new(); MAX_PROCESSORS];
 
-#[panic_handler]
-fn panic(info: &PanicInfo) -> ! {
-    dbugln!("{}", info);
-    exit(libq::ExitReason::Failure);
-}
+pub struct Processor {}
 
-#[unsafe(link_section = ".start")]
-#[unsafe(no_mangle)]
-extern "C" fn _start() {
-    dbugln!("Hello Server!");
-
-    // let mut signal_buffer = [const { WaitSignal::None }; 8];
-    // while let Ok(wait_amount) = libq::wait_for(&[WaitCondition::SleepMs(100)], &mut signal_buffer) {
-    //     dbugln!("{:#?}", &signal_buffer[..wait_amount]);
-    // }
-
-    exit(libq::ExitReason::Success);
+impl Processor {
+    pub const fn new() -> Self {
+        Self {}
+    }
 }

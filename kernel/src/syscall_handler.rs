@@ -30,6 +30,7 @@ use quantum_portal::{
     DebugMsgError, ExitReason, MapMemoryError, MemoryLocation, MemoryProtections, QuantumPortal,
     WaitCondition, WaitSignal, WaitingError, server::QuantumPortalServer,
 };
+use util::consts::PAGE_4K;
 
 use crate::process::scheduler::{current_process, scheduler_exit_process};
 
@@ -46,7 +47,7 @@ impl QuantumPortalServer for KernelSyscalls {
 }
 
 impl QuantumPortal for KernelSyscalls {
-    fn exit(exit_reason: ExitReason) -> ! {
+    fn exit(_exit_reason: ExitReason) -> ! {
         let (process, _) = current_process();
         scheduler_exit_process(process);
     }
@@ -56,38 +57,36 @@ impl QuantumPortal for KernelSyscalls {
         protections: MemoryProtections,
         bytes: usize,
     ) -> Result<*mut u8, MapMemoryError> {
-        // let process = aquire_running_and_release_biglock();
-        // let page_permissions = match protections {
-        //     MemoryProtections::ReadOnly => VmPermissions::USER_R,
-        //     MemoryProtections::ReadWrite => VmPermissions::USER_RW,
-        //     MemoryProtections::ReadExecute => VmPermissions::USER_RE,
-        //     MemoryProtections::None => VmPermissions::none(),
-        // };
-        // let page_amount = ((bytes - 1) / PAGE_4K) + 1;
+        let (process, _) = current_process();
+        let page_permissions = match protections {
+            MemoryProtections::ReadOnly => VmPermissions::USER_R,
+            MemoryProtections::ReadWrite => VmPermissions::USER_RW,
+            MemoryProtections::ReadExecute => VmPermissions::USER_RE,
+            MemoryProtections::None => VmPermissions::none(),
+        };
+        let page_amount = ((bytes - 1) / PAGE_4K) + 1;
 
-        // // FIXME: We need to figure out a sane number of max pages.
-        // if page_amount > 1024 || bytes == 0 {
-        //     return Err(MapMemoryError::InvalidLength(bytes));
-        // }
+        // FIXME: We need to figure out a sane number of max pages.
+        if page_amount > 1024 || bytes == 0 {
+            return Err(MapMemoryError::InvalidLength(bytes));
+        }
 
-        // let vm_region = match location {
-        //     MemoryLocation::Anywhere => process
-        //         .write()
-        //         .add_anywhere(page_amount, page_permissions, false)
-        //         .map_err(|err| match err {
-        //             crate::process::ProcessError::OutOfVirtualMemory => MapMemoryError::OutOfMemory,
-        //             _ => MapMemoryError::MappingMemoryError,
-        //         })?,
-        // };
+        let vm_region = match location {
+            MemoryLocation::Anywhere => process
+                .lock()
+                .add_anywhere(page_amount, page_permissions, false)
+                .map_err(|err| match err {
+                    crate::process::ProcessError::OutOfVirtualMemory => MapMemoryError::OutOfMemory,
+                    _ => MapMemoryError::MappingMemoryError,
+                })?,
+        };
 
-        // Ok(vm_region.start.addr().as_mut_ptr())
-        todo!()
+        Ok(vm_region.start.addr().as_mut_ptr())
     }
 
     fn get_pid() -> usize {
-        // let process = aquire_running_and_release_biglock();
-        // process.read().get_pid()
-        todo!()
+        let (process, _) = current_process();
+        process.lock().get_pid()
     }
 
     fn debug_msg(msg: &str) -> Result<(), DebugMsgError> {

@@ -64,6 +64,9 @@ impl<T> InterruptMutex<T> {
 impl<T: ?Sized> InterruptMutex<T> {
     /// Aquire a lock to the data
     pub fn lock(&self) -> InterruptMutexGuard<T> {
+        let restore_state = interrupts::are_interrupts_enabled();
+        unsafe { interrupts::disable_interrupts() };
+
         if self.lock.load(Ordering::Acquire) {
             panic!("Cannot lock the Mutex multiple times!");
         }
@@ -71,8 +74,6 @@ impl<T: ?Sized> InterruptMutex<T> {
         self.lock.store(true, Ordering::Relaxed);
         LOCKS_HELD.fetch_add(1, Ordering::Relaxed);
 
-        let restore_state = interrupts::are_interrupts_enabled();
-        unsafe { interrupts::disable_interrupts() };
         InterruptMutexGuard {
             ph: PhantomData,
             ptr: NonNull::new(self.inner.get()).unwrap(),
@@ -129,12 +130,15 @@ impl<'a, T: ?Sized> DerefMut for InterruptMutexGuard<'a, T> {
 
 impl<'a, T: ?Sized> Drop for InterruptMutexGuard<'a, T> {
     fn drop(&mut self) {
-        if self.restore_state {
+        if LOCKS_HELD.fetch_sub(1, Ordering::Relaxed) == 0 {
+            panic!("Cannot release a lock, when no locks are currently being held!");
+        }
+        if !self.atomic.swap(false, Ordering::Release) {
+            panic!("Cannot release a lock that was never locked!");
+        }
+        if self.restore_state && LOCKS_HELD.load(Ordering::Relaxed) == 0 {
             unsafe { interrupts::enable_interrupts() };
         }
-
-        LOCKS_HELD.fetch_sub(1, Ordering::Relaxed);
-        self.atomic.store(false, Ordering::Release);
     }
 }
 
@@ -154,5 +158,10 @@ impl<'a, T: ?Sized> InterruptMutexGuard<'a, T> {
     /// Release the inner lock and get the inner value
     pub unsafe fn release_lock(mut self) -> &'a mut T {
         unsafe { self.ptr.as_mut() }
+    }
+
+    /// Do not restore interrupts when this lock is released
+    pub fn stop_restore(&mut self) {
+        self.restore_state = false;
     }
 }
