@@ -77,7 +77,12 @@ fn main(kbh: &KernelBootHeader) {
     logln!("Running on a(n) '{:?}' processor.", cpu_vender());
 
     gdt::init_kernel_gdt();
-    gdt::set_stack_for_privl(Process::KERNEL_IRQ_STACK_ADDR.as_mut_ptr(), Ring0);
+    gdt::set_stack_for_privl(
+        Process::KERNEL_IRQ_BOTTOM_STACK_ADDR
+            .offset(Process::KERNEL_STACK_SIZE)
+            .as_mut_ptr(),
+        Ring0,
+    );
     unsafe { gdt::load_tss() };
     int::enable_pic();
     int::attach_interrupts();

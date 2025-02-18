@@ -84,7 +84,6 @@ fn exception_handler(args: &InterruptInfo) {
                 user_fault: user,
                 vaddr,
             };
-            log!("*");
             match call_page_fault_handler(info) {
                 // If this page fault was handled, we dont need to do anything!
                 mem::vm::PageFaultReponse::Handled => (),
@@ -137,7 +136,6 @@ fn exception_handler(args: &InterruptInfo) {
     }
 
     notify_end_irq();
-    log!("$");
 }
 
 fn call_attached_irq(irq_id: u8, args: &InterruptInfo) {

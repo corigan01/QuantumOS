@@ -24,12 +24,13 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 use super::{
-    KernelTicks, ProcessError, RefProcess, RefThread, WeakRefProcess, WeakRefThread, thread::Thread,
+    KernelStack, KernelTicks, ProcessError, RefProcess, RefThread, WeakRefProcess, WeakRefThread,
+    thread::Thread,
 };
 use crate::{
     process::Process,
     processor::{
-        get_current_process_id, is_within_critical, is_within_irq, notify_end_irq,
+        get_current_process_id, irq_count, is_within_critical, is_within_irq, notify_end_irq,
         set_current_process_id,
     },
 };
@@ -47,15 +48,18 @@ use core::arch::asm;
 use elf::elf_owned::ElfOwned;
 use lldebug::{log, logln, warnln};
 use mem::{
-    paging::Virt2PhysMapping,
-    vm::{PageFaultInfo, PageFaultReponse},
+    page::VirtPage,
+    paging::{Virt2PhysMapping, VmPermissions},
+    vm::{PageFaultInfo, PageFaultReponse, VmFillAction, VmProcess, VmRegion},
 };
 use quantum_portal::{WaitCondition, WaitSignal};
 use tar::Tar;
 
 #[derive(Debug)]
 pub struct Scheduler {
-    kernel_page_tables: Virt2PhysMapping,
+    page_table_root: VmProcess,
+    /// The current 'shareable' stack ptr for syscalls
+    current_syscall_stack: KernelStack,
     /// A vector of all processes running on the system
     alive: BTreeMap<usize, RefProcess>,
     /// A map of PIDs that are free for processes to use
@@ -84,7 +88,8 @@ impl Scheduler {
             pid_bitmap: BoolVec::new(),
             queue: VecDeque::new(),
             running: None,
-            kernel_page_tables: Virt2PhysMapping::empty(),
+            page_table_root: VmProcess::new(),
+            current_syscall_stack: KernelStack::dangling(),
         }
     }
 
@@ -107,6 +112,44 @@ impl Scheduler {
             Arc::downgrade(&proc),
             Arc::downgrade(&thread),
         ));
+
+        Ok(())
+    }
+
+    /// Branch off the current stack for the kernel
+    ///
+    /// This changes the stack for all non-kernel-blocked process's syscall entry, but keeps the current
+    /// stack for the caller.
+    pub unsafe fn branch_kernel_stack_for(&mut self) -> Result<KernelStack, ProcessError> {
+        let old_stack = self.current_syscall_stack.swap();
+        unsafe { self.current_syscall_stack.set_syscall_stack() };
+
+        Ok(old_stack)
+    }
+
+    /// Init the kernel memory regions
+    unsafe fn init_kernel_memory(&mut self) -> Result<(), ProcessError> {
+        // 1. Copy the kernel pages and load them
+        self.page_table_root =
+            unsafe { VmProcess::inhearit_page_tables(Virt2PhysMapping::inhearit_bootloader()?) };
+        unsafe { self.page_table_root.page_tables.clone().load() }.unwrap();
+
+        let stack_top = Process::KERNEL_IRQ_BOTTOM_STACK_ADDR.offset(Process::KERNEL_STACK_SIZE);
+
+        // 2. Allocate IRQ kernel stack area
+        self.page_table_root.inplace_new_vmobject(
+            VmRegion {
+                start: VirtPage::containing_addr(Process::KERNEL_IRQ_BOTTOM_STACK_ADDR),
+                end: VirtPage::containing_addr(stack_top),
+            },
+            VmPermissions::SYS_RW,
+            VmFillAction::Scrub(0),
+            true,
+        )?;
+
+        // 3. alloc the inital kernel stack
+        self.current_syscall_stack = KernelStack::new();
+        unsafe { self.current_syscall_stack.set_syscall_stack() };
 
         Ok(())
     }
@@ -148,18 +191,15 @@ impl Scheduler {
     ) -> Result<RefProcess, ProcessError> {
         let pid = self.alloc_pid();
         logln!("Exec new process: name='{}', pid='{}'", name, pid);
-        let mut proc = Process::new(pid, name, self.kernel_page_tables.clone());
+        let mut proc = Process::new(pid, name, self.page_table_root.page_tables.clone());
 
-        // 1. Setup the process's kernel memory regions
-        proc.setup_kernel_memory_regions()?;
-
-        // 2. If we have an executable, we need to spawn a new thread
+        // 1. If we have an executable, we need to spawn a new thread
         let ref_thread = if let Some(elf_file) = bin {
             let rip = elf_file.elf().entry_point()?.into();
             let thread_id = proc.new_thread_id();
 
             proc.add_elf(elf_file)?;
-            proc.alloc_thread_stack(thread_id)?;
+            proc.alloc_thread_stacks(thread_id)?;
 
             let ref_thread = proc.add_thread(
                 thread_id,
@@ -175,10 +215,10 @@ impl Scheduler {
 
         let ref_proc = Arc::new(InterruptMutex::new(proc));
 
-        // 3. Add this process to the list of alive processes
+        // 2. Add this process to the list of alive processes
         self.alive.insert(pid, ref_proc.clone());
 
-        // 4. If this process has a thread, lets try and schedule it
+        // 3. If this process has a thread, lets try and schedule it
         if let Some(thread) = ref_thread {
             self.schedule_thread(ref_proc.clone(), thread)?;
         }
@@ -190,9 +230,8 @@ impl Scheduler {
     pub fn bootstrap_scheduler(initfs: &[u8]) -> Result<Self, ProcessError> {
         let mut s = Self::new();
 
-        // 1. Copy the kernel pages
-        s.kernel_page_tables = unsafe { Virt2PhysMapping::inhearit_bootloader()? };
-        unsafe { s.kernel_page_tables.clone().load() }.unwrap();
+        // 1. Bootstrap kernel regions
+        unsafe { s.init_kernel_memory()? };
 
         // 2. Look through the initfs and load all the processes
         let initfs_tar = Tar::new(initfs);
@@ -252,7 +291,14 @@ impl Scheduler {
                     (&mut *thread.as_mut_ptr()).set_userspace_context(context)
                 },
                 Thread::KERNEL_CODE_SEGMENT => unsafe {
-                    (&mut *thread.as_mut_ptr()).set_kernel_context(context)
+                    // If it was already in a kernel_context, we don't need to allocate another stack
+                    let kernel_stack = if (&mut *thread.as_mut_ptr()).kernel_stack.is_none() {
+                        Some(self.branch_kernel_stack_for()?)
+                    } else {
+                        None
+                    };
+
+                    (&mut *thread.as_mut_ptr()).set_kernel_context(context, kernel_stack);
                 },
                 segment => unreachable!("Unknown code segment {segment}"),
             }
@@ -269,7 +315,7 @@ impl Scheduler {
             unsafe { process.lock().load_tables()? };
         };
 
-        unsafe { (&mut *process.as_mut_ptr()).switch_into(thread) }
+        unsafe { (&mut *process.as_mut_ptr()).switch_into(thread, &self.current_syscall_stack) }
     }
 
     /// Tick the scheduler
@@ -288,6 +334,11 @@ impl Scheduler {
         // If this process has ticks remaining, we just decrement them
         if *ticks_remaining > 0 {
             *ticks_remaining -= 1;
+            return Ok(false);
+        }
+
+        // If we are nested within IRQs, we will not switch
+        if irq_count() > 1 {
             return Ok(false);
         }
 
@@ -430,10 +481,9 @@ pub fn scheduler_exit_process(process: RefProcess) -> ! {
 /// Tick the scheduler
 pub fn scheduler_tick(context: &ProcessContext) -> Result<(), ProcessError> {
     if is_within_critical() {
-        logln!("C");
         return Ok(());
     }
-    log!(".");
+
     let (_, thread) = current_process();
 
     // If we changed our running process, we need to switch to it

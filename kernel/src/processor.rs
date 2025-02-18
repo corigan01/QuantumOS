@@ -65,6 +65,11 @@ pub fn is_within_irq() -> bool {
     HANDLING_IRQ.load(Ordering::Relaxed) > 0
 }
 
+/// Get the count of how many IRQ the processor is within
+pub fn irq_count() -> usize {
+    HANDLING_IRQ.load(Ordering::Relaxed)
+}
+
 /// Inform that we are begining a critical section
 pub fn notify_begin_critical() {
     HANDLING_CRITICAL.fetch_add(1, Ordering::Acquire);

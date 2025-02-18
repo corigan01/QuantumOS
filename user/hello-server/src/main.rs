@@ -40,10 +40,10 @@ fn panic(info: &PanicInfo) -> ! {
 extern "C" fn _start() {
     dbugln!("Hello Server!");
 
-    // let mut signal_buffer = [const { WaitSignal::None }; 8];
-    // while let Ok(wait_amount) = libq::wait_for(&[WaitCondition::SleepMs(100)], &mut signal_buffer) {
-    //     dbugln!("{:#?}", &signal_buffer[..wait_amount]);
-    // }
+    let mut signal_buffer = [const { WaitSignal::None }; 8];
+    while let Ok(wait_amount) = libq::wait_for(&[WaitCondition::SleepMs(100)], &mut signal_buffer) {
+        dbugln!("{:#?}", &signal_buffer[..wait_amount]);
+    }
 
     exit(libq::ExitReason::Success);
 }

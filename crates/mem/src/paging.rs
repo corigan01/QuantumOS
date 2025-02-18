@@ -928,6 +928,15 @@ impl VmPermissions {
         .set_user_flag(true);
     pub const USER_RE: VmPermissions = VmPermissions::none()
         .set_read_flag(true)
+        .set_exec_flag(true)
+        .set_user_flag(true);
+    pub const SYS_R: VmPermissions = VmPermissions::none().set_read_flag(true);
+    pub const SYS_RW: VmPermissions = VmPermissions::none()
+        .set_exec_flag(true)
+        .set_read_flag(true)
+        .set_write_flag(true);
+    pub const SYS_RE: VmPermissions = VmPermissions::none()
+        .set_read_flag(true)
         .set_exec_flag(true);
 
     /// No permissions

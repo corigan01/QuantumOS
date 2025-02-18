@@ -25,6 +25,8 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 use alloc::vec::Vec;
 use alloc::{
+    alloc::alloc_zeroed,
+    alloc::dealloc,
     boxed::Box,
     string::String,
     sync::{Arc, Weak},
@@ -33,7 +35,10 @@ use arch::CpuPrivilege;
 use arch::interrupts::disable_interrupts;
 use arch::locks::InterruptMutex;
 use boolvec::BoolVec;
+use core::alloc::Layout;
 use core::error::Error;
+use core::mem::ManuallyDrop;
+use core::ptr::NonNull;
 use elf::{ElfErrorKind, elf_owned::ElfOwned};
 use lldebug::logln;
 use mem::{
@@ -47,6 +52,7 @@ use thread::Thread;
 use util::consts::{PAGE_2M, PAGE_4K};
 use vm_elf::VmElfInject;
 
+use crate::context::set_syscall_rsp;
 use crate::processor::{notify_begin_critical, set_current_process_id};
 
 pub mod scheduler;
@@ -55,6 +61,94 @@ pub mod vm_elf;
 
 type RefThread = Arc<InterruptMutex<Thread>>;
 type WeakRefThread = Weak<InterruptMutex<Thread>>;
+
+/*
+Note about processes:
+ - IRQ's have only 1 kernel thread, and must not be interrupted
+ - SYSCALLS default to a 'multiple' stack, but will switch once a kernel thread gets blocked
+*/
+
+#[derive(Clone, Debug)]
+pub struct KernelStack {
+    bottom: NonNull<u64>,
+    len: usize,
+}
+
+unsafe impl Send for KernelStack {}
+unsafe impl Sync for KernelStack {}
+
+impl KernelStack {
+    /// Allocate a new kernel stack
+    pub fn new() -> Self {
+        let alloc = unsafe {
+            alloc_zeroed(
+                Layout::from_size_align(Process::KERNEL_STACK_SIZE, align_of::<u64>()).unwrap(),
+            )
+        };
+
+        Self {
+            bottom: NonNull::new(alloc).unwrap().cast(),
+            len: Process::KERNEL_STACK_SIZE,
+        }
+    }
+
+    /// Create a new dangling kernel stack
+    pub const fn dangling() -> Self {
+        Self {
+            bottom: NonNull::dangling(),
+            len: 0,
+        }
+    }
+
+    /// Create a new kernel stack inplace of the old one
+    pub fn swap(&mut self) -> Self {
+        let new = ManuallyDrop::new(Self::new());
+        let old = Self {
+            bottom: self.bottom,
+            len: self.len,
+        };
+
+        self.bottom = new.bottom;
+        self.len = new.len;
+
+        old
+    }
+
+    /// Get the top of the stack
+    pub fn stack_top(&self) -> VirtAddr {
+        VirtAddr::new(self.bottom.addr().get() + self.len)
+    }
+
+    /// Get the bottom of the stack
+    pub fn stack_bottom(&self) -> VirtAddr {
+        VirtAddr::new(self.bottom.addr().get())
+    }
+
+    /// Set this kernel stack as the current syscall entry stack
+    pub unsafe fn set_syscall_stack(&self) {
+        assert_ne!(self.len, 0, "kernel stack cannot be zero");
+        unsafe { set_syscall_rsp(self.stack_top().addr() as u64) };
+    }
+}
+
+impl Drop for KernelStack {
+    fn drop(&mut self) {
+        // make sure its not dangling
+        if self.len != 0 {
+            // dealloc the inner allocation
+            unsafe {
+                dealloc(
+                    self.bottom.as_ptr().cast(),
+                    Layout::from_size_align(self.len, align_of::<u64>()).unwrap(),
+                )
+            };
+        }
+
+        // Change the ptr to become invalid to prevent use-after-free
+        self.bottom = NonNull::dangling();
+        self.len = 0;
+    }
+}
 
 /// A structure repr a running process on the system
 #[derive(Debug, Clone)]
@@ -150,14 +244,15 @@ impl From<TarError> for ProcessError {
 impl Process {
     /// This is the start address that processes should base their stack from
     pub const PROCESS_STACK_START_ADDR: VirtAddr = VirtAddr::new(0x7fff00000000);
-    /// The stack at which the kernel's IRQ entries should point
-    pub const KERNEL_IRQ_STACK_ADDR: VirtAddr = VirtAddr::new(0xffffffff90000000);
-    /// The stack at which the kernel's syscall entry should point
-    pub const KERNEL_SYSCALL_STACK_ADDR: VirtAddr = VirtAddr::new(0xffffffff92000000);
+    /// The stack at which the kernel's irq entry should point
+    pub const KERNEL_IRQ_BOTTOM_STACK_ADDR: VirtAddr = VirtAddr::new(0xffffffff90000000);
+    /// The stack at which the kernel's irq entry should point
+    pub const KERNEL_SYSCALL_BOTTOM_STACK_ADDR: VirtAddr =
+        VirtAddr::new(0xffffffff90000000 + Self::KERNEL_STACK_SIZE + PAGE_4K);
     /// The size of each of the kernel's stacks
-    pub const KERNEL_STACK_SIZE: usize = PAGE_4K * 32;
+    pub const KERNEL_STACK_SIZE: usize = PAGE_4K * 40;
     /// The size of an userspace process stack
-    pub const USERSPACE_STACK_SIZE: usize = PAGE_4K * 16;
+    pub const USERSPACE_STACK_SIZE: usize = PAGE_4K * 32;
 
     /// Create a new empty process
     pub fn new(id: usize, name: String, table: Virt2PhysMapping) -> Self {
@@ -197,7 +292,7 @@ impl Process {
     }
 
     /// Exit a thread
-    pub fn exit_thread(&mut self, thread: RefThread) -> Result<(), ProcessError> {
+    pub fn exit_thread(&mut self, _thread: RefThread) -> Result<(), ProcessError> {
         todo!()
     }
 
@@ -207,7 +302,7 @@ impl Process {
     }
 
     /// Allocate a thread stack for a given thread id
-    pub fn alloc_thread_stack(&mut self, thread_id: usize) -> Result<VmRegion, ProcessError> {
+    pub fn alloc_thread_stacks(&mut self, thread_id: usize) -> Result<VmRegion, ProcessError> {
         let stack_top = Self::PROCESS_STACK_START_ADDR;
         let stack_inc = Self::USERSPACE_STACK_SIZE;
         let guard_size = PAGE_4K;
@@ -219,47 +314,6 @@ impl Process {
         self.add_anon(stack_region, VmPermissions::USER_RW, false)?;
 
         Ok(stack_region)
-    }
-
-    /// Setup kernel's memory, like stack, heap, etc...
-    fn setup_kernel_memory_regions(&self) -> Result<(), ProcessError> {
-        // kernel syscall stack
-        self.vm
-            .inplace_new_vmobject(
-                VmRegion {
-                    start: VirtPage::containing_addr(
-                        Self::KERNEL_SYSCALL_STACK_ADDR.sub_offset(Self::KERNEL_STACK_SIZE),
-                    ),
-                    end: VirtPage::containing_addr(Self::KERNEL_SYSCALL_STACK_ADDR),
-                },
-                VmPermissions::none()
-                    .set_exec_flag(true)
-                    .set_read_flag(true)
-                    .set_write_flag(true),
-                VmFillAction::Scrub(0),
-                true,
-            )
-            .map_err(|err| ProcessError::InsertVmObjectErr(err))?;
-
-        // kernel irq stack
-        self.vm
-            .inplace_new_vmobject(
-                VmRegion {
-                    start: VirtPage::containing_addr(
-                        Self::KERNEL_IRQ_STACK_ADDR.sub_offset(Self::KERNEL_STACK_SIZE),
-                    ),
-                    end: VirtPage::containing_addr(Self::KERNEL_IRQ_STACK_ADDR),
-                },
-                VmPermissions::none()
-                    .set_exec_flag(true)
-                    .set_read_flag(true)
-                    .set_write_flag(true),
-                VmFillAction::Scrub(0),
-                true,
-            )
-            .map_err(|err| ProcessError::InsertVmObjectErr(err))?;
-
-        Ok(())
     }
 
     /// Add an elf to process's memory map
@@ -404,7 +458,11 @@ impl Process {
     }
 
     /// Context switch into this process
-    pub unsafe fn switch_into(&mut self, thread: RefThread) -> Result<(), ProcessError> {
+    pub unsafe fn switch_into(
+        &mut self,
+        thread: RefThread,
+        global_stack: &KernelStack,
+    ) -> Result<(), ProcessError> {
         // Begin a critical section
         unsafe { disable_interrupts() };
         notify_begin_critical();
@@ -417,7 +475,7 @@ impl Process {
             return Err(ProcessError::LoadedAssertionError(true));
         }
 
-        unsafe { (&mut *thread.as_mut_ptr()).context_switch() };
+        unsafe { (&mut *thread.as_mut_ptr()).context_switch(global_stack) };
     }
 }
 

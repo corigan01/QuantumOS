@@ -122,6 +122,6 @@ impl QuantumPortal for KernelSyscalls {
             return Err(WaitingError::InvalidSignalBuffer);
         }
 
-        todo!()
+        loop {}
     }
 }

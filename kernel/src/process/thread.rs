@@ -30,26 +30,26 @@ use arch::{
     locks::interrupt_locks_held,
     registers::{ProcessContext, Segment},
 };
-use lldebug::{log, logln};
+use lldebug::logln;
 use mem::addr::VirtAddr;
 use quantum_portal::{WaitCondition, WaitSignal};
 
 use crate::{
     context::userspace_entry,
-    processor::{
-        assert_critical, get_current_thread_id, is_within_irq, notify_end_critical,
-        set_current_thread_id,
-    },
+    processor::{assert_critical, is_within_irq, notify_end_critical, set_current_thread_id},
 };
+
+use super::KernelStack;
 
 /// A structure repr one process thread on the system.
 #[derive(Debug, Clone)]
 pub struct Thread {
-    id: usize,
-    ue_context: ProcessContext,
-    kn_context: Option<ProcessContext>,
-    wait_conds: Vec<WaitCondition>,
-    wait_signals: Vec<WaitSignal>,
+    pub id: usize,
+    pub ue_context: ProcessContext,
+    pub kn_context: Option<ProcessContext>,
+    pub wait_conds: Vec<WaitCondition>,
+    pub wait_signals: Vec<WaitSignal>,
+    pub kernel_stack: Option<KernelStack>,
 }
 
 impl Thread {
@@ -67,6 +67,7 @@ impl Thread {
             kn_context: None,
             wait_conds: Vec::new(),
             wait_signals: Vec::new(),
+            kernel_stack: None,
         }
     }
 
@@ -81,7 +82,11 @@ impl Thread {
     }
 
     /// Set the kernel context
-    pub const fn set_kernel_context(&mut self, context: ProcessContext) {
+    pub fn set_kernel_context(&mut self, context: ProcessContext, stack: Option<KernelStack>) {
+        if self.kernel_stack.is_none() && stack.is_some() {
+            self.kernel_stack = stack;
+        }
+
         self.kn_context = Some(context);
     }
 
@@ -106,7 +111,7 @@ impl Thread {
     ///
     /// # Safety
     /// The process context should always point to valid memory.
-    pub unsafe fn context_switch(&mut self) -> ! {
+    pub unsafe fn context_switch(&mut self, global_stack: &KernelStack) -> ! {
         assert_eq!(
             interrupt_locks_held(),
             0,
@@ -120,16 +125,8 @@ impl Thread {
         assert_interrupts(false);
         assert_critical(true);
 
-        // Check if we are currently in our own thread
-        let current_thread_id = get_current_thread_id();
-        if current_thread_id == self.id {
-            assert!(
-                self.kn_context.is_none(),
-                "Cannot switch into own kernel context"
-            );
-        } else {
-            set_current_thread_id(self.id);
-        }
+        // Set the thread id
+        set_current_thread_id(self.id);
 
         // Since interrupts are disabled, this is safe to do now.
         notify_end_critical();
@@ -140,7 +137,24 @@ impl Thread {
         // We also need to delete this context since we will be switching back to it.
         if let Some(kernel_context) = self.kn_context {
             self.kn_context = None;
-            log!("+");
+
+            // set this stack as the current stack
+            unsafe {
+                self.kernel_stack
+                    .as_ref()
+                    .expect("Kernel thread must have kernel stack")
+                    .set_syscall_stack()
+            };
+
+            // Cannot enter userspace from kernel function
+            if kernel_context.cs >> 3 != Self::KERNEL_CODE_SEGMENT as u64 {
+                unreachable!();
+            }
+
+            // Cannot enter a null ptr
+            if kernel_context.rip == 0 {
+                unreachable!();
+            }
 
             // FIXME: we should call this something else, because here we are just switching back into
             // the kernel.
@@ -148,8 +162,12 @@ impl Thread {
             unreachable!("Kernel should never return back to `context_switch`")
         }
 
+        // Release our kernel stack, and aquire the global_stack
+        self.kernel_stack = None;
+        self.kn_context = None;
+        unsafe { global_stack.set_syscall_stack() };
+
         // We must've previously been in userspace, so lets switch back into it
-        log!("-");
         unsafe { userspace_entry(&raw const self.ue_context) };
         unreachable!("Userspace should never return back to `context_switch`");
     }

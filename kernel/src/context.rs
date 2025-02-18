@@ -28,11 +28,10 @@ use core::{
     mem::offset_of,
 };
 
-use crate::process::Process;
 use arch::registers::ProcessContext;
 
 /// The kernel's syscall entry stack
-pub static mut KERNEL_RSP_PTR: u64 = Process::KERNEL_SYSCALL_STACK_ADDR.addr() as u64;
+pub static mut KERNEL_RSP_PTR: u64 = 0;
 /// A tmp for userspace's stack ptr while in kernel land
 pub static mut USERSPACE_RSP_PTR: u64 = 0x121212;
 /// A lock for timer ticks to not attempt to lock the scheduler
@@ -249,4 +248,11 @@ pub unsafe fn _context_of_caller() -> ProcessContext {
     }
 
     pc
+}
+
+/// Set the RSP of the syscall entry
+pub unsafe fn set_syscall_rsp(new_rsp: u64) {
+    let kernel_rsp_ptr = &raw mut KERNEL_RSP_PTR;
+
+    unsafe { *kernel_rsp_ptr = new_rsp };
 }
