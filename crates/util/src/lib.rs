@@ -53,7 +53,7 @@ pub const fn align_range_to(addr_start: u64, addr_end: u64, alignment: usize) ->
 
 /// Check the alignment of `addr` and `alignment`
 pub const fn is_align_to(addr: u64, alignment: usize) -> bool {
-    addr % (alignment as u64) == 0
+    (addr & (alignment as u64 - 1)) == 0
 }
 
 #[cfg(test)]

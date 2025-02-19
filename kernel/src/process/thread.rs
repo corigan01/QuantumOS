@@ -30,12 +30,11 @@ use arch::{
     locks::interrupt_locks_held,
     registers::{ProcessContext, Segment},
 };
-use lldebug::logln;
-use mem::addr::VirtAddr;
+use mem::addr::{KERNEL_ADDR_START, VirtAddr};
 use quantum_portal::{WaitCondition, WaitSignal};
 
 use crate::{
-    context::userspace_entry,
+    context::{kernelspace_entry, userspace_entry},
     processor::{assert_critical, is_within_irq, notify_end_critical, set_current_thread_id},
 };
 
@@ -47,6 +46,7 @@ pub struct Thread {
     pub id: usize,
     pub ue_context: ProcessContext,
     pub kn_context: Option<ProcessContext>,
+    pub kn_invalid: bool,
     pub wait_conds: Vec<WaitCondition>,
     pub wait_signals: Vec<WaitSignal>,
     pub kernel_stack: Option<KernelStack>,
@@ -68,11 +68,22 @@ impl Thread {
             wait_conds: Vec::new(),
             wait_signals: Vec::new(),
             kernel_stack: None,
+            kn_invalid: false,
         }
     }
 
     /// Set the userspace context
-    pub const fn set_userspace_context(&mut self, context: ProcessContext) {
+    pub fn set_userspace_context(&mut self, context: ProcessContext) {
+        assert_eq!(
+            context.cs >> 3,
+            Self::USERSPACE_CODE_SEGMENT as u64,
+            "{:#x?}",
+            context
+        );
+        assert_eq!(context.ss >> 3, Self::USERSPACE_STACK_SEGMENT as u64);
+        assert!((context.rip as usize) < KERNEL_ADDR_START.addr());
+        assert_ne!(context.rip, 0);
+
         self.ue_context = context;
     }
 
@@ -82,11 +93,13 @@ impl Thread {
     }
 
     /// Set the kernel context
-    pub fn set_kernel_context(&mut self, context: ProcessContext, stack: Option<KernelStack>) {
-        if self.kernel_stack.is_none() && stack.is_some() {
-            self.kernel_stack = stack;
-        }
+    pub fn set_kernel_context(&mut self, context: ProcessContext, stack: KernelStack) {
+        assert_eq!(context.cs >> 3, Self::KERNEL_CODE_SEGMENT as u64);
+        assert_eq!(context.ss >> 3, Self::KERNEL_STACK_SEGMENT as u64);
+        assert!((context.rip as usize) >= KERNEL_ADDR_START.addr());
+        assert!(!self.kn_invalid);
 
+        self.kernel_stack = Some(stack);
         self.kn_context = Some(context);
     }
 
@@ -128,15 +141,12 @@ impl Thread {
         // Set the thread id
         set_current_thread_id(self.id);
 
-        // Since interrupts are disabled, this is safe to do now.
-        notify_end_critical();
-
         // If we have `kernel_context` that must mean we switched out of the kernel, meaning we should
         // switch back into the kernel.
         //
         // We also need to delete this context since we will be switching back to it.
-        if let Some(kernel_context) = self.kn_context {
-            self.kn_context = None;
+        if let Some(ref kernel_context) = self.kn_context {
+            self.kn_invalid = true;
 
             // set this stack as the current stack
             unsafe {
@@ -146,29 +156,23 @@ impl Thread {
                     .set_syscall_stack()
             };
 
-            // Cannot enter userspace from kernel function
-            if kernel_context.cs >> 3 != Self::KERNEL_CODE_SEGMENT as u64 {
-                unreachable!();
-            }
+            // Since interrupts are disabled, this is safe to do now.
+            notify_end_critical();
 
-            // Cannot enter a null ptr
-            if kernel_context.rip == 0 {
-                unreachable!();
-            }
-
-            // FIXME: we should call this something else, because here we are just switching back into
-            // the kernel.
-            unsafe { userspace_entry(&raw const kernel_context) };
-            unreachable!("Kernel should never return back to `context_switch`")
+            unsafe { kernelspace_entry(kernel_context as *const _) };
         }
 
+        self.kn_invalid = false;
+
         // Release our kernel stack, and aquire the global_stack
-        self.kernel_stack = None;
-        self.kn_context = None;
         unsafe { global_stack.set_syscall_stack() };
+        self.kn_context = None;
+        self.kernel_stack = None;
+
+        // Since interrupts are disabled, this is safe to do now.
+        notify_end_critical();
 
         // We must've previously been in userspace, so lets switch back into it
         unsafe { userspace_entry(&raw const self.ue_context) };
-        unreachable!("Userspace should never return back to `context_switch`");
     }
 }

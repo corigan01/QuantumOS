@@ -30,8 +30,8 @@ use super::{
 use crate::{
     process::Process,
     processor::{
-        get_current_process_id, irq_count, is_within_critical, is_within_irq, notify_end_irq,
-        set_current_process_id,
+        get_current_process_id, irq_count, is_within_critical, is_within_irq,
+        notify_begin_critical, notify_end_irq, set_current_process_id,
     },
 };
 use alloc::{
@@ -41,7 +41,11 @@ use alloc::{
     vec::Vec,
 };
 use arch::{
-    CpuPrivilege, interrupts, locks::InterruptMutex, pic8259::pic_eoi, registers::ProcessContext,
+    CpuPrivilege,
+    interrupts::{self, assert_interrupts},
+    locks::InterruptMutex,
+    pic8259::pic_eoi,
+    registers::ProcessContext,
 };
 use boolvec::BoolVec;
 use core::arch::asm;
@@ -122,7 +126,6 @@ impl Scheduler {
     /// stack for the caller.
     pub unsafe fn branch_kernel_stack_for(&mut self) -> Result<KernelStack, ProcessError> {
         let old_stack = self.current_syscall_stack.swap();
-        unsafe { self.current_syscall_stack.set_syscall_stack() };
 
         Ok(old_stack)
     }
@@ -280,28 +283,38 @@ impl Scheduler {
         &mut self,
         old_context: Option<(RefThread, ProcessContext)>,
     ) -> Result<(), ProcessError> {
+        assert_interrupts(false);
         let Some((_, process, thread)) = self.running.clone() else {
             return Err(ProcessError::NotAnyProcess);
         };
+        log!("Into '{:<20}'", process.lock().name);
 
         // Set old's context
-        if let Some((thread, context)) = old_context {
-            match (context.cs >> 3) as u16 {
+        if let Some((old_thread, old_context)) = old_context {
+            match (old_context.cs >> 3) as u16 {
                 Thread::USERSPACE_CODE_SEGMENT => unsafe {
-                    (&mut *thread.as_mut_ptr()).set_userspace_context(context)
+                    let thread = thread.lock();
+                    logln!(
+                        " - (UE {:#018x} -> {:#018x})",
+                        old_context.rip,
+                        thread.kn_context.unwrap_or(thread.ue_context).rip
+                    );
+                    (&mut *old_thread.as_mut_ptr()).set_userspace_context(old_context)
                 },
                 Thread::KERNEL_CODE_SEGMENT => unsafe {
-                    // If it was already in a kernel_context, we don't need to allocate another stack
-                    let kernel_stack = if (&mut *thread.as_mut_ptr()).kernel_stack.is_none() {
-                        Some(self.branch_kernel_stack_for()?)
-                    } else {
-                        None
-                    };
-
-                    (&mut *thread.as_mut_ptr()).set_kernel_context(context, kernel_stack);
+                    let thread = thread.lock();
+                    logln!(
+                        " - (KN {:#018x} -> {:#018x})",
+                        old_context.rip,
+                        thread.kn_context.unwrap_or(thread.ue_context).rip
+                    );
+                    (&mut *old_thread.as_mut_ptr())
+                        .set_kernel_context(old_context, self.branch_kernel_stack_for()?);
                 },
                 segment => unreachable!("Unknown code segment {segment}"),
             }
+        } else {
+            logln!(" - (N )");
         }
 
         let pid = process.lock().id;
@@ -322,18 +335,16 @@ impl Scheduler {
     ///
     /// Returns true when the scheduler changed the currently running process.
     pub fn tick_scheduler(&mut self) -> Result<bool, ProcessError> {
-        let last_running = self.running.as_mut();
-
         // Extract the last running process
-        let Some((ticks_remaining, proc, thread)) = last_running else {
+        let Some((counts, proc, thread)) = self.running.clone() else {
             // Otherwise fill the running process with the next queued process
             self.running = Some(self.next()?);
             return Ok(true);
         };
 
         // If this process has ticks remaining, we just decrement them
-        if *ticks_remaining > 0 {
-            *ticks_remaining -= 1;
+        if counts > 0 {
+            self.running.as_mut().unwrap().0 -= 1;
             return Ok(false);
         }
 
@@ -342,16 +353,19 @@ impl Scheduler {
             return Ok(false);
         }
 
+        if self.queue.len() == 0 {
+            return Ok(false);
+        }
+
         // Check if this is the next process in the queue
-        if let Some(next) = self.queue.get(0) {
-            if next
-                .1
-                .upgrade()
-                .is_some_and(|other_proc| other_proc.lock().id == proc.lock().id)
-            {
-                logln!("!");
-                return Ok(false);
-            }
+        let (new_time, new_proc, new_thread) = self.next()?;
+        if new_proc.lock().id == proc.lock().id && new_thread.lock().id == thread.lock().id {
+            self.queue.push_back((
+                Self::DEFAULT_QUANTUM,
+                Arc::downgrade(&new_proc),
+                Arc::downgrade(&new_thread),
+            ));
+            return Ok(false);
         }
 
         // Otherwise, move the currently active process to the end of the queue
@@ -360,13 +374,14 @@ impl Scheduler {
             Arc::downgrade(&proc),
             Arc::downgrade(&thread),
         ));
-        self.running = Some(self.next()?);
+        self.running = Some((new_time, new_proc, new_thread));
 
         Ok(true)
     }
 
     /// Begin scheduling
     pub unsafe fn begin(&mut self) -> ! {
+        notify_begin_critical();
         assert!(
             self.running.is_none(),
             "Cannot begin scheduler with an already active process"
@@ -420,6 +435,7 @@ pub fn mut_scheduler_no_exit<F>(f: F) -> !
 where
     F: FnOnce(&mut Scheduler),
 {
+    notify_begin_critical();
     let mut lock = THE_SCHEDULER.lock();
     lock.stop_restore();
     let s_ref = unsafe { lock.release_lock() }
@@ -431,7 +447,18 @@ where
 }
 
 /// Get the currently active thread and process
-pub fn current_process() -> (RefProcess, RefThread) {
+pub fn get_running() -> (RefProcess, RefThread) {
+    let (_, proc, thread) = ref_scheduler(|s| {
+        s.running
+            .clone()
+            .expect("Expected a currently running process")
+    });
+
+    (proc, thread)
+}
+
+/// Get the currently active thread and process
+pub fn get_running_and_release_lock() -> (RefProcess, RefThread) {
     let (_, proc, thread) = ref_scheduler(|s| {
         s.running
             .clone()
@@ -479,23 +506,21 @@ pub fn scheduler_exit_process(process: RefProcess) -> ! {
 }
 
 /// Tick the scheduler
-pub fn scheduler_tick(context: &ProcessContext) -> Result<(), ProcessError> {
+pub fn scheduler_tick(context: ProcessContext) -> Result<(), ProcessError> {
     if is_within_critical() {
         return Ok(());
     }
 
-    let (_, thread) = current_process();
+    let (_, thread) = get_running();
 
     // If we changed our running process, we need to switch to it
     if mut_scheduler(|s| s.tick_scheduler())? {
         mut_scheduler_no_exit(|s| unsafe {
             if is_within_irq() {
-                // FIXME: this should be moved to somewhere it makes sense to send an EOI
                 notify_end_irq();
-                pic_eoi(0);
             }
 
-            s.switch_to_running(Some((thread, *context))).unwrap();
+            s.switch_to_running(Some((thread, context))).unwrap();
         });
     }
 
@@ -511,7 +536,7 @@ pub fn scheduler_thread_wait(
 
 pub fn scheduler_process_crash(process: RefProcess, reason: ProcessError) {
     mut_scheduler_no_exit(|s| {
-        warnln!("Process crash! - {reason:#?}");
+        warnln!("Crashing '{}'! - {reason:#x?}", process.lock().name);
         s.exit(process, None).expect("expected to exit process");
         assert!(
             s.tick_scheduler().expect("Expected to tick scheduler"),

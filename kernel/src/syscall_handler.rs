@@ -24,7 +24,6 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 use alloc::format;
-use lldebug::logln;
 use mem::paging::VmPermissions;
 use quantum_portal::{
     DebugMsgError, ExitReason, MapMemoryError, MemoryLocation, MemoryProtections, QuantumPortal,
@@ -32,13 +31,13 @@ use quantum_portal::{
 };
 use util::consts::PAGE_4K;
 
-use crate::process::scheduler::{current_process, scheduler_exit_process};
+use crate::process::scheduler::{get_running_and_release_lock, scheduler_exit_process};
 
 pub struct KernelSyscalls {}
 
 impl QuantumPortalServer for KernelSyscalls {
     fn verify_user_ptr<T: Sized>(ptr: *const T) -> bool {
-        let (proc, _) = current_process();
+        let (proc, _) = get_running_and_release_lock();
 
         unsafe { &*proc.as_mut_ptr() }
             .check_addr(ptr.into(), VmPermissions::USER_RW)
@@ -48,7 +47,7 @@ impl QuantumPortalServer for KernelSyscalls {
 
 impl QuantumPortal for KernelSyscalls {
     fn exit(_exit_reason: ExitReason) -> ! {
-        let (process, _) = current_process();
+        let (process, _) = get_running_and_release_lock();
         scheduler_exit_process(process);
     }
 
@@ -57,7 +56,7 @@ impl QuantumPortal for KernelSyscalls {
         protections: MemoryProtections,
         bytes: usize,
     ) -> Result<*mut u8, MapMemoryError> {
-        let (process, _) = current_process();
+        let (process, _) = get_running_and_release_lock();
         let page_permissions = match protections {
             MemoryProtections::ReadOnly => VmPermissions::USER_R,
             MemoryProtections::ReadWrite => VmPermissions::USER_RW,
@@ -85,12 +84,12 @@ impl QuantumPortal for KernelSyscalls {
     }
 
     fn get_pid() -> usize {
-        let (process, _) = current_process();
+        let (process, _) = get_running_and_release_lock();
         process.lock().get_pid()
     }
 
     fn debug_msg(msg: &str) -> Result<(), DebugMsgError> {
-        let (process, thread) = current_process();
+        let (process, thread) = get_running_and_release_lock();
 
         let fmt_string = {
             let proc_lock = process.lock();
@@ -112,16 +111,19 @@ impl QuantumPortal for KernelSyscalls {
         conditions: &[WaitCondition],
         signal_buffer: &mut [WaitSignal],
     ) -> Result<usize, WaitingError> {
-        logln!(
-            "Waiting - {:?} (signal return size = {})",
-            conditions,
-            signal_buffer.len()
-        );
+        let (_, _) = get_running_and_release_lock();
+
+        // logln!(
+        //     "Waiting - {:?} (signal return size = {})",
+        //     conditions,
+        //     signal_buffer.len()
+        // );
 
         if signal_buffer.len() == 0 {
             return Err(WaitingError::InvalidSignalBuffer);
         }
 
         loop {}
+        Ok(1)
     }
 }

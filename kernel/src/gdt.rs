@@ -83,7 +83,7 @@ pub fn set_stack_for_privl(rsp: *mut u8, cpu_privl: CpuPrivilege) {
     unsafe { (&mut *KERNEL_TSS.get()).set_stack_for_priv(rsp, cpu_privl) };
 }
 
-pub fn _set_stack_for_ist(rsp: *mut u8, ist_id: usize) {
+pub fn set_stack_for_ist(rsp: *mut u8, ist_id: usize) {
     unsafe { (&mut *KERNEL_TSS.get()).set_stack_for_ist(rsp, ist_id) };
 }
 

@@ -23,36 +23,27 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use crate::{sync_disable, sync_enable};
 use core::{
     cell::UnsafeCell,
     fmt::{Debug, Display},
     marker::PhantomData,
     ops::{Deref, DerefMut},
     ptr::NonNull,
-    sync::atomic::{AtomicBool, AtomicUsize, Ordering},
+    sync::atomic::{AtomicBool, Ordering},
 };
 
-use crate::interrupts;
-
-/// The amount of interrupt locks being held
-static LOCKS_HELD: AtomicUsize = AtomicUsize::new(0);
-
-/// Get the current number of interrupt locks currently being held
-pub fn interrupt_locks_held() -> usize {
-    LOCKS_HELD.load(Ordering::Relaxed)
-}
-
-/// A mutex that locks by disabling interrupts
-pub struct InterruptMutex<T: ?Sized> {
+/// A mutex that locks by calling a critical section
+pub struct DebugMutex<T: ?Sized> {
     lock: AtomicBool,
     inner: UnsafeCell<T>,
 }
 
-unsafe impl<T: ?Sized + Sync> Sync for InterruptMutex<T> {}
-unsafe impl<T: ?Sized + Send + Sync> Send for InterruptMutex<T> {}
+unsafe impl<T: ?Sized + Sync> Sync for DebugMutex<T> {}
+unsafe impl<T: ?Sized + Send + Sync> Send for DebugMutex<T> {}
 
-impl<T> InterruptMutex<T> {
-    /// Create a new interrupt Mutex
+impl<T> DebugMutex<T> {
+    /// Create a new debug Mutex
     pub const fn new(inner: T) -> Self {
         Self {
             inner: UnsafeCell::new(inner),
@@ -61,26 +52,19 @@ impl<T> InterruptMutex<T> {
     }
 }
 
-impl<T: ?Sized> InterruptMutex<T> {
+impl<T: ?Sized> DebugMutex<T> {
     /// Aquire a lock to the data
-    pub fn lock(&self) -> InterruptMutexGuard<T> {
-        let restore_state = interrupts::are_interrupts_enabled();
-
-        if restore_state {
-            unsafe { interrupts::disable_interrupts() };
-        }
+    pub fn lock(&self) -> DebugMutexGuard<T> {
+        sync_enable();
 
         if self.lock.load(Ordering::Acquire) {
             panic!("Cannot lock the Mutex multiple times!");
         }
 
         self.lock.store(true, Ordering::Relaxed);
-        LOCKS_HELD.fetch_add(1, Ordering::Relaxed);
-
-        InterruptMutexGuard {
+        DebugMutexGuard {
             ph: PhantomData,
             ptr: NonNull::new(self.inner.get()).unwrap(),
-            restore_state,
             atomic: &self.lock,
         }
     }
@@ -94,30 +78,29 @@ impl<T: ?Sized> InterruptMutex<T> {
     }
 }
 
-impl<T: ?Sized + Debug> Debug for InterruptMutex<T> {
+impl<T: ?Sized + Debug> Debug for DebugMutex<T> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         self.lock().fmt(f)
     }
 }
 
-impl<T: ?Sized + Display> Display for InterruptMutex<T> {
+impl<T: ?Sized + Display> Display for DebugMutex<T> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         self.lock().fmt(f)
     }
 }
 
 /// A protected lock to the data
-pub struct InterruptMutexGuard<'a, T: ?Sized> {
+pub struct DebugMutexGuard<'a, T: ?Sized> {
     ph: PhantomData<&'a ()>,
     ptr: NonNull<T>,
     atomic: &'a AtomicBool,
-    restore_state: bool,
 }
 
-unsafe impl<'a, T: ?Sized + Sync> Sync for InterruptMutexGuard<'a, T> {}
-unsafe impl<'a, T: ?Sized + Send + Sync> Send for InterruptMutexGuard<'a, T> {}
+unsafe impl<'a, T: ?Sized + Sync> Sync for DebugMutexGuard<'a, T> {}
+unsafe impl<'a, T: ?Sized + Send + Sync> Send for DebugMutexGuard<'a, T> {}
 
-impl<'a, T: ?Sized> Deref for InterruptMutexGuard<'a, T> {
+impl<'a, T: ?Sized> Deref for DebugMutexGuard<'a, T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -125,46 +108,37 @@ impl<'a, T: ?Sized> Deref for InterruptMutexGuard<'a, T> {
     }
 }
 
-impl<'a, T: ?Sized> DerefMut for InterruptMutexGuard<'a, T> {
+impl<'a, T: ?Sized> DerefMut for DebugMutexGuard<'a, T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         unsafe { self.ptr.as_mut() }
     }
 }
 
-impl<'a, T: ?Sized> Drop for InterruptMutexGuard<'a, T> {
+impl<'a, T: ?Sized> Drop for DebugMutexGuard<'a, T> {
     fn drop(&mut self) {
-        if LOCKS_HELD.fetch_sub(1, Ordering::Relaxed) == 0 {
-            panic!("Cannot release a lock, when no locks are currently being held!");
-        }
         if !self.atomic.swap(false, Ordering::Release) {
             panic!("Cannot release a lock that was never locked!");
         }
-        if self.restore_state && LOCKS_HELD.load(Ordering::Relaxed) == 0 {
-            unsafe { interrupts::enable_interrupts() };
-        }
+
+        sync_disable();
     }
 }
 
-impl<'a, T: ?Sized + Debug> Debug for InterruptMutexGuard<'a, T> {
+impl<'a, T: ?Sized + Debug> Debug for DebugMutexGuard<'a, T> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         unsafe { self.ptr.as_ref().fmt(f) }
     }
 }
 
-impl<'a, T: ?Sized + Display> Display for InterruptMutexGuard<'a, T> {
+impl<'a, T: ?Sized + Display> Display for DebugMutexGuard<'a, T> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         unsafe { self.ptr.as_ref().fmt(f) }
     }
 }
 
-impl<'a, T: ?Sized> InterruptMutexGuard<'a, T> {
+impl<'a, T: ?Sized> DebugMutexGuard<'a, T> {
     /// Release the inner lock and get the inner value
     pub unsafe fn release_lock(mut self) -> &'a mut T {
         unsafe { self.ptr.as_mut() }
-    }
-
-    /// Do not restore interrupts when this lock is released
-    pub fn stop_restore(&mut self) {
-        self.restore_state = false;
     }
 }

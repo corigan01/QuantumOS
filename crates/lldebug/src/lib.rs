@@ -36,11 +36,7 @@ pub use lldebug_macro::make_debug;
 
 pub mod color;
 pub mod hexdump;
-
-// Re-exports for spin
-pub mod sync {
-    pub use spin::Mutex;
-}
+pub mod lock;
 
 pub enum LogKind {
     Log,
@@ -49,9 +45,14 @@ pub enum LogKind {
 }
 
 pub type OutputFn = fn(core::fmt::Arguments);
+pub type EnableSyncFn = fn();
+pub type DisableSyncFn = fn();
 
 static REQUIRES_HEADER_PRINT: AtomicBool = AtomicBool::new(true);
 static GLOBAL_PRINT_FN: AtomicUsize = AtomicUsize::new(0);
+
+static GLOBAL_CRITICAL_ENABLE_FN: AtomicUsize = AtomicUsize::new(0);
+static GLOBAL_CRITICAL_DISABLE_FN: AtomicUsize = AtomicUsize::new(0);
 
 fn raw_print(args: core::fmt::Arguments) {
     let ptr = GLOBAL_PRINT_FN.load(Ordering::Relaxed);
@@ -64,6 +65,41 @@ fn raw_print(args: core::fmt::Arguments) {
 pub fn set_global_debug_fn(function: OutputFn) {
     let ptr = function as *const fn(core::fmt::Arguments) as usize;
     GLOBAL_PRINT_FN.store(ptr, Ordering::Relaxed);
+}
+
+/// Enables sync for the debug portal
+pub fn set_sync_fn(enable: EnableSyncFn, disable: DisableSyncFn) {
+    let enable_ptr = enable as *const EnableSyncFn as usize;
+    let disable_ptr = disable as *const DisableSyncFn as usize;
+
+    GLOBAL_CRITICAL_ENABLE_FN.store(enable_ptr, Ordering::Relaxed);
+    GLOBAL_CRITICAL_DISABLE_FN.store(disable_ptr, Ordering::Relaxed);
+}
+
+/// Enable sync
+pub fn sync_enable() {
+    let raw_ptr = GLOBAL_CRITICAL_ENABLE_FN.load(Ordering::Relaxed);
+
+    // sync not enabled
+    if raw_ptr == 0 {
+        return;
+    }
+
+    let fn_ptr: EnableSyncFn = unsafe { core::mem::transmute(raw_ptr) };
+    fn_ptr();
+}
+
+/// Disable sync
+pub fn sync_disable() {
+    let raw_ptr = GLOBAL_CRITICAL_DISABLE_FN.load(Ordering::Relaxed);
+
+    // sync not enabled
+    if raw_ptr == 0 {
+        return;
+    }
+
+    let fn_ptr: DisableSyncFn = unsafe { core::mem::transmute(raw_ptr) };
+    fn_ptr();
 }
 
 struct PrettyOutput<'a> {

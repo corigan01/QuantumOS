@@ -98,7 +98,7 @@ pub struct SegmentRegisters {
 
 /// CPUs context
 #[repr(C)]
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProcessContext {
     pub r15: u64,
     pub r14: u64,

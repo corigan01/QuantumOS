@@ -27,14 +27,12 @@ use arch::interrupts::disable_interrupts;
 use core::panic::PanicInfo;
 use lldebug::errorln;
 
-use crate::qemu::{QemuExitStatus, exit_emulator};
-
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
     unsafe { disable_interrupts() };
-    unsafe { (&*(&raw const super::debug_macro::DEBUG_STREAM_OUTPUT_SERIAL)).force_unlock() };
     errorln!("{}", info);
 
     // Close the emulator on panic
-    exit_emulator(QemuExitStatus::Failure);
+    // exit_emulator(QemuExitStatus::Failure);
+    loop {}
 }

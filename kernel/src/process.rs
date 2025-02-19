@@ -32,7 +32,7 @@ use alloc::{
     sync::{Arc, Weak},
 };
 use arch::CpuPrivilege;
-use arch::interrupts::disable_interrupts;
+use arch::interrupts::assert_interrupts;
 use arch::locks::InterruptMutex;
 use boolvec::BoolVec;
 use core::alloc::Layout;
@@ -52,8 +52,8 @@ use thread::Thread;
 use util::consts::{PAGE_2M, PAGE_4K};
 use vm_elf::VmElfInject;
 
-use crate::context::set_syscall_rsp;
-use crate::processor::{notify_begin_critical, set_current_process_id};
+use crate::context::{get_syscall_rsp, set_syscall_rsp};
+use crate::processor::set_current_process_id;
 
 pub mod scheduler;
 pub mod thread;
@@ -102,6 +102,7 @@ impl KernelStack {
 
     /// Create a new kernel stack inplace of the old one
     pub fn swap(&mut self) -> Self {
+        // self.assert_not_within();
         let new = ManuallyDrop::new(Self::new());
         let old = Self {
             bottom: self.bottom,
@@ -129,12 +130,30 @@ impl KernelStack {
         assert_ne!(self.len, 0, "kernel stack cannot be zero");
         unsafe { set_syscall_rsp(self.stack_top().addr() as u64) };
     }
+
+    /// Asserts that we are currently not in the current stack
+    pub fn assert_not_within(&self) {
+        let bottom = self.stack_bottom().addr() as u64;
+        let top = self.stack_top().addr() as u64;
+        let current: u64;
+
+        unsafe { core::arch::asm!("mov rax, rsp", out("rax") current) };
+        assert!(
+            current > top || current < bottom,
+            "Assert not within current stack, rsp={:#018x}, {{start={:#018x}, end={:#018x}}}",
+            current,
+            bottom,
+            top
+        );
+    }
 }
 
 impl Drop for KernelStack {
     fn drop(&mut self) {
         // make sure its not dangling
         if self.len != 0 {
+            self.assert_not_within();
+
             // dealloc the inner allocation
             unsafe {
                 dealloc(
@@ -245,12 +264,9 @@ impl Process {
     /// This is the start address that processes should base their stack from
     pub const PROCESS_STACK_START_ADDR: VirtAddr = VirtAddr::new(0x7fff00000000);
     /// The stack at which the kernel's irq entry should point
-    pub const KERNEL_IRQ_BOTTOM_STACK_ADDR: VirtAddr = VirtAddr::new(0xffffffff90000000);
-    /// The stack at which the kernel's irq entry should point
-    pub const KERNEL_SYSCALL_BOTTOM_STACK_ADDR: VirtAddr =
-        VirtAddr::new(0xffffffff90000000 + Self::KERNEL_STACK_SIZE + PAGE_4K);
+    pub const KERNEL_IRQ_BOTTOM_STACK_ADDR: VirtAddr = VirtAddr::new(0xffffffff92000000);
     /// The size of each of the kernel's stacks
-    pub const KERNEL_STACK_SIZE: usize = PAGE_4K * 40;
+    pub const KERNEL_STACK_SIZE: usize = PAGE_4K * 32;
     /// The size of an userspace process stack
     pub const USERSPACE_STACK_SIZE: usize = PAGE_4K * 32;
 
@@ -463,9 +479,7 @@ impl Process {
         thread: RefThread,
         global_stack: &KernelStack,
     ) -> Result<(), ProcessError> {
-        // Begin a critical section
-        unsafe { disable_interrupts() };
-        notify_begin_critical();
+        assert_interrupts(false);
 
         // Set the global process ID
         set_current_process_id(self.id);

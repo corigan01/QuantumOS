@@ -76,20 +76,6 @@ fn main(kbh: &KernelBootHeader) {
     );
     logln!("Running on a(n) '{:?}' processor.", cpu_vender());
 
-    gdt::init_kernel_gdt();
-    gdt::set_stack_for_privl(
-        Process::KERNEL_IRQ_BOTTOM_STACK_ADDR
-            .offset(Process::KERNEL_STACK_SIZE)
-            .as_mut_ptr(),
-        Ring0,
-    );
-    unsafe { gdt::load_tss() };
-    int::enable_pic();
-    int::attach_interrupts();
-    int::attach_syscall();
-    timer::init_timer();
-    unsafe { arch::registers::ia32_efer::set_no_execute_flag(true) };
-
     logln!(
         "Init Heap Region ({})",
         HumanBytes::from(kbh.kernel_init_heap.1)
@@ -119,6 +105,20 @@ fn main(kbh: &KernelBootHeader) {
 
     let sc =
         Scheduler::bootstrap_scheduler(initfs_slice).expect("Unable to load kernel's scheduler");
+
+    gdt::init_kernel_gdt();
+    gdt::set_stack_for_privl(
+        Process::KERNEL_IRQ_BOTTOM_STACK_ADDR
+            .offset(Process::KERNEL_STACK_SIZE)
+            .as_mut_ptr(),
+        Ring0,
+    );
+    unsafe { gdt::load_tss() };
+    int::enable_pic();
+    int::attach_interrupts();
+    int::attach_syscall();
+    timer::init_timer();
+    unsafe { arch::registers::ia32_efer::set_no_execute_flag(true) };
 
     // Start the scheduler
     set_global_scheduler(sc);

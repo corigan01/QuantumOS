@@ -24,10 +24,9 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 use crate::{
-    context::IN_USERSPACE,
     process::{
-        AccessViolationReason, ProcessError,
-        scheduler::{current_process, scheduler_process_crash},
+        AccessViolationReason, Process, ProcessError,
+        scheduler::{get_running, scheduler_process_crash},
     },
     processor::{notify_begin_irq, notify_end_irq},
 };
@@ -36,33 +35,42 @@ use arch::{
     idt64::{
         ExceptionKind, InterruptDescTable, InterruptFlags, InterruptInfo, fire_debug_int, interrupt,
     },
-    locks::interrupt_locks_held,
+    interrupts::{self, assert_interrupts},
+    locks::{InterruptMutex, interrupt_locks_held},
     pic8259::{pic_eoi, pic_remap},
-    registers::Segment,
+    registers::{ProcessContext, Segment},
 };
-use lldebug::{log, logln, sync::Mutex};
+use lldebug::{log, logln};
 use mem::{
     addr::VirtAddr,
     vm::{PageFaultInfo, call_page_fault_handler},
 };
 use quantum_portal::server::QuantumPortalServer;
 
-static INTERRUPT_TABLE: Mutex<InterruptDescTable> = Mutex::new(InterruptDescTable::new());
-static IRQ_HANDLERS: Mutex<[Option<fn(&InterruptInfo)>; 32]> = Mutex::new([None; 32]);
+static INTERRUPT_TABLE: InterruptMutex<InterruptDescTable> =
+    InterruptMutex::new(InterruptDescTable::new());
+static IRQ_HANDLERS: InterruptMutex<[Option<fn(&InterruptInfo)>; 32]> =
+    InterruptMutex::new([None; 32]);
 
 #[interrupt(0..50)]
 fn exception_handler(args: &InterruptInfo) {
-    let called_from_ue = unsafe { core::ptr::read_volatile(&raw const IN_USERSPACE) };
     assert_eq!(
         interrupt_locks_held(),
         0,
         "Should not be possible to call an interrupt while interrupt locks are held -- {args:#?}"
     );
+    assert_interrupts(false);
     notify_begin_irq();
+    let rsp: u64;
+    unsafe { core::arch::asm!("mov rax, rsp", out("rax") rsp) };
+    let rsp = VirtAddr::new(rsp as usize);
+
+    logln!("rsp={:#018x} - {:?}", rsp, args.flags);
 
     match args.flags {
         // IRQ
         InterruptFlags::Irq(irq_num) if irq_num - PIC_IRQ_OFFSET <= 16 => {
+            unsafe { pic_eoi(irq_num - PIC_IRQ_OFFSET) };
             call_attached_irq(irq_num - PIC_IRQ_OFFSET, &args);
         }
         InterruptFlags::PageFault {
@@ -93,7 +101,8 @@ fn exception_handler(args: &InterruptInfo) {
                     request_perm,
                     addr,
                 } => {
-                    let (proc, _) = current_process();
+                    logln!("{:#x?}", args);
+                    let (proc, _) = get_running();
                     scheduler_process_crash(
                         proc,
                         ProcessError::AccessViolation(AccessViolationReason::NoAccess {
@@ -116,7 +125,9 @@ fn exception_handler(args: &InterruptInfo) {
                 }
             }
         }
-        InterruptFlags::Debug => (),
+        InterruptFlags::Debug => {
+            lldebug::logln!("{:#x?}", args);
+        }
         exception => {
             panic!("UNHANDLED FAULT\n{:#016x?}", args)
         }
@@ -127,15 +138,8 @@ fn exception_handler(args: &InterruptInfo) {
         panic!("Interrupt -- {:?}", args.flags);
     }
 
-    // Send End of interrupt
-    match args.flags {
-        InterruptFlags::Irq(irq) if irq - PIC_IRQ_OFFSET <= 16 => {
-            unsafe { pic_eoi(irq - PIC_IRQ_OFFSET) };
-        }
-        _ => (),
-    }
-
     notify_end_irq();
+    assert_interrupts(false);
 }
 
 fn call_attached_irq(irq_id: u8, args: &InterruptInfo) {
@@ -168,11 +172,13 @@ pub fn attach_irq_handler(handler_fn: fn(&InterruptInfo), irq: u8) {
 
 /// Attach the main 'exception handler' function to the IDT
 pub fn attach_interrupts() {
-    let mut idt = INTERRUPT_TABLE.lock();
-    attach_irq!(idt, exception_handler);
-    unsafe { idt.submit_table().load() };
+    {
+        let mut idt = INTERRUPT_TABLE.lock();
+        attach_irq!(idt, exception_handler);
+        unsafe { idt.submit_table().load() };
 
-    logln!("Attached Interrupts!");
+        logln!("Attached Interrupts!");
+    }
 
     log!("Checking Interrupts...");
     fire_debug_int();
@@ -216,14 +222,31 @@ extern "C" fn syscall_handler(
     rdi: u64,
     rsi: u64,
     rdx: u64,
-    _rcx: u64,
+    rsp: u64,
     r8: u64,
     syscall_number: u64,
 ) -> u64 {
     unsafe {
+        let b4 = {
+            logln!("SYSCALL");
+            let (_, thread) = get_running();
+            thread
+                .lock()
+                .set_userspace_context(core::ptr::read_volatile(rsp as *const ProcessContext));
+            core::ptr::read_volatile(rsp as *const ProcessContext)
+        };
+
         // Call the portal
         let resp =
             crate::syscall_handler::KernelSyscalls::from_syscall(syscall_number, rdi, rsi, rdx, r8);
+
+        interrupts::disable_interrupts();
+
+        {
+            let (_, thread) = get_running();
+            let c = thread.lock().ue_context;
+            logln!("S{:#x?} {}", c, c == b4);
+        }
 
         resp
     }

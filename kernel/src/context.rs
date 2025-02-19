@@ -25,27 +25,26 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 use core::{
     arch::{asm, naked_asm},
+    hint::black_box,
     mem::offset_of,
 };
 
-use arch::registers::ProcessContext;
+use arch::{interrupts::assert_interrupts, registers::ProcessContext};
+use lldebug::logln;
 
 /// The kernel's syscall entry stack
-pub static mut KERNEL_RSP_PTR: u64 = 0;
+pub static mut KERNEL_RSP_PTR: u64 = 0x121212;
 /// A tmp for userspace's stack ptr while in kernel land
 pub static mut USERSPACE_RSP_PTR: u64 = 0x121212;
-/// A lock for timer ticks to not attempt to lock the scheduler
-pub static mut IN_USERSPACE: u8 = 0;
 
 #[naked]
 pub unsafe extern "C" fn kernel_entry() {
     unsafe {
         naked_asm!(
             "
-            cli
             #  -- Save User's stack ptr, and restore our own
 
-            mov byte ptr [{user_lock}], 0
+            cli
             mov [{userspace_rsp_ptr}], rsp
             mov rsp, [{kernel_rsp_ptr}]
             
@@ -53,10 +52,10 @@ pub unsafe extern "C" fn kernel_entry() {
 
             #  -- Start building the processes `ProcessContext`
 
-            push 0x1b
+            push 0x23
             push [{userspace_rsp_ptr}]
             push r11                       # rFLAGS is saved in r11
-            push 0x23
+            push 0x2b
             push rcx                       # rip is saved in rcx
             push 0                         # This isn't an ISR, so we can just store 0 into its 'exception_code'
 
@@ -79,9 +78,11 @@ pub unsafe extern "C" fn kernel_entry() {
             #  -- Call the 'syscall_handler' function
 
             mov r9, rax                    # We move rax (syscall number) into r9 (arg5 of callee)
+            mov rcx, rsp
             call syscall_handler
 
             #  -- Start restoring the processes `ProcessContext`
+            cli
         
             pop r15
             pop r14
@@ -97,38 +98,31 @@ pub unsafe extern "C" fn kernel_entry() {
             pop rdx
             pop rcx
             pop rbx
-            add rsp, 56                    # pop rax , pop 0, pop rip, pop cs, pop rflags, pop rsp, pop ss
+
+            add rsp, 16
+            pop rcx                        # rip
+            add rsp,  8
+            pop r11                        # rflags
+            add rsp, 16
 
             #  -- Return back to userspace
 
-            cli
             pop rsp
-
-            mov qword ptr [{userspace_rsp_ptr}], 0
-            mov byte ptr [{user_lock}], 1
             sysretq
         ",
-            // FIXME: For whatever reason, rust fails to compile with these symbol PTRs,
-            //        so for right now I will just make them part of the linker script and
-            //        use raw ptrs to these symbols.
-            // kernel_rsp_ptr = sym KERNEL_RSP,
-            // userspace_rsp_ptr = sym USERSPACE_RSP,
-
             kernel_rsp_ptr = sym KERNEL_RSP_PTR,
             userspace_rsp_ptr = sym USERSPACE_RSP_PTR,
-            user_lock = sym IN_USERSPACE,
         )
     };
 }
 
 /// This is the entry for userspace
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn userspace_entry(context: *const ProcessContext) {
+pub unsafe extern "C" fn userspace_entry(context: *const ProcessContext) -> ! {
+    assert_interrupts(false);
     unsafe {
         asm!(
             "
-                cli
-
                 #  -- Restore Registers
 
                 mov r15, [rdi + {r15_offset} ]
@@ -149,7 +143,6 @@ pub unsafe extern "C" fn userspace_entry(context: *const ProcessContext) {
 
                 #  -- Restore TRAP frame
 
-                push [rdi + {errno_offset}   ] # errno
                 push [rdi + {ss_offset}      ] # ss
                 push [rdi + {rsp_offset}     ] # rsp
                 push [rdi + {rflags_offset}  ] # rflags
@@ -161,11 +154,9 @@ pub unsafe extern "C" fn userspace_entry(context: *const ProcessContext) {
 
                 #  -- Return back to userspace
 
-                mov byte ptr [{user_lock}], 1
                 iretq
                 ",
             in("rdi") context,
-            user_lock = sym IN_USERSPACE,
             rip_offset = const { offset_of!(ProcessContext, rip) },
             r15_offset = const { offset_of!(ProcessContext, r15) },
             r14_offset = const { offset_of!(ProcessContext, r14) },
@@ -186,11 +177,75 @@ pub unsafe extern "C" fn userspace_entry(context: *const ProcessContext) {
             ss_offset = const { offset_of!(ProcessContext, ss ) },
             rflags_offset = const { offset_of!(ProcessContext, rflag ) },
             rsp_offset = const { offset_of!(ProcessContext, rsp ) },
-            errno_offset = const { offset_of!(ProcessContext,  exception_code) },
-
         )
     }
-    unreachable!("Should never return from userspace entry!");
+    loop {}
+}
+
+/// This is the entry for kernel
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn kernelspace_entry(context: *const ProcessContext) -> ! {
+    assert_interrupts(false);
+    static mut TEMP_RIP: u64 = 0;
+
+    unsafe {
+        *(&raw mut TEMP_RIP) = (&*context).rip;
+
+        asm!(
+            "
+                #  -- Restore Registers
+
+                mov r15, [rdi + {r15_offset} ]
+                mov r14, [rdi + {r14_offset} ]
+                mov r13, [rdi + {r13_offset} ]
+                mov r13, [rdi + {r13_offset} ]
+                mov r12, [rdi + {r12_offset} ]
+                mov r11, [rdi + {r11_offset} ]
+                mov r10, [rdi + {r10_offset} ]
+                mov r9,  [rdi + {r9_offset}  ]
+                mov r8,  [rdi + {r8_offset}  ]
+                mov rbp, [rdi + {rbp_offset} ]
+                mov rsi, [rdi + {rsi_offset} ]
+                mov rdx, [rdi + {rdx_offset} ]
+                mov rcx, [rdi + {rcx_offset} ]
+                mov rbx, [rdi + {rbx_offset} ]
+                mov rax, [rdi + {rax_offset} ]
+
+                mov rsp, [rdi + {rsp_offset} ]             # rsp
+
+                push [rdi + {rflags_offset}  ]             # rflags
+                popf
+                push [rdi + {rdi_offset}     ]             # rdi
+                pop rdi
+
+                #  -- Return back to kernel thread
+
+                sti
+                jmp [{rip_temp}]
+                ",
+            in("rdi") context,
+            rip_temp = sym TEMP_RIP,
+            // rip_offset = const { offset_of!(ProcessContext, rip) },
+            r15_offset = const { offset_of!(ProcessContext, r15) },
+            r14_offset = const { offset_of!(ProcessContext, r14) },
+            r13_offset = const { offset_of!(ProcessContext, r13) },
+            r12_offset = const { offset_of!(ProcessContext, r12) },
+            r11_offset = const { offset_of!(ProcessContext, r11) },
+            r10_offset = const { offset_of!(ProcessContext, r10) },
+            r9_offset = const { offset_of!(ProcessContext, r9) },
+            r8_offset = const { offset_of!(ProcessContext, r8) },
+            rbp_offset = const { offset_of!(ProcessContext, rbp ) },
+            rdi_offset = const { offset_of!(ProcessContext, rdi ) },
+            rsi_offset = const { offset_of!(ProcessContext, rsi ) },
+            rdx_offset = const { offset_of!(ProcessContext, rdx ) },
+            rcx_offset = const { offset_of!(ProcessContext, rcx ) },
+            rbx_offset = const { offset_of!(ProcessContext, rbx ) },
+            rax_offset = const { offset_of!(ProcessContext, rax ) },
+            rflags_offset = const { offset_of!(ProcessContext, rflag ) },
+            rsp_offset = const { offset_of!(ProcessContext, rsp ) },
+        )
+    }
+    loop {}
 }
 
 #[inline(always)]
@@ -255,4 +310,11 @@ pub unsafe fn set_syscall_rsp(new_rsp: u64) {
     let kernel_rsp_ptr = &raw mut KERNEL_RSP_PTR;
 
     unsafe { *kernel_rsp_ptr = new_rsp };
+}
+
+/// get the RSP of the syscall entry
+pub unsafe fn get_syscall_rsp() -> u64 {
+    let kernel_rsp_ptr = &raw mut KERNEL_RSP_PTR;
+
+    unsafe { *kernel_rsp_ptr }
 }

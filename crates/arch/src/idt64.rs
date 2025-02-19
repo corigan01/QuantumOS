@@ -352,24 +352,24 @@ impl InterruptFlags {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct InterruptInfo<'a> {
-    pub context: &'a ProcessContext,
+pub struct InterruptInfo {
+    pub context: ProcessContext,
     pub flags: InterruptFlags,
 }
 
-impl InterruptInfo<'_> {
+impl InterruptInfo {
     pub fn convert_from_ne(irq_id: u8, context: *const ProcessContext) -> Self {
         Self {
-            context: unsafe { &*context },
+            context: unsafe { core::ptr::read_unaligned(context) },
             flags: InterruptFlags::convert_from_interrupt(irq_id, 0),
         }
     }
 
     pub fn convert_from_e(irq_id: u8, context: *const ProcessContext) -> Self {
-        let context_ref = unsafe { &*context };
+        let context = unsafe { core::ptr::read_unaligned(context) };
         Self {
-            context: context_ref,
-            flags: InterruptFlags::convert_from_interrupt(irq_id, context_ref.exception_code),
+            context,
+            flags: InterruptFlags::convert_from_interrupt(irq_id, context.exception_code),
         }
     }
 }
@@ -443,6 +443,7 @@ macro_rules! raw_int_asm {
             unsafe {
                 core::arch::naked_asm!(
                     r#"
+                    .align 16
                     cld
                     push 0
                     push rax
@@ -480,6 +481,7 @@ macro_rules! raw_int_asm {
                     pop rbx
                     pop rax
                     add rsp, 8                     # pop 0
+
                     iretq
                 "#,
                     handler = sym handler
@@ -499,6 +501,7 @@ macro_rules! raw_int_asm {
             unsafe {
                 core::arch::naked_asm!(
                     r#"
+                    .align 16
                     cld
                     push rax
                     push rbx
@@ -517,9 +520,7 @@ macro_rules! raw_int_asm {
                     push r15
 
                     mov rdi, rsp
-                    sub rsp, 8
                     call {handler}
-                    add rsp, 8
 
                     pop r15
                     pop r14
@@ -536,7 +537,7 @@ macro_rules! raw_int_asm {
                     pop rcx
                     pop rbx
                     pop rax
-                    add rsp, 8                     # pop 0
+                    add rsp, 8                     # pop errno
 
                     iretq
                 "#,
