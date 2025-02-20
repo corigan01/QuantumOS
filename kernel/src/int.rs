@@ -23,13 +23,7 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use crate::{
-    process::{
-        AccessViolationReason, Process, ProcessError,
-        scheduler::{get_running, scheduler_process_crash},
-    },
-    processor::{notify_begin_irq, notify_end_irq},
-};
+use crate::processor::{notify_begin_irq, notify_end_irq};
 use arch::{
     CpuPrivilege, attach_irq, critcal_section,
     idt64::{
@@ -102,15 +96,6 @@ fn exception_handler(args: &InterruptInfo) {
                     addr,
                 } => {
                     logln!("{:#x?}", args);
-                    let (proc, _) = get_running();
-                    scheduler_process_crash(
-                        proc,
-                        ProcessError::AccessViolation(AccessViolationReason::NoAccess {
-                            page_perm,
-                            request_perm,
-                            addr,
-                        }),
-                    );
                 }
                 // panic
                 mem::vm::PageFaultReponse::CriticalFault(error) => {
@@ -227,26 +212,9 @@ extern "C" fn syscall_handler(
     syscall_number: u64,
 ) -> u64 {
     unsafe {
-        let b4 = {
-            logln!("SYSCALL");
-            let (_, thread) = get_running();
-            thread
-                .lock()
-                .set_userspace_context(core::ptr::read_volatile(rsp as *const ProcessContext));
-            core::ptr::read_volatile(rsp as *const ProcessContext)
-        };
-
         // Call the portal
         let resp =
             crate::syscall_handler::KernelSyscalls::from_syscall(syscall_number, rdi, rsi, rdx, r8);
-
-        interrupts::disable_interrupts();
-
-        {
-            let (_, thread) = get_running();
-            let c = thread.lock().ue_context;
-            logln!("S{:#x?} {}", c, c == b4);
-        }
 
         resp
     }

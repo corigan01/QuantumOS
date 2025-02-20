@@ -41,7 +41,7 @@ mod syscall_handler;
 mod timer;
 extern crate alloc;
 
-use arch::{CpuPrivilege::Ring0, supports::cpu_vender};
+use arch::{CpuPrivilege::Ring0, interrupts, supports::cpu_vender};
 use bootloader::KernelBootHeader;
 use lldebug::{debug_ready, logln, make_debug};
 use mem::{
@@ -49,7 +49,7 @@ use mem::{
     paging::init_virt2phys_provider,
     pmm::Pmm,
 };
-use process::{Process, scheduler::Scheduler, scheduler::set_global_scheduler};
+use process::task::Task;
 use serial::{Serial, baud::SerialBaud};
 use util::{bytes::HumanBytes, consts::PAGE_4K};
 
@@ -80,9 +80,18 @@ fn main(kbh: &KernelBootHeader) {
         "Init Heap Region ({})",
         HumanBytes::from(kbh.kernel_init_heap.1)
     );
+
     provide_init_region(unsafe {
         core::slice::from_raw_parts_mut(kbh.kernel_init_heap.0 as *mut u8, kbh.kernel_init_heap.1)
     });
+
+    gdt::init_kernel_gdt();
+    unsafe { gdt::load_tss() };
+    int::enable_pic();
+    int::attach_interrupts();
+    int::attach_syscall();
+    timer::init_timer();
+    unsafe { arch::registers::ia32_efer::set_no_execute_flag(true) };
 
     logln!("Init PhysMemoryManager");
     let pmm = Pmm::new(kbh.phys_mem_map).unwrap();
@@ -103,23 +112,60 @@ fn main(kbh: &KernelBootHeader) {
     let initfs_slice =
         unsafe { core::slice::from_raw_parts(kbh.initfs_ptr.0 as *const u8, kbh.initfs_ptr.1) };
 
-    let sc =
-        Scheduler::bootstrap_scheduler(initfs_slice).expect("Unable to load kernel's scheduler");
+    unsafe { interrupts::disable_interrupts() };
 
-    gdt::init_kernel_gdt();
-    gdt::set_stack_for_privl(
-        Process::KERNEL_IRQ_BOTTOM_STACK_ADDR
-            .offset(Process::KERNEL_STACK_SIZE)
-            .as_mut_ptr(),
-        Ring0,
-    );
-    unsafe { gdt::load_tss() };
-    int::enable_pic();
-    int::attach_interrupts();
-    int::attach_syscall();
-    timer::init_timer();
-    unsafe { arch::registers::ia32_efer::set_no_execute_flag(true) };
+    unsafe { (&mut *(&raw mut DINGUS))[0] = Some(Task::new(foo)) };
+    unsafe { (&mut *(&raw mut DINGUS))[1] = Some(Task::new(bar)) };
+    unsafe { (&mut *(&raw mut DINGUS))[2] = Some(Task::new(bazz)) };
 
-    // Start the scheduler
-    set_global_scheduler(sc);
+    let foo_task = unsafe { (&mut *(&raw mut DINGUS))[0].as_mut().unwrap() as *mut _ };
+    unsafe {
+        Task::switch_first(foo_task);
+    }
+}
+
+static mut DINGUS: [Option<Task>; 3] = [const { None }; 3];
+
+fn foo() {
+    logln!("+FOO");
+    let foo_task = unsafe { (&mut *(&raw mut DINGUS))[0].as_mut().unwrap() as *mut _ };
+    let bar_task = unsafe { (&mut *(&raw mut DINGUS))[1].as_mut().unwrap() as *mut _ };
+    let bazz_task = unsafe { (&mut *(&raw mut DINGUS))[2].as_mut().unwrap() as *mut _ };
+
+    logln!("foo -> bar");
+    unsafe { Task::switch_task(foo_task, bar_task) };
+    logln!("foo -> bazz");
+    unsafe { Task::switch_task(foo_task, bazz_task) };
+
+    logln!("-FOO");
+}
+
+fn bar() {
+    logln!("+BAR");
+
+    let foo_task = unsafe { (&mut *(&raw mut DINGUS))[0].as_mut().unwrap() as *mut _ };
+    let bar_task = unsafe { (&mut *(&raw mut DINGUS))[1].as_mut().unwrap() as *mut _ };
+    let bazz_task = unsafe { (&mut *(&raw mut DINGUS))[2].as_mut().unwrap() as *mut _ };
+
+    logln!("bar -> bazz");
+    unsafe { Task::switch_task(bar_task, bazz_task) };
+    logln!("bar -> foo");
+    unsafe { Task::switch_task(bar_task, foo_task) };
+
+    logln!("-BAR");
+}
+
+fn bazz() {
+    logln!("+BAZZ");
+
+    let foo_task = unsafe { (&mut *(&raw mut DINGUS))[0].as_mut().unwrap() as *mut _ };
+    let bar_task = unsafe { (&mut *(&raw mut DINGUS))[1].as_mut().unwrap() as *mut _ };
+    let bazz_task = unsafe { (&mut *(&raw mut DINGUS))[2].as_mut().unwrap() as *mut _ };
+
+    logln!("bazz -> bar");
+    unsafe { Task::switch_task(bazz_task, bar_task) };
+    logln!("bazz -> foo");
+    unsafe { Task::switch_task(bazz_task, foo_task) };
+
+    logln!("-BAZZ");
 }

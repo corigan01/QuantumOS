@@ -31,24 +31,17 @@ use quantum_portal::{
 };
 use util::consts::PAGE_4K;
 
-use crate::process::scheduler::{get_running_and_release_lock, scheduler_exit_process};
-
 pub struct KernelSyscalls {}
 
 impl QuantumPortalServer for KernelSyscalls {
     fn verify_user_ptr<T: Sized>(ptr: *const T) -> bool {
-        let (proc, _) = get_running_and_release_lock();
-
-        unsafe { &*proc.as_mut_ptr() }
-            .check_addr(ptr.into(), VmPermissions::USER_RW)
-            .is_ok()
+        todo!()
     }
 }
 
 impl QuantumPortal for KernelSyscalls {
     fn exit(_exit_reason: ExitReason) -> ! {
-        let (process, _) = get_running_and_release_lock();
-        scheduler_exit_process(process);
+        todo!()
     }
 
     fn map_memory(
@@ -56,74 +49,21 @@ impl QuantumPortal for KernelSyscalls {
         protections: MemoryProtections,
         bytes: usize,
     ) -> Result<*mut u8, MapMemoryError> {
-        let (process, _) = get_running_and_release_lock();
-        let page_permissions = match protections {
-            MemoryProtections::ReadOnly => VmPermissions::USER_R,
-            MemoryProtections::ReadWrite => VmPermissions::USER_RW,
-            MemoryProtections::ReadExecute => VmPermissions::USER_RE,
-            MemoryProtections::None => VmPermissions::none(),
-        };
-        let page_amount = ((bytes - 1) / PAGE_4K) + 1;
-
-        // FIXME: We need to figure out a sane number of max pages.
-        if page_amount > 1024 || bytes == 0 {
-            return Err(MapMemoryError::InvalidLength(bytes));
-        }
-
-        let vm_region = match location {
-            MemoryLocation::Anywhere => process
-                .lock()
-                .add_anywhere(page_amount, page_permissions, false)
-                .map_err(|err| match err {
-                    crate::process::ProcessError::OutOfVirtualMemory => MapMemoryError::OutOfMemory,
-                    _ => MapMemoryError::MappingMemoryError,
-                })?,
-        };
-
-        Ok(vm_region.start.addr().as_mut_ptr())
+        todo!()
     }
 
     fn get_pid() -> usize {
-        let (process, _) = get_running_and_release_lock();
-        process.lock().get_pid()
+        todo!()
     }
 
     fn debug_msg(msg: &str) -> Result<(), DebugMsgError> {
-        let (process, thread) = get_running_and_release_lock();
-
-        let fmt_string = {
-            let proc_lock = process.lock();
-            let thread_lock = thread.lock();
-            format!(
-                "{:<23}t{:02x} p{:02x}",
-                proc_lock.get_process_name(),
-                thread_lock.get_tid(),
-                proc_lock.get_pid(),
-            )
-        };
-
-        ::lldebug::priv_print(lldebug::LogKind::Log, &fmt_string, format_args!("{}", msg));
-
-        Ok(())
+        todo!()
     }
 
     fn wait_for(
         conditions: &[WaitCondition],
         signal_buffer: &mut [WaitSignal],
     ) -> Result<usize, WaitingError> {
-        let (_, _) = get_running_and_release_lock();
-
-        // logln!(
-        //     "Waiting - {:?} (signal return size = {})",
-        //     conditions,
-        //     signal_buffer.len()
-        // );
-
-        if signal_buffer.len() == 0 {
-            return Err(WaitingError::InvalidSignalBuffer);
-        }
-
-        loop {}
-        Ok(1)
+        todo!()
     }
 }

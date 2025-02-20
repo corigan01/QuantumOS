@@ -17,3 +17,4 @@ elf = {workspace = true, features = ["alloc"]}
 tar = { workspace = true }
 boolvec = {workspace = true}
 quantum-portal = {workspace = true, features = ["server"]}
+bits = {workspace = true}

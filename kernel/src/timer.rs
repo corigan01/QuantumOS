@@ -25,14 +25,13 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 use core::sync::atomic::{AtomicU64, Ordering};
 
+use crate::int::attach_irq_handler;
 use arch::{
     critcal_section,
     idt64::InterruptInfo,
     pit825x::{PitAccessMode, PitOperatingMode, PitSelectChannel, pit_command, set_pit_hz},
 };
 use lldebug::{log, logln};
-
-use crate::{int::attach_irq_handler, process::scheduler::scheduler_tick};
 
 const TIMER_HZ: f32 = 1000_f32;
 
@@ -60,8 +59,6 @@ static KERNEL_TICKS: AtomicU64 = AtomicU64::new(0);
 
 fn pit_interrupt_handler(args: &InterruptInfo) {
     KERNEL_TICKS.fetch_add(1, Ordering::AcqRel);
-
-    scheduler_tick(args.context).expect("Expected to be able to tick the scheduler!");
 }
 
 pub fn kernel_ticks() -> u64 {
