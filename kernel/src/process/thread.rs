@@ -22,3 +22,50 @@ NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FO
 DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+
+use crate::locks::RwYieldLock;
+
+use super::{RefProcess, scheduler::RefScheduler, task::Task};
+use alloc::sync::{Arc, Weak};
+
+pub type ThreadId = usize;
+pub type RefThread = Arc<Thread>;
+pub type WeakThread = Weak<Thread>;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum ThreadState {
+    /// The thread is currently Running
+    Running,
+    /// The thread is read to be ran, awaiting the run queue
+    Runnable,
+    /// The thread is in the run queue, awaiting being scheduled
+    Picking,
+    /// The thread is being blocked by some operation and cannot be scheduled
+    Blocking,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum ThreadContextKind {
+    Userspace,
+    Kernel,
+}
+
+/// A userspace execution unit, like a [`Task`] but for userspace.
+#[derive(Debug)]
+pub struct Thread {
+    /// The thread's id
+    id: ThreadId,
+    /// To which does this thread switches to, Kernel or Userspace
+    context_kind: ThreadContextKind,
+    /// This is the kernel task that starts/resumes the context.
+    ///
+    /// The context itself is stored within the task's stack, and could be
+    /// placed either via an interrupt or via a system call.
+    task: Task,
+    /// The scheduling state of this thread
+    state: RwYieldLock<ThreadState>,
+    /// The parent process that this thread represents
+    process: RefProcess,
+    /// The scheduler who manages this process's threads
+    scheduler: RefScheduler,
+}

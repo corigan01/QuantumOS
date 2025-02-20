@@ -23,6 +23,35 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use alloc::{
+    collections::btree_map::BTreeMap,
+    string::String,
+    sync::{Arc, Weak},
+};
+use mem::vm::VmProcess;
+use thread::{ThreadId, WeakThread};
+
+use crate::locks::RwYieldLock;
+
 pub mod scheduler;
 pub mod task;
 pub mod thread;
+
+type ProcessId = usize;
+pub type RefProcess = Arc<Process>;
+pub type WeakProcess = Weak<Process>;
+
+/// A complete execution unit, memory map, threads, etc...
+#[derive(Debug)]
+pub struct Process {
+    /// The unique id of this process
+    id: ProcessId,
+    /// The name of this process
+    name: String,
+    /// Weak references to all threads within this process.
+    ///
+    /// Threads carry strong references to their process, and are the actual scheduling artifacts.
+    threads: RwYieldLock<BTreeMap<ThreadId, WeakThread>>,
+    /// The memory map of this process
+    vm: RwYieldLock<VmProcess>,
+}

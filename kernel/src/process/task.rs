@@ -33,9 +33,13 @@ use util::consts::PAGE_4K;
 
 type ArchStackPtr = usize;
 
+/// A task's flags
 #[bits::bits(field(RW, 0, running), field(RW, 1, dead))]
+#[derive(Debug, Clone, Copy)]
 pub struct TaskFlags(u64);
 
+/// The managed stack area for a task
+#[derive(Debug)]
 pub struct TaskStack {
     stack_bottom: VirtAddr<AlignedTo<{ size_of::<ArchStackPtr>() }>>,
     rsp: ArchStackPtr,
@@ -68,6 +72,9 @@ impl Drop for TaskStack {
     }
 }
 
+/// A unit of execution (kernel only) that is allowed to switch execution to other Tasks though
+/// the stack.
+#[derive(Debug)]
 pub struct Task {
     stack: TaskStack,
     task_flags: TaskFlags,
@@ -152,6 +159,12 @@ impl Task {
     }
 }
 
+/// This is the function placed at the top of the call stack for new tasks. Since its not
+/// called directly, or even part of the execution loop for most functions its just to serve
+/// to prevent functions who return (which isn't valid behavior) from going unnoticed and causing
+/// werid and hard to debug errors.
+///
+/// Its just the function Tasks return to when they finish.
 pub fn ret_call_panic() -> ! {
     panic!("Should never return from caller");
 }

@@ -33,6 +33,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 mod context;
 mod gdt;
 mod int;
+mod locks;
 mod panic;
 mod process;
 mod processor;
@@ -41,7 +42,7 @@ mod syscall_handler;
 mod timer;
 extern crate alloc;
 
-use arch::{CpuPrivilege::Ring0, interrupts, supports::cpu_vender};
+use arch::{interrupts, supports::cpu_vender};
 use bootloader::KernelBootHeader;
 use lldebug::{debug_ready, logln, make_debug};
 use mem::{

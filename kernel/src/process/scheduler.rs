@@ -22,3 +22,54 @@ NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FO
 DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+
+use super::{
+    ProcessId, WeakProcess,
+    thread::{RefThread, WeakThread},
+};
+use alloc::{
+    collections::{binary_heap::BinaryHeap, btree_map::BTreeMap},
+    sync::{Arc, Weak},
+};
+
+/// A priority queue item with a weak reference to its owned thread
+#[derive(Debug)]
+struct ScheduleItem {
+    priority: isize,
+    thread: WeakThread,
+}
+
+impl Eq for ScheduleItem {}
+impl PartialEq for ScheduleItem {
+    fn eq(&self, other: &Self) -> bool {
+        self.priority == other.priority
+    }
+}
+
+impl PartialOrd for ScheduleItem {
+    fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
+        Some(self.priority.cmp(&other.priority))
+    }
+}
+
+impl Ord for ScheduleItem {
+    fn cmp(&self, other: &Self) -> core::cmp::Ordering {
+        self.partial_cmp(other).unwrap()
+    }
+}
+
+pub type RefScheduler = Arc<Scheduler>;
+pub type WeakScheduler = Weak<Scheduler>;
+
+#[derive(Debug)]
+pub struct Scheduler {
+    /// Weak references to all processes.
+    ///
+    /// Each Process contains a strong reference to the scheduler, and the scheduler only needs to know
+    /// the processes exist.
+    process_list: BTreeMap<ProcessId, WeakProcess>,
+    /// Weak references to queued threads
+    picking_queue: BinaryHeap<ScheduleItem>,
+    /// The currently running thread
+    running: Option<RefThread>,
+}
