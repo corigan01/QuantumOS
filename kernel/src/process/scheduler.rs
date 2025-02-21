@@ -27,10 +27,14 @@ use super::{
     ProcessId, WeakProcess,
     thread::{RefThread, WeakThread},
 };
+use crate::locks::{InformedScheduleLock, ScheduleLock};
 use alloc::{
-    collections::{binary_heap::BinaryHeap, btree_map::BTreeMap},
+    collections::{btree_map::BTreeMap, vec_deque::VecDeque},
     sync::{Arc, Weak},
+    vec::Vec,
 };
+use boolvec::BoolVec;
+use lldebug::logln;
 
 /// A priority queue item with a weak reference to its owned thread
 #[derive(Debug)]
@@ -58,8 +62,27 @@ impl Ord for ScheduleItem {
     }
 }
 
+#[derive(Debug)]
+struct AllHoldingLocks {
+    ids: BoolVec,
+    graph: BTreeMap<InformedScheduleLock, Vec<InformedScheduleLock>>,
+    owner: BTreeMap<InformedScheduleLock, WeakThread>,
+}
+
+impl AllHoldingLocks {
+    pub const fn new() -> Self {
+        Self {
+            ids: BoolVec::new(),
+            graph: BTreeMap::new(),
+            owner: BTreeMap::new(),
+        }
+    }
+}
+
 pub type RefScheduler = Arc<Scheduler>;
 pub type WeakScheduler = Weak<Scheduler>;
+
+static THE_SCHEDULER: ScheduleLock<Option<RefScheduler>> = ScheduleLock::new(None);
 
 #[derive(Debug)]
 pub struct Scheduler {
@@ -67,9 +90,34 @@ pub struct Scheduler {
     ///
     /// Each Process contains a strong reference to the scheduler, and the scheduler only needs to know
     /// the processes exist.
-    process_list: BTreeMap<ProcessId, WeakProcess>,
+    process_list: ScheduleLock<BTreeMap<ProcessId, WeakProcess>>,
     /// Weak references to queued threads
-    picking_queue: BinaryHeap<ScheduleItem>,
+    picking_queue: ScheduleLock<VecDeque<ScheduleItem>>,
     /// The currently running thread
-    running: Option<RefThread>,
+    running: ScheduleLock<Option<RefThread>>,
+    /// The currently held locks for processes and threads
+    held_locks: ScheduleLock<AllHoldingLocks>,
+}
+
+impl Scheduler {
+    /// Get 'THE' scheduler
+    ///
+    /// If the scheduler has not be created, this function will create it.
+    pub fn get() -> RefScheduler {
+        if let Some(sch) = THE_SCHEDULER.lock().clone() {
+            return sch;
+        } else {
+            let mut guard = THE_SCHEDULER.lock();
+            logln!("Scheduler Init...");
+            let new_scheduler = Arc::new(Self {
+                process_list: ScheduleLock::new(BTreeMap::new()),
+                picking_queue: ScheduleLock::new(VecDeque::new()),
+                running: ScheduleLock::new(None),
+                held_locks: ScheduleLock::new(AllHoldingLocks::new()),
+            });
+
+            *guard = Some(new_scheduler.clone());
+            new_scheduler
+        }
+    }
 }

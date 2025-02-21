@@ -23,36 +23,33 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use alloc::{
-    collections::btree_map::BTreeMap,
-    string::String,
-    sync::{Arc, Weak},
-};
-use mem::vm::VmProcess;
-use thread::{ThreadId, WeakThread};
+use core::fmt::Debug;
+use core::{cell::UnsafeCell, sync::atomic::AtomicUsize};
 
-use crate::locks::{RwCriticalLock, RwYieldLock};
+/// A `RwLock` that enables a critical section during a `write()` lock.
+///
+/// Critical Sections do not disable interrupts, they just prevent timer
+/// interrupts from causing a yeild.
+///
+/// The `read()` part of this lock is a normal `RwYieldLock` but with
+/// a default of `Strong` scheduler encouragement.
+pub struct RwCriticalLock<T: ?Sized> {
+    lock: AtomicUsize,
+    inner: UnsafeCell<T>,
+}
 
-pub mod scheduler;
-pub mod task;
-pub mod thread;
+impl<T: ?Sized + Debug> Debug for RwCriticalLock<T> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        todo!()
+    }
+}
 
-type ProcessId = usize;
-pub type RefProcess = Arc<Process>;
-pub type WeakProcess = Weak<Process>;
+pub struct ReadCriticalLockGuard<'a, T: ?Sized> {
+    lock: &'a AtomicUsize,
+    ptr: *const T,
+}
 
-/// A complete execution unit, memory map, threads, etc...
-#[derive(Debug)]
-pub struct Process {
-    /// The unique id of this process
-    id: ProcessId,
-    /// The name of this process
-    name: String,
-    /// Weak references to all threads within this process.
-    ///
-    /// Threads carry strong references to their process, and are the actual scheduling artifacts.
-    threads: RwYieldLock<BTreeMap<ThreadId, WeakThread>>,
-    /// The memory map of this process
-    // FIXME: Need to convert `VmProcess` to not use locks
-    vm: RwCriticalLock<VmProcess>,
+pub struct WriteCriticalLockGuard<'a, T: ?Sized> {
+    lock: &'a AtomicUsize,
+    ptr: *mut T,
 }

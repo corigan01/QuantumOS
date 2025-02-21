@@ -23,16 +23,40 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use crate::locks::RwYieldLock;
-
-use super::{RefProcess, scheduler::RefScheduler, task::Task};
-use alloc::sync::{Arc, Weak};
+use super::{RefProcess, task::Task};
+use crate::locks::{InformedScheduleLock, ScheduleLock, ThreadCell};
+use alloc::{
+    collections::vec_deque::VecDeque,
+    sync::{Arc, Weak},
+};
 
 pub type ThreadId = usize;
 pub type RefThread = Arc<Thread>;
 pub type WeakThread = Weak<Thread>;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+/// The kind of lock this thread is currently blocked by
+#[derive(Debug)]
+pub enum ThreadFenceKind {
+    WaitingToLock(InformedScheduleLock),
+}
+
+/// A locking unit for a thread
+///
+/// This data structure is intended to be immutable, and only appended or removed from a thread's
+/// [`BlockInfo`] data structure.
+#[derive(Debug)]
+pub struct ThreadFence {
+    lock_owner: WeakThread,
+    operation: ThreadFenceKind,
+}
+
+/// The currently inhibiting locks preventing this thread from being scheduled
+#[derive(Debug)]
+pub struct BlockInfo {
+    blocks: VecDeque<Arc<ThreadFence>>,
+}
+
+#[derive(Debug)]
 pub enum ThreadState {
     /// The thread is currently Running
     Running,
@@ -41,7 +65,7 @@ pub enum ThreadState {
     /// The thread is in the run queue, awaiting being scheduled
     Picking,
     /// The thread is being blocked by some operation and cannot be scheduled
-    Blocking,
+    Blocked(BlockInfo),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -61,11 +85,9 @@ pub struct Thread {
     ///
     /// The context itself is stored within the task's stack, and could be
     /// placed either via an interrupt or via a system call.
-    task: Task,
+    task: ThreadCell<Task>,
     /// The scheduling state of this thread
-    state: RwYieldLock<ThreadState>,
+    state: ScheduleLock<ThreadState>,
     /// The parent process that this thread represents
     process: RefProcess,
-    /// The scheduler who manages this process's threads
-    scheduler: RefScheduler,
 }

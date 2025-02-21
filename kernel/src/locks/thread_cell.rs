@@ -23,36 +23,27 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use alloc::{
-    collections::btree_map::BTreeMap,
-    string::String,
-    sync::{Arc, Weak},
-};
-use mem::vm::VmProcess;
-use thread::{ThreadId, WeakThread};
+use core::cell::{Cell, UnsafeCell};
+use core::fmt::Debug;
 
-use crate::locks::{RwCriticalLock, RwYieldLock};
+/// A cell that promises the only accessor will be the thread that owns it.
+pub struct ThreadCell<T: ?Sized> {
+    borrows: Cell<usize>,
+    inner: UnsafeCell<T>,
+}
 
-pub mod scheduler;
-pub mod task;
-pub mod thread;
+impl<T: ?Sized + Debug> Debug for ThreadCell<T> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        todo!()
+    }
+}
 
-type ProcessId = usize;
-pub type RefProcess = Arc<Process>;
-pub type WeakProcess = Weak<Process>;
+pub struct ThreadCellRef<'a, T: ?Sized> {
+    borrows: &'a Cell<usize>,
+    ptr: *const T,
+}
 
-/// A complete execution unit, memory map, threads, etc...
-#[derive(Debug)]
-pub struct Process {
-    /// The unique id of this process
-    id: ProcessId,
-    /// The name of this process
-    name: String,
-    /// Weak references to all threads within this process.
-    ///
-    /// Threads carry strong references to their process, and are the actual scheduling artifacts.
-    threads: RwYieldLock<BTreeMap<ThreadId, WeakThread>>,
-    /// The memory map of this process
-    // FIXME: Need to convert `VmProcess` to not use locks
-    vm: RwCriticalLock<VmProcess>,
+pub struct ThreadCellMut<'a, T: ?Sized> {
+    borrows: &'a Cell<usize>,
+    ptr: *mut T,
 }

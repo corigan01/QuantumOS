@@ -50,7 +50,7 @@ use mem::{
     paging::init_virt2phys_provider,
     pmm::Pmm,
 };
-use process::task::Task;
+use process::{scheduler::Scheduler, task::Task};
 use serial::{Serial, baud::SerialBaud};
 use util::{bytes::HumanBytes, consts::PAGE_4K};
 
@@ -112,6 +112,8 @@ fn main(kbh: &KernelBootHeader) {
 
     let initfs_slice =
         unsafe { core::slice::from_raw_parts(kbh.initfs_ptr.0 as *const u8, kbh.initfs_ptr.1) };
+
+    _ = Scheduler::get();
 
     unsafe { interrupts::disable_interrupts() };
 

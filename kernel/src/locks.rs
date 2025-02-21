@@ -23,15 +23,22 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use core::{
-    cell::UnsafeCell,
-    fmt::Debug,
-    sync::atomic::{AtomicBool, AtomicUsize},
-};
+pub use critical_lock::*;
+pub use schedule_lock::*;
+pub use thread_cell::*;
+pub use yield_lock::*;
+
+mod critical_lock;
+mod schedule_lock;
+mod thread_cell;
+mod yield_lock;
+
+use crate::process::thread::RefThread;
+use core::fmt::Debug;
 
 /// A notice to the scheduler about how important this lock might be
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum Encouragement {
+pub enum LockEncouragement {
     /// This operation is not of great importance, and other operations are allowed to complete first
     ///
     /// # Note
@@ -63,33 +70,24 @@ pub enum Encouragement {
     Strong,
 }
 
-/// A `RwLock` with relax behavior that yields until its lock is ready
-pub struct RwYieldLock<T: ?Sized> {
-    lock: AtomicUsize,
-    inner: UnsafeCell<T>,
-}
+/// A lock id used to inform the scheduler when locks are finished
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct InformedScheduleLock(usize);
 
-impl<T: ?Sized + Debug> Debug for RwYieldLock<T> {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+impl InformedScheduleLock {
+    /// Aquire a lock from the scheduler
+    pub fn scheduler_notice_locking(encouragement: LockEncouragement, thread: RefThread) -> Self {
         todo!()
+    }
+
+    /// release a lock from the scheduler
+    pub fn scheduler_notice_unlocking(self) {
+        drop(self);
     }
 }
 
-/// A `Mutex` with relax behavior that prevents schedules
-pub struct ScheduleLock<T: ?Sized> {
-    lock: AtomicBool,
-    inner: UnsafeCell<T>,
-}
-
-impl<T: ?Sized + Debug> Debug for ScheduleLock<T> {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+impl Drop for InformedScheduleLock {
+    fn drop(&mut self) {
         todo!()
     }
 }
-
-// We need to track how many interrupts happen when we hold a `ScheduleLock` that way
-// when we drop the lock, we are able to retry the operations that needed the lock.
-//
-// Or maybe we could use a Queue of operations or closures maybe? That could be memory
-// intensive though? But we need to do something because I don't want to disable interrupts
-// ever!
