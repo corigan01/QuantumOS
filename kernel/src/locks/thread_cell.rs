@@ -23,37 +23,40 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use core::cell::{Cell, UnsafeCell};
-use core::fmt::Debug;
+// use core::cell::{Cell, UnsafeCell};
+// use core::fmt::Debug;
+use core::cell::RefCell;
 
-/// A cell that promises the only accessor will be the thread that owns it.
-pub struct ThreadCell<T: ?Sized> {
-    borrows: Cell<usize>,
-    inner: UnsafeCell<T>,
-}
+pub type ThreadCell<T> = RefCell<T>;
 
-impl<T: ?Sized + Debug> Debug for ThreadCell<T> {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        todo!()
-    }
-}
+// /// A cell that promises the only accessor will be the thread that owns it.
+// pub struct ThreadCell<T: ?Sized> {
+//     borrows: Cell<usize>,
+//     inner: UnsafeCell<T>,
+// }
 
-impl<T> ThreadCell<T> {
-    /// Create a new thread cell
-    pub fn new(value: T) -> Self {
-        Self {
-            borrows: Cell::new(0),
-            inner: UnsafeCell::new(value),
-        }
-    }
-}
+// impl<T: ?Sized + Debug> Debug for ThreadCell<T> {
+//     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+//         todo!()
+//     }
+// }
 
-pub struct ThreadCellRef<'a, T: ?Sized> {
-    borrows: &'a Cell<usize>,
-    ptr: *const T,
-}
+// impl<T> ThreadCell<T> {
+//     /// Create a new thread cell
+//     pub fn new(value: T) -> Self {
+//         Self {
+//             borrows: Cell::new(0),
+//             inner: UnsafeCell::new(value),
+//         }
+//     }
+// }
 
-pub struct ThreadCellMut<'a, T: ?Sized> {
-    borrows: &'a Cell<usize>,
-    ptr: *mut T,
-}
+// pub struct ThreadCellRef<'a, T: ?Sized> {
+//     borrows: &'a Cell<usize>,
+//     ptr: *const T,
+// }
+
+// pub struct ThreadCellMut<'a, T: ?Sized> {
+//     borrows: &'a Cell<usize>,
+//     ptr: *mut T,
+// }

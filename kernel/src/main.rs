@@ -123,6 +123,8 @@ fn main(kbh: &KernelBootHeader) {
 
     let kernel_process = Process::new("kernel".into());
     Thread::new_kernel(kernel_process, foo);
+
+    Scheduler::yield_me();
 }
 fn foo() {
     logln!("+FOO");

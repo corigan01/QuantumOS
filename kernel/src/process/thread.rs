@@ -26,6 +26,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 use super::{ProcessEntry, RefProcess, scheduler::Scheduler, task::Task};
 use crate::locks::ThreadCell;
 use alloc::sync::{Arc, Weak};
+use lldebug::logln;
 
 pub type ThreadId = usize;
 pub type RefThread = Arc<Thread>;
@@ -61,6 +62,7 @@ impl Thread {
     /// Create a new userspace thread
     pub fn new_user(process: RefProcess, entry_point: ProcessEntry) -> RefThread {
         let id = process.alloc_thread_id();
+        logln!("Spawn User Thread (tid='{}')", id);
         let task = Task::new(userspace_thread_begin);
 
         let thread = Arc::new(Self {
@@ -80,6 +82,7 @@ impl Thread {
     /// Create a new kernel thread
     pub fn new_kernel(process: RefProcess, entry_point: fn()) -> RefThread {
         let id = process.alloc_thread_id();
+        logln!("Spawn Kernel Thread (tid='{}')", id);
         let task = Task::new(entry_point);
 
         let thread = Arc::new(Self {

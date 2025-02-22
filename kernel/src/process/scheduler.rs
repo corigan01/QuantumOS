@@ -27,6 +27,7 @@ use core::fmt::Display;
 
 use super::{
     Process, ProcessId, RefProcess, WeakProcess,
+    task::Task,
     thread::{RefThread, WeakThread},
 };
 use crate::locks::{AquiredLock, LockEncouragement, LockId, ScheduleLock, current_scheduler_locks};
@@ -425,13 +426,56 @@ impl Scheduler {
         pid_lock.set(p.id, false);
     }
 
-    /// Yield the current process (If possible)
+    /// Returns the next process that should execute
+    fn next(&self) -> RefThread {
+        self.picking_queue
+            .lock()
+            .pop_front()
+            .unwrap()
+            .thread
+            .upgrade()
+            .unwrap()
+    }
+
+    /// Yield the current thread (If possible)
     pub fn yield_me() {
         if current_scheduler_locks() != 0 {
             todo!("skipping yield");
         }
 
-        todo!()
+        let s = Scheduler::get();
+        let mut running_lock = s.running.lock();
+
+        // Save the current running process
+        if let Some(previous_running) = running_lock.clone() {
+            s.picking_queue.lock().push_back(ScheduleItem {
+                priority: 0,
+                thread: Arc::downgrade(&previous_running),
+            });
+
+            // Pick the next running thread
+            let next_running = s.next();
+            *running_lock = Some(next_running.clone());
+
+            let previous_task_ptr = previous_running.task.as_ptr();
+            let new_task_ptr = next_running.task.as_ptr();
+
+            drop(running_lock);
+            drop(s);
+
+            unsafe { Task::switch_task(previous_task_ptr, new_task_ptr) };
+        } else {
+            // Pick the next running thread
+            let next_running = s.next();
+            *running_lock = Some(next_running.clone());
+
+            let new_task_ptr = next_running.task.as_ptr();
+
+            drop(running_lock);
+            drop(s);
+
+            unsafe { Task::switch_first(new_task_ptr) };
+        }
     }
 
     pub fn alloc_new_lockid(&self) -> LockId {
