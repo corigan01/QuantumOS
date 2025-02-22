@@ -24,17 +24,23 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 use super::{
-    ProcessId, WeakProcess,
+    Process, ProcessId, RefProcess, WeakProcess,
     thread::{RefThread, WeakThread},
 };
-use crate::locks::{InformedScheduleLock, ScheduleLock};
+use crate::locks::{AquiredLock, LockEncouragement, LockId, ScheduleLock};
 use alloc::{
     collections::{btree_map::BTreeMap, vec_deque::VecDeque},
     sync::{Arc, Weak},
     vec::Vec,
 };
 use boolvec::BoolVec;
-use lldebug::logln;
+use lldebug::{log, logln};
+use mem::{
+    page::PhysPage,
+    paging::VmPermissions,
+    virt2phys::virt2phys,
+    vm::{VmProcess, VmRegion},
+};
 
 /// A priority queue item with a weak reference to its owned thread
 #[derive(Debug)]
@@ -62,20 +68,121 @@ impl Ord for ScheduleItem {
     }
 }
 
+type NoDropAquiredLockId = usize;
+type NoDropLockId = usize;
+
 #[derive(Debug)]
-struct AllHoldingLocks {
-    ids: BoolVec,
-    graph: BTreeMap<InformedScheduleLock, Vec<InformedScheduleLock>>,
-    owner: BTreeMap<InformedScheduleLock, WeakThread>,
+struct LockIdInfo {
+    shared_locks: Vec<NoDropAquiredLockId>,
+    exclusive_locks: Vec<NoDropAquiredLockId>,
 }
 
-impl AllHoldingLocks {
-    pub const fn new() -> Self {
+#[derive(Debug)]
+pub struct LockHoldings {
+    lock_id_alloc: BoolVec,
+    aquired_id_alloc: BoolVec,
+    aquired_map: BTreeMap<NoDropAquiredLockId, NoDropLockId>,
+    id_map: BTreeMap<NoDropLockId, LockIdInfo>,
+}
+
+impl LockHoldings {
+    const fn new() -> Self {
         Self {
-            ids: BoolVec::new(),
-            graph: BTreeMap::new(),
-            owner: BTreeMap::new(),
+            lock_id_alloc: BoolVec::new(),
+            aquired_id_alloc: BoolVec::new(),
+            aquired_map: BTreeMap::new(),
+            id_map: BTreeMap::new(),
         }
+    }
+
+    /// Check if this lock has any outstanding locks being held
+    pub fn any_outstanding_locks(&self, lock_id: &LockId) -> bool {
+        self.id_map
+            .get(&lock_id.0)
+            .is_some_and(|info| info.shared_locks.len() > 0 || info.exclusive_locks.len() > 0)
+    }
+
+    /// Get the number of active shared locks
+    pub fn current_shared_locks_for(&self, lock_id: &LockId) -> usize {
+        self.id_map
+            .get(&lock_id.0)
+            .map(|info| info.shared_locks.len())
+            .unwrap_or(0)
+    }
+
+    /// Get the number of active exclusive locks
+    pub fn current_exclusive_locks_for(&self, lock_id: &LockId) -> usize {
+        self.id_map
+            .get(&lock_id.0)
+            .map(|info| info.exclusive_locks.len())
+            .unwrap_or(0)
+    }
+
+    /// Create a new lock id
+    pub fn alloc_lock_id(&mut self) -> LockId {
+        let lock_id = self.lock_id_alloc.find_first_of(false).unwrap();
+        self.lock_id_alloc.set(lock_id, true);
+        self.id_map.insert(
+            lock_id,
+            LockIdInfo {
+                shared_locks: Vec::new(),
+                exclusive_locks: Vec::new(),
+            },
+        );
+
+        LockId(lock_id)
+    }
+
+    /// Dealloc a lock id
+    pub fn dealloc_lock_id(&mut self, lock_id: &LockId) {
+        if self.any_outstanding_locks(lock_id) {
+            panic!(
+                "Tried to dealloc a lock (id={}) with outstanding locks!",
+                lock_id.0
+            );
+        }
+
+        assert!(
+            self.lock_id_alloc.get(lock_id.0),
+            "Lock was not marked in allocation map"
+        );
+        self.lock_id_alloc.set(lock_id.0, false);
+        self.id_map.remove(&lock_id.0);
+    }
+
+    pub fn lock_exclusive(
+        &mut self,
+        lock_id: &LockId,
+        encouragement: LockEncouragement,
+    ) -> AquiredLock {
+        todo!()
+    }
+    pub fn lock_shared(
+        &mut self,
+        lock_id: &LockId,
+        encouragement: LockEncouragement,
+    ) -> AquiredLock {
+        todo!()
+    }
+
+    pub fn try_lock_exclusive(
+        &mut self,
+        lock_id: &LockId,
+        encouragement: LockEncouragement,
+    ) -> Option<AquiredLock> {
+        todo!()
+    }
+
+    pub fn try_lock_shared(
+        &mut self,
+        lock_id: &LockId,
+        encouragement: LockEncouragement,
+    ) -> Option<AquiredLock> {
+        todo!()
+    }
+
+    pub fn unlock(&mut self, lock: &AquiredLock) {
+        todo!()
     }
 }
 
@@ -91,12 +198,16 @@ pub struct Scheduler {
     /// Each Process contains a strong reference to the scheduler, and the scheduler only needs to know
     /// the processes exist.
     process_list: ScheduleLock<BTreeMap<ProcessId, WeakProcess>>,
+    /// An allocation bitmap of PIDs
+    pid_alloc: ScheduleLock<BoolVec>,
     /// Weak references to queued threads
     picking_queue: ScheduleLock<VecDeque<ScheduleItem>>,
     /// The currently running thread
     running: ScheduleLock<Option<RefThread>>,
     /// The currently held locks for processes and threads
-    held_locks: ScheduleLock<AllHoldingLocks>,
+    pub held_locks: ScheduleLock<LockHoldings>,
+    /// Kernel Memory Map
+    kernel_vm: ScheduleLock<VmProcess>,
 }
 
 impl Scheduler {
@@ -108,16 +219,109 @@ impl Scheduler {
             return sch;
         } else {
             let mut guard = THE_SCHEDULER.lock();
+
             logln!("Scheduler Init...");
             let new_scheduler = Arc::new(Self {
                 process_list: ScheduleLock::new(BTreeMap::new()),
                 picking_queue: ScheduleLock::new(VecDeque::new()),
                 running: ScheduleLock::new(None),
-                held_locks: ScheduleLock::new(AllHoldingLocks::new()),
+                held_locks: ScheduleLock::new(LockHoldings::new()),
+                kernel_vm: ScheduleLock::new(VmProcess::new()),
+                pid_alloc: ScheduleLock::new(BoolVec::new()),
             });
 
             *guard = Some(new_scheduler.clone());
             new_scheduler
         }
+    }
+
+    /// Begin mapping core kernel regions
+    pub unsafe fn init_kernel_vm(
+        &self,
+        kernel_exe: VmRegion,
+        kernel_heap: VmRegion,
+        kernel_stack: VmRegion,
+        initfs: VmRegion,
+    ) {
+        // We want to hold this lock the duration of init the kernel regions
+        let kernel_vm = self.kernel_vm.lock();
+
+        let mut mapping_counter = 0;
+        let mut map_vm_object = |region: VmRegion, permissions: VmPermissions| {
+            let mut kernel_mappings = BTreeMap::new();
+            for kernel_vpage in region.pages_iter() {
+                mapping_counter += 1;
+
+                kernel_mappings.insert(
+                    kernel_vpage,
+                    PhysPage::containing_addr(virt2phys(kernel_vpage.addr()).unwrap()),
+                );
+            }
+            kernel_vm
+                .manual_inplace_new_vmobject(region, permissions, kernel_mappings)
+                .expect("Unable to map kernel exe region");
+        };
+
+        // FIXME: We should figure out a better solution for creating VmObjects from the
+        // kernel's bootloader.
+        log!("Remapping bootloader's regions...");
+        map_vm_object(kernel_exe, VmPermissions::SYS_RE);
+        map_vm_object(kernel_heap, VmPermissions::SYS_RW);
+        map_vm_object(kernel_stack, VmPermissions::SYS_RW);
+        map_vm_object(initfs, VmPermissions::SYS_R);
+        unsafe { kernel_vm.page_tables.clone().load() }.unwrap();
+        logln!("OK ({mapping_counter})");
+    }
+
+    /// Clone the `VmProcess` instance of the kernel's memory map
+    pub fn fork_kernel_vm(&self) -> VmProcess {
+        self.kernel_vm.lock().clone()
+    }
+
+    /// Create a new PID
+    pub fn alloc_pid(&self) -> ProcessId {
+        let mut pid_lock = self.pid_alloc.lock();
+
+        let bit_index = pid_lock
+            .find_first_of(false)
+            .expect("Unable to allocate new PID");
+        pid_lock.set(bit_index, true);
+
+        bit_index
+    }
+
+    /// Add a process to the process mapping
+    pub fn register_new_process(&self, p: RefProcess) {
+        logln!("Spawn Process '{}' (pid='{}')", p.name, p.id);
+        if let Some(old_proc) = self.process_list.lock().insert(p.id, Arc::downgrade(&p)) {
+            if let Some(old_proc) = old_proc.upgrade() {
+                panic!(
+                    "Cannot replace an 'alive' process with another alive process. ({} tried to replace {})",
+                    p.name, old_proc.name
+                );
+            }
+        }
+    }
+
+    /// Remove a process from the process mapping
+    pub fn remove_process(&self, p: &Process) {
+        logln!("Kill Process '{}' (pid='{}')", p.name, p.id);
+        let mut pid_lock = self.pid_alloc.lock();
+        assert!(
+            self.process_list.lock().remove(&p.id).is_some(),
+            "Cannot remove process, as process was never registered"
+        );
+        assert!(
+            pid_lock.get(p.id),
+            "Process ID was already marked as false!"
+        );
+
+        pid_lock.set(p.id, false);
+    }
+}
+
+impl Drop for Scheduler {
+    fn drop(&mut self) {
+        panic!("Should never drop the scheduler!");
     }
 }

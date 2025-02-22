@@ -33,8 +33,9 @@ mod schedule_lock;
 mod thread_cell;
 mod yield_lock;
 
-use crate::process::thread::RefThread;
 use core::fmt::Debug;
+
+use crate::process::scheduler::Scheduler;
 
 /// A notice to the scheduler about how important this lock might be
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -72,22 +73,95 @@ pub enum LockEncouragement {
 
 /// A lock id used to inform the scheduler when locks are finished
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub struct InformedScheduleLock(usize);
+pub struct AquiredLock(usize);
 
-impl InformedScheduleLock {
-    /// Aquire a lock from the scheduler
-    pub fn scheduler_notice_locking(encouragement: LockEncouragement, thread: RefThread) -> Self {
-        todo!()
+impl AquiredLock {
+    /// Inform the scheduler that we are aquiring an exclusive lock
+    ///
+    /// This type of lock is used for `Mutexes` or write operations on `RwLocks`. This exclusivly
+    /// aquires the lock, such that no other locks can be held before or after the duration of this
+    /// `AquiredLock`.
+    ///
+    /// # Note
+    /// This function preforms the lock operation, and always returns when the lock has been aquired.
+    pub fn lock_exclusive(lock_id: &LockId, encouragement: LockEncouragement) -> Self {
+        Scheduler::get()
+            .held_locks
+            .lock()
+            .lock_exclusive(lock_id, encouragement)
     }
 
-    /// release a lock from the scheduler
-    pub fn scheduler_notice_unlocking(self) {
+    /// Inform the scheduler that we are aquiring a shared lock
+    ///
+    /// This type of lock is used for read operations on `RwLocks`. This 'share'
+    /// aquires the lock, such that other 'shared' locks can aquire without blocking.
+    /// `AquiredLock`.
+    ///
+    /// # Note
+    /// This function preforms the lock operation, and always returns when the lock has been aquired.
+    pub fn lock_shared(lock_id: &LockId, encouragement: LockEncouragement) -> Self {
+        Scheduler::get()
+            .held_locks
+            .lock()
+            .lock_shared(lock_id, encouragement)
+    }
+
+    /// Same as `lock_exclusive` except doesn't block.
+    pub fn try_lock_exclusive(lock_id: &LockId, encouragement: LockEncouragement) -> Option<Self> {
+        Scheduler::get()
+            .held_locks
+            .lock()
+            .try_lock_exclusive(lock_id, encouragement)
+    }
+
+    /// Same as `lock_shared` except doesn't block.
+    pub fn try_lock_shared(lock_id: &LockId, encouragement: LockEncouragement) -> Option<Self> {
+        Scheduler::get()
+            .held_locks
+            .lock()
+            .try_lock_shared(lock_id, encouragement)
+    }
+
+    /// Release a lock from the scheduler
+    pub fn unlock(self) {
         drop(self);
     }
 }
 
-impl Drop for InformedScheduleLock {
+impl Drop for AquiredLock {
     fn drop(&mut self) {
-        todo!()
+        Scheduler::get().held_locks.lock().unlock(&self);
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct LockId(pub usize);
+
+impl LockId {
+    /// Used to create an ID for a new lock. Used to prevent deadlocks for threads.
+    pub fn new() -> Self {
+        Scheduler::get().held_locks.lock().alloc_lock_id()
+    }
+
+    /// Outstanding 'shared' locks
+    pub fn current_shared_locks(&self) -> usize {
+        Scheduler::get()
+            .held_locks
+            .lock()
+            .current_shared_locks_for(self)
+    }
+
+    /// Outstanding 'exclusive' locks
+    pub fn current_exclusive_locks(&self) -> usize {
+        Scheduler::get()
+            .held_locks
+            .lock()
+            .current_exclusive_locks_for(self)
+    }
+}
+
+impl Drop for LockId {
+    fn drop(&mut self) {
+        Scheduler::get().held_locks.lock().dealloc_lock_id(self);
     }
 }

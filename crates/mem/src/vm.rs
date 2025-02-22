@@ -31,7 +31,7 @@ use crate::{
     addr::{AlignedTo, KERNEL_ADDR_START, VirtAddr},
     page::{PhysPage, VirtPage},
     paging::{PageCorrelationError, Virt2PhysMapping, VmOptions, VmPermissions},
-    pmm::SharedPhysPage,
+    pmm::use_pmm_mut,
 };
 use alloc::{boxed::Box, collections::BTreeMap, sync::Arc, vec::Vec};
 use arch::locks::InterruptMutex;
@@ -68,6 +68,14 @@ impl VmRegion {
             start: VirtPage::containing_addr(start),
             end: VirtPage::containing_addr(end),
         }
+    }
+
+    /// Get a VmRegion from a `u64` and offset `usize` (Virtal ptr)
+    pub const fn from_kbh(region: (u64, usize)) -> Self {
+        Self::from_containing(
+            VirtAddr::new(region.0 as usize),
+            VirtAddr::new(region.0 as usize).offset(region.1 - PAGE_4K),
+        )
     }
 
     /// Is this virtual address contained within this VmRegion
@@ -120,8 +128,8 @@ pub trait VmInjectFillAction: core::fmt::Debug + Sync + Send {
 
     /// Allocate a physical page for this virtual page
     #[allow(unused_variables)]
-    fn alloc_physical_page(&mut self, vpage: VirtPage) -> Result<SharedPhysPage, MemoryError> {
-        SharedPhysPage::allocate_anywhere()
+    fn alloc_physical_page(&mut self, vpage: VirtPage) -> Result<PhysPage, MemoryError> {
+        use_pmm_mut(|pmm| pmm.allocate_page())
     }
 
     /// Should all pages be filled immediately when this object is created?
@@ -212,11 +220,10 @@ impl VmInjectFillAction for VmFillAction {
         }
     }
 
-    fn alloc_physical_page(&mut self, vpage: VirtPage) -> Result<SharedPhysPage, MemoryError> {
+    fn alloc_physical_page(&mut self, vpage: VirtPage) -> Result<PhysPage, MemoryError> {
         match self {
-            VmFillAction::Nothing => SharedPhysPage::allocate_anywhere(),
-            VmFillAction::Scrub(_) => SharedPhysPage::allocate_anywhere(),
             VmFillAction::InjectWith(rw_lock) => rw_lock.write().alloc_physical_page(vpage),
+            _ => use_pmm_mut(|pmm| pmm.allocate_page()),
         }
     }
 
@@ -279,8 +286,6 @@ pub struct VmObject {
     // supports_cow: bool,
     /// The region of memory this VmObject contains
     pub region: VmRegion,
-    /// The physical page tables this VmObject has allocated
-    pub mappings: BTreeMap<VirtPage, SharedPhysPage>,
     /// Permissions of this object
     pub permissions: VmPermissions,
     /// What to do wiht this vm object
@@ -291,7 +296,6 @@ impl Clone for VmObject {
     fn clone(&self) -> Self {
         Self {
             region: self.region,
-            mappings: self.mappings.clone(),
             permissions: self.permissions,
             fill_action: RwLock::new(self.fill_action.read().clone()),
         }
@@ -353,7 +357,6 @@ impl VmObject {
     ) -> Result<Arc<RwLock<Self>>, NewVmObjectError> {
         let mut new_self = Self {
             region,
-            mappings: BTreeMap::new(),
             permissions,
             fill_action: RwLock::new(fill_action),
         };
@@ -371,6 +374,40 @@ impl VmObject {
                     .map_err(|err| NewVmObjectError::MappingErr(err))?;
             }
         }
+
+        Ok(Arc::new(RwLock::new(new_self)))
+    }
+
+    /// Create a new VmObject via manually mapping pages
+    pub fn manual_new(
+        vm_process: &VmProcess,
+        region: VmRegion,
+        mappings: BTreeMap<VirtPage, PhysPage>,
+        permissions: VmPermissions,
+    ) -> Result<Arc<RwLock<Self>>, NewVmObjectError> {
+        for (vpage, ppage) in mappings.iter() {
+            vm_process
+                .page_tables
+                .correlate_page(
+                    *vpage,
+                    PhysPage::new(ppage.page()),
+                    VmOptions::none()
+                        .set_reduce_perm_from_tables_flag(true)
+                        .set_increase_perm_flag(true)
+                        .set_force_permissions_on_page_flag(true)
+                        .set_overwrite_flag(true),
+                    permissions,
+                )
+                .map_err(|err| {
+                    NewVmObjectError::MappingErr(VmObjectMappingError::MappingError(err))
+                })?;
+        }
+
+        let new_self = Self {
+            region,
+            permissions,
+            fill_action: RwLock::new(VmFillAction::Nothing),
+        };
 
         Ok(Arc::new(RwLock::new(new_self)))
     }
@@ -410,7 +447,7 @@ impl VmObject {
             .page_tables
             .correlate_page(
                 vpage,
-                *backing_page,
+                backing_page,
                 KERNEL_POPULATE_OPT,
                 KERNEL_POPULATE_PERM,
             )
@@ -420,7 +457,7 @@ impl VmObject {
         match self
             .fill_action
             .write()
-            .populate_page(self, vm_process, 0, vpage, *backing_page)
+            .populate_page(self, vm_process, 0, vpage, backing_page)
         {
             PopulationReponse::Okay => (),
             PopulationReponse::MappingError(page_correlation_error) => {
@@ -439,7 +476,7 @@ impl VmObject {
             .page_tables
             .correlate_page(
                 vpage,
-                *backing_page,
+                backing_page,
                 VmOptions::none()
                     .set_reduce_perm_from_tables_flag(true)
                     .set_increase_perm_flag(true)
@@ -448,9 +485,6 @@ impl VmObject {
                 self.permissions,
             )
             .map_err(|err| VmObjectMappingError::MappingError(err))?;
-
-        // Remember this page in our mapping table
-        self.mappings.insert(vpage, backing_page);
 
         Ok(())
     }
@@ -694,6 +728,35 @@ impl VmProcess {
             override_and_fill_now,
         )
         .map_err(|obj_err| InsertVmObjectError::VmObjectError(obj_err))?;
+
+        // Insert the object
+        self.insert_vm_object(obj.clone())?;
+
+        Ok(obj)
+    }
+
+    /// Make a new `VmObject` from manual mappings.
+    pub fn manual_inplace_new_vmobject(
+        &self,
+        region: VmRegion,
+        permissions: VmPermissions,
+        mappings: BTreeMap<VirtPage, PhysPage>,
+    ) -> Result<Arc<RwLock<VmObject>>, InsertVmObjectError> {
+        // If there is already a region that exists on that virtual address
+        //
+        // Even though this is checked again once the object gets inserted, we
+        // want to make sure this object is valid before we do the expensive work
+        // of creating it.
+        if let Some(existing) = self.check_overlapping(&region) {
+            return Err(InsertVmObjectError::Overlapping {
+                existing,
+                attempted: region,
+            });
+        }
+
+        // Construct the object
+        let obj = VmObject::manual_new(self, region, mappings, permissions)
+            .map_err(|obj_err| InsertVmObjectError::VmObjectError(obj_err))?;
 
         // Insert the object
         self.insert_vm_object(obj.clone())?;

@@ -23,104 +23,21 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use alloc::{boxed::Box, collections::btree_map::BTreeMap, vec::Vec};
+use alloc::{boxed::Box, sync::Arc};
 use elf::{elf_owned::ElfOwned, tables::SegmentKind};
-use mem::{
-    addr::VirtAddr,
-    page::VirtPage,
-    paging::VmPermissions,
-    vm::{PopulationReponse, VmFillAction, VmInjectFillAction, VmProcess, VmRegion},
-};
+use mem::vm::{PopulationReponse, VmFillAction, VmInjectFillAction, VmProcess};
 use util::consts::PAGE_4K;
-
-use super::ProcessError;
 
 /// An elf backing object for a process's memory map
 #[derive(Debug)]
 pub struct VmElfInject {
-    file: ElfOwned,
+    file: Arc<ElfOwned>,
 }
 
 impl VmElfInject {
     /// Create a new VmElfInject
-    pub fn new(elf: ElfOwned) -> Self {
+    pub fn new(elf: Arc<ElfOwned>) -> Self {
         Self { file: elf }
-    }
-
-    /// Get an iterator over the different regions that this elf file
-    /// needs to load.
-    pub fn load_regions(
-        &self,
-    ) -> Result<impl Iterator<Item = (VirtAddr, VirtAddr, VmPermissions)> + use<'_>, ProcessError>
-    {
-        Ok(self
-            .file
-            .elf()
-            .program_headers()
-            .map_err(|elf_err| ProcessError::ElfLoadingError(elf_err))?
-            .iter()
-            .filter(|h| h.segment_kind() == SegmentKind::Load)
-            .map(|h| {
-                let expected_vaddr = VirtAddr::new(h.expected_vaddr() as usize);
-                let perms = VmPermissions::none()
-                    .set_exec_flag(h.is_executable() || true)
-                    .set_read_flag(h.is_readable() || true)
-                    .set_write_flag(h.is_writable() || true)
-                    .set_user_flag(true);
-
-                (
-                    expected_vaddr,
-                    expected_vaddr.offset(h.in_mem_size()),
-                    perms,
-                )
-            }))
-    }
-
-    /// Get the load segments as aligned segments and permissions fixed
-    ///
-    /// Since elf exe don't have to have their segments perfectly page aligned
-    /// it is possible for two segments to overlap (in a page sense) so we
-    /// take the highest of the two and split them
-    pub fn load_segments(
-        &self,
-    ) -> Result<impl IntoIterator<Item = (VmRegion, VmPermissions)> + use<>, ProcessError> {
-        // FIXME: This is a realy bad impl of this, we should change this before anyone sees :)
-        let mut pages: BTreeMap<VirtPage, VmPermissions> = BTreeMap::new();
-
-        self.load_regions()?
-            .map(|(start, end, perm)| {
-                let vm_region = VmRegion::from_containing(start, end);
-                vm_region.pages_iter().map(move |page| (page, perm))
-            })
-            .flatten()
-            .for_each(|(page, perm)| {
-                if let Some(already_existing_page) = pages.get_mut(&page) {
-                    *already_existing_page += perm;
-                } else {
-                    pages.insert(page, perm);
-                }
-            });
-
-        let mut acc: BTreeMap<VmPermissions, Vec<VirtPage>> = BTreeMap::new();
-        for (page, perm) in pages.into_iter() {
-            acc.entry(perm)
-                .and_modify(|old| old.push(page))
-                .or_insert(alloc::vec![page]);
-        }
-
-        Ok(acc.into_iter().map(|(perm, pages)| {
-            let mut region = VmRegion::new(pages[0], pages[0]);
-
-            for page in pages {
-                if page.page() - 1 == region.end.page() {
-                    region.end = VirtPage::new(region.end.page() + 1);
-                } else if page.page() + 1 == region.start.page() {
-                    region.start = VirtPage::new(region.start.page() - 1);
-                }
-            }
-
-            (region, perm)
-        }))
     }
 
     /// Convert this object into a FillAction

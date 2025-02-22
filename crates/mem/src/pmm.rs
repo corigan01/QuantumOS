@@ -146,6 +146,15 @@ impl SharedPhysPage {
         Ok(Self(Arc::new(page)))
     }
 
+    /// Creates a new SharedPhysPage from a given physical page
+    ///
+    /// # Safety
+    /// This function does not check that the page is available, so it is up to the caller
+    /// to ensure the physical page is valid.
+    pub unsafe fn force_new_at(page: PhysPage) -> Self {
+        Self(Arc::new(page))
+    }
+
     /// Get the refrences to this page
     pub fn ref_count(&self) -> usize {
         Arc::strong_count(&self.0)

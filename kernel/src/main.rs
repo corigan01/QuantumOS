@@ -49,8 +49,9 @@ use mem::{
     alloc::{KernelAllocator, provide_init_region},
     paging::init_virt2phys_provider,
     pmm::Pmm,
+    vm::VmRegion,
 };
-use process::{scheduler::Scheduler, task::Task};
+use process::{Process, scheduler::Scheduler, task::Task};
 use serial::{Serial, baud::SerialBaud};
 use util::{bytes::HumanBytes, consts::PAGE_4K};
 
@@ -110,10 +111,17 @@ fn main(kbh: &KernelBootHeader) {
 
     logln!("Init Scheduler ... ");
 
-    let initfs_slice =
-        unsafe { core::slice::from_raw_parts(kbh.initfs_ptr.0 as *const u8, kbh.initfs_ptr.1) };
+    let s = Scheduler::get();
+    unsafe {
+        s.init_kernel_vm(
+            VmRegion::from_kbh(kbh.kernel_exe),
+            VmRegion::from_kbh(kbh.kernel_init_heap),
+            VmRegion::from_kbh(kbh.kernel_stack),
+            VmRegion::from_kbh(kbh.initfs_ptr),
+        )
+    };
 
-    _ = Scheduler::get();
+    let funny = Process::new("funny".into());
 
     unsafe { interrupts::disable_interrupts() };
 

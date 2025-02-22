@@ -23,20 +23,28 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use crate::locks::{LockEncouragement, RwCriticalLock, RwYieldLock};
 use alloc::{
     collections::btree_map::BTreeMap,
     string::String,
     sync::{Arc, Weak},
 };
-use mem::vm::VmProcess;
+use elf::{elf_owned::ElfOwned, tables::SegmentKind};
+use mem::{
+    addr::VirtAddr,
+    paging::VmPermissions,
+    vm::{VmProcess, VmRegion},
+};
+use scheduler::Scheduler;
 use thread::{ThreadId, WeakThread};
-
-use crate::locks::{RwCriticalLock, RwYieldLock};
+use vm_elf::VmElfInject;
 
 pub mod scheduler;
 pub mod task;
 pub mod thread;
+mod vm_elf;
 
+pub type ProcessEntry = VirtAddr;
 type ProcessId = usize;
 pub type RefProcess = Arc<Process>;
 pub type WeakProcess = Weak<Process>;
@@ -55,4 +63,57 @@ pub struct Process {
     /// The memory map of this process
     // FIXME: Need to convert `VmProcess` to not use locks
     vm: RwCriticalLock<VmProcess>,
+}
+
+impl Process {
+    /// Create a new process
+    pub fn new(name: String) -> RefProcess {
+        let s = Scheduler::get();
+
+        let proc = Arc::new(Self {
+            id: s.alloc_pid(),
+            name,
+            threads: RwYieldLock::new(BTreeMap::new()),
+            vm: RwCriticalLock::new(s.fork_kernel_vm()),
+        });
+        s.register_new_process(proc.clone());
+
+        proc
+    }
+
+    /// Add an ELF mapping to this process's memory map
+    pub fn map_elf(&self, elf: Arc<ElfOwned>) -> ProcessEntry {
+        // `Weak` should be fine here because we shouldn't have any threads at this point in the process's
+        // lifecycle.
+        let vm_lock = self.vm.write(LockEncouragement::Weak);
+        let elf_fill = VmElfInject::new(elf.clone()).fill_action();
+
+        elf.elf()
+            .program_headers()
+            .unwrap()
+            .iter()
+            .filter(|header| header.segment_kind() == SegmentKind::Load)
+            .for_each(|header| {
+                let header_perms = VmPermissions::none()
+                    .set_exec_flag(header.is_executable())
+                    .set_read_flag(true)
+                    .set_write_flag(header.is_writable());
+
+                let header_region =
+                    VmRegion::from_kbh((header.expected_vaddr(), header.in_mem_size()));
+
+                vm_lock
+                    .inplace_new_vmobject(header_region, header_perms, elf_fill.clone(), false)
+                    .unwrap();
+            });
+
+        elf.elf().entry_point().unwrap().into()
+    }
+}
+
+impl Drop for Process {
+    fn drop(&mut self) {
+        let s = Scheduler::get();
+        s.remove_process(self);
+    }
 }

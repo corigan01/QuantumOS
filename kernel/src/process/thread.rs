@@ -24,7 +24,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 use super::{RefProcess, task::Task};
-use crate::locks::{InformedScheduleLock, ScheduleLock, ThreadCell};
+use crate::locks::{AquiredLock, ScheduleLock, ThreadCell};
 use alloc::{
     collections::vec_deque::VecDeque,
     sync::{Arc, Weak},
@@ -37,7 +37,7 @@ pub type WeakThread = Weak<Thread>;
 /// The kind of lock this thread is currently blocked by
 #[derive(Debug)]
 pub enum ThreadFenceKind {
-    WaitingToLock(InformedScheduleLock),
+    WaitingToLock(AquiredLock),
 }
 
 /// A locking unit for a thread
