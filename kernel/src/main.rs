@@ -51,7 +51,7 @@ use mem::{
     pmm::Pmm,
     vm::VmRegion,
 };
-use process::{Process, scheduler::Scheduler, task::Task};
+use process::{Process, scheduler::Scheduler, task::Task, thread::Thread};
 use serial::{Serial, baud::SerialBaud};
 use util::{bytes::HumanBytes, consts::PAGE_4K};
 
@@ -121,62 +121,10 @@ fn main(kbh: &KernelBootHeader) {
         )
     };
 
-    let funny = Process::new("funny".into());
-
-    unsafe { interrupts::disable_interrupts() };
-
-    unsafe { (&mut *(&raw mut DINGUS))[0] = Some(Task::new(foo)) };
-    unsafe { (&mut *(&raw mut DINGUS))[1] = Some(Task::new(bar)) };
-    unsafe { (&mut *(&raw mut DINGUS))[2] = Some(Task::new(bazz)) };
-
-    let foo_task = unsafe { (&mut *(&raw mut DINGUS))[0].as_mut().unwrap() as *mut _ };
-    unsafe {
-        Task::switch_first(foo_task);
-    }
+    let kernel_process = Process::new("kernel".into());
+    Thread::new_kernel(kernel_process, foo);
 }
-
-static mut DINGUS: [Option<Task>; 3] = [const { None }; 3];
-
 fn foo() {
     logln!("+FOO");
-    let foo_task = unsafe { (&mut *(&raw mut DINGUS))[0].as_mut().unwrap() as *mut _ };
-    let bar_task = unsafe { (&mut *(&raw mut DINGUS))[1].as_mut().unwrap() as *mut _ };
-    let bazz_task = unsafe { (&mut *(&raw mut DINGUS))[2].as_mut().unwrap() as *mut _ };
-
-    logln!("foo -> bar");
-    unsafe { Task::switch_task(foo_task, bar_task) };
-    logln!("foo -> bazz");
-    unsafe { Task::switch_task(foo_task, bazz_task) };
-
     logln!("-FOO");
-}
-
-fn bar() {
-    logln!("+BAR");
-
-    let foo_task = unsafe { (&mut *(&raw mut DINGUS))[0].as_mut().unwrap() as *mut _ };
-    let bar_task = unsafe { (&mut *(&raw mut DINGUS))[1].as_mut().unwrap() as *mut _ };
-    let bazz_task = unsafe { (&mut *(&raw mut DINGUS))[2].as_mut().unwrap() as *mut _ };
-
-    logln!("bar -> bazz");
-    unsafe { Task::switch_task(bar_task, bazz_task) };
-    logln!("bar -> foo");
-    unsafe { Task::switch_task(bar_task, foo_task) };
-
-    logln!("-BAR");
-}
-
-fn bazz() {
-    logln!("+BAZZ");
-
-    let foo_task = unsafe { (&mut *(&raw mut DINGUS))[0].as_mut().unwrap() as *mut _ };
-    let bar_task = unsafe { (&mut *(&raw mut DINGUS))[1].as_mut().unwrap() as *mut _ };
-    let bazz_task = unsafe { (&mut *(&raw mut DINGUS))[2].as_mut().unwrap() as *mut _ };
-
-    logln!("bazz -> bar");
-    unsafe { Task::switch_task(bazz_task, bar_task) };
-    logln!("bazz -> foo");
-    unsafe { Task::switch_task(bazz_task, foo_task) };
-
-    logln!("-BAZZ");
 }

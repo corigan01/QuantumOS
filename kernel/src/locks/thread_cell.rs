@@ -38,6 +38,16 @@ impl<T: ?Sized + Debug> Debug for ThreadCell<T> {
     }
 }
 
+impl<T> ThreadCell<T> {
+    /// Create a new thread cell
+    pub fn new(value: T) -> Self {
+        Self {
+            borrows: Cell::new(0),
+            inner: UnsafeCell::new(value),
+        }
+    }
+}
+
 pub struct ThreadCellRef<'a, T: ?Sized> {
     borrows: &'a Cell<usize>,
     ptr: *const T,

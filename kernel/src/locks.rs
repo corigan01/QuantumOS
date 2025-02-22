@@ -73,7 +73,7 @@ pub enum LockEncouragement {
 
 /// A lock id used to inform the scheduler when locks are finished
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub struct AquiredLock(usize);
+pub struct AquiredLock(pub usize);
 
 impl AquiredLock {
     /// Inform the scheduler that we are aquiring an exclusive lock
@@ -85,10 +85,7 @@ impl AquiredLock {
     /// # Note
     /// This function preforms the lock operation, and always returns when the lock has been aquired.
     pub fn lock_exclusive(lock_id: &LockId, encouragement: LockEncouragement) -> Self {
-        Scheduler::get()
-            .held_locks
-            .lock()
-            .lock_exclusive(lock_id, encouragement)
+        Scheduler::aquiredlock_exclusive(lock_id, encouragement)
     }
 
     /// Inform the scheduler that we are aquiring a shared lock
@@ -100,26 +97,21 @@ impl AquiredLock {
     /// # Note
     /// This function preforms the lock operation, and always returns when the lock has been aquired.
     pub fn lock_shared(lock_id: &LockId, encouragement: LockEncouragement) -> Self {
-        Scheduler::get()
-            .held_locks
-            .lock()
-            .lock_shared(lock_id, encouragement)
+        Scheduler::aquiredlock_shared(lock_id, encouragement)
     }
 
     /// Same as `lock_exclusive` except doesn't block.
     pub fn try_lock_exclusive(lock_id: &LockId, encouragement: LockEncouragement) -> Option<Self> {
         Scheduler::get()
-            .held_locks
-            .lock()
-            .try_lock_exclusive(lock_id, encouragement)
+            .try_aquiredlock_exclusive(lock_id, encouragement)
+            .ok()
     }
 
     /// Same as `lock_shared` except doesn't block.
     pub fn try_lock_shared(lock_id: &LockId, encouragement: LockEncouragement) -> Option<Self> {
         Scheduler::get()
-            .held_locks
-            .lock()
-            .try_lock_shared(lock_id, encouragement)
+            .try_aquiredlock_shared(lock_id, encouragement)
+            .ok()
     }
 
     /// Release a lock from the scheduler
@@ -130,7 +122,7 @@ impl AquiredLock {
 
 impl Drop for AquiredLock {
     fn drop(&mut self) {
-        Scheduler::get().held_locks.lock().unlock(&self);
+        Scheduler::get().aquiredlock_unlock(self);
     }
 }
 
@@ -140,28 +132,22 @@ pub struct LockId(pub usize);
 impl LockId {
     /// Used to create an ID for a new lock. Used to prevent deadlocks for threads.
     pub fn new() -> Self {
-        Scheduler::get().held_locks.lock().alloc_lock_id()
+        Scheduler::get().alloc_new_lockid()
     }
 
     /// Outstanding 'shared' locks
     pub fn current_shared_locks(&self) -> usize {
-        Scheduler::get()
-            .held_locks
-            .lock()
-            .current_shared_locks_for(self)
+        Scheduler::get().lockid_total_shared(self)
     }
 
     /// Outstanding 'exclusive' locks
     pub fn current_exclusive_locks(&self) -> usize {
-        Scheduler::get()
-            .held_locks
-            .lock()
-            .current_exclusive_locks_for(self)
+        Scheduler::get().lockid_total_exclusive(self)
     }
 }
 
 impl Drop for LockId {
     fn drop(&mut self) {
-        Scheduler::get().held_locks.lock().dealloc_lock_id(self);
+        Scheduler::get().dealloc_lockid(self);
     }
 }

@@ -29,6 +29,7 @@ use alloc::{
     string::String,
     sync::{Arc, Weak},
 };
+use boolvec::BoolVec;
 use elf::{elf_owned::ElfOwned, tables::SegmentKind};
 use mem::{
     addr::VirtAddr,
@@ -45,7 +46,7 @@ pub mod thread;
 mod vm_elf;
 
 pub type ProcessEntry = VirtAddr;
-type ProcessId = usize;
+pub type ProcessId = usize;
 pub type RefProcess = Arc<Process>;
 pub type WeakProcess = Weak<Process>;
 
@@ -60,6 +61,8 @@ pub struct Process {
     ///
     /// Threads carry strong references to their process, and are the actual scheduling artifacts.
     threads: RwYieldLock<BTreeMap<ThreadId, WeakThread>>,
+    /// Thread allocation bitmap
+    thread_id_alloc: RwYieldLock<BoolVec>,
     /// The memory map of this process
     // FIXME: Need to convert `VmProcess` to not use locks
     vm: RwCriticalLock<VmProcess>,
@@ -74,6 +77,7 @@ impl Process {
             id: s.alloc_pid(),
             name,
             threads: RwYieldLock::new(BTreeMap::new()),
+            thread_id_alloc: RwYieldLock::new(BoolVec::new()),
             vm: RwCriticalLock::new(s.fork_kernel_vm()),
         });
         s.register_new_process(proc.clone());
@@ -108,6 +112,20 @@ impl Process {
             });
 
         elf.elf().entry_point().unwrap().into()
+    }
+
+    /// Allocate a new thread id
+    pub fn alloc_thread_id(&self) -> ThreadId {
+        // Moderate lock because holding this lock means we cannot spawn any new threads for this process, but
+        // we can still execute the current threads.
+        let mut thread_ids = self.thread_id_alloc.write(LockEncouragement::Moderate);
+
+        let new_thread_id = thread_ids
+            .find_first_of(false)
+            .expect("Cannot allocate a new thread id");
+        thread_ids.set(new_thread_id, true);
+
+        new_thread_id
     }
 }
 

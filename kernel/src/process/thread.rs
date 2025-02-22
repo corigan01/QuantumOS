@@ -23,50 +23,13 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use super::{RefProcess, task::Task};
-use crate::locks::{AquiredLock, ScheduleLock, ThreadCell};
-use alloc::{
-    collections::vec_deque::VecDeque,
-    sync::{Arc, Weak},
-};
+use super::{ProcessEntry, RefProcess, scheduler::Scheduler, task::Task};
+use crate::locks::ThreadCell;
+use alloc::sync::{Arc, Weak};
 
 pub type ThreadId = usize;
 pub type RefThread = Arc<Thread>;
 pub type WeakThread = Weak<Thread>;
-
-/// The kind of lock this thread is currently blocked by
-#[derive(Debug)]
-pub enum ThreadFenceKind {
-    WaitingToLock(AquiredLock),
-}
-
-/// A locking unit for a thread
-///
-/// This data structure is intended to be immutable, and only appended or removed from a thread's
-/// [`BlockInfo`] data structure.
-#[derive(Debug)]
-pub struct ThreadFence {
-    lock_owner: WeakThread,
-    operation: ThreadFenceKind,
-}
-
-/// The currently inhibiting locks preventing this thread from being scheduled
-#[derive(Debug)]
-pub struct BlockInfo {
-    blocks: VecDeque<Arc<ThreadFence>>,
-}
-
-#[derive(Debug)]
-pub enum ThreadState {
-    /// The thread is currently Running
-    Running,
-    /// The thread is read to be ran, awaiting the run queue
-    Runnable,
-    /// The thread is in the run queue, awaiting being scheduled
-    Picking,
-    /// The thread is being blocked by some operation and cannot be scheduled
-    Blocked(BlockInfo),
-}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ThreadContextKind {
@@ -78,16 +41,70 @@ pub enum ThreadContextKind {
 #[derive(Debug)]
 pub struct Thread {
     /// The thread's id
-    id: ThreadId,
+    pub id: ThreadId,
     /// To which does this thread switches to, Kernel or Userspace
-    context_kind: ThreadContextKind,
+    pub context_kind: ThreadContextKind,
     /// This is the kernel task that starts/resumes the context.
     ///
     /// The context itself is stored within the task's stack, and could be
     /// placed either via an interrupt or via a system call.
-    task: ThreadCell<Task>,
-    /// The scheduling state of this thread
-    state: ScheduleLock<ThreadState>,
+    pub task: ThreadCell<Task>,
     /// The parent process that this thread represents
-    process: RefProcess,
+    pub process: RefProcess,
+    /// Init Userspace entrypoint
+    // TODO: Maybe there could be a better way of passing the `ProcessEntry` into
+    // `userspace_thread_begin`?
+    userspace_entry: Option<ProcessEntry>,
+}
+
+impl Thread {
+    /// Create a new userspace thread
+    pub fn new_user(process: RefProcess, entry_point: ProcessEntry) -> RefThread {
+        let id = process.alloc_thread_id();
+        let task = Task::new(userspace_thread_begin);
+
+        let thread = Arc::new(Self {
+            id,
+            context_kind: ThreadContextKind::Userspace,
+            task: ThreadCell::new(task),
+            process,
+            userspace_entry: Some(entry_point),
+        });
+
+        let s = Scheduler::get();
+        s.register_new_thread(thread.clone());
+
+        thread
+    }
+
+    /// Create a new kernel thread
+    pub fn new_kernel(process: RefProcess, entry_point: fn()) -> RefThread {
+        let id = process.alloc_thread_id();
+        let task = Task::new(entry_point);
+
+        let thread = Arc::new(Self {
+            id,
+            context_kind: ThreadContextKind::Kernel,
+            task: ThreadCell::new(task),
+            process,
+            userspace_entry: None,
+        });
+
+        let s = Scheduler::get();
+        s.register_new_thread(thread.clone());
+
+        thread
+    }
+}
+
+fn userspace_thread_begin() {
+    todo!()
+}
+
+extern "C" fn asm_syscall_entry() {
+    todo!()
+}
+
+extern "C" fn asm_syscall_exit() {
+    todo!()
 }
