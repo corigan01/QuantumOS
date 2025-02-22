@@ -46,7 +46,7 @@ use arch::{interrupts, supports::cpu_vender};
 use bootloader::KernelBootHeader;
 use lldebug::{debug_ready, logln, make_debug};
 use mem::{
-    alloc::{KernelAllocator, provide_init_region},
+    alloc::{KernelAllocator, dump_allocator, provide_init_region},
     paging::init_virt2phys_provider,
     pmm::Pmm,
     vm::VmRegion,
@@ -131,12 +131,14 @@ fn main(kbh: &KernelBootHeader) {
 
 fn foo() {
     logln!("+FOO");
-    Scheduler::yield_me();
-    logln!("-FOO");
+    loop {
+        Scheduler::yield_me();
+    }
 }
 
 fn bar() {
     logln!("+BAR");
+    Scheduler::yield_me();
     Scheduler::yield_me();
     logln!("-BAR");
 }

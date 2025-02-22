@@ -30,7 +30,9 @@ use super::{
     task::Task,
     thread::{RefThread, WeakThread},
 };
-use crate::locks::{AquiredLock, LockEncouragement, LockId, ScheduleLock, current_scheduler_locks};
+use crate::locks::{
+    AcquiredLock, LockEncouragement, LockId, ScheduleLock, current_scheduler_locks,
+};
 use alloc::{
     collections::{btree_map::BTreeMap, vec_deque::VecDeque},
     sync::{Arc, Weak},
@@ -171,7 +173,7 @@ impl LockHoldings {
         &mut self,
         current_thread: WeakThread,
         lock_id: &LockId,
-    ) -> Result<AquiredLock, LockError> {
+    ) -> Result<AcquiredLock, LockError> {
         let lock_id_info = self
             .id_map
             .get_mut(&lock_id.0)
@@ -188,7 +190,7 @@ impl LockHoldings {
                 .lock_map
                 .insert(new_aquired_lock_id, (true, current_thread));
 
-            return Ok(AquiredLock(new_aquired_lock_id));
+            return Ok(AcquiredLock(new_aquired_lock_id));
         }
 
         // If this will block, check if its because of a deadlock
@@ -208,7 +210,7 @@ impl LockHoldings {
         &mut self,
         current_thread: WeakThread,
         lock_id: &LockId,
-    ) -> Result<AquiredLock, LockError> {
+    ) -> Result<AcquiredLock, LockError> {
         let lock_id_info = self
             .id_map
             .get_mut(&lock_id.0)
@@ -225,7 +227,7 @@ impl LockHoldings {
                 .lock_map
                 .insert(new_aquired_lock_id, (false, current_thread));
 
-            return Ok(AquiredLock(new_aquired_lock_id));
+            return Ok(AcquiredLock(new_aquired_lock_id));
         }
 
         // If this will block, check if its because of a deadlock
@@ -242,7 +244,7 @@ impl LockHoldings {
         }
     }
 
-    pub fn unlock(&mut self, lock: &AquiredLock) {
+    pub fn unlock(&mut self, lock: &AcquiredLock) {
         let lock_id = self
             .aquired_map
             .remove(&lock.0)
@@ -505,12 +507,12 @@ impl Scheduler {
         self.held_locks.lock().dealloc_lock_id(lock);
     }
 
-    pub fn aquiredlock_exclusive(
+    pub fn acquiredlock_exclusive(
         lock_id: &LockId,
         encouragement: LockEncouragement,
-    ) -> AquiredLock {
+    ) -> AcquiredLock {
         loop {
-            match Scheduler::get().try_aquiredlock_exclusive(lock_id, encouragement) {
+            match Scheduler::get().try_acquiredlock_exclusive(lock_id, encouragement) {
                 Ok(lock) => break lock,
                 Err(LockError::WillBlock) => Self::yield_me(),
                 Err(LockError::Deadlock) => {
@@ -520,9 +522,9 @@ impl Scheduler {
         }
     }
 
-    pub fn aquiredlock_shared(lock_id: &LockId, encouragement: LockEncouragement) -> AquiredLock {
+    pub fn acquiredlock_shared(lock_id: &LockId, encouragement: LockEncouragement) -> AcquiredLock {
         loop {
-            match Scheduler::get().try_aquiredlock_shared(lock_id, encouragement) {
+            match Scheduler::get().try_acquiredlock_shared(lock_id, encouragement) {
                 Ok(lock) => break lock,
                 Err(LockError::WillBlock) => Self::yield_me(),
                 Err(LockError::Deadlock) => {
@@ -532,21 +534,21 @@ impl Scheduler {
         }
     }
 
-    pub fn try_aquiredlock_exclusive(
+    pub fn try_acquiredlock_exclusive(
         &self,
         lock_id: &LockId,
         _encouragement: LockEncouragement,
-    ) -> Result<AquiredLock, LockError> {
+    ) -> Result<AcquiredLock, LockError> {
         self.held_locks
             .lock()
             .try_lock_exclusive(self.current_thread(), lock_id)
     }
 
-    pub fn try_aquiredlock_shared(
+    pub fn try_acquiredlock_shared(
         &self,
         lock_id: &LockId,
         _encouragement: LockEncouragement,
-    ) -> Result<AquiredLock, LockError> {
+    ) -> Result<AcquiredLock, LockError> {
         self.held_locks
             .lock()
             .try_lock_shared(self.current_thread(), lock_id)
@@ -560,7 +562,7 @@ impl Scheduler {
         self.held_locks.lock().current_exclusive_locks_for(lock)
     }
 
-    pub fn aquiredlock_unlock(&self, lock: &AquiredLock) {
+    pub fn aquiredlock_unlock(&self, lock: &AcquiredLock) {
         self.held_locks.lock().unlock(lock);
     }
 }

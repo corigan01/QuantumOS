@@ -23,7 +23,7 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use super::{AquiredLock, LockEncouragement, LockId};
+use super::{AcquiredLock, LockEncouragement, LockId};
 use core::cell::UnsafeCell;
 use core::fmt::Debug;
 use core::ops::{Deref, DerefMut};
@@ -44,13 +44,10 @@ impl<T> RwYieldLock<T> {
     }
 }
 
-// I want to make this lock ensure that it cannot deadlock. For example, if the same thread
-// tries to aquire a write lock while holding a read lock, the kernel should panic!
-
 impl<T: ?Sized> RwYieldLock<T> {
-    /// Aquire a read lock to the `RwYieldLock`
+    /// Acquire a read lock to the `RwYieldLock`
     pub fn read<'a>(&'a self, p: LockEncouragement) -> ReadYieldLockGuard<'a, T> {
-        let lock = AquiredLock::lock_shared(&self.lock, p);
+        let lock = AcquiredLock::lock_shared(&self.lock, p);
 
         ReadYieldLockGuard {
             lock_id: &self.lock,
@@ -59,9 +56,9 @@ impl<T: ?Sized> RwYieldLock<T> {
         }
     }
 
-    /// Aquire a write lock to the `RwYieldLock`
+    /// Acquire a write lock to the `RwYieldLock`
     pub fn write<'a>(&'a self, p: LockEncouragement) -> WriteYieldLockGuard<'a, T> {
-        let lock = AquiredLock::lock_exclusive(&self.lock, p);
+        let lock = AcquiredLock::lock_exclusive(&self.lock, p);
 
         WriteYieldLockGuard {
             lock_id: &self.lock,
@@ -70,9 +67,9 @@ impl<T: ?Sized> RwYieldLock<T> {
         }
     }
 
-    /// Try to Aquire a read lock to the `RwYieldLock`
+    /// Try to Acquire a read lock to the `RwYieldLock`
     pub fn try_read<'a>(&'a self, p: LockEncouragement) -> Option<ReadYieldLockGuard<'a, T>> {
-        let lock = AquiredLock::try_lock_shared(&self.lock, p)?;
+        let lock = AcquiredLock::try_lock_shared(&self.lock, p)?;
 
         Some(ReadYieldLockGuard {
             lock_id: &self.lock,
@@ -81,9 +78,9 @@ impl<T: ?Sized> RwYieldLock<T> {
         })
     }
 
-    /// Try to Aquire a write lock to the `RwYieldLock`
+    /// Try to Acquire a write lock to the `RwYieldLock`
     pub fn try_write<'a>(&'a self, p: LockEncouragement) -> Option<WriteYieldLockGuard<'a, T>> {
-        let lock = AquiredLock::try_lock_exclusive(&self.lock, p)?;
+        let lock = AcquiredLock::try_lock_exclusive(&self.lock, p)?;
 
         Some(WriteYieldLockGuard {
             lock_id: &self.lock,
@@ -109,13 +106,13 @@ impl<T: ?Sized + Debug> Debug for RwYieldLock<T> {
 
 pub struct ReadYieldLockGuard<'a, T: ?Sized> {
     lock_id: &'a LockId,
-    lock: AquiredLock,
+    lock: AcquiredLock,
     ptr: *const T,
 }
 
 pub struct WriteYieldLockGuard<'a, T: ?Sized> {
     lock_id: &'a LockId,
-    lock: AquiredLock,
+    lock: AcquiredLock,
     ptr: *mut T,
 }
 

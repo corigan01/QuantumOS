@@ -23,7 +23,7 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use super::{AquiredLock, LockEncouragement, LockId};
+use super::{AcquiredLock, LockEncouragement, LockId};
 use core::cell::UnsafeCell;
 use core::fmt::Debug;
 use core::ops::{Deref, DerefMut};
@@ -50,7 +50,7 @@ impl<T> RwCriticalLock<T> {
 impl<T: ?Sized> RwCriticalLock<T> {
     /// Aquire a read lock to the `RwCriticalLock`
     pub fn read<'a>(&'a self, p: LockEncouragement) -> ReadCriticalLockGuard<'a, T> {
-        let lock = AquiredLock::lock_shared(&self.lock, p);
+        let lock = AcquiredLock::lock_shared(&self.lock, p);
 
         ReadCriticalLockGuard {
             lock_id: &self.lock,
@@ -61,7 +61,7 @@ impl<T: ?Sized> RwCriticalLock<T> {
 
     /// Aquire a write lock to the `RwCriticalLock`
     pub fn write<'a>(&'a self, p: LockEncouragement) -> WriteCriticalLockGuard<'a, T> {
-        let lock = AquiredLock::lock_exclusive(&self.lock, p);
+        let lock = AcquiredLock::lock_exclusive(&self.lock, p);
 
         WriteCriticalLockGuard {
             lock_id: &self.lock,
@@ -72,7 +72,7 @@ impl<T: ?Sized> RwCriticalLock<T> {
 
     /// Try to Aquire a read lock to the `RwCriticalLock`
     pub fn try_read<'a>(&'a self, p: LockEncouragement) -> Option<ReadCriticalLockGuard<'a, T>> {
-        let lock = AquiredLock::try_lock_shared(&self.lock, p)?;
+        let lock = AcquiredLock::try_lock_shared(&self.lock, p)?;
 
         Some(ReadCriticalLockGuard {
             lock_id: &self.lock,
@@ -83,7 +83,7 @@ impl<T: ?Sized> RwCriticalLock<T> {
 
     /// Try to Aquire a write lock to the `RwCriticalLock`
     pub fn try_write<'a>(&'a self, p: LockEncouragement) -> Option<WriteCriticalLockGuard<'a, T>> {
-        let lock = AquiredLock::try_lock_exclusive(&self.lock, p)?;
+        let lock = AcquiredLock::try_lock_exclusive(&self.lock, p)?;
 
         Some(WriteCriticalLockGuard {
             lock_id: &self.lock,
@@ -109,13 +109,13 @@ impl<T: ?Sized + Debug> Debug for RwCriticalLock<T> {
 
 pub struct ReadCriticalLockGuard<'a, T: ?Sized> {
     lock_id: &'a LockId,
-    lock: AquiredLock,
+    lock: AcquiredLock,
     ptr: *const T,
 }
 
 pub struct WriteCriticalLockGuard<'a, T: ?Sized> {
     lock_id: &'a LockId,
-    lock: AquiredLock,
+    lock: AcquiredLock,
     ptr: *mut T,
 }
 

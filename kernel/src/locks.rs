@@ -73,19 +73,19 @@ pub enum LockEncouragement {
 
 /// A lock id used to inform the scheduler when locks are finished
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub struct AquiredLock(pub usize);
+pub struct AcquiredLock(pub usize);
 
-impl AquiredLock {
-    /// Inform the scheduler that we are aquiring an exclusive lock
+impl AcquiredLock {
+    /// Inform the scheduler that we are acquiring an exclusive lock
     ///
     /// This type of lock is used for `Mutexes` or write operations on `RwLocks`. This exclusivly
-    /// aquires the lock, such that no other locks can be held before or after the duration of this
+    /// acquires the lock, such that no other locks can be held before or after the duration of this
     /// `AquiredLock`.
     ///
     /// # Note
     /// This function preforms the lock operation, and always returns when the lock has been aquired.
     pub fn lock_exclusive(lock_id: &LockId, encouragement: LockEncouragement) -> Self {
-        Scheduler::aquiredlock_exclusive(lock_id, encouragement)
+        Scheduler::acquiredlock_exclusive(lock_id, encouragement)
     }
 
     /// Inform the scheduler that we are aquiring a shared lock
@@ -97,20 +97,20 @@ impl AquiredLock {
     /// # Note
     /// This function preforms the lock operation, and always returns when the lock has been aquired.
     pub fn lock_shared(lock_id: &LockId, encouragement: LockEncouragement) -> Self {
-        Scheduler::aquiredlock_shared(lock_id, encouragement)
+        Scheduler::acquiredlock_shared(lock_id, encouragement)
     }
 
     /// Same as `lock_exclusive` except doesn't block.
     pub fn try_lock_exclusive(lock_id: &LockId, encouragement: LockEncouragement) -> Option<Self> {
         Scheduler::get()
-            .try_aquiredlock_exclusive(lock_id, encouragement)
+            .try_acquiredlock_exclusive(lock_id, encouragement)
             .ok()
     }
 
     /// Same as `lock_shared` except doesn't block.
     pub fn try_lock_shared(lock_id: &LockId, encouragement: LockEncouragement) -> Option<Self> {
         Scheduler::get()
-            .try_aquiredlock_shared(lock_id, encouragement)
+            .try_acquiredlock_shared(lock_id, encouragement)
             .ok()
     }
 
@@ -120,7 +120,7 @@ impl AquiredLock {
     }
 }
 
-impl Drop for AquiredLock {
+impl Drop for AcquiredLock {
     fn drop(&mut self) {
         Scheduler::get().aquiredlock_unlock(self);
     }
