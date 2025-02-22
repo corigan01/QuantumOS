@@ -122,11 +122,27 @@ fn main(kbh: &KernelBootHeader) {
     };
 
     let kernel_process = Process::new("kernel".into());
-    Thread::new_kernel(kernel_process, foo);
+    Thread::new_kernel(kernel_process.clone(), foo);
+    Thread::new_kernel(kernel_process.clone(), bar);
+    Thread::new_kernel(kernel_process, bazz);
 
     Scheduler::yield_me();
 }
+
 fn foo() {
     logln!("+FOO");
+    Scheduler::yield_me();
     logln!("-FOO");
+}
+
+fn bar() {
+    logln!("+BAR");
+    Scheduler::yield_me();
+    logln!("-BAR");
+}
+
+fn bazz() {
+    logln!("+BAZZ");
+    Scheduler::yield_me();
+    logln!("-BAZZ");
 }

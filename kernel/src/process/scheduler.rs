@@ -245,12 +245,12 @@ impl LockHoldings {
     pub fn unlock(&mut self, lock: &AquiredLock) {
         let lock_id = self
             .aquired_map
-            .get(&lock.0)
+            .remove(&lock.0)
             .expect("Attempted to unlock a lock that was never created!");
 
         let lock_info = self
             .id_map
-            .get_mut(lock_id)
+            .get_mut(&lock_id)
             .expect("Tried to unlock a lock from a lock that doesn't exist");
 
         // Is this lock an exclusive lock
@@ -260,10 +260,12 @@ impl LockHoldings {
             .expect("Aquired lock not found in parent's lock")
             .0
         {
-            lock_info.exclusive_locks.checked_sub(1).unwrap();
+            lock_info.exclusive_locks = lock_info.exclusive_locks.checked_sub(1).unwrap();
         } else {
-            lock_info.shared_locks.checked_sub(1).unwrap();
+            lock_info.shared_locks = lock_info.shared_locks.checked_sub(1).unwrap();
         }
+
+        self.aquired_id_alloc.set(lock.0, false);
     }
 }
 
@@ -457,6 +459,16 @@ impl Scheduler {
             let next_running = s.next();
             *running_lock = Some(next_running.clone());
 
+            logln!(
+                "Yielding from '{}' (pid={}, tid={}) to '{}' (pid={}, tid={})",
+                previous_running.process.name,
+                previous_running.process.id,
+                previous_running.id,
+                next_running.process.name,
+                next_running.process.id,
+                next_running.id
+            );
+
             let previous_task_ptr = previous_running.task.as_ptr();
             let new_task_ptr = next_running.task.as_ptr();
 
@@ -468,6 +480,13 @@ impl Scheduler {
             // Pick the next running thread
             let next_running = s.next();
             *running_lock = Some(next_running.clone());
+
+            logln!(
+                "Yielding to '{}' (pid={}, tid={})",
+                next_running.process.name,
+                next_running.process.id,
+                next_running.id
+            );
 
             let new_task_ptr = next_running.task.as_ptr();
 
