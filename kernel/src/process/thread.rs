@@ -23,11 +23,20 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use super::{ProcessEntry, RefProcess, scheduler::Scheduler, task::Task};
-use crate::locks::ThreadCell;
-use alloc::sync::{Arc, Weak};
-use lldebug::logln;
+use core::arch::asm;
 
+use super::{ProcessEntry, RefProcess, scheduler::Scheduler, task::Task};
+use crate::{
+    gdt,
+    locks::{LockEncouragement, ThreadCell},
+};
+use alloc::sync::{Arc, Weak};
+use arch::interrupts;
+use lldebug::logln;
+use mem::{addr::VirtAddr, paging::VmPermissions, vm::VmRegion};
+use util::consts::PAGE_4K;
+
+pub type UserspaceStackTop = VirtAddr;
 pub type ThreadId = usize;
 pub type RefThread = Arc<Thread>;
 pub type WeakThread = Weak<Thread>;
@@ -55,10 +64,14 @@ pub struct Thread {
     /// Init Userspace entrypoint
     // TODO: Maybe there could be a better way of passing the `ProcessEntry` into
     // `userspace_thread_begin`?
-    userspace_entry: Option<ProcessEntry>,
+    userspace_entry_ptr: Option<ProcessEntry>,
+    userspace_rsp_ptr: ThreadCell<Option<UserspaceStackTop>>,
 }
 
 impl Thread {
+    pub const DEFAULT_USERSPACE_RSP_TOP: VirtAddr = VirtAddr::new(0x7fff00000000);
+    pub const DEFAULT_USERSPACE_RSP_LEN: usize = PAGE_4K * 4;
+
     /// Create a new userspace thread
     pub fn new_user(process: RefProcess, entry_point: ProcessEntry) -> RefThread {
         let id = process.alloc_thread_id();
@@ -70,11 +83,13 @@ impl Thread {
             context_kind: ThreadContextKind::Userspace,
             task: ThreadCell::new(task),
             process,
-            userspace_entry: Some(entry_point),
+            userspace_entry_ptr: Some(entry_point),
+            userspace_rsp_ptr: ThreadCell::new(None),
         });
 
         let s = Scheduler::get();
         s.register_new_thread(thread.clone());
+        thread.alloc_user_stack();
 
         thread
     }
@@ -90,7 +105,8 @@ impl Thread {
             context_kind: ThreadContextKind::Kernel,
             task: ThreadCell::new(task),
             process,
-            userspace_entry: None,
+            userspace_entry_ptr: None,
+            userspace_rsp_ptr: ThreadCell::new(None),
         });
 
         let s = Scheduler::get();
@@ -98,10 +114,84 @@ impl Thread {
 
         thread
     }
+
+    /// Create a mapping for the userspace stack
+    fn alloc_user_stack(&self) {
+        let stack_top = Self::DEFAULT_USERSPACE_RSP_TOP
+            .offset(self.id * Self::DEFAULT_USERSPACE_RSP_LEN + (self.id * PAGE_4K));
+
+        self.process.map_anon(
+            VmRegion::from_containing(
+                stack_top.sub_offset(Self::DEFAULT_USERSPACE_RSP_LEN),
+                stack_top,
+            ),
+            VmPermissions::USER_RW,
+        );
+
+        *self.userspace_rsp_ptr.borrow_mut() = Some(stack_top);
+    }
 }
 
 fn userspace_thread_begin() {
-    todo!()
+    let current_thread = Scheduler::get()
+        .current_thread()
+        .upgrade()
+        .expect("Expected to operating on an alive thread");
+    assert!(matches!(
+        current_thread.context_kind,
+        ThreadContextKind::Userspace
+    ));
+
+    let entry = current_thread
+        .userspace_entry_ptr
+        .expect("Requires an entry ptr")
+        .addr();
+    let rsp = current_thread
+        .userspace_rsp_ptr
+        .clone()
+        .into_inner()
+        .expect("Requires an rsp ptr")
+        .addr();
+
+    // Here we need a critical section because we need to ensure the ISR stack is set
+    unsafe { interrupts::disable_interrupts() };
+
+    let top_of_task_stack = current_thread.task.borrow().stack_top();
+    gdt::set_stack_for_privl(top_of_task_stack.as_mut_ptr(), arch::CpuPrivilege::Ring0);
+
+    unsafe {
+        asm!(
+            r"
+              mov r15, 0
+              mov r14, 0
+              mov r13, 0
+              mov r13, 0
+              mov r12, 0
+              mov r11, 0
+              mov r10, 0
+              mov r9,  0
+              mov r8,  0
+              mov rbp, 0
+              mov rdx, 0
+              mov rcx, 0
+              mov rbx, 0
+              mov rax, 0
+
+              push 0x23   # ss
+              push rsi    # rsp
+              push 0x200  # rflags
+              push 0x2b   # cs
+              push rdi    # rip
+
+              mov rsi, 0
+              mov rdi, 0
+
+              iretq
+          ",
+          in("rdi") entry,
+          in("rsi") rsp,
+        );
+    }
 }
 
 extern "C" fn asm_syscall_entry() {

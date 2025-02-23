@@ -72,9 +72,10 @@ impl VmRegion {
 
     /// Get a VmRegion from a `u64` and offset `usize` (Virtal ptr)
     pub const fn from_kbh(region: (u64, usize)) -> Self {
-        Self::from_containing(
-            VirtAddr::new(region.0 as usize),
-            VirtAddr::new(region.0 as usize).offset(region.1 - PAGE_4K),
+        Self::new(
+            VirtPage::containing_addr(VirtAddr::new(region.0 as usize)),
+            VirtPage::containing_addr(VirtAddr::new(region.0 as usize).offset(region.1))
+                .sub_offset_by(1),
         )
     }
 
@@ -98,6 +99,11 @@ impl VmRegion {
     /// Does this other VmRegion overlap with our VmObject
     pub fn overlaps_with(&self, rhs: &Self) -> bool {
         self.does_contain_page(rhs.start) || self.does_contain_page(rhs.end)
+    }
+
+    /// The length of bytes within this region
+    pub fn len_bytes(&self) -> usize {
+        self.end.addr().addr() - self.start.addr().addr()
     }
 }
 

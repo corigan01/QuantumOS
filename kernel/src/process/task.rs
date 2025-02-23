@@ -110,6 +110,11 @@ impl Task {
         &raw mut self.stack.rsp
     }
 
+    /// Get the top of the task's inner stack ptr
+    pub fn stack_top(&self) -> VirtAddr {
+        VirtAddr::new(self.stack.stack_bottom.addr() + self.stack.len)
+    }
+
     /// Switch from task `from` into task `to`.
     pub unsafe fn switch_task(from: *mut Self, to: *mut Self) {
         unsafe {

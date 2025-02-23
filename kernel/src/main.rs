@@ -118,8 +118,9 @@ fn main(kbh: &KernelBootHeader) {
             VmRegion::from_kbh(kbh.kernel_init_heap),
             VmRegion::from_kbh(kbh.kernel_stack),
             VmRegion::from_kbh(kbh.initfs_ptr),
-        )
-    };
+        );
+        s.spawn_all_initfs(VmRegion::from_kbh(kbh.initfs_ptr));
+    }
 
     let kernel_process = Process::new("kernel".into());
     Thread::new_kernel(kernel_process.clone(), foo);

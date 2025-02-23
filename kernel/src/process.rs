@@ -34,10 +34,11 @@ use elf::{elf_owned::ElfOwned, tables::SegmentKind};
 use mem::{
     addr::VirtAddr,
     paging::VmPermissions,
-    vm::{VmProcess, VmRegion},
+    vm::{InsertVmObjectError, VmFillAction, VmProcess, VmRegion},
 };
 use scheduler::Scheduler;
 use thread::{ThreadId, WeakThread};
+use util::consts::PAGE_4K;
 use vm_elf::VmElfInject;
 
 pub mod scheduler;
@@ -87,9 +88,7 @@ impl Process {
 
     /// Add an ELF mapping to this process's memory map
     pub fn map_elf(&self, elf: Arc<ElfOwned>) -> ProcessEntry {
-        // `Weak` should be fine here because we shouldn't have any threads at this point in the process's
-        // lifecycle.
-        let vm_lock = self.vm.write(LockEncouragement::Weak);
+        let vm_lock = self.vm.write();
         let elf_fill = VmElfInject::new(elf.clone()).fill_action();
 
         elf.elf()
@@ -106,12 +105,31 @@ impl Process {
                 let header_region =
                     VmRegion::from_kbh((header.expected_vaddr(), header.in_mem_size()));
 
-                vm_lock
-                    .inplace_new_vmobject(header_region, header_perms, elf_fill.clone(), false)
-                    .unwrap();
+                match vm_lock.inplace_new_vmobject(
+                    header_region,
+                    header_perms,
+                    elf_fill.clone(),
+                    false,
+                ) {
+                    Ok(_) => (),
+                    Err(InsertVmObjectError::Overlapping {
+                        existing: _,
+                        attempted: _,
+                    }) => (),
+                    Err(err) => panic!("{:#?}", err),
+                }
             });
 
         elf.elf().entry_point().unwrap().into()
+    }
+
+    /// Add a new anonymous memory mapping
+    pub fn map_anon(&self, region: VmRegion, perm: VmPermissions) {
+        let vm_lock = self.vm.write();
+
+        vm_lock
+            .inplace_new_vmobject(region, perm, VmFillAction::Scrub(0), false)
+            .unwrap();
     }
 
     /// Allocate a new thread id

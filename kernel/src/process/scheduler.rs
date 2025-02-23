@@ -30,8 +30,9 @@ use super::{
     task::Task,
     thread::{RefThread, WeakThread},
 };
-use crate::locks::{
-    AcquiredLock, LockEncouragement, LockId, ScheduleLock, current_scheduler_locks,
+use crate::{
+    locks::{AcquiredLock, LockEncouragement, LockId, ScheduleLock, current_scheduler_locks},
+    process::thread::Thread,
 };
 use alloc::{
     collections::{btree_map::BTreeMap, vec_deque::VecDeque},
@@ -39,6 +40,7 @@ use alloc::{
     vec::Vec,
 };
 use boolvec::BoolVec;
+use elf::elf_owned::ElfOwned;
 use lldebug::{log, logln};
 use mem::{
     page::PhysPage,
@@ -46,6 +48,7 @@ use mem::{
     virt2phys::virt2phys,
     vm::{VmProcess, VmRegion},
 };
+use tar::Tar;
 
 /// A priority queue item with a weak reference to its owned thread
 #[derive(Debug)]
@@ -496,6 +499,26 @@ impl Scheduler {
             drop(s);
 
             unsafe { Task::switch_first(new_task_ptr) };
+        }
+    }
+
+    /// Spawn all the processes within the initfs region
+    ///
+    /// # Safety
+    /// The caller must ensure that this is the same region that was mapped, and that
+    /// this region exists with correct data.
+    pub unsafe fn spawn_all_initfs(&self, initfs: VmRegion) {
+        let initfs_slice = unsafe {
+            core::slice::from_raw_parts(initfs.start.addr().as_ptr::<u8>(), initfs.len_bytes())
+        };
+
+        let tar_file = Tar::new(initfs_slice);
+        for file in tar_file.iter() {
+            let new_process = Process::new(file.filename().unwrap().into());
+            let file_bytes = Arc::new(ElfOwned::new_from_slice(file.file().unwrap()));
+
+            let entry_ptr = new_process.map_elf(file_bytes);
+            Thread::new_user(new_process.clone(), entry_ptr);
         }
     }
 

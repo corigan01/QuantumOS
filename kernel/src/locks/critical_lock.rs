@@ -60,8 +60,8 @@ impl<T: ?Sized> RwCriticalLock<T> {
     }
 
     /// Aquire a write lock to the `RwCriticalLock`
-    pub fn write<'a>(&'a self, p: LockEncouragement) -> WriteCriticalLockGuard<'a, T> {
-        let lock = AcquiredLock::lock_exclusive(&self.lock, p);
+    pub fn write<'a>(&'a self) -> WriteCriticalLockGuard<'a, T> {
+        let lock = AcquiredLock::lock_exclusive(&self.lock, LockEncouragement::Strong);
 
         WriteCriticalLockGuard {
             lock_id: &self.lock,
