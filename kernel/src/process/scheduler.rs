@@ -46,7 +46,7 @@ use mem::{
     page::PhysPage,
     paging::VmPermissions,
     virt2phys::virt2phys,
-    vm::{VmProcess, VmRegion},
+    vm::{PageFaultInfo, PageFaultReponse, VmProcess, VmRegion, set_page_fault_handler},
 };
 use tar::Tar;
 
@@ -321,6 +321,8 @@ impl Scheduler {
                 thread_list: ScheduleLock::new(Vec::new()),
             });
 
+            set_page_fault_handler(page_fault_handler);
+
             *guard = Some(new_scheduler.clone());
             new_scheduler
         }
@@ -419,7 +421,7 @@ impl Scheduler {
 
     /// Remove a process from the process mapping
     pub fn remove_process(&self, p: &Process) {
-        logln!("Kill Process '{}' (pid='{}')", p.name, p.id);
+        logln!("Removing '{}' (pid='{}')", p.name, p.id);
         let mut pid_lock = self.pid_alloc.lock();
         assert!(
             self.process_list.lock().remove(&p.id).is_some(),
@@ -435,13 +437,19 @@ impl Scheduler {
 
     /// Returns the next process that should execute
     fn next(&self) -> RefThread {
-        self.picking_queue
-            .lock()
-            .pop_front()
-            .unwrap()
-            .thread
-            .upgrade()
-            .unwrap()
+        loop {
+            match self
+                .picking_queue
+                .lock()
+                .pop_front()
+                .expect("No active threads to schedule")
+                .thread
+                .upgrade()
+            {
+                Some(thread) => break thread,
+                None => (),
+            }
+        }
     }
 
     /// Yield the current thread (If possible)
@@ -464,15 +472,19 @@ impl Scheduler {
             let next_running = s.next();
             *running_lock = Some(next_running.clone());
 
-            logln!(
-                "Yielding from '{}' (pid={}, tid={}) to '{}' (pid={}, tid={})",
-                previous_running.process.name,
-                previous_running.process.id,
-                previous_running.id,
-                next_running.process.name,
-                next_running.process.id,
-                next_running.id
-            );
+            if next_running.id != previous_running.id
+                || next_running.process.id != previous_running.process.id
+            {
+                logln!(
+                    "Yielding from '{}' (pid={}, tid={}) to '{}' (pid={}, tid={})",
+                    previous_running.process.name,
+                    previous_running.process.id,
+                    previous_running.id,
+                    next_running.process.name,
+                    next_running.process.id,
+                    next_running.id
+                );
+            }
 
             let previous_task_ptr = previous_running.task.as_ptr();
             let new_task_ptr = next_running.task.as_ptr();
@@ -588,10 +600,52 @@ impl Scheduler {
     pub fn aquiredlock_unlock(&self, lock: &AcquiredLock) {
         self.held_locks.lock().unlock(lock);
     }
+
+    /// Crash the current thread
+    pub fn crash_current() {
+        {
+            let s = Scheduler::get();
+            let current_thread = s.current_thread().upgrade().unwrap();
+            logln!(
+                "Kill Thread '{}' pid={}, tid={}",
+                current_thread.process.name,
+                current_thread.process.id,
+                current_thread.id
+            );
+
+            // Remove thread from thread list
+            s.thread_list.lock().retain(|thread| {
+                thread.id != current_thread.id || thread.process.id != current_thread.process.id
+            });
+
+            current_thread
+                .process
+                .threads
+                .write(LockEncouragement::Strong)
+                .remove(&current_thread.id)
+                .expect("Expected to find thread in parent process's array!");
+
+            // Remove thread from running
+            *s.running.lock() = None;
+        }
+
+        Scheduler::yield_me();
+    }
 }
 
 impl Drop for Scheduler {
     fn drop(&mut self) {
         panic!("Should never drop the scheduler!");
     }
+}
+
+pub fn page_fault_handler(info: PageFaultInfo) -> PageFaultReponse {
+    Scheduler::get()
+        .current_thread()
+        .upgrade()
+        .unwrap()
+        .process
+        .vm
+        .write()
+        .page_fault_handler(info)
 }

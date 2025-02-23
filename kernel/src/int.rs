@@ -23,23 +23,21 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use crate::processor::{notify_begin_irq, notify_end_irq};
+use crate::process::scheduler::Scheduler;
 use arch::{
     CpuPrivilege, attach_irq, critcal_section,
     idt64::{
         ExceptionKind, InterruptDescTable, InterruptFlags, InterruptInfo, fire_debug_int, interrupt,
     },
-    interrupts::{self, assert_interrupts},
-    locks::{InterruptMutex, interrupt_locks_held},
+    locks::InterruptMutex,
     pic8259::{pic_eoi, pic_remap},
-    registers::{ProcessContext, Segment},
+    registers::Segment,
 };
-use lldebug::{log, logln};
+use lldebug::{errorln, log, logln};
 use mem::{
     addr::VirtAddr,
     vm::{PageFaultInfo, call_page_fault_handler},
 };
-use quantum_portal::server::QuantumPortalServer;
 
 static INTERRUPT_TABLE: InterruptMutex<InterruptDescTable> =
     InterruptMutex::new(InterruptDescTable::new());
@@ -48,18 +46,9 @@ static IRQ_HANDLERS: InterruptMutex<[Option<fn(&InterruptInfo)>; 32]> =
 
 #[interrupt(0..50)]
 fn exception_handler(args: &InterruptInfo) {
-    assert_eq!(
-        interrupt_locks_held(),
-        0,
-        "Should not be possible to call an interrupt while interrupt locks are held -- {args:#?}"
-    );
-    assert_interrupts(false);
-    notify_begin_irq();
-    let rsp: u64;
-    unsafe { core::arch::asm!("mov rax, rsp", out("rax") rsp) };
-    let rsp = VirtAddr::new(rsp as usize);
-
-    logln!("rsp={:#018x} - {:?}", rsp, args.flags);
+    if args.flags.exception_kind() == ExceptionKind::Abort {
+        panic!("Interrupt -- {:?}", args.flags);
+    }
 
     match args.flags {
         // IRQ
@@ -95,7 +84,13 @@ fn exception_handler(args: &InterruptInfo) {
                     request_perm,
                     addr,
                 } => {
-                    logln!("{:#x?}", args);
+                    logln!(
+                        "Page fault without access!\n  Requested={:?}\n  Actual={:?}\n  address={:#018x}",
+                        request_perm,
+                        page_perm,
+                        addr
+                    );
+                    Scheduler::crash_current();
                 }
                 // panic
                 mem::vm::PageFaultReponse::CriticalFault(error) => {
@@ -111,20 +106,14 @@ fn exception_handler(args: &InterruptInfo) {
             }
         }
         InterruptFlags::Debug => {
-            lldebug::logln!("{:#x?}", args);
+            logln!("{:#x?}", args);
         }
         exception => {
-            panic!("UNHANDLED FAULT\n{:#016x?}", args)
+            errorln!("UNHANDLED FAULT\n{:#016x?}", args);
+            Scheduler::crash_current();
         }
         _ => (),
     }
-
-    if args.flags.exception_kind() == ExceptionKind::Abort {
-        panic!("Interrupt -- {:?}", args.flags);
-    }
-
-    notify_end_irq();
-    assert_interrupts(false);
 }
 
 fn call_attached_irq(irq_id: u8, args: &InterruptInfo) {
@@ -198,24 +187,5 @@ const PIC_IRQ_OFFSET: u8 = 0x20;
 pub fn enable_pic() {
     unsafe {
         pic_remap(PIC_IRQ_OFFSET, PIC_IRQ_OFFSET + 8);
-    }
-}
-
-#[unsafe(no_mangle)]
-#[inline(never)]
-extern "C" fn syscall_handler(
-    rdi: u64,
-    rsi: u64,
-    rdx: u64,
-    rsp: u64,
-    r8: u64,
-    syscall_number: u64,
-) -> u64 {
-    unsafe {
-        // Call the portal
-        let resp =
-            crate::syscall_handler::KernelSyscalls::from_syscall(syscall_number, rdi, rsi, rdx, r8);
-
-        resp
     }
 }

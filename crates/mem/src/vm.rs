@@ -840,7 +840,7 @@ static MAIN_PAGE_FAULT_HANDLER: InterruptMutex<Option<SystemAttachedPageFaultFn>
 pub fn call_page_fault_handler(info: PageFaultInfo) -> PageFaultReponse {
     // FIXME: This lock will deadlock if we fault setting the page fault handler, we
     //        should fix this in the future!
-    let locked = MAIN_PAGE_FAULT_HANDLER.lock();
+    let locked = MAIN_PAGE_FAULT_HANDLER.lock().clone();
     if let Some(locked) = locked.as_ref() {
         // call the handler function if its enabled
         locked(info)

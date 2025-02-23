@@ -42,16 +42,16 @@ mod syscall_handler;
 mod timer;
 extern crate alloc;
 
-use arch::{interrupts, supports::cpu_vender};
+use arch::supports::cpu_vender;
 use bootloader::KernelBootHeader;
 use lldebug::{debug_ready, logln, make_debug};
 use mem::{
-    alloc::{KernelAllocator, dump_allocator, provide_init_region},
+    alloc::{KernelAllocator, provide_init_region},
     paging::init_virt2phys_provider,
     pmm::Pmm,
     vm::VmRegion,
 };
-use process::{Process, scheduler::Scheduler, task::Task, thread::Thread};
+use process::{Process, scheduler::Scheduler, thread::Thread};
 use serial::{Serial, baud::SerialBaud};
 use util::{bytes::HumanBytes, consts::PAGE_4K};
 

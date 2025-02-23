@@ -40,7 +40,7 @@ fn panic(info: &PanicInfo) -> ! {
 extern "C" fn _start() {
     let hello_world = "Hello World from UE!! ";
 
-    for i in 0..100 {
+    for i in 0..10 {
         dbugln!("{hello_world} -> [{i}] ");
     }
 

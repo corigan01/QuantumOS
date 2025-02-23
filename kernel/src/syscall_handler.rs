@@ -24,24 +24,40 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 use alloc::format;
-use mem::paging::VmPermissions;
+use lldebug::{LogKind, logln};
 use quantum_portal::{
     DebugMsgError, ExitReason, MapMemoryError, MemoryLocation, MemoryProtections, QuantumPortal,
     WaitCondition, WaitSignal, WaitingError, server::QuantumPortalServer,
 };
-use util::consts::PAGE_4K;
+
+use crate::process::scheduler::Scheduler;
+
+#[unsafe(no_mangle)]
+extern "C" fn syscall_handler(
+    rdi: u64,
+    rsi: u64,
+    rdx: u64,
+    _rsp: u64,
+    r8: u64,
+    syscall_number: u64,
+) -> u64 {
+    unsafe {
+        crate::syscall_handler::KernelSyscalls::from_syscall(syscall_number, rdi, rsi, rdx, r8)
+    }
+}
 
 pub struct KernelSyscalls {}
 
 impl QuantumPortalServer for KernelSyscalls {
     fn verify_user_ptr<T: Sized>(ptr: *const T) -> bool {
-        todo!()
+        true
     }
 }
 
 impl QuantumPortal for KernelSyscalls {
     fn exit(_exit_reason: ExitReason) -> ! {
-        todo!()
+        Scheduler::crash_current();
+        unreachable!();
     }
 
     fn map_memory(
@@ -49,21 +65,35 @@ impl QuantumPortal for KernelSyscalls {
         protections: MemoryProtections,
         bytes: usize,
     ) -> Result<*mut u8, MapMemoryError> {
-        todo!()
+        logln!("map_memory todo");
+        Scheduler::crash_current();
+        unreachable!();
     }
 
     fn get_pid() -> usize {
-        todo!()
+        logln!("get_pid todo");
+        Scheduler::crash_current();
+        unreachable!();
     }
 
     fn debug_msg(msg: &str) -> Result<(), DebugMsgError> {
-        todo!()
+        let current_thread = Scheduler::get().current_thread().upgrade().unwrap();
+        let process_fmt = format!(
+            "{:<24}p{:02x}t{:02x}",
+            current_thread.process.name, current_thread.process.id, current_thread.id
+        );
+
+        lldebug::priv_print(LogKind::Log, &process_fmt, format_args!("{}", msg));
+
+        Ok(())
     }
 
     fn wait_for(
         conditions: &[WaitCondition],
         signal_buffer: &mut [WaitSignal],
     ) -> Result<usize, WaitingError> {
-        todo!()
+        logln!("wait_for todo");
+        Scheduler::crash_current();
+        unreachable!();
     }
 }

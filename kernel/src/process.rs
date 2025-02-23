@@ -31,6 +31,7 @@ use alloc::{
 };
 use boolvec::BoolVec;
 use elf::{elf_owned::ElfOwned, tables::SegmentKind};
+use lldebug::logln;
 use mem::{
     addr::VirtAddr,
     paging::VmPermissions,
@@ -38,7 +39,6 @@ use mem::{
 };
 use scheduler::Scheduler;
 use thread::{ThreadId, WeakThread};
-use util::consts::PAGE_4K;
 use vm_elf::VmElfInject;
 
 pub mod scheduler;
@@ -55,9 +55,9 @@ pub type WeakProcess = Weak<Process>;
 #[derive(Debug)]
 pub struct Process {
     /// The unique id of this process
-    id: ProcessId,
+    pub id: ProcessId,
     /// The name of this process
-    name: String,
+    pub name: String,
     /// Weak references to all threads within this process.
     ///
     /// Threads carry strong references to their process, and are the actual scheduling artifacts.
@@ -91,34 +91,21 @@ impl Process {
         let vm_lock = self.vm.write();
         let elf_fill = VmElfInject::new(elf.clone()).fill_action();
 
-        elf.elf()
-            .program_headers()
-            .unwrap()
-            .iter()
-            .filter(|header| header.segment_kind() == SegmentKind::Load)
-            .for_each(|header| {
-                let header_perms = VmPermissions::none()
-                    .set_exec_flag(header.is_executable())
-                    .set_read_flag(true)
-                    .set_write_flag(header.is_writable());
+        let header_perms = VmPermissions::none()
+            .set_user_flag(true)
+            .set_exec_flag(true)
+            .set_read_flag(true)
+            .set_write_flag(true);
 
-                let header_region =
-                    VmRegion::from_kbh((header.expected_vaddr(), header.in_mem_size()));
-
-                match vm_lock.inplace_new_vmobject(
-                    header_region,
-                    header_perms,
-                    elf_fill.clone(),
-                    false,
-                ) {
-                    Ok(_) => (),
-                    Err(InsertVmObjectError::Overlapping {
-                        existing: _,
-                        attempted: _,
-                    }) => (),
-                    Err(err) => panic!("{:#?}", err),
-                }
-            });
+        let (start_addr, end_addr) = elf.elf().vaddr_range().unwrap();
+        vm_lock
+            .inplace_new_vmobject(
+                VmRegion::from_containing(start_addr.into(), end_addr.into()),
+                header_perms,
+                elf_fill.clone(),
+                false,
+            )
+            .unwrap();
 
         elf.elf().entry_point().unwrap().into()
     }

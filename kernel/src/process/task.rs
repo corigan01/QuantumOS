@@ -31,6 +31,8 @@ use core::{
 use mem::addr::{AlignedTo, VirtAddr};
 use util::consts::PAGE_4K;
 
+use crate::process::scheduler::Scheduler;
+
 type ArchStackPtr = usize;
 
 /// A task's flags
@@ -158,7 +160,7 @@ impl Task {
         };
 
         let stack_ptr = new_task.get_task_stack_ptr();
-        unsafe { asm_init(stack_ptr, start, ret_call_panic) };
+        unsafe { asm_init(stack_ptr, start, ret_call_crash) };
 
         new_task
     }
@@ -170,8 +172,9 @@ impl Task {
 /// werid and hard to debug errors.
 ///
 /// Its just the function Tasks return to when they finish.
-pub fn ret_call_panic() -> ! {
-    panic!("Should never return from caller");
+pub fn ret_call_crash() -> ! {
+    Scheduler::crash_current();
+    unreachable!("Should never return from caller");
 }
 
 #[inline(always)]

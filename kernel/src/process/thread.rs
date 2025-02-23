@@ -26,10 +26,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 use core::arch::asm;
 
 use super::{ProcessEntry, RefProcess, scheduler::Scheduler, task::Task};
-use crate::{
-    gdt,
-    locks::{LockEncouragement, ThreadCell},
-};
+use crate::{context::set_syscall_rsp, gdt, locks::ThreadCell};
 use alloc::sync::{Arc, Weak};
 use arch::interrupts;
 use lldebug::logln;
@@ -158,6 +155,7 @@ fn userspace_thread_begin() {
 
     let top_of_task_stack = current_thread.task.borrow().stack_top();
     gdt::set_stack_for_privl(top_of_task_stack.as_mut_ptr(), arch::CpuPrivilege::Ring0);
+    unsafe { set_syscall_rsp(top_of_task_stack.addr() as u64) };
 
     unsafe {
         asm!(
@@ -192,12 +190,4 @@ fn userspace_thread_begin() {
           in("rsi") rsp,
         );
     }
-}
-
-extern "C" fn asm_syscall_entry() {
-    todo!()
-}
-
-extern "C" fn asm_syscall_exit() {
-    todo!()
 }

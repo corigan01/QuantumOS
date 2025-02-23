@@ -352,21 +352,21 @@ impl InterruptFlags {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct InterruptInfo {
-    pub context: ProcessContext,
+pub struct InterruptInfo<'a> {
+    pub context: &'a ProcessContext,
     pub flags: InterruptFlags,
 }
 
-impl InterruptInfo {
+impl<'a> InterruptInfo<'a> {
     pub fn convert_from_ne(irq_id: u8, context: *const ProcessContext) -> Self {
         Self {
-            context: unsafe { core::ptr::read_unaligned(context) },
+            context: unsafe { &*context },
             flags: InterruptFlags::convert_from_interrupt(irq_id, 0),
         }
     }
 
     pub fn convert_from_e(irq_id: u8, context: *const ProcessContext) -> Self {
-        let context = unsafe { core::ptr::read_unaligned(context) };
+        let context = unsafe { &*context };
         Self {
             context,
             flags: InterruptFlags::convert_from_interrupt(irq_id, context.exception_code),
