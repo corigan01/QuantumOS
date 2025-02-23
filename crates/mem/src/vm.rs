@@ -74,8 +74,9 @@ impl VmRegion {
     pub const fn from_kbh(region: (u64, usize)) -> Self {
         Self::new(
             VirtPage::containing_addr(VirtAddr::new(region.0 as usize)),
-            VirtPage::containing_addr(VirtAddr::new(region.0 as usize).offset(region.1))
-                .sub_offset_by(1),
+            VirtPage::containing_addr(
+                VirtAddr::new(region.0 as usize).offset(region.1.saturating_sub(1)),
+            ),
         )
     }
 

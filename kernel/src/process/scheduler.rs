@@ -50,6 +50,8 @@ use mem::{
 };
 use tar::Tar;
 
+const VERBOSE_LOGING: bool = false;
+
 /// A priority queue item with a weak reference to its owned thread
 #[derive(Debug)]
 struct ScheduleItem {
@@ -385,7 +387,9 @@ impl Scheduler {
 
     /// Add a process to the process mapping
     pub fn register_new_process(&self, p: RefProcess) {
-        logln!("Spawn Process '{}' (pid='{}')", p.name, p.id);
+        if VERBOSE_LOGING {
+            logln!("Spawn Process '{}' (pid='{}')", p.name, p.id);
+        }
         if let Some(old_proc) = self.process_list.lock().insert(p.id, Arc::downgrade(&p)) {
             if let Some(old_proc) = old_proc.upgrade() {
                 panic!(
@@ -421,7 +425,9 @@ impl Scheduler {
 
     /// Remove a process from the process mapping
     pub fn remove_process(&self, p: &Process) {
-        logln!("Removing '{}' (pid='{}')", p.name, p.id);
+        if VERBOSE_LOGING {
+            logln!("Removing '{}' (pid='{}')", p.name, p.id);
+        }
         let mut pid_lock = self.pid_alloc.lock();
         assert!(
             self.process_list.lock().remove(&p.id).is_some(),
@@ -455,25 +461,32 @@ impl Scheduler {
     /// Yield the current thread (If possible)
     pub fn yield_me() {
         if current_scheduler_locks() != 0 {
-            todo!("skipping yield");
+            return;
         }
 
         let s = Scheduler::get();
         let mut running_lock = s.running.lock();
 
+        if s.picking_queue.lock().len() == 0 {
+            return;
+        }
+
         // Save the current running process
         if let Some(previous_running) = running_lock.clone() {
-            s.picking_queue.lock().push_back(ScheduleItem {
-                priority: 0,
-                thread: Arc::downgrade(&previous_running),
-            });
+            if !*previous_running.crashed.borrow() {
+                s.picking_queue.lock().push_back(ScheduleItem {
+                    priority: 0,
+                    thread: Arc::downgrade(&previous_running),
+                });
+            }
 
             // Pick the next running thread
             let next_running = s.next();
             *running_lock = Some(next_running.clone());
 
-            if next_running.id != previous_running.id
-                || next_running.process.id != previous_running.process.id
+            if (next_running.id != previous_running.id
+                || next_running.process.id != previous_running.process.id)
+                && VERBOSE_LOGING
             {
                 logln!(
                     "Yielding from '{}' (pid={}, tid={}) to '{}' (pid={}, tid={})",
@@ -498,12 +511,14 @@ impl Scheduler {
             let next_running = s.next();
             *running_lock = Some(next_running.clone());
 
-            logln!(
-                "Yielding to '{}' (pid={}, tid={})",
-                next_running.process.name,
-                next_running.process.id,
-                next_running.id
-            );
+            if VERBOSE_LOGING {
+                logln!(
+                    "Yielding to '{}' (pid={}, tid={})",
+                    next_running.process.name,
+                    next_running.process.id,
+                    next_running.id
+                );
+            }
 
             let new_task_ptr = next_running.task.as_ptr();
 
@@ -549,7 +564,10 @@ impl Scheduler {
         loop {
             match Scheduler::get().try_acquiredlock_exclusive(lock_id, encouragement) {
                 Ok(lock) => break lock,
-                Err(LockError::WillBlock) => Self::yield_me(),
+                Err(LockError::WillBlock) => {
+                    logln!("Blocking lock!");
+                    Self::yield_me()
+                }
                 Err(LockError::Deadlock) => {
                     panic!("Aquiring an exclusive lock on this thread will deadlock!")
                 }
@@ -561,7 +579,10 @@ impl Scheduler {
         loop {
             match Scheduler::get().try_acquiredlock_shared(lock_id, encouragement) {
                 Ok(lock) => break lock,
-                Err(LockError::WillBlock) => Self::yield_me(),
+                Err(LockError::WillBlock) => {
+                    logln!("Blocking lock!");
+                    Self::yield_me()
+                }
                 Err(LockError::Deadlock) => {
                     panic!("Aquiring an exclusive lock on this thread will deadlock!")
                 }
@@ -606,8 +627,10 @@ impl Scheduler {
         {
             let s = Scheduler::get();
             let current_thread = s.current_thread().upgrade().unwrap();
+            *current_thread.crashed.borrow_mut() = true;
+
             logln!(
-                "Kill Thread '{}' pid={}, tid={}",
+                "CRASH! '{}' pid={}, tid={}",
                 current_thread.process.name,
                 current_thread.process.id,
                 current_thread.id
@@ -624,12 +647,10 @@ impl Scheduler {
                 .write(LockEncouragement::Strong)
                 .remove(&current_thread.id)
                 .expect("Expected to find thread in parent process's array!");
-
-            // Remove thread from running
-            *s.running.lock() = None;
         }
 
         Scheduler::yield_me();
+        unreachable!("Yield returned to crashed process!");
     }
 }
 

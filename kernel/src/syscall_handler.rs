@@ -96,4 +96,10 @@ impl QuantumPortal for KernelSyscalls {
         Scheduler::crash_current();
         unreachable!();
     }
+
+    fn yield_me() -> usize {
+        logln!("Userspace Yield");
+        Scheduler::yield_me();
+        0
+    }
 }

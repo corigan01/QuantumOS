@@ -30,12 +30,11 @@ use alloc::{
     sync::{Arc, Weak},
 };
 use boolvec::BoolVec;
-use elf::{elf_owned::ElfOwned, tables::SegmentKind};
-use lldebug::logln;
+use elf::elf_owned::ElfOwned;
 use mem::{
     addr::VirtAddr,
     paging::VmPermissions,
-    vm::{InsertVmObjectError, VmFillAction, VmProcess, VmRegion},
+    vm::{VmFillAction, VmProcess, VmRegion},
 };
 use scheduler::Scheduler;
 use thread::{ThreadId, WeakThread};
@@ -73,7 +72,6 @@ impl Process {
     /// Create a new process
     pub fn new(name: String) -> RefProcess {
         let s = Scheduler::get();
-
         let proc = Arc::new(Self {
             id: s.alloc_pid(),
             name,

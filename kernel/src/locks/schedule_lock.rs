@@ -35,6 +35,16 @@ pub fn current_scheduler_locks() -> usize {
     SCHEDULE_LOCKS_HELD.load(Ordering::Relaxed)
 }
 
+/// Manually acquire a schedule lock
+pub unsafe fn manual_schedule_lock() {
+    SCHEDULE_LOCKS_HELD.fetch_add(1, Ordering::SeqCst);
+}
+
+/// Manually release a schedule lock
+pub unsafe fn manual_schedule_unlock() {
+    SCHEDULE_LOCKS_HELD.fetch_sub(1, Ordering::SeqCst);
+}
+
 /// A `Mutex` with relax behavior that prevents schedules
 pub struct ScheduleLock<T: ?Sized> {
     lock: AtomicBool,
@@ -71,6 +81,9 @@ impl<T: ?Sized> ScheduleLock<T> {
     /// This does not disable interrupts, but instead just prevents interrupts from causing
     /// the scheduler to switch to another process.
     pub fn lock<'a>(&'a self) -> ScheduleLockGuard<'a, T> {
+        // Increment the scheduler lock
+        SCHEDULE_LOCKS_HELD.fetch_add(1, Ordering::SeqCst);
+
         // Aquire the lock
         while let Err(previous_value) =
             self.lock
@@ -80,9 +93,6 @@ impl<T: ?Sized> ScheduleLock<T> {
                 panic!("Cannot aquire the scheduler lock twice!");
             }
         }
-
-        // Increment the scheduler lock
-        SCHEDULE_LOCKS_HELD.fetch_add(1, Ordering::SeqCst);
 
         ScheduleLockGuard {
             lock: &self.lock,

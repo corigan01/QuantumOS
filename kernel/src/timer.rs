@@ -25,7 +25,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 use core::sync::atomic::{AtomicU64, Ordering};
 
-use crate::int::attach_irq_handler;
+use crate::{int::attach_irq_handler, process::scheduler::Scheduler};
 use arch::{
     critcal_section,
     idt64::InterruptInfo,
@@ -59,6 +59,7 @@ static KERNEL_TICKS: AtomicU64 = AtomicU64::new(0);
 
 fn pit_interrupt_handler(args: &InterruptInfo) {
     KERNEL_TICKS.fetch_add(1, Ordering::AcqRel);
+    // Scheduler::yield_me();
 }
 
 pub fn kernel_ticks() -> u64 {

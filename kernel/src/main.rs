@@ -42,9 +42,12 @@ mod syscall_handler;
 mod timer;
 extern crate alloc;
 
-use arch::supports::cpu_vender;
+use core::cell::SyncUnsafeCell;
+
+use arch::{interrupts, supports::cpu_vender};
 use bootloader::KernelBootHeader;
-use lldebug::{debug_ready, logln, make_debug};
+use lldebug::{debug_ready, logln, make_debug, set_sync_fn};
+use locks::{manual_schedule_lock, manual_schedule_unlock};
 use mem::{
     alloc::{KernelAllocator, provide_init_region},
     paging::init_virt2phys_provider,
@@ -92,7 +95,6 @@ fn main(kbh: &KernelBootHeader) {
     int::enable_pic();
     int::attach_interrupts();
     int::attach_syscall();
-    timer::init_timer();
     unsafe { arch::registers::ia32_efer::set_no_execute_flag(true) };
 
     logln!("Init PhysMemoryManager");
@@ -109,8 +111,6 @@ fn main(kbh: &KernelBootHeader) {
     logln!("Attached virt2phys provider!");
     init_virt2phys_provider();
 
-    logln!("Init Scheduler ... ");
-
     let s = Scheduler::get();
     unsafe {
         s.init_kernel_vm(
@@ -119,33 +119,28 @@ fn main(kbh: &KernelBootHeader) {
             VmRegion::from_kbh(kbh.kernel_stack),
             VmRegion::from_kbh(kbh.initfs_ptr),
         );
-        s.spawn_all_initfs(VmRegion::from_kbh(kbh.initfs_ptr));
     }
 
+    unsafe { (*INITFS_REGION.get()) = VmRegion::from_kbh(kbh.initfs_ptr) };
+
     let kernel_process = Process::new("kernel".into());
-    Thread::new_kernel(kernel_process.clone(), foo);
-    Thread::new_kernel(kernel_process.clone(), bar);
-    Thread::new_kernel(kernel_process, bazz);
+    Thread::new_kernel(kernel_process.clone(), init);
+    Thread::new_kernel(kernel_process.clone(), idle);
 
     Scheduler::yield_me();
 }
 
-fn foo() {
-    logln!("+FOO");
+static INITFS_REGION: SyncUnsafeCell<VmRegion> = SyncUnsafeCell::new(VmRegion::from_kbh((4096, 0)));
+
+fn init() {
+    logln!("init task");
+    let s = Scheduler::get();
+    unsafe { s.spawn_all_initfs(*INITFS_REGION.get()) };
+    timer::init_timer();
+}
+
+fn idle() {
     loop {
         Scheduler::yield_me();
     }
-}
-
-fn bar() {
-    logln!("+BAR");
-    Scheduler::yield_me();
-    Scheduler::yield_me();
-    logln!("-BAR");
-}
-
-fn bazz() {
-    logln!("+BAZZ");
-    Scheduler::yield_me();
-    logln!("-BAZZ");
 }

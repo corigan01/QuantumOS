@@ -36,6 +36,7 @@ use crate::{
 };
 use alloc::{boxed::Box, sync::Arc};
 use arch::{
+    interrupts,
     paging64::{
         PageEntry1G, PageEntry2M, PageEntry4K, PageEntryLvl2, PageEntryLvl3, PageEntryLvl4,
         PageMapLvl1, PageMapLvl2, PageMapLvl3, PageMapLvl4,
@@ -404,6 +405,7 @@ impl Virt2PhysMapping {
 
     /// Load this table
     pub unsafe fn load(self) -> Result<(), PageTableLoadingError> {
+        unsafe { interrupts::disable_interrupts() };
         // We want to hold a lock to the global table to ensure no one else can change it
         let lock = CURRENTLY_LOADED_PAGE_TABLES.mapping.upgradeable_read();
 
@@ -422,6 +424,7 @@ impl Virt2PhysMapping {
         // Write our addr to the page dir
         unsafe { cr3::set_page_directory_base_register(inner_table_ptr.addr() as u64) };
 
+        unsafe { interrupts::enable_interrupts() };
         Ok(())
     }
 

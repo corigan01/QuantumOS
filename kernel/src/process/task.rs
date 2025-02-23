@@ -28,10 +28,13 @@ use core::{
     alloc::Layout,
     arch::{asm, naked_asm},
 };
+use lldebug::logln;
 use mem::addr::{AlignedTo, VirtAddr};
 use util::consts::PAGE_4K;
 
-use crate::process::scheduler::Scheduler;
+use crate::{
+    context::set_syscall_rsp, gdt, locks::LockEncouragement, process::scheduler::Scheduler,
+};
 
 type ArchStackPtr = usize;
 
@@ -83,7 +86,7 @@ pub struct Task {
 }
 
 impl Task {
-    pub const TASK_DEFAULT_STACK_LEN: usize = PAGE_4K * 8;
+    pub const TASK_DEFAULT_STACK_LEN: usize = PAGE_4K * 16;
 
     /// Check if this Task is the currently executing task
     pub fn is_current(&self) -> bool {
@@ -104,6 +107,22 @@ impl Task {
     #[inline(always)]
     fn switch_epilogue(&mut self) {
         self.task_flags.set_running_flag(true);
+
+        let top_of_task_stack = self.stack_top();
+        gdt::set_stack_for_privl(top_of_task_stack.as_mut_ptr(), arch::CpuPrivilege::Ring0);
+        unsafe { set_syscall_rsp(top_of_task_stack.addr() as u64) };
+
+        let current_thread = Scheduler::get().current_thread().upgrade().unwrap();
+        unsafe {
+            let page_tables = current_thread
+                .process
+                .vm
+                .read(LockEncouragement::Strong)
+                .clone();
+            if !page_tables.page_tables.is_loaded() {
+                page_tables.page_tables.load().unwrap()
+            }
+        };
     }
 
     /// Get the tasks inner stack ptr
@@ -145,6 +164,7 @@ impl Task {
         unsafe {
             let to_stack_ptr = (&mut *to).get_task_stack_ptr();
             let mut from_stack_ptr = asm_get_rsp();
+            (&mut *to).switch_epilogue();
 
             asm_switch(&raw mut from_stack_ptr, to_stack_ptr);
 
@@ -173,6 +193,7 @@ impl Task {
 ///
 /// Its just the function Tasks return to when they finish.
 pub fn ret_call_crash() -> ! {
+    logln!("Thread returned!");
     Scheduler::crash_current();
     unreachable!("Should never return from caller");
 }

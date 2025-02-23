@@ -63,6 +63,7 @@ pub struct Thread {
     // `userspace_thread_begin`?
     userspace_entry_ptr: Option<ProcessEntry>,
     userspace_rsp_ptr: ThreadCell<Option<UserspaceStackTop>>,
+    pub crashed: ThreadCell<bool>,
 }
 
 impl Thread {
@@ -72,7 +73,6 @@ impl Thread {
     /// Create a new userspace thread
     pub fn new_user(process: RefProcess, entry_point: ProcessEntry) -> RefThread {
         let id = process.alloc_thread_id();
-        logln!("Spawn User Thread (tid='{}')", id);
         let task = Task::new(userspace_thread_begin);
 
         let thread = Arc::new(Self {
@@ -82,6 +82,7 @@ impl Thread {
             process,
             userspace_entry_ptr: Some(entry_point),
             userspace_rsp_ptr: ThreadCell::new(None),
+            crashed: ThreadCell::new(false),
         });
 
         let s = Scheduler::get();
@@ -94,7 +95,6 @@ impl Thread {
     /// Create a new kernel thread
     pub fn new_kernel(process: RefProcess, entry_point: fn()) -> RefThread {
         let id = process.alloc_thread_id();
-        logln!("Spawn Kernel Thread (tid='{}')", id);
         let task = Task::new(entry_point);
 
         let thread = Arc::new(Self {
@@ -104,6 +104,7 @@ impl Thread {
             process,
             userspace_entry_ptr: None,
             userspace_rsp_ptr: ThreadCell::new(None),
+            crashed: ThreadCell::new(false),
         });
 
         let s = Scheduler::get();
@@ -126,6 +127,12 @@ impl Thread {
         );
 
         *self.userspace_rsp_ptr.borrow_mut() = Some(stack_top);
+    }
+}
+
+impl Drop for Thread {
+    fn drop(&mut self) {
+        logln!("DROP");
     }
 }
 

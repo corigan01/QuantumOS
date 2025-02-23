@@ -115,6 +115,9 @@ pub trait QuantumPortal {
         }
     }
 
+    #[event = 4]
+    fn yield_me() -> usize {}
+
     #[event = 69]
     fn debug_msg(msg: &str) -> Result<(), DebugMsgError> {
         enum DebugMsgError {
