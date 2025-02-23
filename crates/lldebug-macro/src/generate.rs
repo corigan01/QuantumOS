@@ -84,7 +84,7 @@ pub fn generate_stream(enumeration: usize, stream: &DebugStream) -> proc_macro2:
     let stream_init = &stream.init_expr;
 
     quote! {
-        static mut #name: ::core::cell::LazyCell<::lldebug::sync::Mutex<#stream_type>> = ::core::cell::LazyCell::new(|| ::lldebug::sync::Mutex::new(#stream_init));
+        pub static mut #name: ::core::cell::LazyCell<::lldebug::lock::DebugMutex<#stream_type>> = ::core::cell::LazyCell::new(|| ::lldebug::lock::DebugMutex::new(#stream_init));
     }
 }
 
@@ -92,10 +92,10 @@ fn generate_print_each(var_name: &Ident, is_option: bool) -> proc_macro2::TokenS
     if is_option {
         quote! {
             unsafe {
-                if let Some(mut locked) = (#var_name).try_lock() {
-                    if let Some(inner) = &mut *locked {
-                        let _ = inner.write_fmt(args);
-                    }
+                let mut locked = (#var_name).lock();
+
+                if let Some(inner) = &mut *locked {
+                    let _ = inner.write_fmt(args);
                 }
             }
         }

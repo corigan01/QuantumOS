@@ -24,12 +24,12 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 use crate::MemoryError;
+use arch::locks::InterruptMutex;
 use core::{
     alloc::{GlobalAlloc, Layout},
     fmt::Debug,
     ptr::NonNull,
 };
-use lldebug::sync::Mutex;
 use util::{align_to, is_align_to};
 
 struct Buddy {
@@ -281,12 +281,11 @@ impl InnerAllocator {
     }
 }
 
-static INNER_ALLOC: Mutex<InnerAllocator> = Mutex::new(InnerAllocator::new());
+static INNER_ALLOC: InterruptMutex<InnerAllocator> = InterruptMutex::new(InnerAllocator::new());
 
 /// Give bytes to the init alloc.
 pub fn provide_init_region(region: &'static mut [u8]) {
     let mut inner = INNER_ALLOC.lock();
-    lldebug::logln!("Kernel init heap ({} Bytes)", region.len());
     inner.init_alloc = Some(BootStrapAlloc::new(region));
 }
 
@@ -306,13 +305,11 @@ impl KernelAllocator {
 unsafe impl GlobalAlloc for KernelAllocator {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
         let mut inner = INNER_ALLOC.lock();
-
         unsafe { inner.init_alloc.as_mut().unwrap().alloc(layout).unwrap() }
     }
 
     unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
         let mut inner = INNER_ALLOC.lock();
-
         unsafe {
             inner
                 .init_alloc

@@ -172,6 +172,22 @@ macro_rules! make_addr {
             }
         }
 
+        impl<T, const ALIGNMENT: usize> TryFrom<*mut T> for $ident<AlignedTo<ALIGNMENT>> {
+            type Error = AlignmentError<ALIGNMENT>;
+
+            fn try_from(value: *mut T) -> Result<Self, Self::Error> {
+                if !ALIGNMENT.is_power_of_two() {
+                    panic!("Alignment {} should be a power of 2!", ALIGNMENT);
+                }
+
+                if value.addr() & (ALIGNMENT - 1) == 0 {
+                    Ok(Self::try_new(value.addr()))
+                } else {
+                    Err(AlignmentError(()))
+                }
+            }
+        }
+
         impl<const ALIGNMENT: usize> TryFrom<usize> for $ident<AlignedTo<ALIGNMENT>> {
             type Error = AlignmentError<ALIGNMENT>;
 

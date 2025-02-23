@@ -25,6 +25,9 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 use arch::io::IOPort;
 
+/// The configured debug emulator port.
+///
+/// The `isa-debug-exit`'s `iobase` register.
 pub const QEMU_ISA_DEBUG_EXIT_IO_BASE: IOPort = IOPort::new(0xF4);
 
 #[repr(u8)]

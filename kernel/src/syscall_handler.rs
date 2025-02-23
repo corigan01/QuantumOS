@@ -23,77 +23,67 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use crate::process::{SchedulerEvent, aquire_running_and_release_biglock, send_scheduler_event};
 use alloc::format;
-use mem::paging::VmPermissions;
+use lldebug::{LogKind, logln};
 use quantum_portal::{
     DebugMsgError, ExitReason, MapMemoryError, MemoryLocation, MemoryProtections, QuantumPortal,
     WaitCondition, WaitSignal, WaitingError, server::QuantumPortalServer,
 };
-use util::consts::PAGE_4K;
+
+use crate::process::scheduler::Scheduler;
+
+#[unsafe(no_mangle)]
+extern "C" fn syscall_handler(
+    rdi: u64,
+    rsi: u64,
+    rdx: u64,
+    _rsp: u64,
+    r8: u64,
+    syscall_number: u64,
+) -> u64 {
+    unsafe {
+        crate::syscall_handler::KernelSyscalls::from_syscall(syscall_number, rdi, rsi, rdx, r8)
+    }
+}
 
 pub struct KernelSyscalls {}
 
 impl QuantumPortalServer for KernelSyscalls {
-    fn verify_user_ptr<T: Sized>(_ptr: *const T) -> bool {
-        // TODO: Add ptr verify
+    fn verify_user_ptr<T: Sized>(ptr: *const T) -> bool {
         true
     }
 }
 
 impl QuantumPortal for KernelSyscalls {
-    fn exit(exit_reason: ExitReason) -> ! {
-        send_scheduler_event(SchedulerEvent::Exit(exit_reason));
-        unreachable!("Should nerver return");
+    fn exit(_exit_reason: ExitReason) -> ! {
+        Scheduler::crash_current();
+        unreachable!();
     }
 
     fn map_memory(
         location: MemoryLocation,
         protections: MemoryProtections,
         bytes: usize,
-    ) -> ::core::result::Result<*mut u8, MapMemoryError> {
-        let process = aquire_running_and_release_biglock();
-        let page_permissions = match protections {
-            MemoryProtections::ReadOnly => VmPermissions::USER_R,
-            MemoryProtections::ReadWrite => VmPermissions::USER_RW,
-            MemoryProtections::ReadExecute => VmPermissions::USER_RE,
-            MemoryProtections::None => VmPermissions::none(),
-        };
-        let page_amount = ((bytes - 1) / PAGE_4K) + 1;
-
-        // FIXME: We need to figure out a sane number of max pages.
-        if page_amount > 1024 || bytes == 0 {
-            return Err(MapMemoryError::InvalidLength(bytes));
-        }
-
-        let vm_region = match location {
-            MemoryLocation::Anywhere => process
-                .write()
-                .add_anywhere(page_amount, page_permissions, false)
-                .map_err(|err| match err {
-                    crate::process::ProcessError::OutOfVirtualMemory => MapMemoryError::OutOfMemory,
-                    _ => MapMemoryError::MappingMemoryError,
-                })?,
-        };
-
-        Ok(vm_region.start.addr().as_mut_ptr())
+    ) -> Result<*mut u8, MapMemoryError> {
+        logln!("map_memory todo");
+        Scheduler::crash_current();
+        unreachable!();
     }
 
     fn get_pid() -> usize {
-        let process = aquire_running_and_release_biglock();
-        process.read().get_pid()
+        logln!("get_pid todo");
+        Scheduler::crash_current();
+        unreachable!();
     }
 
-    fn debug_msg(msg: &str) -> ::core::result::Result<(), DebugMsgError> {
-        let process = aquire_running_and_release_biglock();
-
-        let fmt_string = format!(
-            "{:<22}pid={:04}",
-            process.read().get_process_name(),
-            process.read().get_pid(),
+    fn debug_msg(msg: &str) -> Result<(), DebugMsgError> {
+        let current_thread = Scheduler::get().current_thread().upgrade().unwrap();
+        let process_fmt = format!(
+            "{:<24}p{:02x}t{:02x}",
+            current_thread.process.name, current_thread.process.id, current_thread.id
         );
 
-        ::lldebug::priv_print(lldebug::LogKind::Log, &fmt_string, format_args!("{}", msg));
+        lldebug::priv_print(LogKind::Log, &process_fmt, format_args!("{}", msg));
 
         Ok(())
     }
@@ -101,7 +91,9 @@ impl QuantumPortal for KernelSyscalls {
     fn wait_for(
         conditions: &[WaitCondition],
         signal_buffer: &mut [WaitSignal],
-    ) -> ::core::result::Result<usize, WaitingError> {
-        todo!()
+    ) -> Result<usize, WaitingError> {
+        logln!("wait_for todo");
+        Scheduler::crash_current();
+        unreachable!();
     }
 }

@@ -23,41 +23,38 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use crate::{
-    context::IN_USERSPACE,
-    process::{
-        AccessViolationReason, ProcessError, SchedulerEvent, aquire_scheduler_biglock,
-        assert_scheduler_biglock, release_scheduler_biglock, send_scheduler_event,
-    },
-};
+use crate::process::scheduler::Scheduler;
 use arch::{
     CpuPrivilege, attach_irq, critcal_section,
     idt64::{
         ExceptionKind, InterruptDescTable, InterruptFlags, InterruptInfo, fire_debug_int, interrupt,
     },
+    locks::InterruptMutex,
     pic8259::{pic_eoi, pic_remap},
     registers::Segment,
 };
-use lldebug::{log, logln, sync::Mutex, warnln};
+use lldebug::{errorln, log, logln};
 use mem::{
     addr::VirtAddr,
     vm::{PageFaultInfo, call_page_fault_handler},
 };
-use quantum_portal::server::QuantumPortalServer;
 
-static INTERRUPT_TABLE: Mutex<InterruptDescTable> = Mutex::new(InterruptDescTable::new());
-static IRQ_HANDLERS: Mutex<[Option<fn(&InterruptInfo, bool)>; 32]> = Mutex::new([None; 32]);
+static INTERRUPT_TABLE: InterruptMutex<InterruptDescTable> =
+    InterruptMutex::new(InterruptDescTable::new());
+static IRQ_HANDLERS: InterruptMutex<[Option<fn(&InterruptInfo)>; 32]> =
+    InterruptMutex::new([None; 32]);
 
 #[interrupt(0..50)]
 fn exception_handler(args: &InterruptInfo) {
-    let called_from_ue = unsafe { core::ptr::read_volatile(&raw const IN_USERSPACE) };
-    unsafe { core::ptr::write_volatile(&raw mut IN_USERSPACE, 0) };
-    unsafe { aquire_scheduler_biglock() };
+    if args.flags.exception_kind() == ExceptionKind::Abort {
+        panic!("Interrupt -- {:?}", args.flags);
+    }
 
     match args.flags {
         // IRQ
         InterruptFlags::Irq(irq_num) if irq_num - PIC_IRQ_OFFSET <= 16 => {
-            call_attached_irq(irq_num - PIC_IRQ_OFFSET, &args, called_from_ue == 1);
+            unsafe { pic_eoi(irq_num - PIC_IRQ_OFFSET) };
+            call_attached_irq(irq_num - PIC_IRQ_OFFSET, &args);
         }
         InterruptFlags::PageFault {
             present,
@@ -85,16 +82,15 @@ fn exception_handler(args: &InterruptInfo) {
                 mem::vm::PageFaultReponse::NoAccess {
                     page_perm,
                     request_perm,
-                    page,
+                    addr,
                 } => {
-                    warnln!("Process crash!");
-                    send_scheduler_event(SchedulerEvent::Fault(ProcessError::AccessViolation(
-                        AccessViolationReason::NoAccess {
-                            page_perm,
-                            request_perm,
-                            page,
-                        },
-                    )));
+                    logln!(
+                        "Page fault without access!\n  Requested={:?}\n  Actual={:?}\n  address={:#018x}",
+                        request_perm,
+                        page_perm,
+                        addr
+                    );
+                    Scheduler::crash_current();
                 }
                 // panic
                 mem::vm::PageFaultReponse::CriticalFault(error) => {
@@ -109,34 +105,18 @@ fn exception_handler(args: &InterruptInfo) {
                 }
             }
         }
-        InterruptFlags::Debug => (),
+        InterruptFlags::Debug => {
+            logln!("{:#x?}", args);
+        }
         exception => {
-            panic!("UNHANDLED FAULT\n{:#016x?}", args)
+            errorln!("UNHANDLED FAULT\n{:#016x?}", args);
+            Scheduler::crash_current();
         }
         _ => (),
-    }
-
-    if args.flags.exception_kind() == ExceptionKind::Abort {
-        panic!("Interrupt -- {:?}", args.flags);
-    }
-
-    // Release scheduler lock
-    unsafe { release_scheduler_biglock() };
-
-    // Send End of interrupt
-    match args.flags {
-        InterruptFlags::Irq(irq) if irq - PIC_IRQ_OFFSET <= 16 => {
-            unsafe { pic_eoi(irq - PIC_IRQ_OFFSET) };
-        }
-        _ => (),
-    }
-
-    if called_from_ue == 1 {
-        unsafe { core::ptr::write_volatile(&raw mut IN_USERSPACE, 1) };
     }
 }
 
-fn call_attached_irq(irq_id: u8, args: &InterruptInfo, called_from_ue: bool) {
+fn call_attached_irq(irq_id: u8, args: &InterruptInfo) {
     let irq_handler = IRQ_HANDLERS.lock();
 
     if let Some(handler) = irq_handler
@@ -148,12 +128,12 @@ fn call_attached_irq(irq_id: u8, args: &InterruptInfo, called_from_ue: bool) {
         drop(irq_handler);
 
         // Finally call the handler
-        handler(args, called_from_ue);
+        handler(args);
     }
 }
 
 /// Set a function to be called whenever an irq is triggered.
-pub fn attach_irq_handler(handler_fn: fn(&InterruptInfo, bool), irq: u8) {
+pub fn attach_irq_handler(handler_fn: fn(&InterruptInfo), irq: u8) {
     critcal_section! {
         let mut irq_handler = IRQ_HANDLERS.lock();
         let Some(handler) = irq_handler.get_mut(irq as usize) else {
@@ -166,11 +146,13 @@ pub fn attach_irq_handler(handler_fn: fn(&InterruptInfo, bool), irq: u8) {
 
 /// Attach the main 'exception handler' function to the IDT
 pub fn attach_interrupts() {
-    let mut idt = INTERRUPT_TABLE.lock();
-    attach_irq!(idt, exception_handler);
-    unsafe { idt.submit_table().load() };
+    {
+        let mut idt = INTERRUPT_TABLE.lock();
+        attach_irq!(idt, exception_handler);
+        unsafe { idt.submit_table().load() };
 
-    logln!("Attached Interrupts!");
+        logln!("Attached Interrupts!");
+    }
 
     log!("Checking Interrupts...");
     fire_debug_int();
@@ -205,32 +187,5 @@ const PIC_IRQ_OFFSET: u8 = 0x20;
 pub fn enable_pic() {
     unsafe {
         pic_remap(PIC_IRQ_OFFSET, PIC_IRQ_OFFSET + 8);
-    }
-}
-
-#[unsafe(no_mangle)]
-#[inline(never)]
-extern "C" fn syscall_handler(
-    rdi: u64,
-    rsi: u64,
-    rdx: u64,
-    _rcx: u64,
-    r8: u64,
-    syscall_number: u64,
-) -> u64 {
-    unsafe {
-        // One of the first things we need to do is aquire the scheduler biglock
-        // Each syscall handler is responsible for disabling the biglock once it
-        // aquires its process lock.
-        aquire_scheduler_biglock();
-
-        // Call the portal
-        let resp =
-            crate::syscall_handler::KernelSyscalls::from_syscall(syscall_number, rdi, rsi, rdx, r8);
-
-        // If the syscall handler did not release the biglock, it should be a fault
-        assert_scheduler_biglock(false);
-
-        resp
     }
 }

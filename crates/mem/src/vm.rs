@@ -31,9 +31,10 @@ use crate::{
     addr::{AlignedTo, KERNEL_ADDR_START, VirtAddr},
     page::{PhysPage, VirtPage},
     paging::{PageCorrelationError, Virt2PhysMapping, VmOptions, VmPermissions},
-    pmm::SharedPhysPage,
+    pmm::use_pmm_mut,
 };
 use alloc::{boxed::Box, collections::BTreeMap, sync::Arc, vec::Vec};
+use arch::locks::InterruptMutex;
 use spin::RwLock;
 use util::consts::PAGE_4K;
 
@@ -69,6 +70,15 @@ impl VmRegion {
         }
     }
 
+    /// Get a VmRegion from a `u64` and offset `usize` (Virtal ptr)
+    pub const fn from_kbh(region: (u64, usize)) -> Self {
+        Self::new(
+            VirtPage::containing_addr(VirtAddr::new(region.0 as usize)),
+            VirtPage::containing_addr(VirtAddr::new(region.0 as usize).offset(region.1))
+                .sub_offset_by(1),
+        )
+    }
+
     /// Is this virtual address contained within this VmRegion
     pub fn does_contain_addr(&self, addr: VirtAddr) -> bool {
         self.start.addr() <= addr && (self.end.addr().offset(PAGE_4K - 1)) >= addr
@@ -89,6 +99,11 @@ impl VmRegion {
     /// Does this other VmRegion overlap with our VmObject
     pub fn overlaps_with(&self, rhs: &Self) -> bool {
         self.does_contain_page(rhs.start) || self.does_contain_page(rhs.end)
+    }
+
+    /// The length of bytes within this region
+    pub fn len_bytes(&self) -> usize {
+        self.end.addr().addr() - self.start.addr().addr()
     }
 }
 
@@ -116,6 +131,12 @@ pub trait VmInjectFillAction: core::fmt::Debug + Sync + Send {
         vpage: VirtPage,
         ppage: PhysPage,
     ) -> PopulationReponse;
+
+    /// Allocate a physical page for this virtual page
+    #[allow(unused_variables)]
+    fn alloc_physical_page(&mut self, vpage: VirtPage) -> Result<PhysPage, MemoryError> {
+        use_pmm_mut(|pmm| pmm.allocate_page())
+    }
 
     /// Should all pages be filled immediately when this object is created?
     #[allow(unused_variables)]
@@ -205,6 +226,13 @@ impl VmInjectFillAction for VmFillAction {
         }
     }
 
+    fn alloc_physical_page(&mut self, vpage: VirtPage) -> Result<PhysPage, MemoryError> {
+        match self {
+            VmFillAction::InjectWith(rw_lock) => rw_lock.write().alloc_physical_page(vpage),
+            _ => use_pmm_mut(|pmm| pmm.allocate_page()),
+        }
+    }
+
     fn requests_all_pages_filled(&self, parent_object: &VmObject) -> bool {
         match self {
             VmFillAction::Nothing => false,
@@ -264,8 +292,6 @@ pub struct VmObject {
     // supports_cow: bool,
     /// The region of memory this VmObject contains
     pub region: VmRegion,
-    /// The physical page tables this VmObject has allocated
-    pub mappings: BTreeMap<VirtPage, SharedPhysPage>,
     /// Permissions of this object
     pub permissions: VmPermissions,
     /// What to do wiht this vm object
@@ -276,7 +302,6 @@ impl Clone for VmObject {
     fn clone(&self) -> Self {
         Self {
             region: self.region,
-            mappings: self.mappings.clone(),
             permissions: self.permissions,
             fill_action: RwLock::new(self.fill_action.read().clone()),
         }
@@ -338,7 +363,6 @@ impl VmObject {
     ) -> Result<Arc<RwLock<Self>>, NewVmObjectError> {
         let mut new_self = Self {
             region,
-            mappings: BTreeMap::new(),
             permissions,
             fill_action: RwLock::new(fill_action),
         };
@@ -356,6 +380,40 @@ impl VmObject {
                     .map_err(|err| NewVmObjectError::MappingErr(err))?;
             }
         }
+
+        Ok(Arc::new(RwLock::new(new_self)))
+    }
+
+    /// Create a new VmObject via manually mapping pages
+    pub fn manual_new(
+        vm_process: &VmProcess,
+        region: VmRegion,
+        mappings: BTreeMap<VirtPage, PhysPage>,
+        permissions: VmPermissions,
+    ) -> Result<Arc<RwLock<Self>>, NewVmObjectError> {
+        for (vpage, ppage) in mappings.iter() {
+            vm_process
+                .page_tables
+                .correlate_page(
+                    *vpage,
+                    PhysPage::new(ppage.page()),
+                    VmOptions::none()
+                        .set_reduce_perm_from_tables_flag(true)
+                        .set_increase_perm_flag(true)
+                        .set_force_permissions_on_page_flag(true)
+                        .set_overwrite_flag(true),
+                    permissions,
+                )
+                .map_err(|err| {
+                    NewVmObjectError::MappingErr(VmObjectMappingError::MappingError(err))
+                })?;
+        }
+
+        let new_self = Self {
+            region,
+            permissions,
+            fill_action: RwLock::new(VmFillAction::Nothing),
+        };
 
         Ok(Arc::new(RwLock::new(new_self)))
     }
@@ -384,7 +442,10 @@ impl VmObject {
         }
 
         // Get a new backing page for this vpage
-        let backing_page = SharedPhysPage::allocate_anywhere()
+        let backing_page = self
+            .fill_action
+            .write()
+            .alloc_physical_page(vpage)
             .map_err(|err| VmObjectMappingError::CannotGetPhysicalPage(err))?;
 
         // Map the page with kernel option first to ensure we can write to this page
@@ -392,7 +453,7 @@ impl VmObject {
             .page_tables
             .correlate_page(
                 vpage,
-                *backing_page,
+                backing_page,
                 KERNEL_POPULATE_OPT,
                 KERNEL_POPULATE_PERM,
             )
@@ -402,7 +463,7 @@ impl VmObject {
         match self
             .fill_action
             .write()
-            .populate_page(self, vm_process, 0, vpage, *backing_page)
+            .populate_page(self, vm_process, 0, vpage, backing_page)
         {
             PopulationReponse::Okay => (),
             PopulationReponse::MappingError(page_correlation_error) => {
@@ -421,7 +482,7 @@ impl VmObject {
             .page_tables
             .correlate_page(
                 vpage,
-                *backing_page,
+                backing_page,
                 VmOptions::none()
                     .set_reduce_perm_from_tables_flag(true)
                     .set_increase_perm_flag(true)
@@ -430,9 +491,6 @@ impl VmObject {
                 self.permissions,
             )
             .map_err(|err| VmObjectMappingError::MappingError(err))?;
-
-        // Remember this page in our mapping table
-        self.mappings.insert(vpage, backing_page);
 
         Ok(())
     }
@@ -448,7 +506,7 @@ impl VmObject {
             return PageFaultReponse::NoAccess {
                 page_perm: self.permissions,
                 request_perm: VmPermissions::none().set_write_flag(true),
-                page: VirtPage::containing_addr(info.vaddr),
+                addr: info.vaddr,
             };
         }
 
@@ -457,7 +515,7 @@ impl VmObject {
             return PageFaultReponse::NoAccess {
                 page_perm: self.permissions,
                 request_perm: VmPermissions::none().set_exec_flag(true),
-                page: VirtPage::containing_addr(info.vaddr),
+                addr: info.vaddr,
             };
         }
 
@@ -466,7 +524,7 @@ impl VmObject {
             return PageFaultReponse::NoAccess {
                 page_perm: self.permissions,
                 request_perm: VmPermissions::none().set_user_flag(true),
-                page: VirtPage::containing_addr(info.vaddr),
+                addr: info.vaddr,
             };
         }
 
@@ -501,6 +559,20 @@ pub enum InsertVmObjectError {
     },
     /// Thew new vm object failed
     VmObjectError(NewVmObjectError),
+}
+
+/// The result from checking an addr within the region
+#[derive(Debug)]
+pub enum CheckAddrResult {
+    /// This address is not mapped
+    NotMapped,
+    /// This address is mapped, and the permissions match
+    MappedAndValidPerms,
+    /// This address is mapped, but the permissions do not match
+    MappedInvalidPerms {
+        expected: VmPermissions,
+        found: VmPermissions,
+    },
 }
 
 /// Repr a virtual 'Address Space' for which a processes exists in
@@ -539,6 +611,27 @@ impl VmProcess {
         Self {
             objects: RwLock::new(Vec::new()),
             page_tables,
+        }
+    }
+
+    /// Check that this address follows some permissions
+    pub fn check_addr_perms(&self, addr: VirtAddr, perms: VmPermissions) -> CheckAddrResult {
+        let object_lock = self.objects.read();
+        let Some(region) = object_lock
+            .iter()
+            .find(|object| object.read().region.does_contain_addr(addr))
+        else {
+            return CheckAddrResult::NotMapped;
+        };
+
+        let region_perms = region.read().permissions;
+        if region_perms == perms {
+            CheckAddrResult::MappedAndValidPerms
+        } else {
+            CheckAddrResult::MappedInvalidPerms {
+                expected: perms,
+                found: region_perms,
+            }
         }
     }
 
@@ -648,6 +741,35 @@ impl VmProcess {
         Ok(obj)
     }
 
+    /// Make a new `VmObject` from manual mappings.
+    pub fn manual_inplace_new_vmobject(
+        &self,
+        region: VmRegion,
+        permissions: VmPermissions,
+        mappings: BTreeMap<VirtPage, PhysPage>,
+    ) -> Result<Arc<RwLock<VmObject>>, InsertVmObjectError> {
+        // If there is already a region that exists on that virtual address
+        //
+        // Even though this is checked again once the object gets inserted, we
+        // want to make sure this object is valid before we do the expensive work
+        // of creating it.
+        if let Some(existing) = self.check_overlapping(&region) {
+            return Err(InsertVmObjectError::Overlapping {
+                existing,
+                attempted: region,
+            });
+        }
+
+        // Construct the object
+        let obj = VmObject::manual_new(self, region, mappings, permissions)
+            .map_err(|obj_err| InsertVmObjectError::VmObjectError(obj_err))?;
+
+        // Insert the object
+        self.insert_vm_object(obj.clone())?;
+
+        Ok(obj)
+    }
+
     /// The page fault handler for this VmProcess
     pub fn page_fault_handler(&self, info: PageFaultInfo) -> PageFaultReponse {
         let lock = self.objects.read();
@@ -662,7 +784,7 @@ impl VmProcess {
                     .set_read_flag(info.is_present)
                     .set_write_flag(info.write_read_access)
                     .set_user_flag(info.user_fault),
-                page: VirtPage::containing_addr(info.vaddr),
+                addr: info.vaddr,
             };
         };
 
@@ -697,7 +819,7 @@ pub enum PageFaultReponse {
     NoAccess {
         page_perm: VmPermissions,
         request_perm: VmPermissions,
-        page: VirtPage,
+        addr: VirtAddr,
     },
     /// Something went wrong, and we need to panic!
     CriticalFault(Box<dyn Error>),
@@ -709,7 +831,8 @@ pub enum PageFaultReponse {
 type SystemAttachedPageFaultFn = fn(PageFaultInfo) -> PageFaultReponse;
 
 /// The handler the system will call
-static MAIN_PAGE_FAULT_HANDLER: RwLock<Option<SystemAttachedPageFaultFn>> = RwLock::new(None);
+static MAIN_PAGE_FAULT_HANDLER: InterruptMutex<Option<SystemAttachedPageFaultFn>> =
+    InterruptMutex::new(None);
 
 /// System page fault entry handler
 ///
@@ -717,7 +840,7 @@ static MAIN_PAGE_FAULT_HANDLER: RwLock<Option<SystemAttachedPageFaultFn>> = RwLo
 pub fn call_page_fault_handler(info: PageFaultInfo) -> PageFaultReponse {
     // FIXME: This lock will deadlock if we fault setting the page fault handler, we
     //        should fix this in the future!
-    let locked = MAIN_PAGE_FAULT_HANDLER.read();
+    let locked = MAIN_PAGE_FAULT_HANDLER.lock().clone();
     if let Some(locked) = locked.as_ref() {
         // call the handler function if its enabled
         locked(info)
@@ -729,10 +852,10 @@ pub fn call_page_fault_handler(info: PageFaultInfo) -> PageFaultReponse {
 
 /// Set this function to be the page fault handler
 pub fn set_page_fault_handler(handler: SystemAttachedPageFaultFn) {
-    *MAIN_PAGE_FAULT_HANDLER.write() = Some(handler);
+    *MAIN_PAGE_FAULT_HANDLER.lock() = Some(handler);
 }
 
 /// Clear the function in the page fault handler, setting it to None
 pub fn remove_page_fault_handler() {
-    *MAIN_PAGE_FAULT_HANDLER.write() = None;
+    *MAIN_PAGE_FAULT_HANDLER.lock() = None;
 }

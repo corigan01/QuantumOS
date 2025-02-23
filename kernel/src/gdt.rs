@@ -23,15 +23,17 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use core::cell::SyncUnsafeCell;
+
 use arch::{
     CpuPrivilege,
     gdt::{CodeSegmentDesc, DataSegmentDesc, GlobalDescriptorTable, TaskStateSegmentPtr},
     tss64::TaskStateSegment,
 };
-use spin::RwLock;
 
-static KERNEL_GDT: RwLock<GlobalDescriptorTable<10>> = RwLock::new(GlobalDescriptorTable::new());
-static KERNEL_TSS: RwLock<TaskStateSegment> = RwLock::new(TaskStateSegment::new());
+static KERNEL_GDT: SyncUnsafeCell<GlobalDescriptorTable<10>> =
+    SyncUnsafeCell::new(GlobalDescriptorTable::new());
+static KERNEL_TSS: SyncUnsafeCell<TaskStateSegment> = SyncUnsafeCell::new(TaskStateSegment::new());
 
 pub fn init_kernel_gdt() {
     let mut gdt = GlobalDescriptorTable::new();
@@ -67,25 +69,22 @@ pub fn init_kernel_gdt() {
             .set_writable_flag(true)
             .set_privilege_level(3),
     );
-    gdt.store_tss(
-        8,
-        TaskStateSegmentPtr::new(unsafe { &*KERNEL_TSS.as_mut_ptr() }),
-    );
+    gdt.store_tss(8, TaskStateSegmentPtr::new(unsafe { &*KERNEL_TSS.get() }));
 
-    *KERNEL_GDT.write() = gdt;
+    unsafe { *KERNEL_GDT.get() = gdt };
     unsafe { load_gdt() };
 }
 
 pub unsafe fn load_gdt() {
-    unsafe { (&mut *KERNEL_GDT.as_mut_ptr()).pack().load() };
+    unsafe { (&mut *KERNEL_GDT.get()).pack().load() };
 }
 
 pub fn set_stack_for_privl(rsp: *mut u8, cpu_privl: CpuPrivilege) {
-    KERNEL_TSS.write().set_stack_for_priv(rsp, cpu_privl);
+    unsafe { (&mut *KERNEL_TSS.get()).set_stack_for_priv(rsp, cpu_privl) };
 }
 
-pub fn _set_stack_for_ist(rsp: *mut u8, ist_id: usize) {
-    KERNEL_TSS.write().set_stack_for_ist(rsp, ist_id);
+pub fn set_stack_for_ist(rsp: *mut u8, ist_id: usize) {
+    unsafe { (&mut *KERNEL_TSS.get()).set_stack_for_ist(rsp, ist_id) };
 }
 
 pub unsafe fn load_tss() {

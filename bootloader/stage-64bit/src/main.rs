@@ -212,7 +212,7 @@ fn build_memory_map(
         let (initfs_start, mut initfs_len) = s2s.initfs_ptr;
         assert!(
             is_align_to(initfs_start, PAGE_2M),
-            "INITFS is not 2Mib page aligned, please ensure initfs is page aligned!"
+            "INITFS is not 2Mib page aligned, please ensure initfs is page aligned! Addr={initfs_start:#018x}"
         );
         initfs_len = align_to(initfs_len, PAGE_2M);
         mm.add_region(PhysMemoryEntry {
@@ -270,7 +270,7 @@ fn build_memory_map(
         let kernels_heap_pages = mm
             .find_continuous_of(
                 PhysMemoryKind::Free,
-                PAGE_2M * 2,
+                PAGE_2M * 4,
                 PAGE_2M,
                 PhysAddr::from(1 * MIB),
             )

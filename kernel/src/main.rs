@@ -33,22 +33,25 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 mod context;
 mod gdt;
 mod int;
+mod locks;
 mod panic;
 mod process;
+mod processor;
 mod qemu;
 mod syscall_handler;
 mod timer;
 extern crate alloc;
 
-use arch::{CpuPrivilege::Ring0, supports::cpu_vender};
+use arch::supports::cpu_vender;
 use bootloader::KernelBootHeader;
 use lldebug::{debug_ready, logln, make_debug};
 use mem::{
     alloc::{KernelAllocator, provide_init_region},
     paging::init_virt2phys_provider,
     pmm::Pmm,
+    vm::VmRegion,
 };
-use process::{Process, Scheduler, set_global_scheduler};
+use process::{Process, scheduler::Scheduler, thread::Thread};
 use serial::{Serial, baud::SerialBaud};
 use util::{bytes::HumanBytes, consts::PAGE_4K};
 
@@ -75,22 +78,22 @@ fn main(kbh: &KernelBootHeader) {
     );
     logln!("Running on a(n) '{:?}' processor.", cpu_vender());
 
+    logln!(
+        "Init Heap Region ({})",
+        HumanBytes::from(kbh.kernel_init_heap.1)
+    );
+
+    provide_init_region(unsafe {
+        core::slice::from_raw_parts_mut(kbh.kernel_init_heap.0 as *mut u8, kbh.kernel_init_heap.1)
+    });
+
     gdt::init_kernel_gdt();
-    gdt::set_stack_for_privl(Process::KERNEL_IRQ_STACK_ADDR.as_mut_ptr(), Ring0);
     unsafe { gdt::load_tss() };
     int::enable_pic();
     int::attach_interrupts();
     int::attach_syscall();
     timer::init_timer();
     unsafe { arch::registers::ia32_efer::set_no_execute_flag(true) };
-
-    logln!(
-        "Init Heap Region ({})",
-        HumanBytes::from(kbh.kernel_init_heap.1)
-    );
-    provide_init_region(unsafe {
-        core::slice::from_raw_parts_mut(kbh.kernel_init_heap.0 as *mut u8, kbh.kernel_init_heap.1)
-    });
 
     logln!("Init PhysMemoryManager");
     let pmm = Pmm::new(kbh.phys_mem_map).unwrap();
@@ -108,12 +111,41 @@ fn main(kbh: &KernelBootHeader) {
 
     logln!("Init Scheduler ... ");
 
-    let initfs_slice =
-        unsafe { core::slice::from_raw_parts(kbh.initfs_ptr.0 as *const u8, kbh.initfs_ptr.1) };
+    let s = Scheduler::get();
+    unsafe {
+        s.init_kernel_vm(
+            VmRegion::from_kbh(kbh.kernel_exe),
+            VmRegion::from_kbh(kbh.kernel_init_heap),
+            VmRegion::from_kbh(kbh.kernel_stack),
+            VmRegion::from_kbh(kbh.initfs_ptr),
+        );
+        s.spawn_all_initfs(VmRegion::from_kbh(kbh.initfs_ptr));
+    }
 
-    let sc =
-        Scheduler::bootstrap_scheduler(&initfs_slice).expect("Unable to load kernel's scheduler");
+    let kernel_process = Process::new("kernel".into());
+    Thread::new_kernel(kernel_process.clone(), foo);
+    Thread::new_kernel(kernel_process.clone(), bar);
+    Thread::new_kernel(kernel_process, bazz);
 
-    // Start the scheduler
-    set_global_scheduler(sc);
+    Scheduler::yield_me();
+}
+
+fn foo() {
+    logln!("+FOO");
+    loop {
+        Scheduler::yield_me();
+    }
+}
+
+fn bar() {
+    logln!("+BAR");
+    Scheduler::yield_me();
+    Scheduler::yield_me();
+    logln!("-BAR");
+}
+
+fn bazz() {
+    logln!("+BAZZ");
+    Scheduler::yield_me();
+    logln!("-BAZZ");
 }

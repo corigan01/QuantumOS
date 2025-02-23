@@ -42,7 +42,6 @@ use arch::{
     },
     registers::cr3,
 };
-use lldebug::warnln;
 use spin::RwLock;
 use util::consts::PAGE_4K;
 
@@ -170,9 +169,6 @@ pub fn virt_to_phys(virt: VirtAddr) -> Result<PhysAddr, PhysPtrTranslationError>
         // try lookin up the addr in the old bootloader page tables.
         Err(PhysPtrTranslationError::PageEntriesNotSetup) => {
             bootloader_convert_phys(virt.addr() as u64)
-                .inspect(|inner| {
-                    warnln!("Virt2Phys [Bootloader] V{:#016x} -> P{:#016x}", virt, inner)
-                })
                 .ok_or(PhysPtrTranslationError::VirtNotFound(virt))
                 .map(|phys_addr| PhysAddr::new(phys_addr as usize))
         }
@@ -927,6 +923,17 @@ impl VmPermissions {
         .set_write_flag(true)
         .set_user_flag(true);
     pub const USER_RE: VmPermissions = VmPermissions::none()
+        .set_read_flag(true)
+        .set_exec_flag(true)
+        .set_user_flag(true);
+    pub const SYS_R: VmPermissions = VmPermissions::none()
+        .set_read_flag(true)
+        .set_exec_flag(true);
+    pub const SYS_RW: VmPermissions = VmPermissions::none()
+        .set_exec_flag(true)
+        .set_read_flag(true)
+        .set_write_flag(true);
+    pub const SYS_RE: VmPermissions = VmPermissions::none()
         .set_read_flag(true)
         .set_exec_flag(true);
 

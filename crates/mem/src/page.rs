@@ -244,6 +244,11 @@ impl<S: PagingStructureSize> VirtPage<S> {
         Self::new(self.id + offset)
     }
 
+    /// Offset this page by an offset of pages
+    pub const fn sub_offset_by(self, offset: usize) -> Self {
+        Self::new(self.id - offset)
+    }
+
     /// Get the distance (in pages) from `self` to `lhs`.
     ///
     /// # Note
