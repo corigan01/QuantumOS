@@ -23,256 +23,328 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use crate::MemoryError;
 use arch::locks::InterruptMutex;
 use core::{
     alloc::{GlobalAlloc, Layout},
     fmt::Debug,
     ptr::NonNull,
 };
-use util::{align_to, is_align_to};
+use util::is_align_to;
 
-struct Buddy {
-    free: bool,
-    ptr: NonNull<Buddy>,
-    len: usize,
-    next: Option<NonNull<Buddy>>,
+#[derive(Debug, PartialEq, Eq)]
+enum BuddyState {
+    Free,
+    Used { layout: Layout },
 }
 
-pub struct BootStrapAlloc {
-    buddy: NonNull<Buddy>,
-    len: usize,
-    bytes_used: usize,
-    bytes_total: usize,
+#[derive(Debug)]
+struct BuddyNode {
+    next: Option<NonNull<BuddyNode>>,
+    prev: Option<NonNull<BuddyNode>>,
+    state: BuddyState,
+    size: usize,
 }
 
-unsafe impl Send for BootStrapAlloc {}
-unsafe impl Sync for BootStrapAlloc {}
+pub struct BuddyAllocator {
+    head: Option<NonNull<BuddyNode>>,
+    region_start: NonNull<u8>,
+    region_end: NonNull<u8>,
+}
 
-impl BootStrapAlloc {
-    pub fn new(memory_region: &mut [u8]) -> Self {
-        assert!(memory_region.len() > size_of::<Buddy>() * 2);
-
-        let buddy = NonNull::new(memory_region.as_mut_ptr().cast()).unwrap();
-        let alignment = buddy.align_offset(align_of::<Buddy>());
-        let mut aligned_buddy = unsafe { buddy.byte_add(alignment) };
-
-        unsafe {
-            *aligned_buddy.as_mut() = Buddy {
-                free: true,
-                ptr: aligned_buddy,
-                len: memory_region.len() - alignment,
-                next: None,
-            };
-        }
-
-        Self {
-            buddy: aligned_buddy,
-            len: 1,
-            bytes_used: alignment + size_of::<Buddy>(),
-            bytes_total: memory_region.len(),
-        }
+impl BuddyAllocator {
+    pub const fn new(ptr: NonNull<u8>, len: usize) -> Self {
+        let buddy_allocator = Self {
+            head: None,
+            region_start: ptr,
+            region_end: unsafe { ptr.byte_add(len) },
+        };
+        buddy_allocator
     }
 
-    unsafe fn melt_right(&mut self, mut buddy: NonNull<Buddy>) {
-        unsafe {
-            let current = buddy.as_mut();
-            let Some(mut next) = current.next else {
-                return;
-            };
+    fn head(&mut self) -> NonNull<BuddyNode> {
+        let buddy = *self.head.get_or_insert_with(|| {
+            let region = self.region_start..self.region_end;
+            let offset = self.region_start.align_offset(align_of::<BuddyNode>());
+            let new_buddy = unsafe { self.region_start.byte_add(offset) }.cast::<BuddyNode>();
 
-            let next = next.as_mut();
-            current.next = next.next;
-            current.len += next.len;
+            assert!(region.contains(&new_buddy.cast::<u8>()));
 
-            if next.free {
-                self.bytes_used -= size_of::<Buddy>();
-            } else {
-                self.bytes_used -= next.len;
+            unsafe {
+                new_buddy.write(BuddyNode {
+                    next: None,
+                    prev: None,
+                    state: BuddyState::Free,
+                    size: (self.region_end.addr().get() - new_buddy.addr().get())
+                        - size_of::<BuddyNode>(),
+                });
             }
-        }
-        self.len -= 1;
+
+            new_buddy
+        });
+
+        self.safety_check_buddy(buddy);
+        buddy
     }
 
-    pub unsafe fn alloc(&mut self, layout: Layout) -> Result<*mut u8, MemoryError> {
-        unsafe {
-            let mut buddy = self.buddy;
-            loop {
-                let buddy_mut = buddy.as_mut();
-                let align_len = align_to(buddy.add(1).addr().get() as u64, layout.align()) as usize
-                    - buddy.add(1).addr().get();
-                let min_len = layout.size() + align_len + size_of::<Buddy>();
+    /// Asserts that the given buddy is within the allocation region provided, and that it is properly formed.
+    #[inline]
+    fn safety_check_buddy(&self, buddy: NonNull<BuddyNode>) -> BuddyNode {
+        let region = self.region_start..self.region_end;
 
-                if !buddy_mut.free || buddy_mut.len < min_len {
-                    let Some(buddy_next) = buddy_mut.next else {
-                        return Err(MemoryError::OutOfAllocMemory);
-                    };
+        debug_assert!(buddy.is_aligned());
+        assert!(region.contains(&buddy.cast::<u8>()));
 
-                    buddy = buddy_next;
-                    continue;
-                }
+        let buddy_read = unsafe { buddy.read() };
+        debug_assert!(
+            buddy_read
+                .next
+                .is_none_or(|next| { region.contains(&next.cast::<u8>()) })
+        );
+        debug_assert!(
+            buddy_read
+                .prev
+                .is_none_or(|prev| { region.contains(&prev.cast::<u8>()) })
+        );
+        debug_assert_ne!(buddy_read.size, 0);
 
-                // Split
-                let ret_ptr = if buddy_mut.len > min_len + (size_of::<Buddy>() * 2) {
-                    let previous_next = buddy_mut.next;
-                    let len = align_to((buddy.addr().get() + min_len) as u64, align_of::<Buddy>())
-                        as usize
-                        - buddy.addr().get();
+        buddy_read
+    }
 
-                    let next_buddy = buddy.byte_add(len);
-                    *next_buddy.as_ptr() = Buddy {
-                        free: true,
-                        ptr: next_buddy,
-                        len: buddy_mut.len - len,
-                        next: previous_next,
-                    };
+    unsafe fn alloc(&mut self, layout: Layout) -> *mut u8 {
+        let mut cursor = self.head();
 
-                    buddy_mut.free = false;
-                    buddy_mut.len = len;
-                    buddy_mut.next = Some(next_buddy);
-                    self.len += 1;
-                    self.bytes_used += buddy_mut.len;
+        loop {
+            let cursor_read = self.safety_check_buddy(cursor);
+            if matches!(cursor_read.state, BuddyState::Used { .. }) {
+                cursor = cursor_read.next.expect(
+                    "Reached end of allocation region, no region fits desired allocation. ",
+                );
+                continue;
+            }
 
-                    buddy_mut
-                        .ptr
-                        .as_ptr()
-                        .byte_add(size_of::<Buddy>() + align_len)
-                        .cast()
-                } else {
-                    buddy_mut.free = false;
-                    self.bytes_used += buddy_mut.len - size_of::<Buddy>();
+            let post_header_ptr = unsafe { cursor.byte_add(size_of::<BuddyNode>()) };
+            let post_header_size = cursor_read.size;
+            let end_region_ptr = unsafe { post_header_ptr.byte_add(post_header_size) };
 
-                    buddy_mut
-                        .ptr
-                        .as_ptr()
-                        .byte_add(size_of::<Buddy>() + align_len)
-                        .cast()
-                };
+            let type_alignment_cost = post_header_ptr.cast::<u8>().align_offset(layout.align());
+            let type_size = type_alignment_cost + layout.size();
 
-                assert!(
-                    is_align_to(ret_ptr as u64, layout.align()),
-                    "Alloc was about to return unaligned PTR"
+            // Check if this buddy can fit the allocation
+            if post_header_size < type_size {
+                cursor = cursor_read.next.expect(
+                    "Reached end of allocation region, no region fits desired allocation. ",
+                );
+                continue;
+            }
+
+            let post_allocation_bytes = post_header_size - type_size;
+            let next_header_alignmnet_cost = unsafe {
+                post_header_ptr
+                    .cast::<u8>()
+                    .byte_add(type_size)
+                    .align_offset(align_of::<BuddyNode>())
+            };
+
+            // If we can fit another allocation buddy in this region
+            if post_allocation_bytes > next_header_alignmnet_cost + (2 * size_of::<BuddyNode>()) {
+                let mut next_buddy_ptr =
+                    unsafe { post_header_ptr.byte_add(type_size + next_header_alignmnet_cost) };
+
+                debug_assert!(next_buddy_ptr.is_aligned());
+                debug_assert!(
+                    unsafe { next_buddy_ptr.byte_add(size_of::<BuddyNode>()) } < end_region_ptr
                 );
 
-                return Ok(ret_ptr);
-            }
-        }
-    }
+                let new_post_header_size =
+                    next_buddy_ptr.addr().get() - post_header_ptr.addr().get();
+                let next_size = (end_region_ptr.addr().get() - next_buddy_ptr.addr().get())
+                    - size_of::<BuddyNode>();
 
-    pub unsafe fn free(&mut self, ptr: *mut u8, layout: Layout) -> Result<(), MemoryError> {
-        let ptr_end = ptr as usize + layout.size();
+                // Resolve new node's `next` and `prev` connections
+                unsafe {
+                    let next_mut = next_buddy_ptr.as_mut();
 
-        unsafe {
-            let mut previous_buddy = self.buddy;
-            let mut index = 0;
+                    next_mut.prev = Some(cursor);
+                    next_mut.size = next_size;
+                    next_mut.state = BuddyState::Free;
 
-            loop {
-                let previous_mut = previous_buddy.as_mut();
-                let previous_ptr = previous_mut.ptr.addr().get() + size_of::<Buddy>();
-                let previous_end = previous_mut.ptr.addr().get() + previous_mut.len;
-
-                let Some(mut buddy) = previous_buddy.as_ref().next else {
-                    if previous_ptr < (ptr as usize) || previous_end < ptr_end {
-                        return Err(MemoryError::NotFound);
+                    if let Some(mut next) = cursor_read.next {
+                        next_mut.next = Some(next);
+                        next.as_mut().prev = Some(next_buddy_ptr);
+                    } else {
+                        next_mut.next = None;
                     }
 
-                    previous_mut.free = true;
-                    self.bytes_used -= previous_mut.len - size_of::<Buddy>();
-                    return Ok(());
+                    let cursor_mut = cursor.as_mut();
+                    cursor_mut.next = Some(next_buddy_ptr);
+                    cursor_mut.size = new_post_header_size;
                 };
-
-                let buddy_mut = buddy.as_mut();
-                let buddy_ptr = buddy_mut.ptr.addr().get() + size_of::<Buddy>();
-                let buddy_end = buddy_mut.ptr.addr().get() + buddy_mut.len;
-
-                if index == 0 && previous_ptr >= (ptr as usize) && previous_end >= ptr_end {
-                    previous_mut.free = true;
-
-                    if buddy_mut.free {
-                        self.melt_right(previous_buddy);
-                    }
-
-                    return Ok(());
-                }
-
-                if buddy_ptr < (ptr as usize) || buddy_end < ptr_end {
-                    previous_buddy = buddy;
-                    index += 1;
-                    continue;
-                }
-
-                buddy_mut.free = true;
-
-                if let Some(next_buddy) = buddy_mut.next {
-                    if next_buddy.as_ref().free {
-                        self.melt_right(buddy);
-                    }
-                }
-
-                if previous_buddy.as_ref().free {
-                    self.melt_right(previous_buddy);
-                }
-                // else {
-                //     self.bytes_used -= buddy_mut.len - size_of::<Buddy>();
-                // }
-
-                return Ok(());
             }
+
+            // Update buddy's status
+            unsafe {
+                let cursor_mut = cursor.as_mut();
+                cursor_mut.state = BuddyState::Used { layout };
+            }
+
+            let ret_ptr: *mut u8 = unsafe { post_header_ptr.byte_add(type_alignment_cost) }
+                .cast()
+                .as_ptr();
+
+            debug_assert!(is_align_to(ret_ptr.addr() as u64, layout.align()));
+            unsafe { ret_ptr.write_bytes(0, layout.size()) };
+
+            return ret_ptr;
         }
     }
-}
 
-impl Debug for BootStrapAlloc {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.debug_struct("BootStrapAlloc")
-            .field("len", &self.len)
-            .field("bytes_used", &self.bytes_used)
-            .field("bytes_free", &(self.bytes_total - self.bytes_used))
-            .field("bytes_total", &self.bytes_total)
-            .field("buddy", unsafe { self.buddy.as_ref() })
-            .finish()
-    }
-}
+    fn combine(&mut self, cursor: NonNull<BuddyNode>) {
+        // Combine Left
+        let mut current = cursor;
+        loop {
+            let current_read = self.safety_check_buddy(current);
+            let Some(prev) = current_read.prev else {
+                break;
+            };
+            let prev_read = self.safety_check_buddy(prev);
 
-impl Debug for Buddy {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        #[allow(unused)]
-        #[derive(Debug)]
-        struct BuddyItem {
-            free: bool,
-            ptr: NonNull<Buddy>,
-            len: usize,
-            next: Option<NonNull<Buddy>>,
-        }
+            if !matches!(prev_read.state, BuddyState::Free)
+                || !matches!(current_read.state, BuddyState::Free)
+            {
+                break;
+            }
 
-        let mut list = f.debug_list();
-        unsafe {
-            let mut buddy = self.ptr;
-            loop {
-                let buddy_ref = buddy.as_ref();
-
-                list.entry(&BuddyItem {
-                    free: buddy_ref.free,
-                    ptr: buddy_ref.ptr,
-                    len: buddy_ref.len,
-                    next: buddy_ref.next,
+            unsafe {
+                prev.write(BuddyNode {
+                    next: current_read.next,
+                    prev: prev_read.prev,
+                    state: BuddyState::Free,
+                    size: current_read.size + prev_read.size + size_of::<BuddyNode>(),
                 });
 
-                let Some(next_buddy) = buddy_ref.next else {
-                    break;
-                };
+                if let Some(mut next) = current_read.next {
+                    next.as_mut().prev = Some(prev);
+                }
+            }
 
-                buddy = next_buddy;
+            current = prev;
+        }
+
+        // Combine Right
+        loop {
+            let current_read = self.safety_check_buddy(current);
+            let Some(next) = current_read.next else {
+                break;
+            };
+            let next_read = self.safety_check_buddy(next);
+
+            if !matches!(next_read.state, BuddyState::Free)
+                || !matches!(current_read.state, BuddyState::Free)
+            {
+                break;
+            }
+
+            unsafe {
+                current.write(BuddyNode {
+                    next: next_read.next,
+                    prev: current_read.prev,
+                    state: BuddyState::Free,
+                    size: current_read.size + next_read.size + size_of::<BuddyNode>(),
+                });
+
+                if let Some(mut next_next) = next_read.next {
+                    next_next.as_mut().prev = Some(current);
+                }
+            }
+
+            current = next;
+        }
+    }
+
+    unsafe fn dealloc(&mut self, ptr: *mut u8, layout: Layout) {
+        let mut cursor = self.head();
+
+        loop {
+            let cursor_read = self.safety_check_buddy(cursor);
+            let post_header_size = cursor_read.size;
+            let post_header_ptr = unsafe { cursor.byte_add(size_of::<BuddyNode>()) }.cast::<u8>();
+            let post_header_end =
+                unsafe { post_header_ptr.byte_add(post_header_size) }.cast::<u8>();
+
+            if !(post_header_ptr.as_ptr()..post_header_end.as_ptr()).contains(&ptr) {
+                cursor = cursor_read
+                    .next
+                    .expect("reached end of region, but didn't find ptr to free!");
+                continue;
+            }
+
+            // check that this region is valid
+            match cursor_read.state {
+                BuddyState::Free => panic!(
+                    "Double free, ptr={:?}\nlayout={:#?}\nregion={:#?}\nmappings={:#?}",
+                    ptr, layout, cursor_read, self
+                ),
+                BuddyState::Used {
+                    layout: state_layout,
+                } if state_layout != layout => {
+                    panic!(
+                        "Layout does not match previous state! prev={:?} new={:?}",
+                        state_layout, layout
+                    );
+                }
+                _ => (),
+            }
+
+            unsafe { cursor.as_mut().state = BuddyState::Free };
+            self.combine(cursor);
+
+            break;
+        }
+    }
+}
+
+impl Debug for BuddyAllocator {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        struct Fields {
+            head_ptr: Option<NonNull<BuddyNode>>,
+        }
+
+        impl Debug for Fields {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                let mut list = f.debug_list();
+
+                if let Some(mut alloc) = self.head_ptr {
+                    list.entry(&unsafe { alloc.read() });
+
+                    while let Some(next) = unsafe { alloc.read().next } {
+                        list.entry(&unsafe { next.read() });
+                        alloc = next;
+                    }
+                }
+
+                list.finish()
             }
         }
 
-        list.finish()
+        f.debug_struct(stringify!(BuddyAllocator))
+            .field("head", &self.head)
+            .field(
+                "region_len",
+                &(self.region_end.addr().get() - self.region_start.addr().get()),
+            )
+            .field(
+                "alloc",
+                &Fields {
+                    head_ptr: self.head,
+                },
+            )
+            .finish()
     }
 }
 
 #[derive(Debug)]
 struct InnerAllocator {
-    init_alloc: Option<BootStrapAlloc>,
+    init_alloc: Option<BuddyAllocator>,
 }
 
 impl InnerAllocator {
@@ -286,7 +358,10 @@ static INNER_ALLOC: InterruptMutex<InnerAllocator> = InterruptMutex::new(InnerAl
 /// Give bytes to the init alloc.
 pub fn provide_init_region(region: &'static mut [u8]) {
     let mut inner = INNER_ALLOC.lock();
-    inner.init_alloc = Some(BootStrapAlloc::new(region));
+    inner.init_alloc = Some(BuddyAllocator::new(
+        NonNull::new(region.as_mut_ptr()).unwrap(),
+        region.len(),
+    ));
 }
 
 pub fn dump_allocator() {
@@ -305,19 +380,12 @@ impl KernelAllocator {
 unsafe impl GlobalAlloc for KernelAllocator {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
         let mut inner = INNER_ALLOC.lock();
-        unsafe { inner.init_alloc.as_mut().unwrap().alloc(layout).unwrap() }
+        unsafe { inner.init_alloc.as_mut().unwrap().alloc(layout) }
     }
 
     unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
         let mut inner = INNER_ALLOC.lock();
-        unsafe {
-            inner
-                .init_alloc
-                .as_mut()
-                .unwrap()
-                .free(ptr, layout)
-                .unwrap()
-        }
+        unsafe { inner.init_alloc.as_mut().unwrap().dealloc(ptr, layout) }
     }
 }
 
@@ -332,27 +400,50 @@ mod test {
     fn test_buddy_new() {
         lldebug::testing_stdout!();
         let len = 10 * util::consts::KIB;
-        let mem_region = unsafe {
-            core::slice::from_raw_parts_mut(
-                std::alloc::alloc_zeroed(Layout::from_size_align(len, 1).unwrap()),
-                len,
-            )
-        };
+        let layout = Layout::from_size_align(len, 1).unwrap();
+        let mem_region = unsafe { std::alloc::alloc_zeroed(layout) };
 
         let mut ptrs = std::vec::Vec::new();
-        let mut alloc = BootStrapAlloc::new(mem_region);
+        let mut alloc = BuddyAllocator::new(NonNull::new(mem_region).unwrap(), len);
 
-        for i in 0..10 {
-            let ptr = unsafe { alloc.alloc(Layout::new::<u8>()).unwrap() };
+        for i in 0..3 {
+            let ptr = unsafe { alloc.alloc(Layout::new::<u8>()) };
             unsafe { *ptr = i };
             assert_eq!(unsafe { *ptr }, i);
             ptrs.push(ptr);
         }
 
-        for i in 0..10 {
+        for i in 0..3 {
             let ptr = ptrs[i as usize];
             assert_eq!(unsafe { *ptr }, i);
-            unsafe { alloc.free(ptr, Layout::new::<u8>()).unwrap() };
+            unsafe { alloc.dealloc(ptr, Layout::new::<u8>()) };
+        }
+
+        unsafe { std::alloc::dealloc(mem_region, layout) };
+    }
+
+    #[test]
+    #[ignore = "dingus"]
+    fn alloc_random() {
+        lldebug::testing_stdout!();
+        let len = 10 * util::consts::KIB;
+        let mem_region =
+            unsafe { std::alloc::alloc_zeroed(Layout::from_size_align(len, 1).unwrap()) };
+
+        let mut ptrs = std::vec::Vec::new();
+        let mut alloc = BuddyAllocator::new(NonNull::new(mem_region).unwrap(), len);
+
+        for i in 0..100 {
+            let ptr = unsafe { alloc.alloc(Layout::from_size_align((i * 8) % 128, 8).unwrap()) };
+            unsafe { *ptr = i as u8 };
+            assert_eq!(unsafe { *ptr }, i as u8);
+            ptrs.push(ptr);
+        }
+
+        for i in 0..100 {
+            let ptr = ptrs[i as usize];
+            assert_eq!(unsafe { *ptr }, i as u8);
+            unsafe { alloc.dealloc(ptr, Layout::from_size_align((i * 8) % 128, 8).unwrap()) };
         }
     }
 }
