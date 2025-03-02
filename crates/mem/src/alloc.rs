@@ -105,12 +105,16 @@ impl BuddyAllocator {
                 .prev
                 .is_none_or(|prev| { region.contains(&prev.cast::<u8>()) })
         );
-        debug_assert_ne!(buddy_read.size, 0);
+        debug_assert_ne!(buddy_read.size, 0, "{:#?}", self);
 
         buddy_read
     }
 
     unsafe fn alloc(&mut self, layout: Layout) -> *mut u8 {
+        if layout.size() == 0 {
+            return self.region_start.as_ptr();
+        }
+
         let mut cursor = self.head();
 
         loop {
@@ -262,6 +266,10 @@ impl BuddyAllocator {
     }
 
     unsafe fn dealloc(&mut self, ptr: *mut u8, layout: Layout) {
+        if layout.size() == 0 {
+            assert_eq!(ptr, self.region_start.as_ptr());
+        }
+
         let mut cursor = self.head();
 
         loop {
@@ -423,18 +431,18 @@ mod test {
     }
 
     #[test]
-    #[ignore = "dingus"]
     fn alloc_random() {
         lldebug::testing_stdout!();
-        let len = 10 * util::consts::KIB;
-        let mem_region =
-            unsafe { std::alloc::alloc_zeroed(Layout::from_size_align(len, 1).unwrap()) };
+        let len = 32 * util::consts::KIB;
+        let layout = Layout::from_size_align(len, 1).unwrap();
+        let mem_region = unsafe { std::alloc::alloc_zeroed(layout) };
 
         let mut ptrs = std::vec::Vec::new();
         let mut alloc = BuddyAllocator::new(NonNull::new(mem_region).unwrap(), len);
 
         for i in 0..100 {
-            let ptr = unsafe { alloc.alloc(Layout::from_size_align((i * 8) % 128, 8).unwrap()) };
+            let ptr =
+                unsafe { alloc.alloc(Layout::from_size_align((i * 8) % 128 + 8, 8).unwrap()) };
             unsafe { *ptr = i as u8 };
             assert_eq!(unsafe { *ptr }, i as u8);
             ptrs.push(ptr);
@@ -443,7 +451,9 @@ mod test {
         for i in 0..100 {
             let ptr = ptrs[i as usize];
             assert_eq!(unsafe { *ptr }, i as u8);
-            unsafe { alloc.dealloc(ptr, Layout::from_size_align((i * 8) % 128, 8).unwrap()) };
+            unsafe { alloc.dealloc(ptr, Layout::from_size_align((i * 8) % 128 + 8, 8).unwrap()) };
         }
+
+        unsafe { std::alloc::dealloc(mem_region, layout) };
     }
 }

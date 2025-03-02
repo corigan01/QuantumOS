@@ -25,7 +25,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 use core::sync::atomic::{AtomicU64, Ordering};
 
-use crate::{int::attach_irq_handler, process::scheduler::Scheduler};
+use crate::int::attach_irq_handler;
 use arch::{
     critcal_section,
     idt64::InterruptInfo,

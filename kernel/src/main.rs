@@ -44,17 +44,19 @@ extern crate alloc;
 
 use core::cell::SyncUnsafeCell;
 
-use arch::{interrupts, supports::cpu_vender};
+use arch::supports::cpu_vender;
 use bootloader::KernelBootHeader;
-use lldebug::{debug_ready, logln, make_debug, set_sync_fn};
-use locks::{manual_schedule_lock, manual_schedule_unlock};
+use lldebug::{debug_ready, logln, make_debug};
 use mem::{
     alloc::{KernelAllocator, provide_init_region},
-    paging::init_virt2phys_provider,
     pmm::Pmm,
     vm::VmRegion,
 };
-use process::{Process, scheduler::Scheduler, thread::Thread};
+use process::{
+    Process,
+    scheduler::{Scheduler, init_virt2phys_provider},
+    thread::Thread,
+};
 use serial::{Serial, baud::SerialBaud};
 use util::{bytes::HumanBytes, consts::PAGE_4K};
 

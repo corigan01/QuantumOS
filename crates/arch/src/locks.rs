@@ -48,8 +48,8 @@ pub struct InterruptMutex<T: ?Sized> {
     inner: UnsafeCell<T>,
 }
 
-unsafe impl<T: ?Sized + Sync> Sync for InterruptMutex<T> {}
-unsafe impl<T: ?Sized + Send + Sync> Send for InterruptMutex<T> {}
+unsafe impl<T: ?Sized> Sync for InterruptMutex<T> {}
+unsafe impl<T: ?Sized> Send for InterruptMutex<T> {}
 
 impl<T> InterruptMutex<T> {
     /// Create a new interrupt Mutex

@@ -22,3 +22,77 @@ NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FO
 DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+
+use core::{
+    cell::UnsafeCell,
+    ops::{Deref, DerefMut},
+    sync::atomic::{AtomicBool, Ordering},
+};
+
+pub struct DebugMutex<T> {
+    lock: AtomicBool,
+    inner: UnsafeCell<T>,
+}
+
+unsafe impl<T> Sync for DebugMutex<T> {}
+unsafe impl<T> Send for DebugMutex<T> {}
+
+pub struct DebugMutexGuard<'a, T> {
+    lock: &'a AtomicBool,
+    ptr: *mut T,
+}
+
+impl<T> DebugMutex<T> {
+    pub const fn new(value: T) -> Self {
+        Self {
+            lock: AtomicBool::new(false),
+            inner: UnsafeCell::new(value),
+        }
+    }
+
+    pub fn try_lock<'a>(&'a self) -> Option<DebugMutexGuard<'a, T>> {
+        while let Err(previous_value) =
+            self.lock
+                .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
+        {
+            // Lock failed
+            if previous_value {
+                return None;
+            }
+        }
+
+        // here we are locked
+        Some(DebugMutexGuard {
+            lock: &self.lock,
+            ptr: self.inner.get(),
+        })
+    }
+}
+
+impl<'a, T> Deref for DebugMutexGuard<'a, T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        unsafe { &*self.ptr }
+    }
+}
+
+impl<'a, T> DerefMut for DebugMutexGuard<'a, T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        unsafe { &mut *self.ptr }
+    }
+}
+
+impl<'a, T> Drop for DebugMutexGuard<'a, T> {
+    fn drop(&mut self) {
+        while let Err(previous_value) =
+            self.lock
+                .compare_exchange(true, false, Ordering::Release, Ordering::Relaxed)
+        {
+            assert_ne!(
+                previous_value, false,
+                "Cannot unlock an already unlocked lock"
+            );
+        }
+    }
+}

@@ -27,6 +27,7 @@ use alloc::alloc::{alloc_zeroed, dealloc};
 use core::{
     alloc::Layout,
     arch::{asm, naked_asm},
+    cell::UnsafeCell,
 };
 use lldebug::logln;
 use mem::addr::{AlignedTo, VirtAddr};
@@ -47,7 +48,7 @@ pub struct TaskFlags(u64);
 #[derive(Debug)]
 pub struct TaskStack {
     stack_bottom: VirtAddr<AlignedTo<{ size_of::<ArchStackPtr>() }>>,
-    rsp: ArchStackPtr,
+    rsp: UnsafeCell<ArchStackPtr>,
     len: usize,
 }
 
@@ -60,7 +61,7 @@ impl TaskStack {
 
         Self {
             stack_bottom: VirtAddr::try_from(allocation).unwrap(),
-            rsp: (allocation as ArchStackPtr) + len,
+            rsp: UnsafeCell::new((allocation as ArchStackPtr) + len),
             len,
         }
     }
@@ -86,7 +87,7 @@ pub struct Task {
 }
 
 impl Task {
-    pub const TASK_DEFAULT_STACK_LEN: usize = PAGE_4K * 16;
+    pub const TASK_DEFAULT_STACK_LEN: usize = PAGE_4K * 32;
 
     /// Check if this Task is the currently executing task
     pub fn is_current(&self) -> bool {
@@ -101,26 +102,28 @@ impl Task {
     #[inline(always)]
     fn switch_prelude(&mut self) {
         self.task_flags.set_running_flag(false);
+        unsafe {
+            let current_thread = Scheduler::get().current_thread().upgrade().unwrap();
+            let page_tables = current_thread.process.vm.read(LockEncouragement::Strong);
+            if !page_tables.page_tables.read().is_loaded() {
+                page_tables.page_tables.read().load().unwrap();
+            }
+        };
     }
 
     /// Called immediately after switching
     #[inline(always)]
     fn switch_epilogue(&mut self) {
         self.task_flags.set_running_flag(true);
-
         let top_of_task_stack = self.stack_top();
         gdt::set_stack_for_privl(top_of_task_stack.as_mut_ptr(), arch::CpuPrivilege::Ring0);
         unsafe { set_syscall_rsp(top_of_task_stack.addr() as u64) };
 
-        let current_thread = Scheduler::get().current_thread().upgrade().unwrap();
         unsafe {
-            let page_tables = current_thread
-                .process
-                .vm
-                .read(LockEncouragement::Strong)
-                .clone();
-            if !page_tables.page_tables.is_loaded() {
-                page_tables.page_tables.load().unwrap()
+            let current_thread = Scheduler::get().current_thread().upgrade().unwrap();
+            let page_tables = current_thread.process.vm.read(LockEncouragement::Strong);
+            if !page_tables.page_tables.read().is_loaded() {
+                page_tables.page_tables.read().load().unwrap();
             }
         };
     }
@@ -128,7 +131,7 @@ impl Task {
     /// Get the tasks inner stack ptr
     #[inline]
     fn get_task_stack_ptr(&mut self) -> *mut ArchStackPtr {
-        &raw mut self.stack.rsp
+        self.stack.rsp.get()
     }
 
     /// Get the top of the task's inner stack ptr
@@ -145,9 +148,19 @@ impl Task {
 
             assert!(
                 (&*from).is_current(),
-                "Switching, yet current is not correct!"
+                "Switching, yet current is not correct! Current={:016x}, Expected=({:016x}-{:016x})",
+                asm_get_rsp(),
+                (&*from).stack.stack_bottom.addr(),
+                (&*from).stack_top().addr()
             );
-            asm_switch(from_stack_ptr, to_stack_ptr);
+            logln!(
+                "rsp: {:#018x} -> {:#018x}",
+                from_stack_ptr.read(),
+                to_stack_ptr.read()
+            );
+            if from != to {
+                asm_switch(from_stack_ptr, to_stack_ptr);
+            }
             assert!(
                 (&*from).is_current(),
                 "Switched back to current, yet current is not correct!"
@@ -165,6 +178,7 @@ impl Task {
             let to_stack_ptr = (&mut *to).get_task_stack_ptr();
             let mut from_stack_ptr = asm_get_rsp();
             (&mut *to).switch_epilogue();
+            logln!("rsp={:#018x}", from_stack_ptr);
 
             asm_switch(&raw mut from_stack_ptr, to_stack_ptr);
 

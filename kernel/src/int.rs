@@ -85,10 +85,11 @@ fn exception_handler(args: &InterruptInfo) {
                     addr,
                 } => {
                     logln!(
-                        "Page fault without access!\n  Requested={:?}\n  Actual={:?}\n  address={:#018x}",
+                        "Page fault without access!\n  Requested={:?}\n  Actual={:?}\n  address={:#018x}\n{:#018x?}",
                         request_perm,
                         page_perm,
-                        addr
+                        addr,
+                        args
                     );
                     Scheduler::crash_current();
                 }

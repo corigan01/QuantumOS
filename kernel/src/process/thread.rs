@@ -68,7 +68,7 @@ pub struct Thread {
 
 impl Thread {
     pub const DEFAULT_USERSPACE_RSP_TOP: VirtAddr = VirtAddr::new(0x7fff00000000);
-    pub const DEFAULT_USERSPACE_RSP_LEN: usize = PAGE_4K * 4;
+    pub const DEFAULT_USERSPACE_RSP_LEN: usize = PAGE_4K * 16;
 
     /// Create a new userspace thread
     pub fn new_user(process: RefProcess, entry_point: ProcessEntry) -> RefThread {

@@ -34,7 +34,7 @@ use crate::{
     page::{PhysPage, VirtPage},
     virt2phys::ObtainPhysAddr,
 };
-use alloc::{boxed::Box, sync::Arc};
+use alloc::boxed::Box;
 use arch::{
     interrupts,
     paging64::{
@@ -43,12 +43,11 @@ use arch::{
     },
     registers::cr3,
 };
-use spin::RwLock;
-use util::consts::PAGE_4K;
+use lldebug::logln;
 
 /// The top-most page table
 pub struct Virt2PhysMapping {
-    mapping: RwLock<Option<Arc<RwLock<SafePageMapLvl4>>>>,
+    mapping: Option<Box<SafePageMapLvl4>>,
 }
 
 #[derive(Clone)]
@@ -74,15 +73,6 @@ struct SafePageMapLvl1 {
     table: PageMapLvl1,
 }
 
-impl Clone for Virt2PhysMapping {
-    fn clone(&self) -> Self {
-        let table = self.mapping.read().as_ref().map(|inner| inner.clone());
-        Virt2PhysMapping {
-            mapping: RwLock::new(table),
-        }
-    }
-}
-
 /// Flush this page from the TLB
 #[inline]
 pub unsafe fn flush_tlb(page: VirtPage) {
@@ -105,10 +95,8 @@ fn table_indexes_for(vaddr: VirtAddr) -> (usize, usize, usize, usize) {
     (lvl4, lvl3, lvl2, lvl1)
 }
 
-static CURRENTLY_LOADED_PAGE_TABLES: Virt2PhysMapping = Virt2PhysMapping::empty();
-
 /// Bootloader convert a virtual address to a physical address
-pub fn bootloader_convert_phys(virt: u64) -> Option<u64> {
+pub unsafe fn bootloader_convert_phys(virt: u64) -> Option<u64> {
     // FIXME: This is just hardcoded for now, but should be populated from the bootloader!!!!
     //
     // Since we know the bootloader is identity mapped, the physical PTRs are valid virtual PTRs!
@@ -161,29 +149,6 @@ pub fn bootloader_convert_phys(virt: u64) -> Option<u64> {
     }
 }
 
-/// Convert a virtual address to a physical address
-pub fn virt_to_phys(virt: VirtAddr) -> Result<PhysAddr, PhysPtrTranslationError> {
-    match CURRENTLY_LOADED_PAGE_TABLES.vpage_to_ppage_lookup(VirtPage::containing_addr(virt)) {
-        // Try to lookup in the page tables loaded by us
-        Ok(phys_page) => Ok(phys_page.addr().extend_by(virt.chop_bottom(PAGE_4K))),
-        // If we haven't loaded the page tables yet (maybe in progress of loading them) we
-        // try lookin up the addr in the old bootloader page tables.
-        Err(PhysPtrTranslationError::PageEntriesNotSetup) => {
-            bootloader_convert_phys(virt.addr() as u64)
-                .ok_or(PhysPtrTranslationError::VirtNotFound(virt))
-                .map(|phys_addr| PhysAddr::new(phys_addr as usize))
-        }
-        // Our loaded page tables gave a non "I am not loaded yet"-kinda error, so
-        // lets just pass it along.
-        Err(e) => Err(e),
-    }
-}
-
-/// Hook the `virt_to_phys` function to the `phys_page` trait provider
-pub fn init_virt2phys_provider() {
-    crate::virt2phys::set_global_lookup_fn(virt_to_phys);
-}
-
 #[derive(Clone, Copy, Debug)]
 pub enum PageTableLoadingError {
     PhysTranslationErr(PhysPtrTranslationError),
@@ -194,27 +159,19 @@ pub enum PageTableLoadingError {
 impl Virt2PhysMapping {
     /// Create a new table that is not mapped
     pub const fn empty() -> Self {
-        Self {
-            mapping: RwLock::new(None),
-        }
+        Self { mapping: None }
     }
 
     /// Copy all entries and tables from 'from' into a new table.
     pub fn inhearit_from(from: &Self) -> Self {
-        let old_table = from
-            .mapping
-            .read()
-            .as_ref()
-            .map(|inner| Arc::new(RwLock::new(inner.read().clone())));
+        let old_table = from.mapping.as_ref().map(|inner| inner.clone());
 
-        Self {
-            mapping: RwLock::new(old_table),
-        }
+        Self { mapping: old_table }
     }
 
     /// Copy all entries from the bootloader's page tables
     pub unsafe fn inhearit_bootloader() -> Result<Self, PageCorrelationError> {
-        let new_table = Self::empty();
+        let mut new_table = Self::empty();
 
         // Since the bootloader identity maps itself, we can use that to read the page tables
         // even though their PTRs are PhysAddr instead of VirtAddr.
@@ -244,7 +201,7 @@ impl Virt2PhysMapping {
 
         // Map a 1Gib page to our page table
         fn map_1g(
-            mapping: &Virt2PhysMapping,
+            mapping: &mut Virt2PhysMapping,
             vpage: VirtPage,
             ppage: PhysPage,
         ) -> Result<(), PageCorrelationError> {
@@ -265,7 +222,7 @@ impl Virt2PhysMapping {
 
         // Map a 2Mib page to our page table
         fn map_2m(
-            mapping: &Virt2PhysMapping,
+            mapping: &mut Virt2PhysMapping,
             vpage: VirtPage,
             ppage: PhysPage,
         ) -> Result<(), PageCorrelationError> {
@@ -286,7 +243,7 @@ impl Virt2PhysMapping {
 
         // Map a normal 4Kib page to our page table
         fn map_4k(
-            mapping: &Virt2PhysMapping,
+            mapping: &mut Virt2PhysMapping,
             vpage: VirtPage,
             ppage: PhysPage,
         ) -> Result<(), PageCorrelationError> {
@@ -310,7 +267,7 @@ impl Virt2PhysMapping {
                     // 1Gib Entry
                     if lvl3_entry.is_present_set() && lvl3_entry.is_page_size_set() {
                         map_1g(
-                            &new_table,
+                            &mut new_table,
                             // Convert the indexes back into a page id
                             VirtPage::new(lvl4_index * 512 * 512 * 512 + lvl3_index * 512 * 512),
                             PhysPage::containing_addr(PhysAddr::new(
@@ -329,7 +286,7 @@ impl Virt2PhysMapping {
                         // 2Mib Entry
                         if lvl2_entry.is_present_set() && lvl2_entry.is_page_size_set() {
                             map_2m(
-                                &new_table,
+                                &mut new_table,
                                 // Convert the indexes back into a page id
                                 VirtPage::new(
                                     lvl4_index * 512 * 512 * 512
@@ -353,7 +310,7 @@ impl Virt2PhysMapping {
                         }
 
                         map_4k(
-                            &new_table,
+                            &mut new_table,
                             // Convert the indexes back into a page id
                             VirtPage::new(
                                 lvl4_index * 512 * 512 * 512
@@ -375,12 +332,10 @@ impl Virt2PhysMapping {
 
     /// Get the physical address of the inner table
     fn inner_table_ptr(&self) -> Result<PhysAddr, PageTableLoadingError> {
-        let mapping_inner = self.mapping.read();
         let raw_ptr = VirtAddr::new(
-            mapping_inner
+            self.mapping
                 .as_ref()
                 .ok_or(PageTableLoadingError::Empty)?
-                .read()
                 .table
                 .table_ptr() as usize,
         );
@@ -392,22 +347,20 @@ impl Virt2PhysMapping {
 
     /// Check if this table is currently loaded
     pub fn is_loaded(&self) -> bool {
-        // FIXME: I think this is a bug with RwLock, since there should only be
-        //        read locks (I even checked), but it always hangs?
-        unsafe { &*self.mapping.as_mut_ptr() }
-            .as_ref()
-            .is_some_and(|our_table| {
-                unsafe { &*CURRENTLY_LOADED_PAGE_TABLES.mapping.as_mut_ptr() }
-                    .as_ref()
-                    .is_some_and(|global_table| Arc::ptr_eq(our_table, global_table))
-            })
+        self.mapping.as_ref().is_some_and(|inner| {
+            let phy = VirtAddr::new(inner.table.table_ptr() as usize)
+                .phys_addr()
+                .unwrap()
+                .addr() as u64;
+            let real = cr3::get_page_directory_base_register();
+
+            phy == real
+        })
     }
 
     /// Load this table
-    pub unsafe fn load(self) -> Result<(), PageTableLoadingError> {
+    pub unsafe fn load(&self) -> Result<(), PageTableLoadingError> {
         unsafe { interrupts::disable_interrupts() };
-        // We want to hold a lock to the global table to ensure no one else can change it
-        let lock = CURRENTLY_LOADED_PAGE_TABLES.mapping.upgradeable_read();
 
         if self.is_loaded() {
             return Err(PageTableLoadingError::AlreadyLoaded);
@@ -415,15 +368,8 @@ impl Virt2PhysMapping {
 
         let inner_table_ptr = self.inner_table_ptr()?;
 
-        // Write ourselves to the table
-        {
-            let mut global_table = lock.upgrade();
-            *global_table = self.mapping.read().clone();
-        }
-
         // Write our addr to the page dir
         unsafe { cr3::set_page_directory_base_register(inner_table_ptr.addr() as u64) };
-
         unsafe { interrupts::enable_interrupts() };
         Ok(())
     }
@@ -433,16 +379,13 @@ impl Virt2PhysMapping {
         &self,
         page: VirtPage,
     ) -> Result<PhysPage, PhysPtrTranslationError> {
-        // FIXME: I think this is a bug with RwLock, since there should only be
-        //        read locks (I even checked), but it always hangs?
-        let mapping_lock = unsafe { &*self.mapping.as_mut_ptr() };
-        let Some(inner) = mapping_lock.as_ref() else {
+        let Some(inner) = self.mapping.as_ref() else {
             return Err(PhysPtrTranslationError::PageEntriesNotSetup);
         };
 
         let (lvl4_index, lvl3_index, lvl2_index, lvl1_index) = table_indexes_for(page.addr());
 
-        let Some(phys_addr) = inner.read().lower.get(lvl4_index).and_then(|lvl3| {
+        let Some(phys_addr) = inner.lower.get(lvl4_index).and_then(|lvl3| {
             let entry = lvl3
                 .as_ref()?
                 .lower
@@ -468,22 +411,12 @@ impl Virt2PhysMapping {
 
     /// Map this `vpage` to `ppage` returning the previous PhysPage if there was one
     pub fn correlate_page(
-        &self,
+        &mut self,
         vpage: VirtPage,
         ppage: PhysPage,
         options: VmOptions,
         permissions: VmPermissions,
     ) -> Result<Option<PhysPage>, PageCorrelationError> {
-        // Grab a lock to this page table
-        let lock = if options.is_dont_wait_for_lock_set() {
-            match self.mapping.try_upgradeable_read() {
-                Some(lock) => lock,
-                None => return Err(PageCorrelationError::AlreadyLocked),
-            }
-        } else {
-            self.mapping.upgradeable_read()
-        };
-
         let (lvl4_index, lvl3_index, lvl2_index, lvl1_index) = table_indexes_for(vpage.addr());
 
         fn check_perms(
@@ -522,7 +455,7 @@ impl Virt2PhysMapping {
 
         // We first try to do all the checks with RO before we commit to
         // fully locking the table.
-        if let Some(err) = lock.as_ref().and_then(|ro_checks| {
+        if let Some(err) = self.mapping.as_ref().and_then(|ro_checks| {
             let lvl2 = |entry: &PageEntryLvl2, lower: &SafePageMapLvl1| {
                 check_perms(
                     entry.is_present_set(),
@@ -565,7 +498,7 @@ impl Virt2PhysMapping {
                 .or_else(|| lower.ref_at(lvl3_index, lvl3).flatten())
             };
 
-            ro_checks.read().ref_at(lvl4_index, lvl4).flatten()
+            ro_checks.ref_at(lvl4_index, lvl4).flatten()
         }) {
             return Err(err);
         }
@@ -581,18 +514,10 @@ impl Virt2PhysMapping {
         let mut vaddr1: Option<VirtAddr> = None;
 
         // make sure to get back the ro_lock
-        let (ro_lock, prev_page) = {
-            // Ensure an entry exists
-            let lock = match lock.as_ref() {
-                None => {
-                    let mut upgraded_lock = lock.upgrade();
-                    *upgraded_lock = Some(Arc::new(RwLock::new(SafePageMapLvl4::empty())));
-                    upgraded_lock.downgrade_to_upgradeable()
-                }
-                _ => lock,
-            };
-
-            let mut lvl4_mut = lock.as_ref().unwrap().write();
+        let prev_page = {
+            let lvl4_mut = self
+                .mapping
+                .get_or_insert_with(|| Box::new(SafePageMapLvl4::empty()));
 
             let lvl2_fun = |entry: &mut PageEntryLvl2, table: &mut SafePageMapLvl1| {
                 let prev_permissions = entry.get_permissions();
@@ -762,8 +687,7 @@ impl Virt2PhysMapping {
                 table.ensured_mut_at(lvl3_index, lvl3_fun)
             })?;
 
-            drop(lvl4_mut);
-            (lock, prev_page)
+            prev_page
         };
 
         // If we are loaded and one of the page tables was just now created,
@@ -795,27 +719,27 @@ impl Virt2PhysMapping {
                 None => None,
             };
 
-            // Re-acquire the 'R/W' lock
-            let mut lvl4_mut = ro_lock.as_ref().unwrap().write();
-
             // Write back the physical address that we calculated
-            lvl4_mut.ensured_mut_at(lvl4_index, |entry, table| {
-                if let Some(paddr3) = paddr3 {
-                    entry.set_next_entry_phy_address(paddr3.addr() as u64);
-                }
-
-                table.ensured_mut_at(lvl3_index, |entry, table| {
-                    if let Some(paddr2) = paddr2 {
-                        entry.set_next_entry_phy_address(paddr2.addr() as u64);
+            self.mapping
+                .as_mut()
+                .unwrap()
+                .ensured_mut_at(lvl4_index, |entry, table| {
+                    if let Some(paddr3) = paddr3 {
+                        entry.set_next_entry_phy_address(paddr3.addr() as u64);
                     }
 
-                    table.ensured_mut_at(lvl2_index, |entry, _| {
-                        if let Some(paddr1) = paddr1 {
-                            entry.set_next_entry_phy_address(paddr1.addr() as u64);
+                    table.ensured_mut_at(lvl3_index, |entry, table| {
+                        if let Some(paddr2) = paddr2 {
+                            entry.set_next_entry_phy_address(paddr2.addr() as u64);
                         }
+
+                        table.ensured_mut_at(lvl2_index, |entry, _| {
+                            if let Some(paddr1) = paddr1 {
+                                entry.set_next_entry_phy_address(paddr1.addr() as u64);
+                            }
+                        })
                     })
-                })
-            });
+                });
         }
 
         // Finally we are done :)
@@ -1286,9 +1210,7 @@ impl SafePageMapLvl1 {
 
 impl core::fmt::Debug for Virt2PhysMapping {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        let mapping_lock = self.mapping.read();
-
-        let Some(_) = mapping_lock.as_ref() else {
+        if self.mapping.is_none() {
             writeln!(f, "Virt2PhysMapping ?? (Empty)")?;
             return Ok(());
         };
@@ -1298,15 +1220,7 @@ impl core::fmt::Debug for Virt2PhysMapping {
         if self.is_loaded() {
             write!(f, "Current")?;
         } else {
-            write!(
-                f,
-                "Not Loaded, refs={}",
-                self.mapping
-                    .read()
-                    .as_ref()
-                    .map(|inner| Arc::strong_count(inner))
-                    .unwrap_or(0)
-            )?;
+            write!(f, "Not Loaded",)?;
         }
         writeln!(f, ")")
     }
@@ -1314,29 +1228,19 @@ impl core::fmt::Debug for Virt2PhysMapping {
 
 impl core::fmt::Display for Virt2PhysMapping {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        let mapping_lock = self.mapping.read();
+        let mapping_lock = self.mapping.as_ref();
 
         let Some(ref inner) = mapping_lock.as_ref() else {
             writeln!(f, "Virt2PhysMapping ?? (Empty)")?;
             return Ok(());
         };
 
-        let lvl4 = inner.read();
-
         write!(f, "Virt2PhysMapping (",)?;
 
         if self.is_loaded() {
             write!(f, "Current")?;
         } else {
-            write!(
-                f,
-                "Not Loaded, refs={}",
-                self.mapping
-                    .read()
-                    .as_ref()
-                    .map(|inner| Arc::strong_count(inner))
-                    .unwrap_or(0)
-            )?;
+            write!(f, "Not Loaded",)?;
         }
         writeln!(f, ") ::")?;
 
@@ -1467,7 +1371,7 @@ impl core::fmt::Display for Virt2PhysMapping {
         }
 
         for lvl4_index in 0..512 {
-            if let Some(err) = lvl4.ref_at(lvl4_index, |lvl4_entry, lvl3| {
+            if let Some(err) = inner.ref_at(lvl4_index, |lvl4_entry, lvl3| {
                 lvl4_fun(f, f.alternate(), lvl4_index, lvl4_entry, lvl3)
             }) {
                 err?;

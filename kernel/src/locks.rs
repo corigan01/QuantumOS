@@ -118,10 +118,20 @@ impl AcquiredLock {
     pub fn unlock(self) {
         drop(self);
     }
+
+    /// Force unlock from the scheduler
+    pub unsafe fn force_unlock(&mut self) {
+        Scheduler::get().aquiredlock_unlock(self);
+        self.0 = usize::MAX;
+    }
 }
 
 impl Drop for AcquiredLock {
     fn drop(&mut self) {
+        if self.0 == usize::MAX {
+            return;
+        }
+
         Scheduler::get().aquiredlock_unlock(self);
     }
 }

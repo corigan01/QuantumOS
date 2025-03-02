@@ -23,10 +23,10 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use core::arch::naked_asm;
+use core::{arch::naked_asm, cell::SyncUnsafeCell};
 
-pub static mut KERNEL_RSP_PTR: u64 = 0x121212;
-pub static mut TEMP_USERSPACE_RSP_PTR: u64 = 0x121212;
+pub static KERNEL_RSP_PTR: SyncUnsafeCell<u64> = SyncUnsafeCell::new(0x121212);
+pub static TEMP_USERSPACE_RSP_PTR: SyncUnsafeCell<u64> = SyncUnsafeCell::new(0x121212);
 
 #[naked]
 pub unsafe extern "C" fn kernel_entry() {
@@ -108,14 +108,14 @@ pub unsafe extern "C" fn kernel_entry() {
 
 /// Set the RSP of the syscall entry
 pub unsafe fn set_syscall_rsp(new_rsp: u64) {
-    let kernel_rsp_ptr = &raw mut KERNEL_RSP_PTR;
+    let kernel_rsp_ptr = KERNEL_RSP_PTR.get();
 
     unsafe { *kernel_rsp_ptr = new_rsp };
 }
 
 /// get the RSP of the syscall entry
 pub unsafe fn get_syscall_rsp() -> u64 {
-    let kernel_rsp_ptr = &raw mut KERNEL_RSP_PTR;
+    let kernel_rsp_ptr = KERNEL_RSP_PTR.get();
 
     unsafe { *kernel_rsp_ptr }
 }

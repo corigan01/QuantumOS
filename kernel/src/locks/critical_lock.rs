@@ -23,7 +23,7 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use super::{AcquiredLock, LockEncouragement, LockId};
+use super::{AcquiredLock, LockEncouragement, LockId, schedule_lock};
 use core::cell::UnsafeCell;
 use core::fmt::Debug;
 use core::ops::{Deref, DerefMut};
@@ -61,6 +61,7 @@ impl<T: ?Sized> RwCriticalLock<T> {
 
     /// Aquire a write lock to the `RwCriticalLock`
     pub fn write<'a>(&'a self) -> WriteCriticalLockGuard<'a, T> {
+        unsafe { schedule_lock::manual_schedule_lock() };
         let lock = AcquiredLock::lock_exclusive(&self.lock, LockEncouragement::Strong);
 
         WriteCriticalLockGuard {
@@ -82,14 +83,27 @@ impl<T: ?Sized> RwCriticalLock<T> {
     }
 
     /// Try to Aquire a write lock to the `RwCriticalLock`
-    pub fn try_write<'a>(&'a self, p: LockEncouragement) -> Option<WriteCriticalLockGuard<'a, T>> {
-        let lock = AcquiredLock::try_lock_exclusive(&self.lock, p)?;
+    pub fn try_write<'a>(&'a self) -> Option<WriteCriticalLockGuard<'a, T>> {
+        unsafe { schedule_lock::manual_schedule_lock() };
+        let Some(lock) = AcquiredLock::try_lock_exclusive(&self.lock, LockEncouragement::Strong)
+        else {
+            unsafe { schedule_lock::manual_schedule_unlock() };
+            return None;
+        };
 
         Some(WriteCriticalLockGuard {
             lock_id: &self.lock,
             lock,
             ptr: self.inner.get(),
         })
+    }
+
+    /// Get the inner ptr
+    ///
+    /// # Safety
+    /// The caller must ensure that no other locks are currently taking place.
+    pub unsafe fn get_mut_ptr(&self) -> *mut T {
+        self.inner.get()
     }
 }
 
@@ -149,5 +163,12 @@ impl<'a, T: ?Sized> Deref for WriteCriticalLockGuard<'a, T> {
 impl<'a, T: ?Sized> DerefMut for WriteCriticalLockGuard<'a, T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         unsafe { &mut *self.ptr }
+    }
+}
+
+impl<'a, T: ?Sized> Drop for WriteCriticalLockGuard<'a, T> {
+    fn drop(&mut self) {
+        unsafe { self.lock.force_unlock() };
+        unsafe { schedule_lock::manual_schedule_unlock() };
     }
 }

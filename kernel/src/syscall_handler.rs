@@ -100,6 +100,7 @@ impl QuantumPortal for KernelSyscalls {
     fn yield_me() -> usize {
         logln!("Userspace Yield");
         Scheduler::yield_me();
+        logln!("Userspace Yield - ret");
         0
     }
 }

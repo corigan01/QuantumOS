@@ -106,7 +106,7 @@ debug = 0
 overflow-checks = true
 
 [profile.kernel]
-inherits = "release"
+inherits = "dev"
 panic = "abort"
 opt-level=1
 strip = false

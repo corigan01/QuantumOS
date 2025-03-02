@@ -86,7 +86,7 @@ impl Process {
 
     /// Add an ELF mapping to this process's memory map
     pub fn map_elf(&self, elf: Arc<ElfOwned>) -> ProcessEntry {
-        let vm_lock = self.vm.write();
+        let mut vm_lock = self.vm.write();
         let elf_fill = VmElfInject::new(elf.clone()).fill_action();
 
         let header_perms = VmPermissions::none()
@@ -110,7 +110,7 @@ impl Process {
 
     /// Add a new anonymous memory mapping
     pub fn map_anon(&self, region: VmRegion, perm: VmPermissions) {
-        let vm_lock = self.vm.write();
+        let mut vm_lock = self.vm.write();
 
         vm_lock
             .inplace_new_vmobject(region, perm, VmFillAction::Scrub(0), false)

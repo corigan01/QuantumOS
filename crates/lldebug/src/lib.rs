@@ -27,12 +27,12 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 use core::fmt::Write;
 use core::sync::atomic::AtomicBool;
-use core::sync::atomic::AtomicUsize;
 use core::sync::atomic::Ordering;
 
 // Re-export the macro
 pub use lldebug_macro::debug_ready;
 pub use lldebug_macro::make_debug;
+use lock::DebugMutex;
 
 pub mod color;
 pub mod hexdump;
@@ -45,23 +45,24 @@ pub enum LogKind {
 }
 
 pub type OutputFn = fn(core::fmt::Arguments);
-pub type EnableSyncFn = fn();
-pub type DisableSyncFn = fn();
 
 static REQUIRES_HEADER_PRINT: AtomicBool = AtomicBool::new(true);
-static GLOBAL_PRINT_FN: AtomicUsize = AtomicUsize::new(0);
+static GLOBAL_PRINT_FN: DebugMutex<Option<OutputFn>> = DebugMutex::new(None);
 
 fn raw_print(args: core::fmt::Arguments) {
-    let ptr = GLOBAL_PRINT_FN.load(Ordering::Relaxed);
-    if ptr as usize != 0 {
-        let ptr: fn(core::fmt::Arguments) = unsafe { core::mem::transmute(ptr) };
-        ptr(args);
+    let Some(ptr) = GLOBAL_PRINT_FN.try_lock() else {
+        return;
+    };
+
+    if let Some(inner) = *ptr {
+        inner(args);
     }
 }
 
 pub fn set_global_debug_fn(function: OutputFn) {
-    let ptr = function as *const fn(core::fmt::Arguments) as usize;
-    GLOBAL_PRINT_FN.store(ptr, Ordering::Relaxed);
+    *GLOBAL_PRINT_FN
+        .try_lock()
+        .expect("Unable to lock when setting function") = Some(function);
 }
 
 struct PrettyOutput<'a> {

@@ -43,14 +43,16 @@ use boolvec::BoolVec;
 use elf::elf_owned::ElfOwned;
 use lldebug::{log, logln};
 use mem::{
-    page::PhysPage,
-    paging::VmPermissions,
-    virt2phys::virt2phys,
+    addr::{PhysAddr, VirtAddr},
+    page::{PhysPage, VirtPage},
+    paging::{VmPermissions, bootloader_convert_phys},
+    virt2phys::{PhysPtrTranslationError, set_global_lookup_fn, virt2phys},
     vm::{PageFaultInfo, PageFaultReponse, VmProcess, VmRegion, set_page_fault_handler},
 };
 use tar::Tar;
+use util::consts::PAGE_4K;
 
-const VERBOSE_LOGING: bool = false;
+const VERBOSE_LOGING: bool = true;
 
 /// A priority queue item with a weak reference to its owned thread
 #[derive(Debug)]
@@ -339,7 +341,7 @@ impl Scheduler {
         initfs: VmRegion,
     ) {
         // We want to hold this lock the duration of init the kernel regions
-        let kernel_vm = self.kernel_vm.lock();
+        let mut kernel_vm = self.kernel_vm.lock();
 
         let mut mapping_counter = 0;
         let mut map_vm_object = |region: VmRegion, permissions: VmPermissions| {
@@ -364,13 +366,13 @@ impl Scheduler {
         map_vm_object(kernel_heap, VmPermissions::SYS_RW);
         map_vm_object(kernel_stack, VmPermissions::SYS_RW);
         map_vm_object(initfs, VmPermissions::SYS_R);
-        unsafe { kernel_vm.page_tables.clone().load() }.unwrap();
+        unsafe { kernel_vm.page_tables.read().load() }.unwrap();
         logln!("OK ({mapping_counter})");
     }
 
     /// Clone the `VmProcess` instance of the kernel's memory map
     pub fn fork_kernel_vm(&self) -> VmProcess {
-        self.kernel_vm.lock().clone()
+        VmProcess::inhearit_page_tables(&self.kernel_vm.lock().page_tables.read())
     }
 
     /// Create a new PID
@@ -404,7 +406,11 @@ impl Scheduler {
     pub fn register_new_thread(&self, t: RefThread) {
         {
             // Strong because locking the thread list will cause the process to fully block
-            let mut thread_list = t.process.threads.write(LockEncouragement::Strong);
+            let mut thread_list = t
+                .process
+                .threads
+                .try_write(LockEncouragement::Strong)
+                .unwrap();
             thread_list.insert(t.id, Arc::downgrade(&t));
         }
 
@@ -569,7 +575,10 @@ impl Scheduler {
                     Self::yield_me()
                 }
                 Err(LockError::Deadlock) => {
-                    panic!("Aquiring an exclusive lock on this thread will deadlock!")
+                    panic!(
+                        "Aquiring an exclusive lock on this thread will deadlock! {:#?}",
+                        Scheduler::get().held_locks.lock()
+                    )
                 }
             }
         }
@@ -584,7 +593,10 @@ impl Scheduler {
                     Self::yield_me()
                 }
                 Err(LockError::Deadlock) => {
-                    panic!("Aquiring an exclusive lock on this thread will deadlock!")
+                    panic!(
+                        "Aquiring a shared lock on this thread will deadlock! {:#?}",
+                        Scheduler::get().held_locks.lock()
+                    )
                 }
             }
         }
@@ -627,7 +639,7 @@ impl Scheduler {
         {
             let s = Scheduler::get();
             let current_thread = s.current_thread().upgrade().unwrap();
-            *current_thread.crashed.borrow_mut() = true;
+            *s.running.lock() = None;
 
             logln!(
                 "CRASH! '{}' pid={}, tid={}",
@@ -636,15 +648,16 @@ impl Scheduler {
                 current_thread.id
             );
 
-            // Remove thread from thread list
-            s.thread_list.lock().retain(|thread| {
-                thread.id != current_thread.id || thread.process.id != current_thread.process.id
-            });
+            // // Remove thread from thread list
+            // s.thread_list.lock().retain(|thread| {
+            //     thread.id != current_thread.id || thread.process.id != current_thread.process.id
+            // });
 
             current_thread
                 .process
                 .threads
-                .write(LockEncouragement::Strong)
+                .try_write(LockEncouragement::Strong)
+                .unwrap()
                 .remove(&current_thread.id)
                 .expect("Expected to find thread in parent process's array!");
         }
@@ -667,6 +680,49 @@ pub fn page_fault_handler(info: PageFaultInfo) -> PageFaultReponse {
         .unwrap()
         .process
         .vm
-        .write()
+        .try_read(LockEncouragement::Strong)
+        .unwrap()
         .page_fault_handler(info)
+}
+
+/// Convert a virtual address to a physical address
+pub fn virt_to_phys(virt: VirtAddr) -> Result<PhysAddr, PhysPtrTranslationError> {
+    let scheduler = Scheduler::get();
+    let Some(running_thread) = scheduler.running.lock().clone() else {
+        return unsafe {
+            bootloader_convert_phys(virt.addr() as u64)
+                .ok_or(PhysPtrTranslationError::VirtNotFound(virt))
+                .map(|phys_addr| PhysAddr::new(phys_addr as usize))
+        };
+    };
+
+    match unsafe {
+        &*running_thread
+            .process
+            .vm
+            .try_read(LockEncouragement::Strong)
+            .unwrap()
+            .page_tables
+            .as_mut_ptr()
+    }
+    .vpage_to_ppage_lookup(VirtPage::containing_addr(virt))
+    {
+        // Try to lookup in the page tables loaded by us
+        Ok(phys_page) => Ok(phys_page.addr().extend_by(virt.chop_bottom(PAGE_4K))),
+        // If we haven't loaded the page tables yet (maybe in progress of loading them) we
+        // try lookin up the addr in the old bootloader page tables.
+        Err(PhysPtrTranslationError::PageEntriesNotSetup) => unsafe {
+            bootloader_convert_phys(virt.addr() as u64)
+                .ok_or(PhysPtrTranslationError::VirtNotFound(virt))
+                .map(|phys_addr| PhysAddr::new(phys_addr as usize))
+        },
+        // Our loaded page tables gave a non "I am not loaded yet"-kinda error, so
+        // lets just pass it along.
+        Err(e) => Err(e),
+    }
+}
+
+/// Hook the `virt_to_phys` function to the `phys_page` trait provider
+pub fn init_virt2phys_provider() {
+    set_global_lookup_fn(virt_to_phys);
 }

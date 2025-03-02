@@ -25,7 +25,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 use crate::parse::{DebugMacroInput, DebugStream};
 use proc_macro2::Span;
-use quote::{quote, quote_spanned};
+use quote::{format_ident, quote, quote_spanned};
 use syn::{Ident, ItemFn, Result, Type};
 
 pub fn generate_make_debug(macro_input: DebugMacroInput) -> Result<proc_macro2::TokenStream> {
@@ -80,45 +80,77 @@ pub fn generate_stream(enumeration: usize, stream: &DebugStream) -> proc_macro2:
     };
 
     let name = Ident::new(&static_stream_var_name(enumeration, stream), name_span);
+    let name_init = format_ident!("{}_initfn", name.to_string().to_ascii_lowercase());
     let stream_type = &stream.debug_type;
     let stream_init = &stream.init_expr;
 
-    quote! {
-        pub static mut #name: ::core::cell::LazyCell<::lldebug::lock::DebugMutex<#stream_type>> = ::core::cell::LazyCell::new(|| ::lldebug::lock::DebugMutex::new(#stream_init));
+    if !is_type_option(stream_type) {
+        quote! {
+            pub fn #name_init() -> #stream_type {
+                #stream_init
+            }
+
+            pub static mut #name: ::lldebug::lock::DebugMutex<::core::option::Option<#stream_type>> = ::lldebug::lock::DebugMutex::new(None);
+        }
+    } else {
+        quote! {
+            pub fn #name_init() -> #stream_type {
+                #stream_init
+            }
+
+            pub static mut #name: ::lldebug::lock::DebugMutex<#stream_type> = ::lldebug::lock::DebugMutex::new(None);
+        }
     }
 }
 
 fn generate_print_each(var_name: &Ident, is_option: bool) -> proc_macro2::TokenStream {
+    let name_init = format_ident!("{}_initfn", var_name.to_string().to_ascii_lowercase());
     if is_option {
         quote! {
             unsafe {
-                let mut locked = (#var_name).lock();
-
-                if let Some(inner) = &mut *locked {
-                    let _ = inner.write_fmt(args);
+                if let Some(mut locked) = (#var_name).try_lock() {
+                    if let Some(inner) = &mut *locked {
+                        let _ = inner.write_fmt(args);
+                    } else {
+                        *locked = #name_init();
+                        if let Some(inner) = &mut *locked {
+                            let _ = inner.write_fmt(args);
+                        }
+                    }
                 }
             }
         }
     } else {
         quote! {
-            let _ = unsafe { (*(*(#var_name)).lock()).write_fmt(args) };
+            unsafe {
+                if let Some(mut locked) = (#var_name).try_lock() {
+                    if let Some(inner) = &mut *locked {
+                        let _ = inner.write_fmt(args);
+                    } else {
+                        *locked = Some(#name_init());
+                        if let Some(inner) = &mut *locked {
+                            let _ = inner.write_fmt(args);
+                        }
+                    }
+                }
+            }
         }
     }
 }
 
+fn is_type_option(debug_type: &Type) -> bool {
+    let Type::Path(maybe_option) = debug_type else {
+        return false;
+    };
+
+    maybe_option
+        .path
+        .segments
+        .iter()
+        .any(|segment| segment.ident.to_string().contains("Option"))
+}
+
 pub fn generate_init_function(macro_input: &DebugMacroInput) -> proc_macro2::TokenStream {
-    fn is_type_option(debug_type: &Type) -> bool {
-        let Type::Path(maybe_option) = debug_type else {
-            return false;
-        };
-
-        maybe_option
-            .path
-            .segments
-            .iter()
-            .any(|segment| segment.ident.to_string().contains("Option"))
-    }
-
     // FIXME: We should only do one call to `static_stream_var_name` per stream, however, this
     // is eaiser for now.
     let stream_outputs: Vec<proc_macro2::TokenStream> = macro_input

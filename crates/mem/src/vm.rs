@@ -209,7 +209,7 @@ impl VmInjectFillAction for VmFillAction {
         ppage: PhysPage,
     ) -> PopulationReponse {
         // If the table is not loaded, we cannot populate this page
-        if !process.page_tables.is_loaded() {
+        if !process.page_tables.read().is_loaded() {
             return PopulationReponse::PageTablesNotLoaded;
         }
 
@@ -362,7 +362,7 @@ impl VmObject {
         fill_action: VmFillAction,
         override_and_fill: bool,
     ) -> Result<Arc<RwLock<Self>>, NewVmObjectError> {
-        let mut new_self = Self {
+        let new_self = Self {
             region,
             permissions,
             fill_action: RwLock::new(fill_action),
@@ -395,6 +395,7 @@ impl VmObject {
         for (vpage, ppage) in mappings.iter() {
             vm_process
                 .page_tables
+                .write()
                 .correlate_page(
                     *vpage,
                     PhysPage::new(ppage.page()),
@@ -423,7 +424,7 @@ impl VmObject {
     ///
     /// This function should flush this page to the VmProcess's page tables.
     pub fn map_new_page(
-        &mut self,
+        &self,
         vm_process: &VmProcess,
         vpage: VirtPage,
     ) -> Result<(), VmObjectMappingError> {
@@ -438,7 +439,7 @@ impl VmObject {
         }
 
         // We cannot populate page table while the table isnt loaded
-        if !vm_process.page_tables.is_loaded() {
+        if !vm_process.page_tables.read().is_loaded() {
             return Err(VmObjectMappingError::PageTableNotLoaded);
         }
 
@@ -452,6 +453,7 @@ impl VmObject {
         // Map the page with kernel option first to ensure we can write to this page
         vm_process
             .page_tables
+            .write()
             .correlate_page(
                 vpage,
                 backing_page,
@@ -481,6 +483,7 @@ impl VmObject {
         // Finally map the page back to the user when done
         vm_process
             .page_tables
+            .write()
             .correlate_page(
                 vpage,
                 backing_page,
@@ -498,7 +501,7 @@ impl VmObject {
 
     /// The page fault handler for this VmObject
     pub fn page_fault_handler(
-        &mut self,
+        &self,
         vm_process: &VmProcess,
         info: PageFaultInfo,
     ) -> PageFaultReponse {
@@ -531,7 +534,7 @@ impl VmObject {
 
         match self
             .fill_action
-            .write()
+            .read()
             .page_fault_handler(self, vm_process, info)
         {
             PageFaultReponse::Handled => (),
@@ -586,16 +589,7 @@ pub struct VmProcess {
     /// Since these objects can and be shared, we must lock and ref-count them
     objects: RwLock<Vec<Arc<RwLock<VmObject>>>>,
     /// The page tables in this process
-    pub page_tables: Virt2PhysMapping,
-}
-
-impl Clone for VmProcess {
-    fn clone(&self) -> Self {
-        Self {
-            objects: RwLock::new(self.objects.read().clone()),
-            page_tables: self.page_tables.clone(),
-        }
-    }
+    pub page_tables: RwLock<Virt2PhysMapping>,
 }
 
 impl VmProcess {
@@ -603,15 +597,15 @@ impl VmProcess {
     pub const fn new() -> Self {
         Self {
             objects: RwLock::new(Vec::new()),
-            page_tables: Virt2PhysMapping::empty(),
+            page_tables: RwLock::new(Virt2PhysMapping::empty()),
         }
     }
 
     /// Inhearit the page tables from 'page_tables'
-    pub fn inhearit_page_tables(page_tables: Virt2PhysMapping) -> Self {
+    pub fn inhearit_page_tables(page_tables: &Virt2PhysMapping) -> Self {
         Self {
             objects: RwLock::new(Vec::new()),
-            page_tables,
+            page_tables: RwLock::new(Virt2PhysMapping::inhearit_from(page_tables)),
         }
     }
 
@@ -708,7 +702,7 @@ impl VmProcess {
     /// Make a new vm object from this process. This will both insert the object
     /// and return a new Arc<..> ptr to it.
     pub fn inplace_new_vmobject(
-        &self,
+        &mut self,
         region: VmRegion,
         permissions: VmPermissions,
         fill_action: VmFillAction,
@@ -744,7 +738,7 @@ impl VmProcess {
 
     /// Make a new `VmObject` from manual mappings.
     pub fn manual_inplace_new_vmobject(
-        &self,
+        &mut self,
         region: VmRegion,
         permissions: VmPermissions,
         mappings: BTreeMap<VirtPage, PhysPage>,
@@ -777,6 +771,7 @@ impl VmProcess {
         let Some(object) = lock
             .iter()
             .find(|object| object.read().region.does_contain_addr(info.vaddr))
+            .cloned()
         else {
             return PageFaultReponse::NoAccess {
                 page_perm: VmPermissions::none(),
@@ -789,7 +784,8 @@ impl VmProcess {
             };
         };
 
-        object.write().page_fault_handler(self, info)
+        drop(lock);
+        object.read().page_fault_handler(self, info)
     }
 }
 
