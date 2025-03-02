@@ -33,6 +33,7 @@ use core::sync::atomic::Ordering;
 pub use lldebug_macro::debug_ready;
 pub use lldebug_macro::make_debug;
 use lock::DebugMutex;
+use lock::UNLOCK_OVERRIDE;
 
 pub mod color;
 pub mod hexdump;
@@ -63,6 +64,12 @@ pub fn set_global_debug_fn(function: OutputFn) {
     *GLOBAL_PRINT_FN
         .try_lock()
         .expect("Unable to lock when setting function") = Some(function);
+}
+
+/// Forces all `DebugMutex`'s to unlock, allowing to provide debug output again. This
+/// is useful for `Panic` situations where a thread had locked output before crashing.
+pub unsafe fn force_unlock_all() {
+    UNLOCK_OVERRIDE.store(true, Ordering::Release);
 }
 
 struct PrettyOutput<'a> {

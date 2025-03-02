@@ -270,7 +270,7 @@ fn build_memory_map(
         let kernels_heap_pages = mm
             .find_continuous_of(
                 PhysMemoryKind::Free,
-                PAGE_2M * 4,
+                PAGE_2M * 8,
                 PAGE_2M,
                 PhysAddr::from(1 * MIB),
             )

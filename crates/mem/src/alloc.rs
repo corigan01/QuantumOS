@@ -135,9 +135,14 @@ impl BuddyAllocator {
 
             // Check if this buddy can fit the allocation
             if post_header_size < type_size {
-                cursor = cursor_read.next.expect(
-                    "Reached end of allocation region, no region fits desired allocation. ",
-                );
+                if let Some(next_cursor) = cursor_read.next {
+                    cursor = next_cursor;
+                } else {
+                    panic!(
+                        "Reached end of allocation region, no region fits desired allocation. \n{:#?}",
+                        self
+                    );
+                }
                 continue;
             }
 

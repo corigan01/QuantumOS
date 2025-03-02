@@ -36,14 +36,12 @@ use crate::{
 };
 use alloc::boxed::Box;
 use arch::{
-    interrupts,
     paging64::{
         PageEntry1G, PageEntry2M, PageEntry4K, PageEntryLvl2, PageEntryLvl3, PageEntryLvl4,
         PageMapLvl1, PageMapLvl2, PageMapLvl3, PageMapLvl4,
     },
     registers::cr3,
 };
-use lldebug::logln;
 
 /// The top-most page table
 pub struct Virt2PhysMapping {
@@ -360,8 +358,6 @@ impl Virt2PhysMapping {
 
     /// Load this table
     pub unsafe fn load(&self) -> Result<(), PageTableLoadingError> {
-        unsafe { interrupts::disable_interrupts() };
-
         if self.is_loaded() {
             return Err(PageTableLoadingError::AlreadyLoaded);
         }
@@ -370,7 +366,6 @@ impl Virt2PhysMapping {
 
         // Write our addr to the page dir
         unsafe { cr3::set_page_directory_base_register(inner_table_ptr.addr() as u64) };
-        unsafe { interrupts::enable_interrupts() };
         Ok(())
     }
 

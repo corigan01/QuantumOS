@@ -30,6 +30,7 @@ use lldebug::errorln;
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
     unsafe { disable_interrupts() };
+    unsafe { lldebug::force_unlock_all() };
     errorln!("{}", info);
 
     // Close the emulator on panic

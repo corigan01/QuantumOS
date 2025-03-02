@@ -24,6 +24,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 use alloc::alloc::{alloc_zeroed, dealloc};
+use arch::interrupts;
 use core::{
     alloc::Layout,
     arch::{asm, naked_asm},
@@ -102,6 +103,7 @@ impl Task {
     #[inline(always)]
     fn switch_prelude(&mut self) {
         self.task_flags.set_running_flag(false);
+
         unsafe {
             let current_thread = Scheduler::get().current_thread().upgrade().unwrap();
             let page_tables = current_thread.process.vm.read(LockEncouragement::Strong);
@@ -115,17 +117,10 @@ impl Task {
     #[inline(always)]
     fn switch_epilogue(&mut self) {
         self.task_flags.set_running_flag(true);
+
         let top_of_task_stack = self.stack_top();
         gdt::set_stack_for_privl(top_of_task_stack.as_mut_ptr(), arch::CpuPrivilege::Ring0);
         unsafe { set_syscall_rsp(top_of_task_stack.addr() as u64) };
-
-        unsafe {
-            let current_thread = Scheduler::get().current_thread().upgrade().unwrap();
-            let page_tables = current_thread.process.vm.read(LockEncouragement::Strong);
-            if !page_tables.page_tables.read().is_loaded() {
-                page_tables.page_tables.read().load().unwrap();
-            }
-        };
     }
 
     /// Get the tasks inner stack ptr
@@ -153,11 +148,6 @@ impl Task {
                 (&*from).stack.stack_bottom.addr(),
                 (&*from).stack_top().addr()
             );
-            logln!(
-                "rsp: {:#018x} -> {:#018x}",
-                from_stack_ptr.read(),
-                to_stack_ptr.read()
-            );
             if from != to {
                 asm_switch(from_stack_ptr, to_stack_ptr);
             }
@@ -166,7 +156,7 @@ impl Task {
                 "Switched back to current, yet current is not correct!"
             );
 
-            (&mut *from).switch_epilogue()
+            (&mut *from).switch_epilogue();
         };
     }
 
@@ -177,8 +167,8 @@ impl Task {
         unsafe {
             let to_stack_ptr = (&mut *to).get_task_stack_ptr();
             let mut from_stack_ptr = asm_get_rsp();
+            (&mut *to).switch_prelude();
             (&mut *to).switch_epilogue();
-            logln!("rsp={:#018x}", from_stack_ptr);
 
             asm_switch(&raw mut from_stack_ptr, to_stack_ptr);
 

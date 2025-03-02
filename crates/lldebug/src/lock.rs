@@ -29,6 +29,11 @@ use core::{
     sync::atomic::{AtomicBool, Ordering},
 };
 
+pub(crate) static UNLOCK_OVERRIDE: AtomicBool = AtomicBool::new(false);
+
+/// A exclusive mutex for output related data structures.
+///
+/// Can be unlocked globally.
 pub struct DebugMutex<T> {
     lock: AtomicBool,
     inner: UnsafeCell<T>,
@@ -51,6 +56,13 @@ impl<T> DebugMutex<T> {
     }
 
     pub fn try_lock<'a>(&'a self) -> Option<DebugMutexGuard<'a, T>> {
+        if UNLOCK_OVERRIDE.load(Ordering::Relaxed) {
+            return Some(DebugMutexGuard {
+                lock: &self.lock,
+                ptr: self.inner.get(),
+            });
+        };
+
         while let Err(previous_value) =
             self.lock
                 .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
@@ -85,6 +97,10 @@ impl<'a, T> DerefMut for DebugMutexGuard<'a, T> {
 
 impl<'a, T> Drop for DebugMutexGuard<'a, T> {
     fn drop(&mut self) {
+        if UNLOCK_OVERRIDE.load(Ordering::Relaxed) {
+            return;
+        }
+
         while let Err(previous_value) =
             self.lock
                 .compare_exchange(true, false, Ordering::Release, Ordering::Relaxed)
