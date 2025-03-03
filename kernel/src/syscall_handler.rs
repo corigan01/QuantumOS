@@ -49,7 +49,7 @@ extern "C" fn syscall_handler(
 pub struct KernelSyscalls {}
 
 impl QuantumPortalServer for KernelSyscalls {
-    fn verify_user_ptr<T: Sized>(ptr: *const T) -> bool {
+    fn verify_user_ptr<T: Sized>(_ptr: *const T) -> bool {
         true
     }
 }
@@ -61,9 +61,9 @@ impl QuantumPortal for KernelSyscalls {
     }
 
     fn map_memory(
-        location: MemoryLocation,
-        protections: MemoryProtections,
-        bytes: usize,
+        _location: MemoryLocation,
+        _protections: MemoryProtections,
+        _bytes: usize,
     ) -> Result<*mut u8, MapMemoryError> {
         logln!("map_memory todo");
         Scheduler::crash_current();
@@ -89,8 +89,8 @@ impl QuantumPortal for KernelSyscalls {
     }
 
     fn wait_for(
-        conditions: &[WaitCondition],
-        signal_buffer: &mut [WaitSignal],
+        _conditions: &[WaitCondition],
+        _signal_buffer: &mut [WaitSignal],
     ) -> Result<usize, WaitingError> {
         logln!("wait_for todo");
         Scheduler::crash_current();

@@ -55,7 +55,7 @@ use mem::{
 use tar::Tar;
 use util::consts::PAGE_4K;
 
-const VERBOSE_LOGING: bool = true;
+const VERBOSE_LOGING: bool = false;
 
 /// A priority queue item with a weak reference to its owned thread
 #[derive(Debug)]

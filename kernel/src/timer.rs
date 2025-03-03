@@ -57,7 +57,7 @@ pub fn init_timer() {
 
 static KERNEL_TICKS: AtomicU64 = AtomicU64::new(0);
 
-fn pit_interrupt_handler(args: &InterruptInfo) {
+fn pit_interrupt_handler(_args: &InterruptInfo) {
     KERNEL_TICKS.fetch_add(1, Ordering::AcqRel);
     Scheduler::yield_me();
 }

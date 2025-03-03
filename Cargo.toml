@@ -105,8 +105,16 @@ lto = true
 debug = 0
 overflow-checks = true
 
-[profile.kernel]
+[profile.kernel-dev]
 inherits = "dev"
+panic = "abort"
+opt-level=0
+strip = false
+debug = 1
+overflow-checks = true
+
+[profile.kernel]
+inherits = "release"
 panic = "abort"
 opt-level=1
 strip = false

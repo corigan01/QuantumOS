@@ -44,9 +44,6 @@ impl<T> RwCriticalLock<T> {
     }
 }
 
-// I want to make this lock ensure that it cannot deadlock. For example, if the same thread
-// tries to aquire a write lock while holding a read lock, the kernel should panic!
-
 impl<T: ?Sized> RwCriticalLock<T> {
     /// Aquire a read lock to the `RwCriticalLock`
     pub fn read<'a>(&'a self, p: LockEncouragement) -> ReadCriticalLockGuard<'a, T> {

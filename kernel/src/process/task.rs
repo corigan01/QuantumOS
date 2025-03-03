@@ -24,7 +24,6 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 use alloc::alloc::{alloc_zeroed, dealloc};
-use arch::interrupts;
 use core::{
     alloc::Layout,
     arch::{asm, naked_asm},
@@ -91,7 +90,10 @@ pub struct Task {
 }
 
 impl Task {
-    pub const TASK_DEFAULT_STACK_LEN: usize = PAGE_4K * 32;
+    #[cfg(debug_assertions)]
+    pub const TASK_DEFAULT_STACK_LEN: usize = PAGE_4K * 64;
+    #[cfg(not(debug_assertions))]
+    pub const TASK_DEFAULT_STACK_LEN: usize = PAGE_4K * 16;
 
     /// Check if this Task is the currently executing task
     pub fn is_current(&self) -> bool {

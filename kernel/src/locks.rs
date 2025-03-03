@@ -115,7 +115,7 @@ impl AcquiredLock {
     }
 
     /// Release a lock from the scheduler
-    pub fn unlock(self) {
+    pub fn _unlock(self) {
         drop(self);
     }
 

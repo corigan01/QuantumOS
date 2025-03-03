@@ -82,7 +82,6 @@ fn main(kbh: &KernelBootHeader) {
         HumanBytes::from(kbh.phys_mem_map.bytes_of(mem::phys::PhysMemoryKind::Free))
     );
     logln!("Running on a(n) '{:?}' processor.", cpu_vender());
-
     logln!(
         "Init Heap Region ({})",
         HumanBytes::from(kbh.kernel_init_heap.1)
@@ -114,16 +113,17 @@ fn main(kbh: &KernelBootHeader) {
     init_virt2phys_provider();
 
     let s = Scheduler::get();
+    let initfs_region = VmRegion::from_kbh(kbh.initfs_ptr);
     unsafe {
         s.init_kernel_vm(
             VmRegion::from_kbh(kbh.kernel_exe),
             VmRegion::from_kbh(kbh.kernel_init_heap),
             VmRegion::from_kbh(kbh.kernel_stack),
-            VmRegion::from_kbh(kbh.initfs_ptr),
+            initfs_region,
         );
     }
 
-    unsafe { (*INITFS_REGION.get()) = VmRegion::from_kbh(kbh.initfs_ptr) };
+    unsafe { (*INITFS_REGION.get()) = initfs_region };
 
     let kernel_process = Process::new("kernel".into());
     Thread::new_kernel(kernel_process.clone(), init);
@@ -132,7 +132,7 @@ fn main(kbh: &KernelBootHeader) {
     Scheduler::yield_me();
 }
 
-static INITFS_REGION: SyncUnsafeCell<VmRegion> = SyncUnsafeCell::new(VmRegion::from_kbh((4096, 0)));
+static INITFS_REGION: SyncUnsafeCell<VmRegion> = SyncUnsafeCell::new(VmRegion::from_kbh((0, 0)));
 
 fn init() {
     logln!("init task");

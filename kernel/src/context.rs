@@ -114,7 +114,7 @@ pub unsafe fn set_syscall_rsp(new_rsp: u64) {
 }
 
 /// get the RSP of the syscall entry
-pub unsafe fn get_syscall_rsp() -> u64 {
+pub unsafe fn _get_syscall_rsp() -> u64 {
     let kernel_rsp_ptr = KERNEL_RSP_PTR.get();
 
     unsafe { *kernel_rsp_ptr }
