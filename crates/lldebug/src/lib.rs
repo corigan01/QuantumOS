@@ -33,6 +33,7 @@ use core::sync::atomic::Ordering;
 pub use lldebug_macro::debug_ready;
 pub use lldebug_macro::make_debug;
 use lock::DebugMutex;
+use lock::DEBUG_LOCKS;
 use lock::UNLOCK_OVERRIDE;
 
 pub mod color;
@@ -70,6 +71,11 @@ pub fn set_global_debug_fn(function: OutputFn) {
 /// is useful for `Panic` situations where a thread had locked output before crashing.
 pub unsafe fn force_unlock_all() {
     UNLOCK_OVERRIDE.store(true, Ordering::Release);
+}
+
+/// Get the current number of active locks being held for debugging.
+pub fn current_debug_locks() -> usize {
+    DEBUG_LOCKS.load(Ordering::Relaxed)
 }
 
 struct PrettyOutput<'a> {

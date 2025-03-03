@@ -143,6 +143,11 @@ fn init() {
 
 fn idle() {
     loop {
+        let s = Scheduler::get();
+        if s.threads_alive() <= 1 {
+            logln!("All threads exited!");
+            qemu::exit_emulator(qemu::QemuExitStatus::Success);
+        }
         Scheduler::yield_me();
     }
 }

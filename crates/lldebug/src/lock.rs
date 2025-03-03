@@ -26,10 +26,11 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 use core::{
     cell::UnsafeCell,
     ops::{Deref, DerefMut},
-    sync::atomic::{AtomicBool, Ordering},
+    sync::atomic::{AtomicBool, AtomicUsize, Ordering},
 };
 
 pub(crate) static UNLOCK_OVERRIDE: AtomicBool = AtomicBool::new(false);
+pub(crate) static DEBUG_LOCKS: AtomicUsize = AtomicUsize::new(0);
 
 /// A exclusive mutex for output related data structures.
 ///
@@ -73,6 +74,8 @@ impl<T> DebugMutex<T> {
             }
         }
 
+        DEBUG_LOCKS.fetch_add(1, Ordering::AcqRel);
+
         // here we are locked
         Some(DebugMutexGuard {
             lock: &self.lock,
@@ -110,5 +113,6 @@ impl<'a, T> Drop for DebugMutexGuard<'a, T> {
                 "Cannot unlock an already unlocked lock"
             );
         }
+        DEBUG_LOCKS.fetch_sub(1, Ordering::AcqRel);
     }
 }

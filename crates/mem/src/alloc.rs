@@ -355,6 +355,13 @@ impl Debug for BuddyAllocator {
     }
 }
 
+// Misc : 8   Mib (init)                : 0xffffffff80800000
+// 8192 : 4   Mib                       :
+// 4096 : 1   Mib                       :
+// 512  : 1   Mib                       :
+// 128  : 0.5 Mib                       :
+// 64   : 0.5 Mib                       :
+
 #[derive(Debug)]
 struct InnerAllocator {
     init_alloc: Option<BuddyAllocator>,

@@ -25,12 +25,14 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 use arch::interrupts::disable_interrupts;
 use core::panic::PanicInfo;
-use lldebug::errorln;
+use lldebug::{current_debug_locks, errorln};
 
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
     unsafe { disable_interrupts() };
-    unsafe { lldebug::force_unlock_all() };
+    if current_debug_locks() != 0 {
+        unsafe { lldebug::force_unlock_all() };
+    }
     errorln!("{}", info);
 
     // Close the emulator on panic

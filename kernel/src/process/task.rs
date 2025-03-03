@@ -35,7 +35,10 @@ use mem::addr::{AlignedTo, VirtAddr};
 use util::consts::PAGE_4K;
 
 use crate::{
-    context::set_syscall_rsp, gdt, locks::LockEncouragement, process::scheduler::Scheduler,
+    context::set_syscall_rsp,
+    gdt,
+    locks::{LockEncouragement, manual_schedule_unlock},
+    process::scheduler::Scheduler,
 };
 
 type ArchStackPtr = usize;
@@ -92,11 +95,16 @@ impl Task {
 
     /// Check if this Task is the currently executing task
     pub fn is_current(&self) -> bool {
+        let current_rsp = unsafe { asm_get_rsp() };
+        self.is_within_stack(current_rsp)
+    }
+
+    /// Check if this stack ptr is within the stack region of this task
+    pub fn is_within_stack(&self, rsp: usize) -> bool {
         let stack_bottom = self.stack.stack_bottom.addr();
         let stack_top = stack_bottom + self.stack.len;
-        let current_rsp = unsafe { asm_get_rsp() };
 
-        stack_bottom <= current_rsp && stack_top >= current_rsp
+        stack_bottom <= rsp && stack_top >= rsp
     }
 
     /// Called immediately before switching
@@ -141,16 +149,24 @@ impl Task {
             let from_stack_ptr = (&mut *from).get_task_stack_ptr();
             let to_stack_ptr = (&mut *to).get_task_stack_ptr();
 
-            assert!(
-                (&*from).is_current(),
-                "Switching, yet current is not correct! Current={:016x}, Expected=({:016x}-{:016x})",
-                asm_get_rsp(),
-                (&*from).stack.stack_bottom.addr(),
-                (&*from).stack_top().addr()
-            );
+            if !(&*from).is_current() {
+                let s = Scheduler::get();
+                let rsp = VirtAddr::new(asm_get_rsp());
+                let stack_owner = s.stack_owner(rsp);
+
+                panic!(
+                    "Switching, yet current is not correct! Current={:016x}, (expected: {:016x}-{:016x}) Owner={:#?}",
+                    asm_get_rsp(),
+                    (&*from).stack.stack_bottom.addr(),
+                    (&*from).stack_top().addr(),
+                    stack_owner
+                );
+            }
+
             if from != to {
                 asm_switch(from_stack_ptr, to_stack_ptr);
             }
+
             assert!(
                 (&*from).is_current(),
                 "Switched back to current, yet current is not correct!"
@@ -207,6 +223,10 @@ pub unsafe fn asm_get_rsp() -> ArchStackPtr {
     let rsp;
     unsafe { asm!("mov {rsp_ptr}, rsp", rsp_ptr = out(reg) rsp) };
     rsp
+}
+
+extern "C" fn release_lock() {
+    unsafe { manual_schedule_unlock() };
 }
 
 /// Init a given tasks state
@@ -285,8 +305,11 @@ pub unsafe extern "C" fn asm_switch(from: *mut ArchStackPtr, to: *const ArchStac
             pop r14
             pop r15
 
+            call {release_lock}
+
             ret
-        "#
+        "#,
+            release_lock = sym release_lock
         )
     };
 }

@@ -31,7 +31,10 @@ use super::{
     thread::{RefThread, WeakThread},
 };
 use crate::{
-    locks::{AcquiredLock, LockEncouragement, LockId, ScheduleLock, current_scheduler_locks},
+    locks::{
+        AcquiredLock, LockEncouragement, LockId, ScheduleLock, current_scheduler_locks,
+        manual_schedule_lock, manual_schedule_unlock,
+    },
     process::thread::Thread,
 };
 use alloc::{
@@ -41,7 +44,7 @@ use alloc::{
 };
 use boolvec::BoolVec;
 use elf::elf_owned::ElfOwned;
-use lldebug::{log, logln};
+use lldebug::{current_debug_locks, log, logln};
 use mem::{
     addr::{PhysAddr, VirtAddr},
     page::{PhysPage, VirtPage},
@@ -52,7 +55,7 @@ use mem::{
 use tar::Tar;
 use util::consts::PAGE_4K;
 
-const VERBOSE_LOGING: bool = false;
+const VERBOSE_LOGING: bool = true;
 
 /// A priority queue item with a weak reference to its owned thread
 #[derive(Debug)]
@@ -466,7 +469,7 @@ impl Scheduler {
 
     /// Yield the current thread (If possible)
     pub fn yield_me() {
-        if current_scheduler_locks() != 0 {
+        if current_scheduler_locks() != 0 || current_debug_locks() != 0 {
             return;
         }
 
@@ -508,6 +511,8 @@ impl Scheduler {
             let previous_task_ptr = previous_running.task.as_ptr();
             let new_task_ptr = next_running.task.as_ptr();
 
+            unsafe { manual_schedule_lock() };
+
             drop(running_lock);
             drop(s);
 
@@ -527,6 +532,8 @@ impl Scheduler {
             }
 
             let new_task_ptr = next_running.task.as_ptr();
+
+            unsafe { manual_schedule_lock() };
 
             drop(running_lock);
             drop(s);
@@ -637,9 +644,9 @@ impl Scheduler {
     /// Crash the current thread
     pub fn crash_current() {
         {
+            unsafe { manual_schedule_lock() };
             let s = Scheduler::get();
             let current_thread = s.current_thread().upgrade().unwrap();
-            *s.running.lock() = None;
 
             logln!(
                 "CRASH! '{}' pid={}, tid={}",
@@ -648,11 +655,7 @@ impl Scheduler {
                 current_thread.id
             );
 
-            // // Remove thread from thread list
-            // s.thread_list.lock().retain(|thread| {
-            //     thread.id != current_thread.id || thread.process.id != current_thread.process.id
-            // });
-
+            current_thread.crashed.replace(true);
             current_thread
                 .process
                 .threads
@@ -660,10 +663,31 @@ impl Scheduler {
                 .unwrap()
                 .remove(&current_thread.id)
                 .expect("Expected to find thread in parent process's array!");
+
+            *s.running.lock() = None;
+            unsafe { manual_schedule_unlock() };
         }
 
         Scheduler::yield_me();
         unreachable!("Yield returned to crashed process!");
+    }
+
+    /// Get the number of alive threads on the system.
+    pub fn threads_alive(&self) -> usize {
+        self.thread_list
+            .lock()
+            .iter()
+            .filter(|thread| !*thread.crashed.borrow())
+            .count()
+    }
+
+    /// Get the stack owner for this stack ptr
+    pub fn stack_owner(&self, rsp: VirtAddr) -> Option<RefThread> {
+        let thread_list = self.thread_list.lock();
+        thread_list
+            .iter()
+            .find(|thread| thread.task.borrow().is_within_stack(rsp.addr()))
+            .cloned()
     }
 }
 
