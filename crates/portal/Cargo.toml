@@ -13,5 +13,6 @@ lldebug = { workspace = true }
 
 [features]
 default = ["client"]
+alloc = []
 client = ["dep:libsys", "portal-macro/client"]
 server = ["portal-macro/server"]

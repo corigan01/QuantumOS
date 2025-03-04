@@ -75,6 +75,7 @@ pub enum ProtocolVarType {
     },
     Never(Span),
     Unit(Span),
+    Bool(Span),
     Signed8(Span),
     Signed16(Span),
     Signed32(Span),
@@ -280,6 +281,7 @@ impl ProtocolVarType {
             ProtocolVarType::RefTo { span, .. } => span.clone(),
             ProtocolVarType::PtrTo { span, .. } => span.clone(),
             ProtocolVarType::Array { span, .. } => span.clone(),
+            ProtocolVarType::Bool(span) => span.clone(),
         }
     }
 }

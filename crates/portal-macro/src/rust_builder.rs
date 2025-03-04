@@ -397,6 +397,9 @@ impl ToTokens for ast::ProtocolVarType {
             ast::ProtocolVarType::Unit(span) => {
                 tokens.append_all(quote_spanned! {span.clone()=>()})
             }
+            ast::ProtocolVarType::Bool(span) => {
+                tokens.append_all(quote_spanned! {span.clone()=>bool})
+            }
             ast::ProtocolVarType::Signed8(span) => {
                 tokens.append_all(quote_spanned! {span.clone()=>i8})
             }
@@ -526,24 +529,38 @@ impl<'a> ToTokens for IntoPortalImpl<'a> {
                 quote! { match (unsafe { Self::call_syscall(#input_enum::#enum_part) }) }
             };
 
-            let fn_closing = if matches!(endpoint.output_arg.0, ast::ProtocolVarType::Never(_)) {
-                let fmt_string = format!("Portal Endpoint '{}' promised to never return, but yet returned!", fn_ident);
-                let error_string = format!("Portal Endpoint '{}': '{}::call_syscall' was supposed to return '{}::{}'", fn_ident, ident, output_enum, enum_part);
-                quote! {
-                    {
-                        #output_enum::#enum_part => { unreachable!(#fmt_string); }
-                        _ => {
-                            unreachable!(#error_string)
+            let fn_closing = match endpoint.output_arg.0 {
+                ast::ProtocolVarType::Never(_) => {
+                    let fmt_string = format!("Portal Endpoint '{}' promised to never return, but yet returned!", fn_ident);
+                    let error_string = format!("Portal Endpoint '{}': '{}::call_syscall' was supposed to return '{}::{}'", fn_ident, ident, output_enum, enum_part);
+                    quote! {
+                        {
+                            #output_enum::#enum_part => { unreachable!(#fmt_string); }
+                            _ => {
+                                unreachable!(#error_string)
+                            }
+                        };
+                    }
+                },
+                ast::ProtocolVarType::Unit(_) => {
+                    let fmt_string = format!("Portal Endpoint '{}': '{}::call_syscall' was supposed to return '{}::{}'", fn_ident, ident, output_enum, enum_part);
+                    quote! {
+                        {
+                            #output_enum::#enum_part => (),
+                            _ => {
+                                unreachable!(#fmt_string)
+                            }
                         }
-                    };
+                    }
                 }
-            } else {
-                let fmt_string = format!("Portal Endpoint '{}': '{}::call_syscall' was supposed to return '{}::{}'", fn_ident, ident, output_enum, enum_part);
-                quote! {
-                    {
-                        #output_enum::#enum_part (output_val) => { output_val }
-                        _ => {
-                            unreachable!(#fmt_string)
+                _ => {
+                    let fmt_string = format!("Portal Endpoint '{}': '{}::call_syscall' was supposed to return '{}::{}'", fn_ident, ident, output_enum, enum_part);
+                    quote! {
+                        {
+                            #output_enum::#enum_part (output_val) => { output_val }
+                            _ => {
+                                unreachable!(#fmt_string)
+                            }
                         }
                     }
                 }

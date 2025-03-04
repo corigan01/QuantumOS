@@ -333,6 +333,7 @@ impl TryFrom<&syn::Type> for ast::ProtocolVarType {
                             ),
                         )),
                     },
+                    "bool" => Ok(Self::Bool(path.span())),
                     "i8" => Ok(Self::Signed8(path.span())),
                     "i16" => Ok(Self::Signed16(path.span())),
                     "i32" => Ok(Self::Signed32(path.span())),

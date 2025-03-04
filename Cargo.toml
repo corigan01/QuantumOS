@@ -124,7 +124,7 @@ overflow-checks = true
 [profile.userspace]
 inherits = "release"
 panic = "abort"
-opt-level= 0
+opt-level=1
 strip = false
-debug = 1
+debug = 0
 overflow-checks = true

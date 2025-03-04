@@ -25,6 +25,8 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 #![no_std]
 
+#[cfg(feature = "alloc")]
+pub mod ipc;
 pub use portal_macro::*;
 
 /// The syscall number of the 'pass-by-enum' calling convention
