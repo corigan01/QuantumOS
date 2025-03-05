@@ -23,7 +23,10 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use core::arch::asm;
+use core::{
+    arch::asm,
+    sync::atomic::{AtomicIsize, Ordering},
+};
 
 use super::{ProcessEntry, RefProcess, scheduler::Scheduler, task::Task};
 use crate::{context::set_syscall_rsp, gdt, locks::ThreadCell};
@@ -58,6 +61,8 @@ pub struct Thread {
     pub task: ThreadCell<Task>,
     /// The parent process that this thread represents
     pub process: RefProcess,
+    quanta: AtomicIsize,
+    temporary_quanta: AtomicIsize,
     /// Init Userspace entrypoint
     // TODO: Maybe there could be a better way of passing the `ProcessEntry` into
     // `userspace_thread_begin`?
@@ -69,6 +74,7 @@ pub struct Thread {
 impl Thread {
     pub const DEFAULT_USERSPACE_RSP_TOP: VirtAddr = VirtAddr::new(0x7fff00000000);
     pub const DEFAULT_USERSPACE_RSP_LEN: usize = PAGE_4K * 16;
+    pub const QUANTA: usize = 20;
 
     /// Create a new userspace thread
     pub fn new_user(process: RefProcess, entry_point: ProcessEntry) -> RefThread {
@@ -83,6 +89,8 @@ impl Thread {
             userspace_entry_ptr: Some(entry_point),
             userspace_rsp_ptr: ThreadCell::new(None),
             crashed: ThreadCell::new(false),
+            quanta: AtomicIsize::new(Self::QUANTA as isize),
+            temporary_quanta: AtomicIsize::new(0),
         });
 
         let s = Scheduler::get();
@@ -105,12 +113,43 @@ impl Thread {
             userspace_entry_ptr: None,
             userspace_rsp_ptr: ThreadCell::new(None),
             crashed: ThreadCell::new(false),
+            quanta: AtomicIsize::new(Self::QUANTA as isize),
+            temporary_quanta: AtomicIsize::new(0),
         });
 
         let s = Scheduler::get();
         s.register_new_thread(thread.clone());
 
         thread
+    }
+
+    /// Called before switching out of this thread
+    pub fn pre_switch_out(&self) {
+        self.temporary_quanta.store(0, Ordering::SeqCst);
+        self.quanta
+            .fetch_add(Self::QUANTA as isize, Ordering::SeqCst);
+    }
+
+    /// Tick this thread forward
+    ///
+    /// Returns true if this thread is ready to switch.
+    pub fn thread_tick(&self, elapsed_ticks: usize) -> bool {
+        let quanta = self
+            .quanta
+            .fetch_sub(elapsed_ticks as isize, Ordering::SeqCst);
+        let temp_quanta = self.temporary_quanta.load(Ordering::Relaxed);
+
+        (quanta + temp_quanta) <= 0
+    }
+
+    /// Stall for `quanta` more ticks
+    pub fn stall_additional(&self, quanta: isize) {
+        self.temporary_quanta.fetch_add(quanta, Ordering::AcqRel);
+    }
+
+    /// Remove stall for `quanta` ticks
+    pub fn remove_stall(&self, quanta: isize) {
+        self.temporary_quanta.fetch_sub(quanta, Ordering::AcqRel);
     }
 
     /// Create a mapping for the userspace stack

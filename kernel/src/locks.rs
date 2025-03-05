@@ -71,6 +71,16 @@ pub enum LockEncouragement {
     Strong,
 }
 
+impl LockEncouragement {
+    pub fn stall_amount(&self) -> usize {
+        match self {
+            LockEncouragement::Weak => 0,
+            LockEncouragement::Moderate => 10,
+            LockEncouragement::Strong => 20,
+        }
+    }
+}
+
 /// A lock id used to inform the scheduler when locks are finished
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct AcquiredLock(pub usize);

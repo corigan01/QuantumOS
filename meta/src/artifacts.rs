@@ -299,10 +299,7 @@ pub async fn build_project(multiboot_mode: bool, emit_asm: Option<String>) -> Re
 
     let ue_slice = [
         (dummy_userspace, PathBuf::from("./dummy")),
-        (hello_server.clone(), PathBuf::from("./helloServ")),
-        (hello_server.clone(), PathBuf::from("./helloServ2")),
-        (hello_server, PathBuf::from("./helloServ3")),
-        (stage_16bit.clone(), PathBuf::from("./i_should_crash")),
+        (hello_server, PathBuf::from("./helloServ")),
     ];
 
     let (bootsector, stage_16, stage_32, stage_64, initfs) = tokio::try_join!(

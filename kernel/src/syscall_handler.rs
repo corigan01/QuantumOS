@@ -26,7 +26,8 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 use alloc::format;
 use lldebug::{LogKind, logln};
 use quantum_portal::{
-    DebugMsgError, ExitReason, MapMemoryError, MemoryLocation, MemoryProtections, QuantumPortal,
+    ConnectHandleError, DebugMsgError, ExitReason, MapMemoryError, MemoryLocation,
+    MemoryProtections, QuantumPortal, RecvHandleError, SendHandleError, ServeHandleError,
     WaitCondition, WaitSignal, WaitingError, server::QuantumPortalServer,
 };
 
@@ -88,18 +89,43 @@ impl QuantumPortal for KernelSyscalls {
         Ok(())
     }
 
-    fn wait_for(
-        _conditions: &[WaitCondition],
-        _signal_buffer: &mut [WaitSignal],
-    ) -> Result<usize, WaitingError> {
+    fn wait_for(_conditions: &[WaitCondition]) -> Result<WaitSignal, WaitingError> {
         logln!("wait_for todo");
         Scheduler::crash_current();
         unreachable!();
     }
 
-    fn yield_me() -> usize {
-        logln!("Userspace Yield");
+    fn yield_me() {
         Scheduler::yield_me();
-        0
+    }
+
+    fn handle_recv(handle: u64, buf: &mut [u8]) -> ::core::result::Result<usize, RecvHandleError> {
+        logln!("Handle Recv");
+        Scheduler::crash_current();
+        unreachable!();
+    }
+
+    fn handle_send(handle: u64, buf: &[u8]) -> ::core::result::Result<usize, SendHandleError> {
+        logln!("Handle Send");
+        Scheduler::crash_current();
+        unreachable!();
+    }
+
+    fn handle_serve(endpoint: &str) -> ::core::result::Result<u64, ServeHandleError> {
+        logln!("Handle Serve");
+        Scheduler::crash_current();
+        unreachable!();
+    }
+
+    fn handle_connect(endpoint: &str) -> ::core::result::Result<u64, ConnectHandleError> {
+        logln!("Handle Connect");
+        Scheduler::crash_current();
+        unreachable!();
+    }
+
+    fn handle_disconnect(handle: u64) {
+        logln!("Handle Disconnect");
+        Scheduler::crash_current();
+        unreachable!();
     }
 }

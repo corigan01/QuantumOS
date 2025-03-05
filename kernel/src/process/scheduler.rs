@@ -23,7 +23,10 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use core::fmt::Display;
+use core::{
+    fmt::Display,
+    sync::atomic::{AtomicUsize, Ordering},
+};
 
 use super::{
     Process, ProcessId, RefProcess, WeakProcess,
@@ -90,7 +93,7 @@ type NoDropLockId = usize;
 struct LockIdInfo {
     shared_locks: usize,
     exclusive_locks: usize,
-    lock_map: BTreeMap<NoDropAquiredLockId, (bool, WeakThread)>,
+    lock_map: BTreeMap<NoDropAquiredLockId, (bool, LockEncouragement, WeakThread)>,
 }
 
 #[derive(Debug)]
@@ -183,6 +186,7 @@ impl LockHoldings {
         &mut self,
         current_thread: WeakThread,
         lock_id: &LockId,
+        encouragement: LockEncouragement,
     ) -> Result<AcquiredLock, LockError> {
         let lock_id_info = self
             .id_map
@@ -198,7 +202,7 @@ impl LockHoldings {
             self.aquired_map.insert(new_aquired_lock_id, lock_id.0);
             lock_id_info
                 .lock_map
-                .insert(new_aquired_lock_id, (true, current_thread));
+                .insert(new_aquired_lock_id, (true, encouragement, current_thread));
 
             return Ok(AcquiredLock(new_aquired_lock_id));
         }
@@ -207,7 +211,7 @@ impl LockHoldings {
         if lock_id_info
             .lock_map
             .values()
-            .map(|(_, weak_thread)| weak_thread)
+            .map(|(_, _, weak_thread)| weak_thread)
             .any(|weak_thread| weak_thread.ptr_eq(&current_thread))
         {
             Err(LockError::Deadlock)
@@ -220,6 +224,7 @@ impl LockHoldings {
         &mut self,
         current_thread: WeakThread,
         lock_id: &LockId,
+        encouragement: LockEncouragement,
     ) -> Result<AcquiredLock, LockError> {
         let lock_id_info = self
             .id_map
@@ -235,7 +240,7 @@ impl LockHoldings {
             self.aquired_map.insert(new_aquired_lock_id, lock_id.0);
             lock_id_info
                 .lock_map
-                .insert(new_aquired_lock_id, (false, current_thread));
+                .insert(new_aquired_lock_id, (false, encouragement, current_thread));
 
             return Ok(AcquiredLock(new_aquired_lock_id));
         }
@@ -244,8 +249,8 @@ impl LockHoldings {
         if lock_id_info
             .lock_map
             .values()
-            .filter(|(is_exclusive, _)| *is_exclusive)
-            .map(|(_, weak_thread)| weak_thread)
+            .filter(|(is_exclusive, _, _)| *is_exclusive)
+            .map(|(_, _, weak_thread)| weak_thread)
             .any(|weak_thread| weak_thread.ptr_eq(&current_thread))
         {
             Err(LockError::Deadlock)
@@ -266,15 +271,18 @@ impl LockHoldings {
             .expect("Tried to unlock a lock from a lock that doesn't exist");
 
         // Is this lock an exclusive lock
-        if lock_info
+        let inner_lock_info = lock_info
             .lock_map
             .remove(&lock.0)
-            .expect("Aquired lock not found in parent's lock")
-            .0
-        {
+            .expect("Aquired lock not found in parent's lock");
+        if inner_lock_info.0 {
             lock_info.exclusive_locks = lock_info.exclusive_locks.checked_sub(1).unwrap();
         } else {
             lock_info.shared_locks = lock_info.shared_locks.checked_sub(1).unwrap();
+        }
+
+        if let Some(locking_thread) = inner_lock_info.2.upgrade() {
+            locking_thread.remove_stall(inner_lock_info.1.stall_amount() as isize);
         }
 
         self.aquired_id_alloc.set(lock.0, false);
@@ -284,6 +292,7 @@ impl LockHoldings {
 pub type RefScheduler = Arc<Scheduler>;
 pub type WeakScheduler = Weak<Scheduler>;
 
+static SKIPPED_TICKS: AtomicUsize = AtomicUsize::new(0);
 static THE_SCHEDULER: ScheduleLock<Option<RefScheduler>> = ScheduleLock::new(None);
 
 #[derive(Debug)]
@@ -467,11 +476,36 @@ impl Scheduler {
         }
     }
 
-    /// Yield the current thread (If possible)
-    pub fn yield_me() {
+    /// Progress the scheduler forward
+    pub fn tick() {
+        // Check if we need to skip this tick
         if current_scheduler_locks() != 0 || current_debug_locks() != 0 {
+            // its unsound to get the scheduler here so instead we add to a static
+            SKIPPED_TICKS.fetch_add(1, Ordering::Acquire);
             return;
         }
+
+        let s = Scheduler::get();
+        let running_lock = s.running.lock();
+        let skipped_ticks = SKIPPED_TICKS.swap(0, Ordering::SeqCst);
+
+        // If we are not running a thread, we don't care to about skipped ticks
+        let Some(running_thread) = &*running_lock else {
+            return;
+        };
+
+        if running_thread.thread_tick(skipped_ticks) {
+            drop(running_lock);
+            drop(s);
+
+            Self::yield_me();
+        }
+    }
+
+    /// Yield the current thread (If possible)
+    pub fn yield_me() {
+        assert_eq!(current_scheduler_locks(), 0);
+        assert_eq!(current_debug_locks(), 0);
 
         let s = Scheduler::get();
         let mut running_lock = s.running.lock();
@@ -483,6 +517,7 @@ impl Scheduler {
         // Save the current running process
         if let Some(previous_running) = running_lock.clone() {
             if !*previous_running.crashed.borrow() {
+                previous_running.pre_switch_out();
                 s.picking_queue.lock().push_back(ScheduleItem {
                     priority: 0,
                     thread: Arc::downgrade(&previous_running),
@@ -612,21 +647,45 @@ impl Scheduler {
     pub fn try_acquiredlock_exclusive(
         &self,
         lock_id: &LockId,
-        _encouragement: LockEncouragement,
+        encouragement: LockEncouragement,
     ) -> Result<AcquiredLock, LockError> {
-        self.held_locks
-            .lock()
-            .try_lock_exclusive(self.current_thread(), lock_id)
+        match self.held_locks.lock().try_lock_exclusive(
+            self.current_thread(),
+            lock_id,
+            encouragement,
+        ) {
+            Ok(lock) => {
+                let running_lock = self.running.lock();
+                if let Some(running) = &*running_lock {
+                    running.stall_additional(encouragement.stall_amount() as isize);
+                }
+
+                Ok(lock)
+            }
+            err => err,
+        }
     }
 
     pub fn try_acquiredlock_shared(
         &self,
         lock_id: &LockId,
-        _encouragement: LockEncouragement,
+        encouragement: LockEncouragement,
     ) -> Result<AcquiredLock, LockError> {
-        self.held_locks
+        match self
+            .held_locks
             .lock()
-            .try_lock_shared(self.current_thread(), lock_id)
+            .try_lock_shared(self.current_thread(), lock_id, encouragement)
+        {
+            Ok(lock) => {
+                let running_lock = self.running.lock();
+                if let Some(running) = &*running_lock {
+                    running.stall_additional(encouragement.stall_amount() as isize);
+                }
+
+                Ok(lock)
+            }
+            err => err,
+        }
     }
 
     pub fn lockid_total_shared(&self, lock: &LockId) -> usize {

@@ -27,7 +27,10 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #![no_main]
 
 use core::panic::PanicInfo;
-use libq::{ExitReason, dbugln, exit, yield_me};
+use libq::{
+    ExitReason, RecvHandleError, dbugln, exit, handle_connect, handle_disconnect, handle_recv,
+    handle_send, yield_me,
+};
 
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
@@ -38,12 +41,32 @@ fn panic(info: &PanicInfo) -> ! {
 #[unsafe(link_section = ".start")]
 #[unsafe(no_mangle)]
 extern "C" fn _start() {
-    let hello_world = "Hello World from UE!! ";
+    dbugln!("Starting Dummy!");
 
-    for i in 0..10 {
-        yield_me();
-        dbugln!("{hello_world} -> [{i}] ");
+    let handle = loop {
+        match handle_connect("hello-server") {
+            Ok(okay) => break okay,
+            Err(e) => {
+                dbugln!("Error connecting to `hello-server` {e:?}...");
+                yield_me();
+            }
+        }
+    };
+
+    handle_send(handle, &[0xde, 0xad, 0xbe, 0xef]).unwrap();
+    let mut data_buf = [0; 32];
+    loop {
+        match handle_recv(handle, &mut data_buf) {
+            Ok(b) => {
+                dbugln!("Got {b} bytes! {data_buf:04x?}");
+            }
+            Err(RecvHandleError::WouldBlock) => (),
+            Err(err) => {
+                dbugln!("Error {err:?}!");
+                break;
+            }
+        }
     }
-
+    handle_disconnect(handle);
     exit(ExitReason::Success);
 }

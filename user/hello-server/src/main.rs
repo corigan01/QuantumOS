@@ -27,7 +27,10 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #![no_main]
 
 use core::panic::PanicInfo;
-use libq::{WaitCondition, WaitSignal, dbugln, exit};
+use libq::{
+    HandleUpdateKind, WaitCondition, WaitSignal, dbugln, exit, handle_disconnect, handle_recv,
+    handle_serve, wait_for,
+};
 
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
@@ -39,10 +42,42 @@ fn panic(info: &PanicInfo) -> ! {
 #[unsafe(no_mangle)]
 extern "C" fn _start() {
     dbugln!("Hello Server!");
+    let server_handle = handle_serve("hello-server").unwrap();
 
-    let mut signal_buffer = [const { WaitSignal::None }; 8];
-    while let Ok(wait_amount) = libq::wait_for(&[WaitCondition::SleepMs(100)], &mut signal_buffer) {
-        dbugln!("{:#?}", &signal_buffer[..wait_amount]);
+    let mut cond_buffer = [WaitCondition::WaitAny(server_handle), WaitCondition::None];
+    while let Ok(signal) = wait_for(&[WaitCondition::WaitAny(server_handle)]) {
+        dbugln!("Wakeup with signal ({signal:?})");
+
+        match signal {
+            WaitSignal::HandleUpdate {
+                kind: HandleUpdateKind::NewConnection { new_handle },
+                handle: _,
+            } => {
+                if matches!(cond_buffer[1], WaitCondition::None) {
+                    cond_buffer[1] = WaitCondition::WaitAny(new_handle);
+                } else {
+                    dbugln!("Handle buffer full!");
+                    handle_disconnect(new_handle);
+                }
+            }
+            WaitSignal::HandleUpdate {
+                handle,
+                kind: HandleUpdateKind::ReadReady,
+            } => {
+                let mut data_buf = [0; 100];
+                let valid_bytes = handle_recv(handle, &mut data_buf).unwrap();
+
+                dbugln!(
+                    "Got {valid_bytes} from {handle}: {:02x?}",
+                    &data_buf[..valid_bytes]
+                );
+            }
+            WaitSignal::TerminationRequest => {
+                dbugln!("Quitting...");
+                exit(libq::ExitReason::Success);
+            }
+            _ => (),
+        }
     }
 
     exit(libq::ExitReason::Success);

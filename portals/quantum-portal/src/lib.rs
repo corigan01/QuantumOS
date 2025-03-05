@@ -64,20 +64,26 @@ pub trait QuantumPortal {
     #[event = 2]
     fn get_pid() -> usize;
 
+    /// Main event handler function.
+    ///
+    /// This function blocks until the first event is triggered, returning it. `wait_of` always blocks on success,
+    /// however, on error this function will return immediately. 
     #[event = 3]
     fn wait_for(
         conditions: &[WaitCondition],
-        signal_buffer: &mut [WaitSignal],
-    ) -> Result<usize, WaitingError> {
+    ) -> Result<WaitSignal, WaitingError> {
         enum WaitCondition {
             /// Wait for this handle to be ready to write
             WaitToWrite(u64),
-            /// Wait for this handle to have bytes ready to read.
+            /// Wait for this handle to have bytes ready to read
             WaitToRead(u64),
+            /// Wait for this handle to accept a new connection
+            WaitConnect(u64),
             /// Waits for any update
             WaitAny(u64),
             /// Sleep the process
-            SleepMs(u64),
+            TimeoutMs(u64),
+            None,
         }
 
         enum WaitSignal {
@@ -85,12 +91,10 @@ pub trait QuantumPortal {
             HandleUpdate {
                 kind: HandleUpdateKind,
                 handle: u64,
-                wait_index: usize,
             },
             /// Updates for sleep
-            SleepUpdate {
-                sleep_ms_duration: u64,
-                wait_index: usize,
+            TimerUpdate {
+                ms_duration: u64,
             },
             /// Your process is requested to exit
             TerminationRequest,
@@ -110,13 +114,52 @@ pub trait QuantumPortal {
         }
 
         enum WaitingError {
-            UnknownHandle { handle: u64, array_index: usize },
+            UnknownHandle { handle: u64 },
             InvalidSignalBuffer,
         }
     }
 
     #[event = 4]
-    fn yield_me() -> usize {}
+    fn yield_me() {}
+
+    /// Receive data from a handle
+    #[event = 5]
+    fn handle_recv(handle: u64, buf: &mut [u8]) -> Result<usize, RecvHandleError> {
+        enum RecvHandleError {
+            InvalidHandle,
+            RecvFailed,
+            WouldBlock,
+        }
+    }
+
+    /// Send data to a handle
+    #[event = 6]
+    fn handle_send(handle: u64, buf: &[u8]) -> Result<usize, SendHandleError> {
+        enum SendHandleError {
+            InvalidHandle,
+            SendFailed,
+            WouldBlock,
+        }
+    }
+
+    #[event = 7]
+    fn handle_serve(endpoint: &str) -> Result<u64, ServeHandleError> {
+        enum ServeHandleError {
+            AlreadyBound
+        }
+    }
+
+    #[event = 8]
+    fn handle_connect(endpoint: &str) -> Result<u64, ConnectHandleError> {
+        enum ConnectHandleError {
+            EndpointDoesNotExist
+        }
+    }
+
+    /// Disconnect the handle if one exists
+    #[event = 9]
+    fn handle_disconnect(handle: u64) {}
+
 
     #[event = 69]
     fn debug_msg(msg: &str) -> Result<(), DebugMsgError> {
