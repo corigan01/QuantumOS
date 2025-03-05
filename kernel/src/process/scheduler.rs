@@ -42,6 +42,7 @@ use crate::{
 };
 use alloc::{
     collections::{btree_map::BTreeMap, vec_deque::VecDeque},
+    string::String,
     sync::{Arc, Weak},
     vec::Vec,
 };
@@ -314,6 +315,8 @@ pub struct Scheduler {
     held_locks: ScheduleLock<LockHoldings>,
     /// Kernel Memory Map
     kernel_vm: ScheduleLock<VmProcess>,
+    /// Handle Servers
+    pub serve_sockets: ScheduleLock<BTreeMap<String, (WeakProcess, u64)>>,
 }
 
 impl Scheduler {
@@ -335,6 +338,7 @@ impl Scheduler {
                 kernel_vm: ScheduleLock::new(VmProcess::new()),
                 pid_alloc: ScheduleLock::new(BoolVec::new()),
                 thread_list: ScheduleLock::new(Vec::new()),
+                serve_sockets: ScheduleLock::new(BTreeMap::new()),
             });
 
             set_page_fault_handler(page_fault_handler);

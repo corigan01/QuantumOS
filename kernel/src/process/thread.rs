@@ -61,7 +61,9 @@ pub struct Thread {
     pub task: ThreadCell<Task>,
     /// The parent process that this thread represents
     pub process: RefProcess,
+    /// The amount of time this thread has left running
     quanta: AtomicIsize,
+    /// Quanta added by locking encouragement
     temporary_quanta: AtomicIsize,
     /// Init Userspace entrypoint
     // TODO: Maybe there could be a better way of passing the `ProcessEntry` into
@@ -126,8 +128,11 @@ impl Thread {
     /// Called before switching out of this thread
     pub fn pre_switch_out(&self) {
         self.temporary_quanta.store(0, Ordering::SeqCst);
+
         self.quanta
             .fetch_add(Self::QUANTA as isize, Ordering::SeqCst);
+        self.quanta
+            .fetch_min(Self::QUANTA as isize, Ordering::SeqCst);
     }
 
     /// Tick this thread forward

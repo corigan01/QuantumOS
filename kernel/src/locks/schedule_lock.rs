@@ -23,7 +23,7 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use core::fmt::Debug;
+use core::fmt::{Debug, Write};
 use core::ops::{Deref, DerefMut};
 use core::sync::atomic::{AtomicUsize, Ordering};
 use core::{cell::UnsafeCell, sync::atomic::AtomicBool};
@@ -53,7 +53,15 @@ pub struct ScheduleLock<T: ?Sized> {
 
 impl<T: ?Sized + Debug> Debug for ScheduleLock<T> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        self.lock().fmt(f)
+        if let Some(lock) = self.try_lock() {
+            f.debug_struct("ScheduleLock")
+                .field("inner", &lock)
+                .finish_non_exhaustive()
+        } else {
+            f.debug_struct("ScheduleLock")
+                .field("inner", &"LOCKED")
+                .finish_non_exhaustive()
+        }
     }
 }
 
@@ -98,6 +106,31 @@ impl<T: ?Sized> ScheduleLock<T> {
             lock: &self.lock,
             ptr: self.inner.get(),
         }
+    }
+
+    /// Try to Lock the scheduler.
+    ///
+    /// This does not disable interrupts, but instead just prevents interrupts from causing
+    /// the scheduler to switch to another process.
+    pub fn try_lock<'a>(&'a self) -> Option<ScheduleLockGuard<'a, T>> {
+        // Increment the scheduler lock
+        SCHEDULE_LOCKS_HELD.fetch_add(1, Ordering::SeqCst);
+
+        // Aquire the lock
+        while let Err(previous_value) =
+            self.lock
+                .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
+        {
+            if previous_value {
+                SCHEDULE_LOCKS_HELD.fetch_sub(1, Ordering::SeqCst);
+                return None;
+            }
+        }
+
+        Some(ScheduleLockGuard {
+            lock: &self.lock,
+            ptr: self.inner.get(),
+        })
     }
 }
 

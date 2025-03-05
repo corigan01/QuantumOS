@@ -23,15 +23,15 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use alloc::format;
+use alloc::{format, string::String};
 use lldebug::{LogKind, logln};
 use quantum_portal::{
     ConnectHandleError, DebugMsgError, ExitReason, MapMemoryError, MemoryLocation,
     MemoryProtections, QuantumPortal, RecvHandleError, SendHandleError, ServeHandleError,
-    WaitCondition, WaitSignal, WaitingError, server::QuantumPortalServer,
+    WaitSignal, server::QuantumPortalServer,
 };
 
-use crate::process::scheduler::Scheduler;
+use crate::process::{HandleError, Process, scheduler::Scheduler};
 
 #[unsafe(no_mangle)]
 extern "C" fn syscall_handler(
@@ -89,43 +89,69 @@ impl QuantumPortal for KernelSyscalls {
         Ok(())
     }
 
-    fn wait_for(_conditions: &[WaitCondition]) -> Result<WaitSignal, WaitingError> {
-        logln!("wait_for todo");
-        Scheduler::crash_current();
-        unreachable!();
-    }
-
     fn yield_me() {
         Scheduler::yield_me();
     }
 
-    fn handle_recv(handle: u64, buf: &mut [u8]) -> ::core::result::Result<usize, RecvHandleError> {
-        logln!("Handle Recv");
-        Scheduler::crash_current();
-        unreachable!();
+    fn handle_recv(handle: u64, buf: &mut [u8]) -> Result<usize, RecvHandleError> {
+        let current_thread = Scheduler::get().current_thread().upgrade().unwrap();
+        current_thread
+            .process
+            .handle_rx(handle, buf)
+            .map_err(|err| match err {
+                HandleError::HandleDoesntExist(_) => RecvHandleError::InvalidHandle,
+                HandleError::InvalidSocketKind | HandleError::HostDisconnect => {
+                    RecvHandleError::RecvFailed
+                }
+                HandleError::WouldBlock => RecvHandleError::WouldBlock,
+            })
     }
 
-    fn handle_send(handle: u64, buf: &[u8]) -> ::core::result::Result<usize, SendHandleError> {
-        logln!("Handle Send");
-        Scheduler::crash_current();
-        unreachable!();
+    fn handle_send(handle: u64, buf: &[u8]) -> Result<usize, SendHandleError> {
+        let current_thread = Scheduler::get().current_thread().upgrade().unwrap();
+        current_thread
+            .process
+            .handle_tx(handle, buf)
+            .map_err(|err| match err {
+                HandleError::HandleDoesntExist(_) => SendHandleError::InvalidHandle,
+                HandleError::InvalidSocketKind | HandleError::HostDisconnect => {
+                    SendHandleError::SendFailed
+                }
+                HandleError::WouldBlock => SendHandleError::WouldBlock,
+            })
     }
 
-    fn handle_serve(endpoint: &str) -> ::core::result::Result<u64, ServeHandleError> {
-        logln!("Handle Serve");
-        Scheduler::crash_current();
-        unreachable!();
+    fn handle_serve(endpoint: &str) -> Result<u64, ServeHandleError> {
+        let current_thread = Scheduler::get().current_thread().upgrade().unwrap();
+        Process::new_connection_handle(current_thread.process.clone(), String::from(endpoint))
+            .ok_or(ServeHandleError::AlreadyBound)
     }
 
-    fn handle_connect(endpoint: &str) -> ::core::result::Result<u64, ConnectHandleError> {
-        logln!("Handle Connect");
-        Scheduler::crash_current();
-        unreachable!();
+    fn handle_connect(endpoint: &str) -> Result<u64, ConnectHandleError> {
+        let s = Scheduler::get();
+        let current_thread = Scheduler::get().current_thread().upgrade().unwrap();
+
+        // Get the handle owner
+        let Some((owner, owner_id)) = s.serve_sockets.lock().get(endpoint).cloned() else {
+            return Err(ConnectHandleError::EndpointDoesNotExist);
+        };
+        let Some(owner) = owner.upgrade() else {
+            s.serve_sockets.lock().remove(endpoint);
+            return Err(ConnectHandleError::EndpointDoesNotExist);
+        };
+
+        let (_, client_handle_id) =
+            Process::new_handle_pair(owner, owner_id, current_thread.process.clone());
+        Ok(client_handle_id)
     }
 
     fn handle_disconnect(handle: u64) {
-        logln!("Handle Disconnect");
-        Scheduler::crash_current();
-        unreachable!();
+        let current_thread = Scheduler::get().current_thread().upgrade().unwrap();
+        Process::disconnect_handle(current_thread.process.clone(), handle);
+    }
+
+    fn signal_wait() -> WaitSignal {
+        let current_thread = Scheduler::get().current_thread().upgrade().unwrap();
+        current_thread.process.next_signal()
     }
 }

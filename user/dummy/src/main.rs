@@ -45,7 +45,10 @@ extern "C" fn _start() {
 
     let handle = loop {
         match handle_connect("hello-server") {
-            Ok(okay) => break okay,
+            Ok(okay) => {
+                dbugln!("Connected to `hello-server` at handle {okay}!");
+                break okay;
+            }
             Err(e) => {
                 dbugln!("Error connecting to `hello-server` {e:?}...");
                 yield_me();
@@ -54,13 +57,13 @@ extern "C" fn _start() {
     };
 
     handle_send(handle, &[0xde, 0xad, 0xbe, 0xef]).unwrap();
-    let mut data_buf = [0; 32];
+    let mut data_buf = [0; 16];
     loop {
         match handle_recv(handle, &mut data_buf) {
             Ok(b) => {
                 dbugln!("Got {b} bytes! {data_buf:04x?}");
             }
-            Err(RecvHandleError::WouldBlock) => (),
+            Err(RecvHandleError::WouldBlock) => yield_me(),
             Err(err) => {
                 dbugln!("Error {err:?}!");
                 break;

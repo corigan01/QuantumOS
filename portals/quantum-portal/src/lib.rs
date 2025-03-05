@@ -64,28 +64,8 @@ pub trait QuantumPortal {
     #[event = 2]
     fn get_pid() -> usize;
 
-    /// Main event handler function.
-    ///
-    /// This function blocks until the first event is triggered, returning it. `wait_of` always blocks on success,
-    /// however, on error this function will return immediately. 
     #[event = 3]
-    fn wait_for(
-        conditions: &[WaitCondition],
-    ) -> Result<WaitSignal, WaitingError> {
-        enum WaitCondition {
-            /// Wait for this handle to be ready to write
-            WaitToWrite(u64),
-            /// Wait for this handle to have bytes ready to read
-            WaitToRead(u64),
-            /// Wait for this handle to accept a new connection
-            WaitConnect(u64),
-            /// Waits for any update
-            WaitAny(u64),
-            /// Sleep the process
-            TimeoutMs(u64),
-            None,
-        }
-
+    fn signal_wait() -> WaitSignal {
         enum WaitSignal {
             /// Updates for handles
             HandleUpdate {
@@ -111,11 +91,6 @@ pub trait QuantumPortal {
             Disconnected,
             /// This handle has accepted a new connection
             NewConnection { new_handle: u64 },
-        }
-
-        enum WaitingError {
-            UnknownHandle { handle: u64 },
-            InvalidSignalBuffer,
         }
     }
 
