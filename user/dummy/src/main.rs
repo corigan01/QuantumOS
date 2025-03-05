@@ -61,7 +61,8 @@ extern "C" fn _start() {
     loop {
         match handle_recv(handle, &mut data_buf) {
             Ok(b) => {
-                dbugln!("Got {b} bytes! {data_buf:04x?}");
+                dbugln!("Got {b} bytes! {:02x?}", &data_buf[..b]);
+                break;
             }
             Err(RecvHandleError::WouldBlock) => yield_me(),
             Err(err) => {

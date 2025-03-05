@@ -390,6 +390,12 @@ impl Process {
             }
             ProcessHandle::ClientTwoWay { host, id } => {
                 let host = host.upgrade().ok_or(HandleError::HostDisconnect)?;
+                host.signals.write(LockEncouragement::Moderate).push_back(
+                    WaitSignal::HandleUpdate {
+                        handle: *id,
+                        kind: HandleUpdateKind::ReadReady,
+                    },
+                );
                 host.remote_tx(*id, data)
             }
             _ => Err(HandleError::InvalidSocketKind),
