@@ -24,12 +24,14 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 use alloc::{format, string::String};
-use lldebug::{LogKind, logln};
+use lldebug::{LogKind, warnln};
+use mem::paging::VmPermissions;
 use quantum_portal::{
     ConnectHandleError, DebugMsgError, ExitReason, MapMemoryError, MemoryLocation,
     MemoryProtections, QuantumPortal, RecvHandleError, SendHandleError, ServeHandleError,
     WaitSignal, server::QuantumPortalServer,
 };
+use util::consts::PAGE_4K;
 
 use crate::process::{HandleError, Process, scheduler::Scheduler};
 
@@ -62,19 +64,33 @@ impl QuantumPortal for KernelSyscalls {
     }
 
     fn map_memory(
-        _location: MemoryLocation,
-        _protections: MemoryProtections,
-        _bytes: usize,
+        location: MemoryLocation,
+        protections: MemoryProtections,
+        bytes: usize,
     ) -> Result<*mut u8, MapMemoryError> {
-        logln!("map_memory todo");
-        Scheduler::crash_current();
-        unreachable!();
+        if bytes == 0 {
+            return Err(MapMemoryError::InvalidLength(bytes));
+        }
+
+        let current_thread = Scheduler::get().current_thread().upgrade().unwrap();
+        let n_pages = bytes / PAGE_4K;
+
+        let vperm = match protections {
+            MemoryProtections::ReadOnly => VmPermissions::USER_R,
+            MemoryProtections::ReadWrite => VmPermissions::USER_RW,
+            MemoryProtections::ReadExecute => VmPermissions::USER_RE,
+            MemoryProtections::None => VmPermissions::NONE,
+        };
+
+        match location {
+            MemoryLocation::Anywhere => current_thread.process.map_anon_anywhere(n_pages, vperm),
+        }
+        .map(|page| page.addr().as_mut_ptr())
     }
 
     fn get_pid() -> usize {
-        logln!("get_pid todo");
-        Scheduler::crash_current();
-        unreachable!();
+        let current_thread = Scheduler::get().current_thread().upgrade().unwrap();
+        current_thread.process.id
     }
 
     fn debug_msg(msg: &str) -> Result<(), DebugMsgError> {
@@ -153,5 +169,11 @@ impl QuantumPortal for KernelSyscalls {
     fn signal_wait() -> WaitSignal {
         let current_thread = Scheduler::get().current_thread().upgrade().unwrap();
         current_thread.process.next_signal()
+    }
+
+    /// Unmap a memory region allocated with [`map_memory`]
+    fn unmap_memory(ptr: *mut u8) {
+        // FIXME: Rewrite the virtual memory alloc to be suck
+        warnln!("Skipping unmapping of memory region {:?}", ptr);
     }
 }

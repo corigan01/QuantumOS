@@ -80,7 +80,7 @@ async fn cargo_helper(
 ) -> Result<PathBuf> {
     let compile_mode = profile.unwrap_or("release");
 
-    let build_std_options: &[&str] = if package == "kernel" {
+    let build_std_options: &[&str] = if package == "kernel" || profile == Some("userspace") {
         &["-Zbuild-std=core,alloc"]
     } else {
         &["-Zbuild-std=core"]

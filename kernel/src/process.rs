@@ -37,12 +37,14 @@ use elf::elf_owned::ElfOwned;
 use lldebug::{logln, warnln};
 use mem::{
     addr::VirtAddr,
+    page::VirtPage,
     paging::VmPermissions,
     vm::{VmFillAction, VmProcess, VmRegion},
 };
-use quantum_portal::{HandleUpdateKind, WaitSignal};
+use quantum_portal::{HandleUpdateKind, MapMemoryError, WaitSignal};
 use scheduler::Scheduler;
 use thread::{ThreadId, WeakThread};
+use util::consts::PAGE_1G;
 use vm_elf::VmElfInject;
 
 pub mod scheduler;
@@ -259,6 +261,25 @@ impl Process {
         vm_lock
             .inplace_new_vmobject(region, perm, VmFillAction::Scrub(0), false)
             .unwrap();
+    }
+
+    /// Add a new anonymous memory mapping for a size
+    pub fn map_anon_anywhere(
+        &self,
+        n_pages: usize,
+        perm: VmPermissions,
+    ) -> Result<VirtPage, MapMemoryError> {
+        let mut vm_lock = self.vm.write();
+
+        let region = vm_lock
+            .find_vm_free(VirtPage::containing_addr(VirtAddr::new(PAGE_1G)), n_pages)
+            .ok_or(MapMemoryError::OutOfMemory)?;
+
+        vm_lock
+            .inplace_new_vmobject(region, perm, VmFillAction::Scrub(0), false)
+            .map_err(|_| MapMemoryError::MappingMemoryError)?;
+
+        Ok(region.start)
     }
 
     /// Allocate a new thread id

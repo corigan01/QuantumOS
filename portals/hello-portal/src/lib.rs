@@ -25,9 +25,9 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 #![no_std]
 
-use portal::portal2;
+use portal::portal;
 
-#[portal2(protocol = "ipc")]
+#[portal(protocol = "ipc")]
 pub trait HelloPortal {
     #[event = 1]
     fn ping_hello_server() -> bool {}

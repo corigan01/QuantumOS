@@ -25,9 +25,9 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 #![no_std]
 
-use portal::portal2;
+use portal::portal;
 
-#[portal2(protocol = "syscall", global = true)]
+#[portal(protocol = "syscall", global = true)]
 pub trait QuantumPortal {
     #[event = 0]
     fn exit(exit_reason: ExitReason) -> ! {
@@ -39,6 +39,9 @@ pub trait QuantumPortal {
         }
     }
 
+    /// Map a memory region into this process's memory map
+    ///
+    /// This function acts like mmap on common unix systems.
     #[event = 1]
     fn map_memory(
         location: MemoryLocation,
@@ -61,6 +64,10 @@ pub trait QuantumPortal {
         }
     }
 
+    /// Unmap a memory region allocated with [`map_memory`]
+    #[event = 10]
+    fn unmap_memory(ptr: *mut u8) {}
+
     #[event = 2]
     fn get_pid() -> usize;
 
@@ -68,14 +75,9 @@ pub trait QuantumPortal {
     fn signal_wait() -> WaitSignal {
         enum WaitSignal {
             /// Updates for handles
-            HandleUpdate {
-                kind: HandleUpdateKind,
-                handle: u64,
-            },
+            HandleUpdate { kind: HandleUpdateKind, handle: u64 },
             /// Updates for sleep
-            TimerUpdate {
-                ms_duration: u64,
-            },
+            TimerUpdate { ms_duration: u64 },
             /// Your process is requested to exit
             TerminationRequest,
             /// There is no condition in this slot
@@ -120,21 +122,20 @@ pub trait QuantumPortal {
     #[event = 7]
     fn handle_serve(endpoint: &str) -> Result<u64, ServeHandleError> {
         enum ServeHandleError {
-            AlreadyBound
+            AlreadyBound,
         }
     }
 
     #[event = 8]
     fn handle_connect(endpoint: &str) -> Result<u64, ConnectHandleError> {
         enum ConnectHandleError {
-            EndpointDoesNotExist
+            EndpointDoesNotExist,
         }
     }
 
     /// Disconnect the handle if one exists
     #[event = 9]
     fn handle_disconnect(handle: u64) {}
-
 
     #[event = 69]
     fn debug_msg(msg: &str) -> Result<(), DebugMsgError> {
