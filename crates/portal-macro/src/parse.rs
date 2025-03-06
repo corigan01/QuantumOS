@@ -26,7 +26,6 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use crate::ast;
-use proc_macro_error::emit_error;
 use proc_macro2::Span;
 use syn::{
     Attribute, Fields, FnArg, Ident, ItemEnum, LitBool, LitStr, ReturnType, Token, TraitItemFn,
@@ -43,11 +42,6 @@ impl Parse for ast::ProtocolKind {
         } else if &str_value == "ipc" {
             Ok(Self::Ipc)
         } else {
-            emit_error!(
-                string.span(),
-                "Expected a protocol kind ('syscall', 'ipc'), found '{}'",
-                str_value
-            );
             Ok(Self::Invalid)
         }
     }
@@ -117,9 +111,10 @@ impl Parse for ast::PortalMacro {
             let item_fn: ast::ProtocolEndpoint = match inner.parse() {
                 Ok(v) => v,
                 Err(err) => {
-                    emit_error!(err.span(), "Cannot parse endpoint function: {}", err);
-
-                    continue;
+                    return Err(syn::Error::new(
+                        err.span(),
+                        format!("Cannot parse endpoint function: {}", err),
+                    ));
                 }
             };
 
@@ -135,18 +130,18 @@ impl Parse for ast::PortalMacro {
         };
 
         // Check for duplicate IDs
-        for (duplicate_id, duplicate_source, duplicate_use) in
+        for (duplicate_id, _duplicate_source, duplicate_use) in
             portal_macro.all_non_unique_portal_ids()
         {
-            let new_id = portal_macro.highest_id() + 1;
+            let _new_id = portal_macro.highest_id() + 1;
 
-            emit_error!(
+            return Err(syn::Error::new(
                 duplicate_use,
-                "Cannot have two endpoint functions with the same ID ({})",
-                duplicate_id;
-                help = "Try changing this ID to {}.", new_id;
-                node = duplicate_source => "Previous use of the ID {} here", duplicate_id;
-            );
+                format!(
+                    "Cannot have two endpoint functions with the same ID {}",
+                    duplicate_id
+                ),
+            ));
         }
 
         Ok(portal_macro)
@@ -201,14 +196,14 @@ impl Parse for ast::ProtocolEndpoint {
             .collect::<syn::Result<Vec<_>>>()?
             .into_iter()
             .enumerate()
-            .inspect(|(index, (_, span, _))| {
-                if *index > 0 {
-                    emit_error!(
-                        span,
-                        "Cannot define multiple protocol specifiers for a single endpoint"
-                    )
-                }
-            })
+            // .inspect(|(index, (_, span, _))| {
+            //     if *index > 0 {
+            //         emit_error!(
+            //             span,
+            //             "Cannot define multiple protocol specifiers for a single endpoint"
+            //         )
+            //     }
+            // })
             .map(|(_, a)| a)
             .last()
             .ok_or(syn::Error::new(input.span(), "Must define endpoint kind"))?;
@@ -230,10 +225,10 @@ impl Parse for ast::ProtocolEndpoint {
                         ))))
                     }
                     stmt => {
-                        emit_error!(
+                        return Err(syn::Error::new(
                             stmt.span(),
-                            "Only `enum` definitions are currently supported"
-                        );
+                            "Only `enum` definitions are currently supported",
+                        ));
                     }
                 }
             }
