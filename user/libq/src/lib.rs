@@ -25,7 +25,9 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 #![no_std]
 
+pub mod alloc;
 pub mod debug;
+pub mod sync;
 
 // Import syscall interface
 pub use quantum_portal::client::*;
