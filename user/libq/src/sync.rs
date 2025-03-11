@@ -29,7 +29,7 @@ use core::{
     ops::{Deref, DerefMut},
     sync::atomic::{AtomicBool, Ordering},
 };
-use quantum_portal::client::yield_me;
+use quantum_portal::client::yield_now;
 
 /// A QuantumOS Mutex with yield relax behavior.
 pub struct Mutex<T: ?Sized> {
@@ -76,7 +76,7 @@ impl<T: ?Sized> Mutex<T> {
                 Some(lock) => return lock,
                 None => {
                     // TODO: In the future we should add thread parking to the scheduler
-                    yield_me();
+                    yield_now();
                 }
             }
         }

@@ -11,5 +11,5 @@ portal = {workspace = true}
 
 [features]
 default = ["client"]
-client = ["portal/client"]
-server = ["portal/server"]
+client = ["portal/syscall-client"]
+server = ["portal/syscall-server"]

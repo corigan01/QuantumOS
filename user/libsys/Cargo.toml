@@ -5,5 +5,3 @@ version.workspace = true
 authors.workspace = true
 description.workspace = true
 documentation.workspace = true
-
-[dependencies]

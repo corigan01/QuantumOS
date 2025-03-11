@@ -29,8 +29,8 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 extern crate alloc;
 use core::panic::PanicInfo;
 use libq::{
-    ExitReason, RecvHandleError, alloc::QuantumHeap, dbugln, exit, handle_connect,
-    handle_disconnect, handle_recv, handle_send, yield_me,
+    ExitReason, RecvHandleError, alloc::QuantumHeap, close, connect, dbugln, exit, recv, send,
+    yield_now,
 };
 
 #[global_allocator]
@@ -48,33 +48,33 @@ extern "C" fn _start() {
     dbugln!("Starting Dummy");
 
     let handle = loop {
-        match handle_connect("hello-server") {
+        match connect("hello-server") {
             Ok(okay) => {
                 dbugln!("Connected to `hello-server` at handle {okay}!");
                 break okay;
             }
             Err(e) => {
                 dbugln!("Error connecting to `hello-server` {e:?}...");
-                yield_me();
+                yield_now();
             }
         }
     };
 
-    handle_send(handle, &[0xde, 0xad, 0xbe, 0xef]).unwrap();
+    send(handle, &[0xde, 0xad, 0xbe, 0xef]).unwrap();
     let mut data_buf = [0; 16];
     loop {
-        match handle_recv(handle, &mut data_buf) {
+        match recv(handle, &mut data_buf) {
             Ok(b) => {
                 dbugln!("Got {b} bytes! {:02x?}", &data_buf[..b]);
                 break;
             }
-            Err(RecvHandleError::WouldBlock) => yield_me(),
+            Err(RecvHandleError::WouldBlock) => yield_now(),
             Err(err) => {
                 dbugln!("Error {err:?}!");
                 break;
             }
         }
     }
-    handle_disconnect(handle);
+    close(handle);
     exit(ExitReason::Success);
 }

@@ -149,7 +149,7 @@ impl ToTokens for ast::PortalMacro {
 
         });
 
-        #[cfg(feature = "client")]
+        #[cfg(feature = "syscall-client")]
         {
             let into_portal_impl = IntoPortalImpl::new(self);
             let global_fn = GlobalFunctionImpl::new(self);
@@ -163,7 +163,7 @@ impl ToTokens for ast::PortalMacro {
                 }
             });
         };
-        #[cfg(feature = "server")]
+        #[cfg(feature = "syscall-server")]
         {
             let out_portal_impl = OutPortalImpl::new(self);
 

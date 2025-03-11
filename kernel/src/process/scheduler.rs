@@ -502,12 +502,12 @@ impl Scheduler {
             drop(running_lock);
             drop(s);
 
-            Self::yield_me();
+            Self::yield_now();
         }
     }
 
     /// Yield the current thread (If possible)
-    pub fn yield_me() {
+    pub fn yield_now() {
         assert_eq!(current_scheduler_locks(), 0);
         assert_eq!(current_debug_locks(), 0);
 
@@ -618,7 +618,7 @@ impl Scheduler {
                 Ok(lock) => break lock,
                 Err(LockError::WillBlock) => {
                     logln!("Blocking lock!");
-                    Self::yield_me()
+                    Self::yield_now()
                 }
                 Err(LockError::Deadlock) => {
                     panic!(
@@ -636,7 +636,7 @@ impl Scheduler {
                 Ok(lock) => break lock,
                 Err(LockError::WillBlock) => {
                     logln!("Blocking lock!");
-                    Self::yield_me()
+                    Self::yield_now()
                 }
                 Err(LockError::Deadlock) => {
                     panic!(
@@ -731,7 +731,7 @@ impl Scheduler {
             unsafe { manual_schedule_unlock() };
         }
 
-        Scheduler::yield_me();
+        Scheduler::yield_now();
         unreachable!("Yield returned to crashed process!");
     }
 

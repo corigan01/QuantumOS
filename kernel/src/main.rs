@@ -129,7 +129,7 @@ fn main(kbh: &KernelBootHeader) {
     Thread::new_kernel(kernel_process.clone(), init);
     Thread::new_kernel(kernel_process.clone(), idle);
 
-    Scheduler::yield_me();
+    Scheduler::yield_now();
 }
 
 static INITFS_REGION: SyncUnsafeCell<VmRegion> = SyncUnsafeCell::new(VmRegion::from_kbh((0, 0)));
@@ -148,6 +148,6 @@ fn idle() {
             logln!("All threads exited!");
             qemu::exit_emulator(qemu::QemuExitStatus::Success);
         }
-        Scheduler::yield_me();
+        Scheduler::yield_now();
     }
 }

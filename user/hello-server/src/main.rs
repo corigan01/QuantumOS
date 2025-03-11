@@ -28,8 +28,11 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 use core::panic::PanicInfo;
 use libq::{
-    HandleUpdateKind, WaitSignal, dbugln, exit, handle_recv, handle_send, handle_serve, signal_wait,
+    HandleUpdateKind, WaitSignal, alloc::QuantumHeap, dbugln, exit, recv, send, serve, signal_wait,
 };
+
+#[global_allocator]
+static ALLOC: QuantumHeap = QuantumHeap::new();
 
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
@@ -41,7 +44,7 @@ fn panic(info: &PanicInfo) -> ! {
 #[unsafe(no_mangle)]
 extern "C" fn _start() {
     dbugln!("Hello Server!");
-    let server_handle = handle_serve("hello-server").unwrap();
+    let server_handle = serve("hello-server").unwrap();
 
     loop {
         let signal = signal_wait();
@@ -59,7 +62,7 @@ extern "C" fn _start() {
                 kind: HandleUpdateKind::ReadReady,
             } => {
                 let mut data_buf = [0; 16];
-                let valid_bytes = handle_recv(handle, &mut data_buf).unwrap();
+                let valid_bytes = recv(handle, &mut data_buf).unwrap();
 
                 dbugln!(
                     "Got {valid_bytes} from {handle}: {:02x?}",
@@ -71,7 +74,7 @@ extern "C" fn _start() {
                 kind: HandleUpdateKind::WriteReady,
             } => {
                 let data_buf = [0xde, 0xea, 0xbe, 0xef];
-                let valid_bytes = handle_send(handle, &data_buf).unwrap();
+                let valid_bytes = send(handle, &data_buf).unwrap();
 
                 dbugln!(
                     "Sent {valid_bytes} from {handle}: {:02x?}",

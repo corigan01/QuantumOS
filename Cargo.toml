@@ -41,6 +41,7 @@ version = "0.1.0"
 authors = ["corigan01 <corigan01@gmail.com>"]
 description = "Quantum Operating System"
 documentation = "https://github.com/corigan01/QuantumOS"
+license = "MIT"
 
 [workspace.dependencies]
 arch = { path = "crates/arch" }

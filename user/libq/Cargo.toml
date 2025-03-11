@@ -5,6 +5,7 @@ version.workspace = true
 authors.workspace = true
 description.workspace = true
 documentation.workspace = true
+license.workspace = true
 
 [dependencies]
 quantum-portal = {workspace = true, features = ["client"]}

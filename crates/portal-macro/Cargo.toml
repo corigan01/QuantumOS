@@ -16,5 +16,7 @@ syn = { version = "2.0.96", features = ["full", "extra-traits", "visit"] }
 
 [features]
 default = []
-client = []
-server = []
+syscall-client = []
+syscall-server = []
+ipc-client = []
+ipc-server = []

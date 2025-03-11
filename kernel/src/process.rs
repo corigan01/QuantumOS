@@ -520,7 +520,7 @@ impl Process {
         loop {
             let len = { self.signals.read(LockEncouragement::Weak).len() };
             if len == 0 {
-                Scheduler::yield_me();
+                Scheduler::yield_now();
             }
 
             match self.signals.write(LockEncouragement::Strong).pop_front() {

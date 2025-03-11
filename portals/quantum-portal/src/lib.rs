@@ -50,6 +50,7 @@ pub trait QuantumPortal {
     ) -> Result<*mut u8, MapMemoryError> {
         enum MemoryLocation {
             Anywhere,
+            PhysicalLoc(u64),
         }
         enum MemoryProtections {
             ReadOnly,
@@ -97,11 +98,11 @@ pub trait QuantumPortal {
     }
 
     #[event = 4]
-    fn yield_me() {}
+    fn yield_now() {}
 
     /// Receive data from a handle
     #[event = 5]
-    fn handle_recv(handle: u64, buf: &mut [u8]) -> Result<usize, RecvHandleError> {
+    fn recv(handle: u64, buf: &mut [u8]) -> Result<usize, RecvHandleError> {
         enum RecvHandleError {
             InvalidHandle,
             RecvFailed,
@@ -111,7 +112,7 @@ pub trait QuantumPortal {
 
     /// Send data to a handle
     #[event = 6]
-    fn handle_send(handle: u64, buf: &[u8]) -> Result<usize, SendHandleError> {
+    fn send(handle: u64, buf: &[u8]) -> Result<usize, SendHandleError> {
         enum SendHandleError {
             InvalidHandle,
             SendFailed,
@@ -120,14 +121,14 @@ pub trait QuantumPortal {
     }
 
     #[event = 7]
-    fn handle_serve(endpoint: &str) -> Result<u64, ServeHandleError> {
+    fn serve(endpoint: &str) -> Result<u64, ServeHandleError> {
         enum ServeHandleError {
             AlreadyBound,
         }
     }
 
     #[event = 8]
-    fn handle_connect(endpoint: &str) -> Result<u64, ConnectHandleError> {
+    fn connect(endpoint: &str) -> Result<u64, ConnectHandleError> {
         enum ConnectHandleError {
             EndpointDoesNotExist,
         }
@@ -135,7 +136,7 @@ pub trait QuantumPortal {
 
     /// Disconnect the handle if one exists
     #[event = 9]
-    fn handle_disconnect(handle: u64) {}
+    fn close(handle: u64) {}
 
     #[event = 69]
     fn debug_msg(msg: &str) -> Result<(), DebugMsgError> {

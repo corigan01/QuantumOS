@@ -58,7 +58,13 @@ impl QuantumPortalServer for KernelSyscalls {
 }
 
 impl QuantumPortal for KernelSyscalls {
-    fn exit(_exit_reason: ExitReason) -> ! {
+    fn exit(exit_reason: ExitReason) -> ! {
+        let current_thread = Scheduler::get().current_thread().upgrade().unwrap();
+        warnln!(
+            "Exitting {} ({:?})",
+            current_thread.process.name,
+            exit_reason
+        );
         Scheduler::crash_current();
         unreachable!();
     }
@@ -84,6 +90,9 @@ impl QuantumPortal for KernelSyscalls {
 
         match location {
             MemoryLocation::Anywhere => current_thread.process.map_anon_anywhere(n_pages, vperm),
+            MemoryLocation::PhysicalLoc(physical_ptr) => {
+                todo!()
+            }
         }
         .map(|page| page.addr().as_mut_ptr())
     }
@@ -105,11 +114,11 @@ impl QuantumPortal for KernelSyscalls {
         Ok(())
     }
 
-    fn yield_me() {
-        Scheduler::yield_me();
+    fn yield_now() {
+        Scheduler::yield_now();
     }
 
-    fn handle_recv(handle: u64, buf: &mut [u8]) -> Result<usize, RecvHandleError> {
+    fn recv(handle: u64, buf: &mut [u8]) -> Result<usize, RecvHandleError> {
         let current_thread = Scheduler::get().current_thread().upgrade().unwrap();
         current_thread
             .process
@@ -123,7 +132,7 @@ impl QuantumPortal for KernelSyscalls {
             })
     }
 
-    fn handle_send(handle: u64, buf: &[u8]) -> Result<usize, SendHandleError> {
+    fn send(handle: u64, buf: &[u8]) -> Result<usize, SendHandleError> {
         let current_thread = Scheduler::get().current_thread().upgrade().unwrap();
         current_thread
             .process
@@ -137,13 +146,13 @@ impl QuantumPortal for KernelSyscalls {
             })
     }
 
-    fn handle_serve(endpoint: &str) -> Result<u64, ServeHandleError> {
+    fn serve(endpoint: &str) -> Result<u64, ServeHandleError> {
         let current_thread = Scheduler::get().current_thread().upgrade().unwrap();
         Process::new_connection_handle(current_thread.process.clone(), String::from(endpoint))
             .ok_or(ServeHandleError::AlreadyBound)
     }
 
-    fn handle_connect(endpoint: &str) -> Result<u64, ConnectHandleError> {
+    fn connect(endpoint: &str) -> Result<u64, ConnectHandleError> {
         let s = Scheduler::get();
         let current_thread = Scheduler::get().current_thread().upgrade().unwrap();
 
@@ -161,7 +170,7 @@ impl QuantumPortal for KernelSyscalls {
         Ok(client_handle_id)
     }
 
-    fn handle_disconnect(handle: u64) {
+    fn close(handle: u64) {
         let current_thread = Scheduler::get().current_thread().upgrade().unwrap();
         Process::disconnect_handle(current_thread.process.clone(), handle);
     }

@@ -25,9 +25,10 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 #![no_std]
 
-#[cfg(feature = "alloc")]
-pub mod ipc;
 pub use portal_macro::*;
+
+#[cfg(any(feature = "ipc-client", feature = "ipc-server"))]
+pub mod ipc;
 
 /// The syscall number of the 'pass-by-enum' calling convention
 pub const SYSCALL_CALLER_ID: u64 = 1;
@@ -52,7 +53,7 @@ pub unsafe trait SyscallOutput: Sized {
     }
 }
 
-#[cfg(feature = "client")]
+#[cfg(feature = "syscall-client")]
 pub mod syscall {
     use libsys::raw_syscall;
 
@@ -103,7 +104,7 @@ pub mod syscall {
     }
 }
 
-#[cfg(feature = "server")]
+#[cfg(feature = "syscall-server")]
 pub mod syscall_recv {
     use lldebug::warnln;
 
