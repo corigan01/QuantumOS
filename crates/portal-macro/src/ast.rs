@@ -128,6 +128,23 @@ pub enum ProtocolEndpointKind {
 #[allow(unused)]
 pub enum ProtocolDefine {
     DefinedEnum(Rc<RefCell<ProtocolEnumDef>>),
+    DefinedStruct(Rc<RefCell<ProtocolStructDef>>),
+}
+
+#[derive(Debug)]
+#[allow(unused)]
+pub struct ProtocolStructDef {
+    pub docs: Vec<Attribute>,
+    pub ident: Ident,
+    pub items: Vec<ProtocolStructItem>,
+}
+
+#[derive(Debug)]
+#[allow(unused)]
+pub struct ProtocolStructItem {
+    pub docs: Vec<Attribute>,
+    pub name: Option<Ident>,
+    pub ty: ProtocolVarType,
 }
 
 #[derive(Debug)]
@@ -291,6 +308,7 @@ impl ProtocolDefine {
     pub fn var_ident(&self) -> Ident {
         match self {
             ProtocolDefine::DefinedEnum(ref_cell) => ref_cell.borrow().ident.clone(),
+            ProtocolDefine::DefinedStruct(ref_cell) => ref_cell.borrow().ident.clone(),
         }
     }
 }
@@ -398,6 +416,11 @@ impl PortalMacro {
                                     inner.is_unknown_of(&ref_cell.ident.to_string())
                                 })
                             }
+                            ProtocolDefine::DefinedStruct(ref_cell) => {
+                                ref_cell.try_borrow().is_ok_and(|ref_cell| {
+                                    inner.is_unknown_of(&ref_cell.ident.to_string())
+                                })
+                            }
                         })
                         .cloned(),
                     _ => None,
@@ -446,6 +469,12 @@ impl PortalMacro {
                                 .for_each(|var_type| search_var_type(var_type, &protocol_defines)),
                             _ => (),
                         });
+                }
+                ProtocolDefine::DefinedStruct(ref_cell) => {
+                    let mut cell = ref_cell.borrow_mut();
+                    cell.items
+                        .iter_mut()
+                        .for_each(|varient| search_var_type(&mut varient.ty, &protocol_defines));
                 }
             });
     }

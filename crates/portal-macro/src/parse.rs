@@ -28,8 +28,8 @@ use std::{cell::RefCell, collections::HashMap, rc::Rc};
 use crate::ast;
 use proc_macro2::Span;
 use syn::{
-    Attribute, Fields, FnArg, Ident, ItemEnum, LitBool, LitStr, ReturnType, Token, TraitItemFn,
-    parse::Parse, spanned::Spanned,
+    Attribute, Field, Fields, FnArg, Ident, ItemEnum, ItemStruct, LitBool, LitStr, ReturnType,
+    Token, TraitItemFn, parse::Parse, spanned::Spanned,
 };
 
 impl Parse for ast::ProtocolKind {
@@ -224,6 +224,11 @@ impl Parse for ast::ProtocolEndpoint {
                             enum_statement.try_into()?,
                         ))))
                     }
+                    syn::Stmt::Item(syn::Item::Struct(struct_statement)) => {
+                        body.push(ast::ProtocolDefine::DefinedStruct(Rc::new(RefCell::new(
+                            struct_statement.try_into()?,
+                        ))))
+                    }
                     stmt => {
                         return Err(syn::Error::new(
                             stmt.span(),
@@ -402,6 +407,85 @@ impl TryFrom<&syn::Type> for ast::ProtocolVarType {
                 ),
             )),
         }
+    }
+}
+
+impl TryFrom<&ItemStruct> for ast::ProtocolStructDef {
+    type Error = syn::Error;
+
+    fn try_from(value: &ItemStruct) -> Result<Self, Self::Error> {
+        let ItemStruct {
+            attrs,
+            vis: _,
+            struct_token: _,
+            ident,
+            generics,
+            fields,
+            semi_token: _,
+        } = value;
+
+        let mut docs = Vec::new();
+        for attr in attrs {
+            if attr.path().is_ident("doc") {
+                docs.push(attr.clone());
+            } else {
+                return Err(syn::Error::new(
+                    attr.span(),
+                    "Attribute not supported for portal defined enum",
+                ));
+            }
+        }
+
+        if !generics.params.is_empty() {
+            return Err(syn::Error::new(
+                generics.span(),
+                "Portal defined enum cannot have any generics",
+            ));
+        }
+
+        let mut items = Vec::new();
+        for field in fields.iter() {
+            items.push(field.try_into()?);
+        }
+
+        Ok(Self {
+            docs,
+            ident: ident.clone(),
+            items,
+        })
+    }
+}
+
+impl TryFrom<&Field> for ast::ProtocolStructItem {
+    type Error = syn::Error;
+
+    fn try_from(value: &Field) -> Result<Self, Self::Error> {
+        let Field {
+            attrs,
+            vis: _,
+            mutability: _,
+            ident,
+            colon_token: _,
+            ty,
+        } = value;
+
+        let mut docs = Vec::new();
+        for attr in attrs {
+            if attr.path().is_ident("doc") {
+                docs.push(attr.clone());
+            } else {
+                return Err(syn::Error::new(
+                    attr.span(),
+                    "Attribute not supported for portal defined enum",
+                ));
+            }
+        }
+
+        Ok(Self {
+            docs,
+            name: ident.clone(),
+            ty: ty.try_into()?,
+        })
     }
 }
 
