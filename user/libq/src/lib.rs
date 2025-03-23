@@ -33,9 +33,30 @@ pub mod sync;
 pub use quantum_portal::sys_client::*;
 pub use quantum_portal::*;
 
+/// Termination trait for `main` to convert `()` or `Result<O, E>` to an exit status.
+pub trait QuantumTermination {
+    fn exit_status(self) -> ExitReason;
+}
+
+impl QuantumTermination for () {
+    fn exit_status(self) -> ExitReason {
+        ExitReason::Success
+    }
+}
+
+impl<E: core::error::Error> QuantumTermination for Result<(), E> {
+    fn exit_status(self) -> ExitReason {
+        match self {
+            Ok(_) => ExitReason::Success,
+            Err(err) => {
+                dbugln!("Failure {err}");
+                ExitReason::Failure
+            }
+        }
+    }
+}
+
 /// A micro version of Rust's standard library's prelude.
-///
-///
 #[macro_export]
 macro_rules! tiny_std {
     () => {
@@ -54,8 +75,10 @@ macro_rules! tiny_std {
         #[unsafe(link_section = ".start")]
         #[unsafe(no_mangle)]
         extern "C" fn _start() {
-            main();
-            $crate::exit($crate::ExitReason::Success);
+            let main_result = main();
+            let exit_status = $crate::QuantumTermination::exit_status(main_result);
+
+            $crate::exit(exit_status);
         }
     };
 }

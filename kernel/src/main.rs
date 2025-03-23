@@ -126,16 +126,18 @@ fn main(kbh: &KernelBootHeader) {
     unsafe { (*INITFS_REGION.get()) = initfs_region };
 
     let kernel_process = Process::new("kernel".into());
-    Thread::new_kernel(kernel_process.clone(), init);
+    Thread::new_kernel(kernel_process.clone(), init_stage2);
     Thread::new_kernel(kernel_process.clone(), idle);
 
+    // This will start the scheduler for the first time
     Scheduler::yield_now();
 }
 
 static INITFS_REGION: SyncUnsafeCell<VmRegion> = SyncUnsafeCell::new(VmRegion::from_kbh((0, 0)));
 
-fn init() {
-    logln!("init task");
+/// Tasks required after scheduling is setup to be started.
+fn init_stage2() {
+    logln!("Starting second-stage init!");
     let s = Scheduler::get();
     unsafe { s.spawn_all_initfs(*INITFS_REGION.get()) };
     timer::init_timer();

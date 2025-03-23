@@ -25,24 +25,11 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 #![no_std]
 #![no_main]
+tiny_std!();
 
-use core::panic::PanicInfo;
-use libq::{
-    HandleUpdateKind, WaitSignal, alloc::QuantumHeap, dbugln, exit, recv, send, serve, signal_wait,
-};
+use libq::{HandleUpdateKind, WaitSignal, dbugln, recv, send, serve, signal_wait, tiny_std};
 
-#[global_allocator]
-static ALLOC: QuantumHeap = QuantumHeap::new();
-
-#[panic_handler]
-fn panic(info: &PanicInfo) -> ! {
-    dbugln!("{}", info);
-    exit(libq::ExitReason::Failure);
-}
-
-#[unsafe(link_section = ".start")]
-#[unsafe(no_mangle)]
-extern "C" fn _start() {
+fn main() {
     dbugln!("Hello Server!");
     let server_handle = serve("hello-server").unwrap();
 
@@ -83,7 +70,7 @@ extern "C" fn _start() {
             }
             WaitSignal::TerminationRequest => {
                 dbugln!("Quitting...");
-                exit(libq::ExitReason::Success);
+                return;
             }
             _ => (),
         }

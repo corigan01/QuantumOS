@@ -25,12 +25,9 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 #![no_std]
 #![no_main]
-
 tiny_std!();
 
-use libq::{
-    ExitReason, RecvHandleError, close, connect, dbugln, exit, recv, send, tiny_std, yield_now,
-};
+use libq::{RecvHandleError, close, connect, dbugln, recv, send, tiny_std, yield_now};
 
 fn main() {
     dbugln!("Starting Dummy");
@@ -49,6 +46,7 @@ fn main() {
     };
 
     send(handle, &[0xde, 0xad, 0xbe, 0xef]).unwrap();
+
     let mut data_buf = [0; 16];
     loop {
         match recv(handle, &mut data_buf) {
@@ -63,6 +61,6 @@ fn main() {
             }
         }
     }
+
     close(handle);
-    exit(ExitReason::Success);
 }
