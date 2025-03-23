@@ -278,7 +278,55 @@ impl ToTokens for ast::ProtocolDefine {
                     }
                 });
             }
+            ast::ProtocolDefine::DefinedStruct(ref_cell) => {
+                let struct_def = ref_cell.borrow();
+
+                let docs = &struct_def.docs;
+                let ident = &struct_def.ident;
+                let items = &struct_def.items;
+
+                if items.iter().any(|struct_field| struct_field.name.is_some()) {
+                    // Named fields
+                    tokens.append_all(quote! {
+                        #(#docs)*
+                        #[repr(C)]
+                        #[derive(Debug, Clone)]
+                        pub struct #ident {
+                            #(#items),*
+                        }
+                    });
+                } else {
+                    // Unnamed fields
+                    tokens.append_all(quote! {
+                        #(#docs)*
+                        #[repr(C)]
+                        #[derive(Debug, Clone)]
+                        pub struct #ident (#(#items),*);
+                    });
+                }
+            },
         }
+    }
+}
+
+impl ToTokens for ast::ProtocolStructItem {
+    fn to_tokens(&self, tokens: &mut TokenStream2) {
+        let docs = &self.docs;
+        let name = &self.name;
+        let ty = &self.ty;
+
+        if let Some(name) = name {
+            tokens.append_all(quote!{
+                #(#docs)*
+                pub #name : #ty
+            });
+        } else {
+            tokens.append_all(quote!{
+                #(#docs)*
+                pub #ty
+            });
+        }
+        
     }
 }
 
