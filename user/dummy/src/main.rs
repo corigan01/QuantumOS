@@ -26,25 +26,13 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #![no_std]
 #![no_main]
 
-extern crate alloc;
-use core::panic::PanicInfo;
+tiny_std!();
+
 use libq::{
-    ExitReason, RecvHandleError, alloc::QuantumHeap, close, connect, dbugln, exit, recv, send,
-    yield_now,
+    ExitReason, RecvHandleError, close, connect, dbugln, exit, recv, send, tiny_std, yield_now,
 };
 
-#[global_allocator]
-static ALLOC: QuantumHeap = QuantumHeap::new();
-
-#[panic_handler]
-fn panic(info: &PanicInfo) -> ! {
-    dbugln!("{}", info);
-    loop {}
-}
-
-#[unsafe(link_section = ".start")]
-#[unsafe(no_mangle)]
-extern "C" fn _start() {
+fn main() {
     dbugln!("Starting Dummy");
 
     let handle = loop {

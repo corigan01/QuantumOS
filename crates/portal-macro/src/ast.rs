@@ -324,6 +324,13 @@ impl ProtocolVarType {
 
                     Ok(())
                 }
+                ProtocolDefine::DefinedStruct(ref_cell) => {
+                    let struct_inner = ref_cell.borrow();
+                    for struct_field in struct_inner.items.iter() {
+                        struct_field.ty.check_allowed(portal_type)?;
+                    }
+                    Ok(())
+                }
             },
             (ProtocolKind::Ipc, ProtocolVarType::IpcString(_)) => Ok(()),
             (ProtocolKind::Ipc, ProtocolVarType::IpcVec { span: _, to }) => {

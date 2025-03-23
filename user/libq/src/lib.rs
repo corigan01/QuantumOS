@@ -32,3 +32,30 @@ pub mod sync;
 // Import syscall interface
 pub use quantum_portal::sys_client::*;
 pub use quantum_portal::*;
+
+/// A micro version of Rust's standard library's prelude.
+///
+///
+#[macro_export]
+macro_rules! tiny_std {
+    () => {
+        extern crate alloc;
+
+        #[global_allocator]
+        static ALLOC: $crate::alloc::QuantumHeap = $crate::alloc::QuantumHeap::new();
+
+        #[cfg(not(test))]
+        #[panic_handler]
+        fn panic(info: &core::panic::PanicInfo) -> ! {
+            $crate::dbugln!("{}", info);
+            $crate::exit($crate::ExitReason::Failure);
+        }
+
+        #[unsafe(link_section = ".start")]
+        #[unsafe(no_mangle)]
+        extern "C" fn _start() {
+            main();
+            $crate::exit($crate::ExitReason::Success);
+        }
+    };
+}
