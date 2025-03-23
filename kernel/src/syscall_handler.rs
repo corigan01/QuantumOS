@@ -23,17 +23,16 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use crate::process::{HandleError, Process, scheduler::Scheduler};
 use alloc::{format, string::String};
 use lldebug::{LogKind, warnln};
 use mem::paging::VmPermissions;
 use quantum_portal::{
     ConnectHandleError, DebugMsgError, ExitReason, MapMemoryError, MemoryLocation,
     MemoryProtections, QuantumPortal, RecvHandleError, SendHandleError, ServeHandleError,
-    WaitSignal, server::QuantumPortalServer,
+    WaitSignal, sys_server::QuantumPortalServer,
 };
 use util::consts::PAGE_4K;
-
-use crate::process::{HandleError, Process, scheduler::Scheduler};
 
 #[unsafe(no_mangle)]
 extern "C" fn syscall_handler(

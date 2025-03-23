@@ -25,7 +25,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 use core::fmt::Error;
 use core::fmt::Write;
-use quantum_portal::client::debug_msg;
+use quantum_portal::sys_client::debug_msg;
 
 /// Quantum OS's 'kernel' debug output.
 ///

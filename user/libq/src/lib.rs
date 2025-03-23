@@ -30,5 +30,5 @@ pub mod debug;
 pub mod sync;
 
 // Import syscall interface
-pub use quantum_portal::client::*;
+pub use quantum_portal::sys_client::*;
 pub use quantum_portal::*;

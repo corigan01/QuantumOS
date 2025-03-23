@@ -56,10 +56,12 @@ impl<'a> PortalUserDefined<'a> {
 }
 
 /// A generator for the enum that all functions will put their arguments
+#[cfg(any(feature = "syscall-client", feature = "syscall-server"))]
 pub struct PortalTranslationInputType<'a> {
     portal: &'a ast::PortalMacro,
 }
 
+#[cfg(any(feature = "syscall-client", feature = "syscall-server"))]
 impl<'a> PortalTranslationInputType<'a> {
     pub fn new(portal: &'a ast::PortalMacro) -> Self {
         Self { portal }
@@ -67,10 +69,12 @@ impl<'a> PortalTranslationInputType<'a> {
 }
 
 /// A generator for the enum that all functions will output
+#[cfg(any(feature = "syscall-client", feature = "syscall-server"))]
 pub struct PortalTranslationOutputType<'a> {
     portal: &'a ast::PortalMacro,
 }
 
+#[cfg(any(feature = "syscall-client", feature = "syscall-server"))]
 impl<'a> PortalTranslationOutputType<'a> {
     pub fn new(portal: &'a ast::PortalMacro) -> Self {
         Self { portal }
@@ -90,11 +94,13 @@ impl<'a> LifetimedProtocolVarType<'a> {
 }
 
 /// A generator for all the functions if they are intended to be global
-pub struct GlobalFunctionImpl<'a> {
+#[cfg(any(feature = "syscall-client", feature = "syscall-server"))]
+pub struct GlobalSyscallFunctionImpl<'a> {
     portal: &'a ast::PortalMacro
 }
 
-impl<'a> GlobalFunctionImpl<'a> {
+#[cfg(any(feature = "syscall-client", feature = "syscall-server"))]
+impl<'a> GlobalSyscallFunctionImpl<'a> {
     pub fn new(portal: &'a ast::PortalMacro) -> Self {
         Self {
             portal,
@@ -104,32 +110,33 @@ impl<'a> GlobalFunctionImpl<'a> {
 
 /// A generator for QuantumOS's into syscall
 /// (aka. The default type that will impl the portal's trait)
-#[allow(unused)]
-pub struct IntoPortalImpl<'a> {
+#[cfg(feature = "syscall-client")]
+pub struct IntoSyscallPortalImpl<'a> {
     portal: &'a ast::PortalMacro,
 }
 
-#[allow(unused)]
-impl<'a> IntoPortalImpl<'a> {
+#[cfg(feature = "syscall-client")]
+impl<'a> IntoSyscallPortalImpl<'a> {
     pub fn new(portal: &'a ast::PortalMacro) -> Self {
         Self { portal }
     }
 }
 
 /// A generator for QuantumOS's out of syscall
-#[allow(unused)]
-pub struct OutPortalImpl<'a> {
+#[cfg(feature = "syscall-server")]
+pub struct OutSyscallPortalImpl<'a> {
     portal: &'a ast::PortalMacro
 }
 
 
-#[allow(unused)]
-impl<'a> OutPortalImpl<'a> {
+#[cfg(feature = "syscall-server")]
+impl<'a> OutSyscallPortalImpl<'a> {
     pub fn new(portal: &'a ast::PortalMacro) -> Self {
         Self { portal }
     }
 }
 
+/// Generate the Rust portal output tokens
 pub fn generate_rust_portal(portal: &ast::PortalMacro) -> TokenStream2 {
     portal.to_token_stream()
 }
@@ -138,24 +145,31 @@ impl ToTokens for ast::PortalMacro {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         let portal_trait = PortalTrait::new(self);
         let user_defined = PortalUserDefined::new(self);
-        let input = PortalTranslationInputType::new(self);
-        let output = PortalTranslationOutputType::new(self);
 
         tokens.append_all(quote! {
             #user_defined
-            #input
-            #output
             #portal_trait
 
         });
 
-        #[cfg(feature = "syscall-client")]
+        #[cfg(any(feature = "syscall-client", feature = "syscall-server"))]
         {
-            let into_portal_impl = IntoPortalImpl::new(self);
-            let global_fn = GlobalFunctionImpl::new(self);
+            let input = PortalTranslationInputType::new(self);
+            let output = PortalTranslationOutputType::new(self);
 
             tokens.append_all(quote! {
-                pub mod client {
+                #input
+                #output
+            });
+        }
+
+        #[cfg(feature = "syscall-client")]
+        {
+            let into_portal_impl = IntoSyscallPortalImpl::new(self);
+            let global_fn = GlobalSyscallFunctionImpl::new(self);
+
+            tokens.append_all(quote! {
+                pub mod sys_client {
                     use super::*;
 
                     #into_portal_impl
@@ -165,10 +179,10 @@ impl ToTokens for ast::PortalMacro {
         };
         #[cfg(feature = "syscall-server")]
         {
-            let out_portal_impl = OutPortalImpl::new(self);
+            let out_portal_impl = OutSyscallPortalImpl::new(self);
 
             tokens.append_all(quote! {
-                pub mod server {
+                pub mod sys_server {
                     use super::*;
 
                     #out_portal_impl
@@ -301,6 +315,7 @@ impl ToTokens for ast::ProtocolEnumFields {
     }
 }
 
+#[cfg(any(feature = "syscall-client", feature = "syscall-server"))]
 impl<'a> ToTokens for PortalTranslationInputType<'a> {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         let lifetime = Lifetime::new("'a", Span::call_site());
@@ -337,7 +352,7 @@ impl<'a> ToTokens for PortalTranslationInputType<'a> {
             }
         });
         tokens.append_all(quote! {
-            unsafe impl<'input_lifetime> ::portal::SyscallInput for #translation_ident<'input_lifetime> {
+            unsafe impl<'input_lifetime> ::portal::syscall::SyscallInput for #translation_ident<'input_lifetime> {
                 fn version_id() -> u32 {
                     1
                 }
@@ -347,6 +362,7 @@ impl<'a> ToTokens for PortalTranslationInputType<'a> {
 }
 
 
+#[cfg(any(feature = "syscall-client", feature = "syscall-server"))]
 impl<'a> ToTokens for PortalTranslationOutputType<'a> {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         let translation_ident = self.portal.get_output_enum_ident();
@@ -371,7 +387,7 @@ impl<'a> ToTokens for PortalTranslationOutputType<'a> {
             }
         });
         tokens.append_all(quote! {
-            unsafe impl ::portal::SyscallOutput for #translation_ident {
+            unsafe impl ::portal::syscall::SyscallOutput for #translation_ident {
                 fn version_id() -> u32 {
                     1
                 }
@@ -384,79 +400,86 @@ impl ToTokens for ast::ProtocolVarType {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         match self {
             ast::ProtocolVarType::ResultKind {
-                span,
-                ok_ty,
-                err_ty,
-            } => {
-                tokens.append_all(quote_spanned! {span.clone()=>::core::result::Result});
-                tokens.append_all(quote! {<#ok_ty, #err_ty>});
-            }
+                        span,
+                        ok_ty,
+                        err_ty,
+                    } => {
+                        tokens.append_all(quote_spanned! {span.clone()=>::core::result::Result});
+                        tokens.append_all(quote! {<#ok_ty, #err_ty>});
+                    }
             ast::ProtocolVarType::Never(span) => {
-                tokens.append_all(quote_spanned! {span.clone()=>!})
-            }
+                        tokens.append_all(quote_spanned! {span.clone()=>!})
+                    }
             ast::ProtocolVarType::Unit(span) => {
-                tokens.append_all(quote_spanned! {span.clone()=>()})
-            }
+                        tokens.append_all(quote_spanned! {span.clone()=>()})
+                    }
             ast::ProtocolVarType::Bool(span) => {
-                tokens.append_all(quote_spanned! {span.clone()=>bool})
-            }
+                        tokens.append_all(quote_spanned! {span.clone()=>bool})
+                    }
             ast::ProtocolVarType::Signed8(span) => {
-                tokens.append_all(quote_spanned! {span.clone()=>i8})
-            }
+                        tokens.append_all(quote_spanned! {span.clone()=>i8})
+                    }
             ast::ProtocolVarType::Signed16(span) => {
-                tokens.append_all(quote_spanned! {span.clone()=>i16})
-            }
+                        tokens.append_all(quote_spanned! {span.clone()=>i16})
+                    }
             ast::ProtocolVarType::Signed32(span) => {
-                tokens.append_all(quote_spanned! {span.clone()=>i32})
-            }
+                        tokens.append_all(quote_spanned! {span.clone()=>i32})
+                    }
             ast::ProtocolVarType::Signed64(span) => {
-                tokens.append_all(quote_spanned! {span.clone()=>i64})
-            }
+                        tokens.append_all(quote_spanned! {span.clone()=>i64})
+                    }
             ast::ProtocolVarType::Unsigned8(span) => {
-                tokens.append_all(quote_spanned! {span.clone()=>u8})
-            }
+                        tokens.append_all(quote_spanned! {span.clone()=>u8})
+                    }
             ast::ProtocolVarType::Unsigned16(span) => {
-                tokens.append_all(quote_spanned! {span.clone()=>u16})
-            }
+                        tokens.append_all(quote_spanned! {span.clone()=>u16})
+                    }
             ast::ProtocolVarType::Unsigned32(span) => {
-                tokens.append_all(quote_spanned! {span.clone()=>u32})
-            }
+                        tokens.append_all(quote_spanned! {span.clone()=>u32})
+                    }
             ast::ProtocolVarType::Unsigned64(span) => {
-                tokens.append_all(quote_spanned! {span.clone()=>u64})
-            }
+                        tokens.append_all(quote_spanned! {span.clone()=>u64})
+                    }
             ast::ProtocolVarType::UnsignedSize(span) => {
-                tokens.append_all(quote_spanned! {span.clone()=>usize})
-            }
+                        tokens.append_all(quote_spanned! {span.clone()=>usize})
+                    }
             ast::ProtocolVarType::Unknown(ident) => {
-                let error_msg = format!("Unknown Type '{}'", ident.to_string());
-                tokens.append_all(quote_spanned! {ident.span()=>compile_error!(#error_msg)})
-            }
+                        let error_msg = format!("Unknown Type '{}'", ident.to_string());
+                        tokens.append_all(quote_spanned! {ident.span()=>compile_error!(#error_msg)})
+                    }
             ast::ProtocolVarType::UserDefined { span, to } => {
-                let type_ident = to.var_ident();
-                tokens.append_all(quote_spanned! {span.clone()=>#type_ident})
-            }
+                        let type_ident = to.var_ident();
+                        tokens.append_all(quote_spanned! {span.clone()=>#type_ident})
+                    }
             ast::ProtocolVarType::Str(span) => {
-                tokens.append_all(quote_spanned! {span.clone()=>str})
-            }
+                        tokens.append_all(quote_spanned! {span.clone()=>str})
+                    }
             ast::ProtocolVarType::RefTo { span, is_mut, to } if *is_mut => {
-                tokens.append_all(quote_spanned! {span.clone()=>&mut #to})
-            }
+                        tokens.append_all(quote_spanned! {span.clone()=>&mut #to})
+                    }
             ast::ProtocolVarType::RefTo { span, to, .. } => {
-                tokens.append_all(quote_spanned! {span.clone()=>&#to})
-            }
+                        tokens.append_all(quote_spanned! {span.clone()=>&#to})
+                    }
             ast::ProtocolVarType::PtrTo { span, is_mut, to } if *is_mut => {
-                tokens.append_all(quote_spanned! {span.clone()=>*mut #to})
-            }
+                        tokens.append_all(quote_spanned! {span.clone()=>*mut #to})
+                    }
             ast::ProtocolVarType::PtrTo { span, to, .. } => {
-                tokens.append_all(quote_spanned! {span.clone()=>*const #to})
-            }
+                        tokens.append_all(quote_spanned! {span.clone()=>*const #to})
+                    }
             ast::ProtocolVarType::Array { span, to, len } => {
-                if let Some(len) = len {
-                    let array_inner = quote!{ #to; #len };
-                    tokens.append_all(quote_spanned! {span.clone()=>[#array_inner]});
-                } else {
-                    tokens.append_all(quote! {[#to]});
-                }
+                        if let Some(len) = len {
+                            let array_inner = quote!{ #to; #len };
+                            tokens.append_all(quote_spanned! {span.clone()=>[#array_inner]});
+                        } else {
+                            tokens.append_all(quote! {[#to]});
+                        }
+                    },
+            ast::ProtocolVarType::IpcString(span) => {
+                tokens.append_all(quote_spanned! {span.clone()=> ::portal::ipc::IpcString });
+            },
+            ast::ProtocolVarType::IpcVec { span, to } => {
+                tokens.append_all(quote_spanned! {span.clone()=> ::portal::ipc::IpcVec});
+                tokens.append_all(quote! {<#to>});
             },
         }
     }
@@ -504,7 +527,8 @@ impl<'a> ToTokens for LifetimedProtocolVarType<'a> {
     }
 }
 
-impl<'a> ToTokens for IntoPortalImpl<'a> {
+#[cfg(feature = "syscall-client")]
+impl<'a> ToTokens for IntoSyscallPortalImpl<'a> {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         let ident = self.portal.get_quantum_os_impl_ident();
         let trait_ident = &self.portal.trait_ident;
@@ -591,8 +615,8 @@ impl<'a> ToTokens for IntoPortalImpl<'a> {
             impl #ident {
                 #[inline]
                 unsafe fn call_syscall<'syscall>(arguments: #input_enum<'syscall>) -> #output_enum {
-                    let mut output = unsafe { <#output_enum as ::portal::SyscallOutput>::before_call() }; 
-                    ::portal::syscall::call_syscall(&arguments, &mut output);
+                    let mut output = unsafe { <#output_enum as ::portal::syscall::SyscallOutput>::before_call() }; 
+                    ::portal::syscall::client::call_syscall(&arguments, &mut output);
 
                     output
                 }
@@ -601,7 +625,8 @@ impl<'a> ToTokens for IntoPortalImpl<'a> {
     }
 }
 
-impl<'a> ToTokens for GlobalFunctionImpl<'a> {
+#[cfg(any(feature = "syscall-client", feature = "syscall-server"))]
+impl<'a> ToTokens for GlobalSyscallFunctionImpl<'a> {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         if !self.portal.args.as_ref().is_some_and(|arg| arg.is_global) { return }
         let into_impl = self.portal.get_quantum_os_impl_ident();
@@ -634,7 +659,8 @@ impl<'a> ToTokens for GlobalFunctionImpl<'a> {
     }
 }
 
-impl<'a> ToTokens for OutPortalImpl<'a> {
+#[cfg(feature = "syscall-server")]
+impl<'a> ToTokens for OutSyscallPortalImpl<'a> {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         let output_ident = self.portal.get_quantum_os_out_ident();
         let trait_ident = &self.portal.trait_ident;
@@ -685,11 +711,11 @@ impl<'a> ToTokens for OutPortalImpl<'a> {
                     let syscall_packed_id = arg3;
                     
                     if !<Self as #output_ident>::verify_user_ptr(syscall_input_ptr) || !<Self as #output_ident>::verify_user_ptr(syscall_output_ptr) {
-                        return portal::SYSCALL_BAD_RESP;
+                        return portal::syscall::SYSCALL_BAD_RESP;
                     }
 
                     unsafe {
-                        ::portal::syscall_recv::adapt_syscall(kind, syscall_input_ptr, syscall_output_ptr, syscall_packed_len, syscall_packed_id, |input| {
+                        ::portal::syscall::server::adapt_syscall(kind, syscall_input_ptr, syscall_output_ptr, syscall_packed_len, syscall_packed_id, |input| {
                             match input {
                                 #(#endpoints)*
                                 _ => unreachable!("Should never get here?"),

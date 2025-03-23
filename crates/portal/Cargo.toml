@@ -12,7 +12,7 @@ libsys = { workspace = true, optional = true }
 lldebug = { workspace = true }
 
 [features]
-default = ["syscall-client", "ipc-client"]
+default = []
 syscall-client = ["dep:libsys", "portal-macro/syscall-client"]
 syscall-server = ["portal-macro/syscall-server"]
 ipc-client = ["portal-macro/ipc-client"]

@@ -25,6 +25,9 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 extern crate alloc;
 
+pub type IpcString = alloc::string::String;
+pub type IpcVec<T> = alloc::vec::Vec<T>;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum IpcError {
     InvalidMagic { given: u8, expected: u8 },
@@ -33,18 +36,40 @@ pub enum IpcError {
     InvalidTypeConvert,
 }
 
+/// Ipc Sender (TX)
+///
+/// This trait supports writting bytes over IPC.
 pub trait Sender {
     fn send(&mut self, bytes: &[u8]) -> Result<(), IpcError>;
 }
 
+/// Ipc Receiver (RX)
+///
+/// This trait supports reading bytes from IPC.
 pub trait Receiver {
     fn recv(&mut self, bytes: &mut [u8]) -> Result<(), IpcError>;
 }
 
+/// Conversion from/to IPC Sockets
+///
+/// This trait allows a type to be converted into and from the IPC
+/// portal. It is required that all types transfered over IPC implement
+/// this trait.
+///
+/// # Note
+/// Users of a portal should **not** implement this themselves. Always use
+/// the portal macro.
 pub trait PortalConvert: Sized {
+    /// Serialize this type for transfer
     fn serialize(&self, send: &mut impl Sender) -> Result<usize, IpcError>;
+    /// Deserialize the transfered bytes into `Self`
     fn deserialize(recv: &mut impl Receiver) -> Result<Self, IpcError>;
 }
+
+pub const MESSAGE_SERVER_START: u8 = 0xF0;
+pub const MESSAGE_CLIENT_START: u8 = 0xF8;
+
+pub const MESSAGE_END: u8 = 0xFF;
 
 pub const CONVERT_U8: u8 = 1;
 pub const CONVERT_U16: u8 = 2;

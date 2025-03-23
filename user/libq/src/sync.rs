@@ -29,7 +29,7 @@ use core::{
     ops::{Deref, DerefMut},
     sync::atomic::{AtomicBool, Ordering},
 };
-use quantum_portal::client::yield_now;
+use quantum_portal::sys_client::yield_now;
 
 /// A QuantumOS Mutex with yield relax behavior.
 pub struct Mutex<T: ?Sized> {

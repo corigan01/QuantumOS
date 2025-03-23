@@ -37,6 +37,12 @@ pub fn portal(args: TokenStream, input: TokenStream) -> TokenStream {
     trait_input.args = Some(args);
 
     trait_input.type_explore();
+    if let Err(error_tokens) = trait_input
+        .check_types()
+        .map_err(|err| err.into_compile_error())
+    {
+        return error_tokens.into();
+    }
 
     rust_builder::generate_rust_portal(&trait_input).into()
 }

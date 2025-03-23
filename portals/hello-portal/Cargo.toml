@@ -8,3 +8,8 @@ documentation.workspace = true
 
 [dependencies]
 portal = {workspace = true}
+
+[features]
+default = ["client", "server"]
+client = ["portal/ipc-client"]
+server = ["portal/ipc-server"]

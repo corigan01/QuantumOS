@@ -45,7 +45,7 @@ pub struct PortalMacroArgs {
     pub is_global: bool,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum ProtocolKind {
     Syscall,
     Ipc,
@@ -89,6 +89,11 @@ pub enum ProtocolVarType {
     UserDefined {
         span: Span,
         to: ProtocolDefine,
+    },
+    IpcString(Span),
+    IpcVec {
+        span: Span,
+        to: Box<ProtocolVarType>,
     },
     Str(Span),
     Array {
@@ -252,6 +257,99 @@ impl ProtocolVarType {
         None
     }
 
+    /// Check if this type is allowed for this portal type
+    pub fn check_allowed(&self, portal_type: ProtocolKind) -> Result<(), syn::Error> {
+        match (portal_type, self) {
+            (
+                _,
+                ProtocolVarType::ResultKind {
+                    span: _,
+                    ok_ty,
+                    err_ty,
+                },
+            ) => {
+                ok_ty.check_allowed(portal_type)?;
+                err_ty.check_allowed(portal_type)?;
+                Ok(())
+            }
+            (_, ProtocolVarType::Never(_)) => Ok(()),
+            (_, ProtocolVarType::Unit(_)) => Ok(()),
+            (_, ProtocolVarType::Bool(_)) => Ok(()),
+            (_, ProtocolVarType::Signed8(_)) => Ok(()),
+            (_, ProtocolVarType::Signed16(_)) => Ok(()),
+            (_, ProtocolVarType::Signed32(_)) => Ok(()),
+            (_, ProtocolVarType::Signed64(_)) => Ok(()),
+            (_, ProtocolVarType::Unsigned8(_)) => Ok(()),
+            (_, ProtocolVarType::Unsigned16(_)) => Ok(()),
+            (_, ProtocolVarType::Unsigned32(_)) => Ok(()),
+            (_, ProtocolVarType::Unsigned64(_)) => Ok(()),
+            (_, ProtocolVarType::UnsignedSize(_)) => Ok(()),
+            (_, ProtocolVarType::Unknown(_)) => Ok(()),
+
+            (_, ProtocolVarType::UserDefined { span: _, to }) => match to {
+                ProtocolDefine::DefinedEnum(ref_cell) => {
+                    let enum_inner = ref_cell.borrow();
+                    for enum_varients in &enum_inner.varients {
+                        match &enum_varients.fields {
+                            ProtocolEnumFields::None => (),
+                            ProtocolEnumFields::Unnamed(protocol_var_types) => {
+                                for var in protocol_var_types {
+                                    var.check_allowed(portal_type)?;
+                                }
+                            }
+                            ProtocolEnumFields::Named(hash_map) => {
+                                for var in hash_map.values() {
+                                    var.check_allowed(portal_type)?;
+                                }
+                            }
+                        }
+                    }
+
+                    Ok(())
+                }
+            },
+            (ProtocolKind::Ipc, ProtocolVarType::IpcString(_)) => Ok(()),
+            (ProtocolKind::Ipc, ProtocolVarType::IpcVec { span: _, to }) => {
+                to.check_allowed(portal_type)
+            }
+
+            (ProtocolKind::Syscall, ProtocolVarType::Str(_)) => Ok(()),
+            (
+                ProtocolKind::Syscall,
+                ProtocolVarType::Array {
+                    span: _,
+                    to,
+                    len: _,
+                },
+            ) => to.check_allowed(portal_type),
+            (
+                ProtocolKind::Syscall,
+                ProtocolVarType::RefTo {
+                    span: _,
+                    is_mut: _,
+                    to,
+                },
+            ) => to.check_allowed(portal_type),
+            (
+                ProtocolKind::Syscall,
+                ProtocolVarType::PtrTo {
+                    span: _,
+                    is_mut: _,
+                    to,
+                },
+            ) => to.check_allowed(portal_type),
+
+            (protocol, var) => Err(syn::Error::new(
+                var.span(),
+                format!(
+                    "Cannot use '{}' with {:?} protocol!",
+                    var.span().source_text().as_deref().unwrap_or("??"),
+                    protocol
+                ),
+            )),
+        }
+    }
+
     /// Check if this type is of the same type as some other user type.
     pub fn is_unknown_of(&self, ident: &str) -> bool {
         match self {
@@ -282,6 +380,8 @@ impl ProtocolVarType {
             ProtocolVarType::PtrTo { span, .. } => span.clone(),
             ProtocolVarType::Array { span, .. } => span.clone(),
             ProtocolVarType::Bool(span) => span.clone(),
+            ProtocolVarType::IpcString(span) => span.clone(),
+            ProtocolVarType::IpcVec { span, to: _ } => span.clone(),
         }
     }
 }
@@ -375,6 +475,25 @@ impl PortalMacro {
             .map(|endpoint| endpoint.portal_id.0)
             .max()
             .unwrap_or(0)
+    }
+
+    /// Check all types to ensure this protocol supports them.
+    pub fn check_types(&self) -> Result<(), syn::Error> {
+        let endpoint_type = self
+            .args
+            .as_ref()
+            .map(|args| args.protocol_kind)
+            .unwrap_or(ProtocolKind::Invalid);
+
+        for endpoint in &self.endpoints {
+            for input_arg in &endpoint.input_args {
+                input_arg.ty.check_allowed(endpoint_type)?;
+            }
+
+            endpoint.output_arg.0.check_allowed(endpoint_type)?;
+        }
+
+        Ok(())
     }
 
     /// Let types gather info about where they are used to figure out the best

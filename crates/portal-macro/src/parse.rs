@@ -328,6 +328,33 @@ impl TryFrom<&syn::Type> for ast::ProtocolVarType {
                             ),
                         )),
                     },
+                    "Vec" => match &path.arguments {
+                        syn::PathArguments::AngleBracketed(angle_bracketed_generic_arguments) => {
+                            let mut gen_iter = angle_bracketed_generic_arguments.args.iter();
+                            match (gen_iter.next(), gen_iter.next()) {
+                                (Some(syn::GenericArgument::Type(inner_ty)), None) => {
+                                    Ok(Self::IpcVec {
+                                        span: path.span(),
+                                        to: Box::new(Self::try_from(inner_ty)?),
+                                    })
+                                }
+                                _ => Err(syn::Error::new(
+                                    type_path.span(),
+                                    format!(
+                                        "Vec '{}' only supports 1 generic argument",
+                                        type_path.span().source_text().as_deref().unwrap_or("??")
+                                    ),
+                                )),
+                            }
+                        }
+                        _ => Err(syn::Error::new(
+                            type_path.span(),
+                            format!(
+                                "Type '{}' has invalid syntax",
+                                type_path.span().source_text().as_deref().unwrap_or("??")
+                            ),
+                        )),
+                    },
                     "bool" => Ok(Self::Bool(path.span())),
                     "i8" => Ok(Self::Signed8(path.span())),
                     "i16" => Ok(Self::Signed16(path.span())),
@@ -339,6 +366,7 @@ impl TryFrom<&syn::Type> for ast::ProtocolVarType {
                     "u64" => Ok(Self::Unsigned64(path.span())),
                     "usize" => Ok(Self::UnsignedSize(path.span())),
                     "str" => Ok(Self::Str(path.span())),
+                    "String" => Ok(Self::IpcString(path.span())),
                     user_defined => Ok(Self::Unknown(Ident::new(user_defined, type_path.span()))),
                 }
             }

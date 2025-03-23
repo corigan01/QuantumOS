@@ -38,4 +38,7 @@ pub trait HelloPortal {
 
     #[event = 3]
     fn something_hello() {}
+
+    #[event = 4]
+    fn i_am_a_test(test: String) {}
 }

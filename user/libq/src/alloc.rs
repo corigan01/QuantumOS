@@ -32,7 +32,7 @@ use core::{
 };
 use quantum_portal::{
     MapMemoryError, MemoryLocation, MemoryProtections,
-    client::{map_memory, unmap_memory},
+    sys_client::{map_memory, unmap_memory},
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
