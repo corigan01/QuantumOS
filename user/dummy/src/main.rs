@@ -29,6 +29,47 @@ tiny_std!();
 
 use libq::{RecvHandleError, close, connect, dbugln, recv, send, tiny_std, yield_now};
 
+trait HelloClient {
+    fn get_hello() -> u32;
+}
+
+trait HelloServer {
+    fn parse_request(&mut self) -> Result<HelloRequest, ()>;
+}
+
+struct IpcResponder<T> {
+    data: T,
+}
+
+enum HelloRequest {
+    GetHello { reponse: IpcResponder<u32> },
+}
+
+struct Dingus(u64);
+
+impl HelloServer for Dingus {
+    fn parse_request(&mut self) -> Result<HelloRequest, ()> {
+        todo!()
+    }
+}
+
+impl<T> IpcResponder<T> {
+    fn respond_with(self, data: T) -> Result<(), ()> {
+        todo!()
+    }
+}
+
+fn test() {
+    let mut dingus = Dingus(123);
+
+    let result = dingus.parse_request().unwrap();
+    match result {
+        HelloRequest::GetHello { reponse } => {
+            reponse.respond_with(123).unwrap();
+        }
+    }
+}
+
 fn main() {
     dbugln!("Starting Dummy");
 

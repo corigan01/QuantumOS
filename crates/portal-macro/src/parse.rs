@@ -51,6 +51,7 @@ mod portal_keywords {
     syn::custom_keyword!(global);
     syn::custom_keyword!(protocol);
     syn::custom_keyword!(event);
+    syn::custom_keyword!(handle);
 }
 
 impl Parse for ast::PortalMacroArgs {
@@ -149,7 +150,7 @@ impl Parse for ast::PortalMacro {
 }
 
 fn convert_attribute_to_id_kind(
-    attribute: &Attribute,
+    attribute: Attribute,
 ) -> syn::Result<(usize, Span, ast::ProtocolEndpointKind)> {
     if attribute.path().is_ident("event") {
         let name_value = attribute.meta.require_name_value()?;
@@ -164,6 +165,21 @@ fn convert_attribute_to_id_kind(
             _ => Err(syn::Error::new(
                 attribute.span(),
                 "Only integer literals are supported 'event' IDs",
+            )),
+        }
+    } else if attribute.path().is_ident("handle") {
+        let name_value = attribute.meta.require_name_value()?;
+        match &name_value.value {
+            syn::Expr::Lit(syn::ExprLit {
+                lit: syn::Lit::Int(expr_lit),
+                ..
+            }) => {
+                let id = expr_lit.base10_parse()?;
+                Ok((id, expr_lit.span(), ast::ProtocolEndpointKind::Handle))
+            }
+            _ => Err(syn::Error::new(
+                attribute.span(),
+                "Only integer literals are supported 'handle' IDs",
             )),
         }
     } else {
@@ -186,27 +202,21 @@ impl Parse for ast::ProtocolEndpoint {
             semi_token: _,
         } = input.parse()?;
 
-        let (doc_attributes, remaining): (Vec<_>, Vec<_>) = attrs
+        let (doc_attributes, mut remaining): (Vec<_>, Vec<_>) = attrs
             .into_iter()
             .partition(|attr| attr.path().is_ident("doc"));
 
         let (id, span, kind) = remaining
-            .iter()
+            .pop()
             .map(convert_attribute_to_id_kind)
-            .collect::<syn::Result<Vec<_>>>()?
-            .into_iter()
-            .enumerate()
-            // .inspect(|(index, (_, span, _))| {
-            //     if *index > 0 {
-            //         emit_error!(
-            //             span,
-            //             "Cannot define multiple protocol specifiers for a single endpoint"
-            //         )
-            //     }
-            // })
-            .map(|(_, a)| a)
-            .last()
-            .ok_or(syn::Error::new(input.span(), "Must define endpoint kind"))?;
+            .ok_or(syn::Error::new(input.span(), "Must define endpoint kind"))??;
+
+        if !remaining.is_empty() {
+            return Err(syn::Error::new(
+                span,
+                "Only one endpoint specifier is allowed",
+            ));
+        }
 
         let input_args = sig
             .inputs
@@ -248,6 +258,7 @@ impl Parse for ast::ProtocolEndpoint {
             output_arg,
             body,
             is_unsafe: sig.unsafety.is_some(),
+            is_async: sig.asyncness.is_some(),
         })
     }
 }

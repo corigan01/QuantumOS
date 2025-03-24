@@ -27,6 +27,7 @@ extern crate alloc;
 
 pub type IpcString = alloc::string::String;
 pub type IpcVec<T> = alloc::vec::Vec<T>;
+pub type IpcResult<T> = ::core::result::Result<T, IpcError>;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum IpcError {

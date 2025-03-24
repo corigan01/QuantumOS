@@ -23,10 +23,15 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use proc_macro2::Span;
+use proc_macro2::{Span, TokenStream};
 use quote::format_ident;
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 use syn::{Attribute, Ident, Visibility};
+
+pub trait ClientServerTokens {
+    fn client_tokens(&self) -> TokenStream;
+    fn server_tokens(&self) -> TokenStream;
+}
 
 #[derive(Debug)]
 #[allow(unused)]
@@ -45,7 +50,7 @@ pub struct PortalMacroArgs {
     pub is_global: bool,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ProtocolKind {
     Syscall,
     Ipc,
@@ -62,6 +67,7 @@ pub struct ProtocolEndpoint {
     pub input_args: Vec<ProtocolInputArg>,
     pub output_arg: ProtocolOutputArg,
     pub is_unsafe: bool,
+    pub is_async: bool,
     pub body: Vec<ProtocolDefine>,
 }
 
@@ -124,9 +130,10 @@ pub struct ProtocolInputArg {
 #[allow(unused)]
 pub struct ProtocolOutputArg(pub ProtocolVarType);
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ProtocolEndpointKind {
     Event,
+    Handle,
 }
 
 #[derive(Debug, Clone)]
@@ -468,6 +475,12 @@ impl ProtocolEnumFields {
 }
 
 impl PortalMacro {
+    pub fn is_syscall_kind(&self) -> bool {
+        self.args
+            .as_ref()
+            .is_some_and(|args| args.protocol_kind == ProtocolKind::Syscall)
+    }
+
     /// Get all the not unique portal ids
     pub fn all_non_unique_portal_ids(&self) -> impl Iterator<Item = (usize, Span, Span)> {
         // FIXME: Maybe there is a less slow way of doing this?
@@ -623,24 +636,38 @@ impl PortalMacro {
     }
 
     pub fn get_input_enum_ident(&self) -> Ident {
-        Ident::new(
-            &format!("{}InputArgs", self.trait_ident),
-            self.trait_ident.span(),
-        )
+        if matches!(self.args.as_ref().unwrap().protocol_kind, ProtocolKind::Ipc) {
+            Ident::new(
+                &format!("{}ClientRequest", self.trait_ident),
+                self.trait_ident.span(),
+            )
+        } else {
+            Ident::new(
+                &format!("{}InputArgs", self.trait_ident),
+                self.trait_ident.span(),
+            )
+        }
     }
 
     pub fn get_output_enum_ident(&self) -> Ident {
-        Ident::new(
-            &format!("{}OutputArgs", self.trait_ident),
-            self.trait_ident.span(),
-        )
+        if matches!(self.args.as_ref().unwrap().protocol_kind, ProtocolKind::Ipc) {
+            Ident::new(
+                &format!("{}ServerRequest", self.trait_ident),
+                self.trait_ident.span(),
+            )
+        } else {
+            Ident::new(
+                &format!("{}OutputArgs", self.trait_ident),
+                self.trait_ident.span(),
+            )
+        }
     }
 
-    pub fn get_quantum_os_impl_ident(&self) -> Ident {
+    pub fn trait_client_name(&self) -> Ident {
         format_ident!("{}Client", self.trait_ident)
     }
 
-    pub fn get_quantum_os_out_ident(&self) -> Ident {
+    pub fn trait_server_name(&self) -> Ident {
         format_ident!("{}Server", self.trait_ident)
     }
 }

@@ -65,10 +65,6 @@ pub trait QuantumPortal {
         }
     }
 
-    /// Unmap a memory region allocated with [`map_memory`]
-    #[event = 10]
-    fn unmap_memory(ptr: *mut u8) {}
-
     #[event = 2]
     fn get_pid() -> usize;
 
@@ -137,6 +133,10 @@ pub trait QuantumPortal {
     /// Disconnect the handle if one exists
     #[event = 9]
     fn close(handle: u64) {}
+
+    /// Unmap a memory region allocated with [`map_memory`]
+    #[event = 10]
+    fn unmap_memory(ptr: *mut u8) {}
 
     #[event = 69]
     fn debug_msg(msg: &str) -> Result<(), DebugMsgError> {

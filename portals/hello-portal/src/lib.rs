@@ -37,7 +37,7 @@ pub trait HelloPortal {
     fn get_hello() -> u32 {}
 
     #[event = 3]
-    fn something_hello() {}
+    async fn something_hello() {}
 
     #[event = 4]
     fn i_am_a_test(test: String) {}
