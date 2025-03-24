@@ -232,23 +232,11 @@ impl ToTokens for ast::PortalMacro {
 #[cfg(feature = "ipc-client")]
 impl<'a> ToTokens for PortalServerRequestEnum<'a> {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
-        let client_enum = self.portal.get_output_enum_ident();
-        let client_requests = self
-            .portal
-            .endpoints
-            .iter()
-            .filter(|endpoint| endpoint.kind == ast::ProtocolEndpointKind::Event)
-            .map(|event| {
-                let name = event.get_enum_ident();
-
-                quote! {
-                    #name
-                }
-            });
+        let server_enum = self.portal.get_output_enum_ident();
 
         tokens.append_all(quote! {
-            pub enum #client_enum {
-                #(#client_requests),*
+            pub enum #server_enum {
+
             }
         });
     }
@@ -257,11 +245,38 @@ impl<'a> ToTokens for PortalServerRequestEnum<'a> {
 #[cfg(feature = "ipc-server")]
 impl<'a> ToTokens for PortalClientRequestEnum<'a> {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
-        let server_enum = self.portal.get_input_enum_ident();
+        let client_enum = self.portal.get_input_enum_ident();
+        let client_requests = self
+            .portal
+            .endpoints
+            .iter()
+            .filter(|endpoint| endpoint.kind == ast::ProtocolEndpointKind::Event)
+            .map(|event| {
+                let name = event.get_enum_ident();
+
+                let type_body = if !event.is_async {
+                    let output_type = &event.output_arg.0;
+
+                    quote! {
+                        {
+                            sender: ::portal::ipc::IpcResponder<'sender, S, #output_type>
+                        }
+                    }
+                } else {
+                    quote! {}
+                };
+
+                quote! {
+                    #name #type_body
+                }
+            });
 
         tokens.append_all(quote! {
-            pub enum #server_enum {
-
+            #[non_exhaustive]
+            pub enum #client_enum<'sender, S: ::portal::ipc::Sender> {
+                #[doc(hidden)]
+                _Unused(::core::marker::PhantomData<&'sender S>),
+                #(#client_requests),*
             }
         });
     }
@@ -313,10 +328,10 @@ impl<'a> ToTokens for PortalTrait<'a> {
             let client_enum = self.portal.get_input_enum_ident();
 
             tokens.append_all(quote! {
-                pub trait #server_trait : ::portal::ipc::Receiver + ::portal::ipc::Sender  {
+                pub trait #server_trait : ::portal::ipc::Receiver + ::portal::ipc::Sender + Sized  {
                     #(#endpoints)*
 
-                    fn incoming(&mut self) -> ::portal::ipc::IpcResult<#client_enum>;
+                    fn incoming(&mut self) -> ::portal::ipc::IpcResult<#client_enum<Self>>;
                 }
             });
         }

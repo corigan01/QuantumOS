@@ -23,18 +23,25 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use core::marker::PhantomData;
+
+use alloc::{collections::VecDeque, vec::Vec};
+
 extern crate alloc;
 
 pub type IpcString = alloc::string::String;
-pub type IpcVec<T> = alloc::vec::Vec<T>;
+pub type IpcVec<T> = Vec<T>;
 pub type IpcResult<T> = ::core::result::Result<T, IpcError>;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum IpcError {
     InvalidMagic { given: u8, expected: u8 },
     BufferInvalidSize,
     Utf8ConvertError,
     InvalidTypeConvert,
+    NotReady,
+    InvalidMessage(Vec<u8>),
+    InvalidHash { given: u64, expected: u64 },
 }
 
 /// Ipc Sender (TX)
@@ -49,6 +56,27 @@ pub trait Sender {
 /// This trait supports reading bytes from IPC.
 pub trait Receiver {
     fn recv(&mut self, bytes: &mut [u8]) -> Result<(), IpcError>;
+}
+
+/// A typed sender for responding to IPC Messages
+pub struct IpcResponder<'a, S: Sender, T: PortalConvert> {
+    sender: &'a mut S,
+    ty: PhantomData<T>,
+}
+
+impl<'a, S: Sender, T: PortalConvert> IpcResponder<'a, S, T> {
+    /// Construct a new IpcResponder for a given type
+    pub const fn new(sender: &'a mut S) -> Self {
+        Self {
+            sender,
+            ty: PhantomData,
+        }
+    }
+
+    /// Respond with a give value
+    pub fn respond_with(self, value: T) -> Result<usize, IpcError> {
+        value.serialize(self.sender)
+    }
 }
 
 /// Conversion from/to IPC Sockets
@@ -67,8 +95,130 @@ pub trait PortalConvert: Sized {
     fn deserialize(recv: &mut impl Receiver) -> Result<Self, IpcError>;
 }
 
-pub const MESSAGE_SERVER_START: u8 = 0xF0;
-pub const MESSAGE_CLIENT_START: u8 = 0xF8;
+/// A message queue cache for out of order messages during blocking requests
+pub struct MessageCache {
+    queue: VecDeque<Vec<u8>>,
+}
+
+impl MessageCache {
+    /// Create a new empty cache
+    pub const fn new() -> Self {
+        Self {
+            queue: VecDeque::new(),
+        }
+    }
+
+    /// Put this message onto the back of the queue
+    pub fn queue_message(&mut self, message: &[u8]) {
+        self.queue.push_back(message.into());
+    }
+
+    /// Put this message into the back of the queue from a vec
+    pub fn queue_vec(&mut self, message: Vec<u8>) {
+        self.queue.push_back(message);
+    }
+
+    /// Get a mut ref to the last element in the array
+    pub fn last_message_mut<'a>(&'a mut self) -> Option<&'a mut Vec<u8>> {
+        self.queue.back_mut()
+    }
+
+    /// Get the next message in the queue
+    pub fn next_message(&mut self) -> Option<Vec<u8>> {
+        self.queue.pop_front()
+    }
+
+    /// Peek the next message in the queue
+    pub fn peek_next<'a>(&'a self) -> Option<&'a Vec<u8>> {
+        self.queue.front()
+    }
+}
+
+/// This is the actual impl that will send data over the IPC socket
+pub trait TxRxGlue {
+    /// Get the MessageCache for the RX buffer
+    fn rx_cache<'a>(&mut self) -> &'a mut MessageCache;
+
+    /// Get the MessageCache for the TX buffer
+    fn tx_cache<'a>(&mut self) -> &'a mut MessageCache;
+
+    /// Flush the TX buffer over the IPC socket
+    fn flush_tx(&mut self) -> Result<(), IpcError>;
+
+    /// Read data into the RX buffer
+    fn peek_rx_buffer<'a>(&'a self) -> Result<&'a [u8], IpcError>;
+    fn take_rx_buffer(&mut self) -> Vec<u8>;
+}
+
+pub trait IpcDevice: TxRxGlue {
+    const ENDPOINT_HASH: u64;
+    const IS_SERVER: bool;
+
+    fn message_send<T: PortalConvert>(
+        &mut self,
+        is_reponse: bool,
+        target_id: u64,
+        data: &T,
+    ) -> Result<usize, IpcError> {
+        let send_byte = match () {
+            _ if !is_reponse && Self::IS_SERVER => MESSAGE_SERVER_REQ_START,
+            _ if is_reponse && Self::IS_SERVER => MESSAGE_SERVER_RSP_START,
+            _ if !is_reponse => MESSAGE_CLIENT_REQ_START,
+            _ => MESSAGE_CLIENT_RSP_START,
+        };
+
+        let mut message = Vec::with_capacity(128);
+
+        // 1. Start Byte
+        message.push(send_byte);
+
+        // 2. Endpoint ID for this IPC kind
+        Self::ENDPOINT_HASH.serialize(&mut message)?;
+
+        // 3. ID for which the message is to be recv
+        target_id.serialize(&mut message)?;
+
+        // 4. Serialize the message
+        data.serialize(&mut message)?;
+
+        // 5. End the transmission
+        message.push(MESSAGE_END);
+
+        // Send the message
+        let message_len = message.len();
+        self.tx_cache().queue_vec(message);
+        self.flush_tx()?;
+
+        Ok(message_len)
+    }
+}
+
+impl Sender for Vec<u8> {
+    fn send(&mut self, bytes: &[u8]) -> Result<(), IpcError> {
+        self.extend_from_slice(bytes);
+        Ok(())
+    }
+}
+
+impl Receiver for Option<&[u8]> {
+    fn recv(&mut self, bytes: &mut [u8]) -> Result<(), IpcError> {
+        let Some(inner) = self else {
+            return Err(IpcError::BufferInvalidSize);
+        };
+
+        if inner.len() < bytes.len() {
+            return Err(IpcError::BufferInvalidSize);
+        }
+
+        bytes.copy_from_slice(&inner[..bytes.len()]);
+        Ok(())
+    }
+}
+
+pub const MESSAGE_SERVER_REQ_START: u8 = 0xF0;
+pub const MESSAGE_SERVER_RSP_START: u8 = 0xF1;
+pub const MESSAGE_CLIENT_REQ_START: u8 = 0xF8;
+pub const MESSAGE_CLIENT_RSP_START: u8 = 0xF9;
 
 pub const MESSAGE_END: u8 = 0xFF;
 
@@ -85,6 +235,32 @@ pub const CONVERT_I64: u8 = 8;
 pub const CONVERT_STR: u8 = 9;
 pub const CONVERT_VEC: u8 = 10;
 pub const CONVERT_TAG: u8 = 11;
+pub const CONVERT_UNIT: u8 = 12;
+
+impl PortalConvert for () {
+    fn serialize(&self, send: &mut impl Sender) -> Result<usize, IpcError> {
+        // Unit needs to send data because it is often used as 'non-data' signals.
+        //
+        // For example, if you are making a blocking request that doesn't return anything
+        // the receiver still needs to be informed when the request finished.
+        send.send(&[CONVERT_UNIT])?;
+        Ok(1)
+    }
+
+    fn deserialize(recv: &mut impl Receiver) -> Result<Self, IpcError> {
+        let mut data_buffer = [0];
+        recv.recv(&mut data_buffer)?;
+
+        if data_buffer[0] != CONVERT_UNIT {
+            return Err(IpcError::InvalidMagic {
+                given: data_buffer[0],
+                expected: CONVERT_UNIT,
+            });
+        }
+
+        Ok(())
+    }
+}
 
 impl PortalConvert for u8 {
     fn serialize(&self, send: &mut impl Sender) -> Result<usize, IpcError> {
@@ -306,16 +482,6 @@ impl PortalConvert for isize {
     }
 }
 
-impl PortalConvert for () {
-    fn serialize(&self, _send: &mut impl Sender) -> Result<usize, IpcError> {
-        Ok(0)
-    }
-
-    fn deserialize(_recv: &mut impl Receiver) -> Result<Self, IpcError> {
-        Ok(())
-    }
-}
-
 impl<T> PortalConvert for Option<T>
 where
     T: PortalConvert,
@@ -442,7 +608,7 @@ impl PortalConvert for bool {
     }
 }
 
-impl<T> PortalConvert for alloc::vec::Vec<T>
+impl<T> PortalConvert for Vec<T>
 where
     T: PortalConvert,
 {
@@ -479,7 +645,7 @@ where
                 .map_err(|_| IpcError::BufferInvalidSize)?,
         );
 
-        let mut vec = alloc::vec::Vec::with_capacity(vec_len);
+        let mut vec = Vec::with_capacity(vec_len);
         for _ in 0..vec_len {
             vec.push(T::deserialize(recv)?);
         }
@@ -494,13 +660,6 @@ mod test {
     use alloc::string::String;
     use alloc::vec;
     use alloc::vec::Vec;
-
-    impl Sender for Vec<u8> {
-        fn send(&mut self, bytes: &[u8]) -> Result<(), IpcError> {
-            self.extend_from_slice(bytes);
-            Ok(())
-        }
-    }
 
     impl Receiver for Vec<u8> {
         fn recv(&mut self, bytes: &mut [u8]) -> Result<(), IpcError> {

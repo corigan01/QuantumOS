@@ -27,33 +27,41 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #![no_main]
 tiny_std!();
 
+use core::marker::PhantomData;
+
 use libq::{RecvHandleError, close, connect, dbugln, recv, send, tiny_std, yield_now};
 
 trait HelloClient {
     fn get_hello() -> u32;
 }
 
-trait HelloServer {
-    fn parse_request(&mut self) -> Result<HelloRequest, ()>;
+trait HelloServer: Sized {
+    fn parse_request(&mut self) -> Result<HelloRequest<Self>, ()>;
 }
 
-struct IpcResponder<T> {
-    data: T,
+struct IpcResponder<'a, C: HelloServer, T> {
+    serv: &'a C,
+    ty: PhantomData<T>,
 }
 
-enum HelloRequest {
-    GetHello { reponse: IpcResponder<u32> },
+enum HelloRequest<'a, C: HelloServer> {
+    GetHello { reponse: IpcResponder<'a, C, u32> },
 }
 
 struct Dingus(u64);
 
 impl HelloServer for Dingus {
-    fn parse_request(&mut self) -> Result<HelloRequest, ()> {
-        todo!()
+    fn parse_request<'a>(&'a mut self) -> Result<HelloRequest<'a, Self>, ()> {
+        Ok(HelloRequest::GetHello {
+            reponse: IpcResponder {
+                serv: self,
+                ty: PhantomData,
+            },
+        })
     }
 }
 
-impl<T> IpcResponder<T> {
+impl<'a, C: HelloServer, T> IpcResponder<'a, C, T> {
     fn respond_with(self, data: T) -> Result<(), ()> {
         todo!()
     }
