@@ -27,56 +27,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #![no_main]
 tiny_std!();
 
-use core::marker::PhantomData;
-
 use libq::{RecvHandleError, close, connect, dbugln, recv, send, tiny_std, yield_now};
-
-trait HelloClient {
-    fn get_hello() -> u32;
-}
-
-trait HelloServer: Sized {
-    fn parse_request(&mut self) -> Result<HelloRequest<Self>, ()>;
-}
-
-struct IpcResponder<'a, C: HelloServer, T> {
-    serv: &'a C,
-    ty: PhantomData<T>,
-}
-
-enum HelloRequest<'a, C: HelloServer> {
-    GetHello { reponse: IpcResponder<'a, C, u32> },
-}
-
-struct Dingus(u64);
-
-impl HelloServer for Dingus {
-    fn parse_request<'a>(&'a mut self) -> Result<HelloRequest<'a, Self>, ()> {
-        Ok(HelloRequest::GetHello {
-            reponse: IpcResponder {
-                serv: self,
-                ty: PhantomData,
-            },
-        })
-    }
-}
-
-impl<'a, C: HelloServer, T> IpcResponder<'a, C, T> {
-    fn respond_with(self, data: T) -> Result<(), ()> {
-        todo!()
-    }
-}
-
-fn test() {
-    let mut dingus = Dingus(123);
-
-    let result = dingus.parse_request().unwrap();
-    match result {
-        HelloRequest::GetHello { reponse } => {
-            reponse.respond_with(123).unwrap();
-        }
-    }
-}
 
 fn main() {
     dbugln!("Starting Dummy");

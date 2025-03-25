@@ -36,28 +36,21 @@ impl Sender for Vec<u8> {
 }
 
 impl Receiver for Option<&[u8]> {
-    fn recv(&mut self, bytes: &mut [u8]) -> Result<(), IpcError> {
+    fn recv(&mut self, bytes: &mut [u8]) -> super::IpcResult<usize> {
         let Some(inner) = self else {
             return Err(IpcError::BufferInvalidSize);
         };
 
-        if inner.len() < bytes.len() {
-            return Err(IpcError::BufferInvalidSize);
-        }
-
-        bytes.copy_from_slice(&inner[..bytes.len()]);
-        Ok(())
+        inner.recv(bytes)
     }
 }
 
 impl Receiver for &[u8] {
-    fn recv(&mut self, bytes: &mut [u8]) -> Result<(), IpcError> {
-        if self.len() < bytes.len() {
-            return Err(IpcError::BufferInvalidSize);
-        }
+    fn recv(&mut self, bytes: &mut [u8]) -> super::IpcResult<usize> {
+        let min_len = bytes.len().min(self.len());
+        bytes[..min_len].copy_from_slice(&self[..min_len]);
 
-        bytes.copy_from_slice(&self[..bytes.len()]);
-        Ok(())
+        Ok(min_len)
     }
 }
 
@@ -95,7 +88,7 @@ impl PortalConvert for () {
 
     fn deserialize(recv: &mut impl Receiver) -> Result<Self, IpcError> {
         let mut data_buffer = [0];
-        recv.recv(&mut data_buffer)?;
+        recv.recv_exact(&mut data_buffer)?;
 
         if data_buffer[0] != CONVERT_UNIT {
             return Err(IpcError::InvalidMagic {
@@ -117,7 +110,7 @@ impl PortalConvert for u8 {
 
     fn deserialize(recv: &mut impl Receiver) -> Result<Self, IpcError> {
         let mut recv_array = [0, 0];
-        recv.recv(&mut recv_array)?;
+        recv.recv_exact(&mut recv_array)?;
 
         if recv_array[0] != CONVERT_U8 {
             return Err(IpcError::InvalidMagic {
@@ -139,7 +132,7 @@ impl PortalConvert for u16 {
 
     fn deserialize(recv: &mut impl Receiver) -> Result<Self, IpcError> {
         let mut recv_array = [0, 0, 0];
-        recv.recv(&mut recv_array)?;
+        recv.recv_exact(&mut recv_array)?;
 
         if recv_array[0] != CONVERT_U16 {
             return Err(IpcError::InvalidMagic {
@@ -165,7 +158,7 @@ impl PortalConvert for u32 {
 
     fn deserialize(recv: &mut impl Receiver) -> Result<Self, IpcError> {
         let mut recv_array = [0, 0, 0, 0, 0];
-        recv.recv(&mut recv_array)?;
+        recv.recv_exact(&mut recv_array)?;
 
         if recv_array[0] != CONVERT_U32 {
             return Err(IpcError::InvalidMagic {
@@ -191,7 +184,7 @@ impl PortalConvert for u64 {
 
     fn deserialize(recv: &mut impl Receiver) -> Result<Self, IpcError> {
         let mut recv_array = [0, 0, 0, 0, 0, 0, 0, 0, 0];
-        recv.recv(&mut recv_array)?;
+        recv.recv_exact(&mut recv_array)?;
 
         if recv_array[0] != CONVERT_U64 {
             return Err(IpcError::InvalidMagic {
@@ -217,7 +210,7 @@ impl PortalConvert for i8 {
 
     fn deserialize(recv: &mut impl Receiver) -> Result<Self, IpcError> {
         let mut recv_array = [0, 0];
-        recv.recv(&mut recv_array)?;
+        recv.recv_exact(&mut recv_array)?;
 
         if recv_array[0] != CONVERT_I8 {
             return Err(IpcError::InvalidMagic {
@@ -239,7 +232,7 @@ impl PortalConvert for i16 {
 
     fn deserialize(recv: &mut impl Receiver) -> Result<Self, IpcError> {
         let mut recv_array = [0, 0, 0];
-        recv.recv(&mut recv_array)?;
+        recv.recv_exact(&mut recv_array)?;
 
         if recv_array[0] != CONVERT_I16 {
             return Err(IpcError::InvalidMagic {
@@ -265,7 +258,7 @@ impl PortalConvert for i32 {
 
     fn deserialize(recv: &mut impl Receiver) -> Result<Self, IpcError> {
         let mut recv_array = [0, 0, 0, 0, 0];
-        recv.recv(&mut recv_array)?;
+        recv.recv_exact(&mut recv_array)?;
 
         if recv_array[0] != CONVERT_I32 {
             return Err(IpcError::InvalidMagic {
@@ -291,7 +284,7 @@ impl PortalConvert for i64 {
 
     fn deserialize(recv: &mut impl Receiver) -> Result<Self, IpcError> {
         let mut recv_array = [0, 0, 0, 0, 0, 0, 0, 0, 0];
-        recv.recv(&mut recv_array)?;
+        recv.recv_exact(&mut recv_array)?;
 
         if recv_array[0] != CONVERT_I64 {
             return Err(IpcError::InvalidMagic {
@@ -347,7 +340,7 @@ where
 
     fn deserialize(recv: &mut impl Receiver) -> Result<Self, IpcError> {
         let mut recv_array = [0, 0];
-        recv.recv(&mut recv_array)?;
+        recv.recv_exact(&mut recv_array)?;
 
         if recv_array[0] != CONVERT_TAG {
             return Err(IpcError::InvalidMagic {
@@ -384,7 +377,7 @@ where
 
     fn deserialize(recv: &mut impl Receiver) -> Result<Self, IpcError> {
         let mut recv_array = [0, 0];
-        recv.recv(&mut recv_array)?;
+        recv.recv_exact(&mut recv_array)?;
 
         if recv_array[0] != CONVERT_TAG {
             return Err(IpcError::InvalidMagic {
@@ -404,7 +397,7 @@ where
 impl PortalConvert for alloc::string::String {
     fn serialize(&self, send: &mut impl Sender) -> Result<usize, IpcError> {
         send.send(&[CONVERT_STR])?;
-        send.send(&self.len().to_ne_bytes())?;
+        send.send(&(self.len() as u64).to_ne_bytes())?;
         send.send(self.as_bytes())?;
 
         Ok(1 + self.len() + (usize::BITS as usize / 8))
@@ -415,7 +408,7 @@ impl PortalConvert for alloc::string::String {
         let mut magic_len = [0, 0, 0, 0, 0, 0, 0, 0, 0];
         #[cfg(target_pointer_width = "32")]
         let mut magic_len = [0, 0, 0, 0, 0];
-        recv.recv(&mut magic_len)?;
+        recv.recv_exact(&mut magic_len)?;
 
         if magic_len[0] != CONVERT_STR {
             return Err(IpcError::InvalidMagic {
@@ -431,7 +424,7 @@ impl PortalConvert for alloc::string::String {
         );
 
         let mut empty_slice = alloc::vec![0; str_len];
-        recv.recv(&mut empty_slice)?;
+        recv.recv_exact(&mut empty_slice)?;
 
         Ok(
             alloc::string::String::from_utf8(empty_slice)
@@ -460,7 +453,7 @@ where
 {
     fn serialize(&self, send: &mut impl Sender) -> Result<usize, IpcError> {
         send.send(&[CONVERT_VEC])?;
-        send.send(&self.len().to_ne_bytes())?;
+        send.send(&(self.len() as u64).to_ne_bytes())?;
 
         let mut bytes = 1 + (usize::BITS as usize / 8);
 
@@ -476,7 +469,7 @@ where
         let mut magic_len = [0, 0, 0, 0, 0, 0, 0, 0, 0];
         #[cfg(target_pointer_width = "32")]
         let mut magic_len = [0, 0, 0, 0, 0];
-        recv.recv(&mut magic_len)?;
+        recv.recv_exact(&mut magic_len)?;
 
         if magic_len[0] != CONVERT_VEC {
             return Err(IpcError::InvalidMagic {
@@ -507,7 +500,7 @@ impl PortalConvert for IpcMessage {
 
         bytes += self.endpoint_hash.serialize(send)?;
         bytes += self.target_id.serialize(send)?;
-        bytes += self.data_len.serialize(send)?;
+        bytes += (self.data.len() as u64).serialize(send)?;
         bytes += self.data.len();
 
         send.send(&self.data)?;
@@ -529,11 +522,15 @@ mod test {
     use alloc::vec::Vec;
 
     impl Receiver for Vec<u8> {
-        fn recv(&mut self, bytes: &mut [u8]) -> Result<(), IpcError> {
+        fn recv_exact(&mut self, bytes: &mut [u8]) -> Result<(), IpcError> {
             for byte in bytes.iter_mut() {
                 *byte = self.remove(0);
             }
             Ok(())
+        }
+
+        fn recv(&mut self, _bytes: &mut [u8]) -> crate::ipc::IpcResult<usize> {
+            todo!()
         }
     }
 

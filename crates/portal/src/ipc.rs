@@ -24,6 +24,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 extern crate alloc;
+use alloc::collections::VecDeque;
 use alloc::vec::Vec;
 use convert::{
     MESSAGE_CLIENT_REQ_START, MESSAGE_CLIENT_RSP_START, MESSAGE_END, MESSAGE_SERVER_REQ_START,
@@ -52,34 +53,48 @@ pub enum IpcError {
 ///
 /// This trait supports writting bytes over IPC.
 pub trait Sender {
-    fn send(&mut self, bytes: &[u8]) -> Result<(), IpcError>;
+    fn send(&mut self, bytes: &[u8]) -> IpcResult<()>;
 }
 
 /// Ipc Receiver (RX)
 ///
 /// This trait supports reading bytes from IPC.
 pub trait Receiver {
-    fn recv(&mut self, bytes: &mut [u8]) -> Result<(), IpcError>;
+    fn recv(&mut self, bytes: &mut [u8]) -> IpcResult<usize>;
+
+    fn recv_exact(&mut self, bytes: &mut [u8]) -> IpcResult<()> {
+        match self.recv(bytes) {
+            Ok(len) if len == bytes.len() => Ok(()),
+            Ok(_) => Err(IpcError::BufferInvalidSize),
+            Err(err) => Err(err),
+        }
+    }
 }
 
 /// A typed sender for responding to IPC Messages
-pub struct IpcResponder<'a, S: Sender, T: PortalConvert> {
-    sender: &'a mut S,
+pub struct IpcResponder<
+    'a,
+    Glue: IpcGlue,
+    Info: IpcServiceInfo,
+    T: PortalConvert,
+    const TARGET_ID: u64,
+> {
+    connection: &'a mut IpcService<Glue, Info>,
     ty: PhantomData<T>,
 }
 
-impl<'a, S: Sender, T: PortalConvert> IpcResponder<'a, S, T> {
-    /// Construct a new IpcResponder for a given type
-    pub const fn new(sender: &'a mut S) -> Self {
+impl<'a, Glue: IpcGlue, Info: IpcServiceInfo, T: PortalConvert, const TARGET_ID: u64>
+    IpcResponder<'a, Glue, Info, T, TARGET_ID>
+{
+    pub fn new(connection: &'a mut IpcService<Glue, Info>) -> Self {
         Self {
-            sender,
+            connection,
             ty: PhantomData,
         }
     }
 
-    /// Respond with a give value
-    pub fn respond_with(self, value: T) -> Result<usize, IpcError> {
-        value.serialize(self.sender)
+    pub fn respond_with(self, value: T) -> IpcResult<()> {
+        self.connection.tx_msg(TARGET_ID, true, value)
     }
 }
 
@@ -109,7 +124,6 @@ pub struct IpcMessage {
     pub start_byte: u8,
     pub endpoint_hash: u64,
     pub target_id: u64,
-    pub data_len: usize,
     pub data: Vec<u8>,
     pub end_byte: u8,
 }
@@ -198,7 +212,6 @@ impl RawIpcBuffer {
             start_byte: self.get_start_byte()?,
             endpoint_hash: self.get_endpoint_hash()?,
             target_id: self.get_target_id()?,
-            data_len: self.get_data_len()?,
             data: self.get_data()?,
             end_byte: self.get_end_byte()?,
         })
@@ -217,7 +230,7 @@ impl RawIpcBuffer {
         match self.populate_ipc_message() {
             Err(IpcError::NotReady) => Err(IpcError::NotReady),
             Ok(valid) => {
-                self.0.drain(0..=valid.data_len + 29);
+                self.0.drain(0..=valid.data.len() + 29);
                 Ok(valid)
             }
             Err(invalid) => {
@@ -240,5 +253,180 @@ impl RawIpcBuffer {
                 return Err(invalid);
             }
         }
+    }
+}
+
+/// Info for a given endpoint service required for connection
+///
+/// This trait serves to provide a constant way of storing the
+/// endpoint's info for the inner `IpcService` struct.
+pub trait IpcServiceInfo {
+    const ENDPOINT_NAME: &'static str;
+    const ENDPOINT_HASH: u64;
+}
+
+pub trait IpcGlue: Sender + Receiver {
+    /// Disconnect Portal's connection from server and client
+    ///
+    /// Calls to `disconnect` should cleanly disconnect the backing
+    /// communication of this `IpcGlue` structure.
+    fn disconnect(&mut self);
+
+    /// If the ipc backend is blocking during a waiting call, it will
+    /// call this method to block until the socket has woken up.
+    fn socket_wait(&self) {}
+
+    // /// Make a connection to the server provided with the service info
+    // fn connect<Info: IpcServiceInfo>(&mut self) -> IpcResult<()>;
+
+    // /// Begin hosting a connection provided with the service info
+    // fn begin_serve<Info: IpcServiceInfo>(&mut self) -> IpcResult<()>;
+}
+
+pub struct IpcService<Glue: IpcGlue, Info: IpcServiceInfo> {
+    glue: Glue,
+    info: PhantomData<Info>,
+    is_server: bool,
+    rx_queue: VecDeque<IpcMessage>,
+    tx_queue: VecDeque<IpcMessage>,
+    rx_buf: RawIpcBuffer,
+}
+
+impl<Glue: IpcGlue, Info: IpcServiceInfo> IpcService<Glue, Info> {
+    pub fn new(glue: Glue, is_server: bool) -> Self {
+        Self {
+            glue,
+            info: PhantomData,
+            rx_queue: VecDeque::new(),
+            tx_queue: VecDeque::new(),
+            rx_buf: RawIpcBuffer::new(),
+            is_server,
+        }
+    }
+
+    /// Try to read data into the data queue and parse it into `IpcMessage`'s
+    pub fn drive_rx(&mut self) -> IpcResult<()> {
+        // read into the data queue
+        loop {
+            let mut data_chunk = [0; 256];
+
+            match self.glue.recv(&mut data_chunk) {
+                Ok(0) | Err(IpcError::BufferInvalidSize) | Err(IpcError::NotReady) => break,
+                Ok(valid_len) => {
+                    self.rx_buf.append(&data_chunk[..valid_len]);
+                }
+                Err(other) => return Err(other),
+            }
+        }
+
+        // try to parse messages
+        loop {
+            match self.rx_buf.pop_message() {
+                Ok(valid) => {
+                    if valid.endpoint_hash != Info::ENDPOINT_HASH {
+                        return Err(IpcError::InvalidHash {
+                            given: valid.endpoint_hash,
+                            expected: Info::ENDPOINT_HASH,
+                        });
+                    }
+
+                    self.rx_queue.push_back(valid);
+                }
+                Err(IpcError::NotReady) => break Ok(()),
+                Err(invalid) => return Err(invalid),
+            }
+        }
+    }
+
+    /// A blocking RX and deserialization call to the service
+    pub fn blocking_rx<T: PortalConvert>(&mut self, target_id: u64) -> IpcResult<T> {
+        let is_server = self.is_server;
+
+        loop {
+            self.drive_rx()?;
+
+            if self.rx_queue.is_empty() {
+                self.glue.socket_wait();
+                continue;
+            }
+
+            if let Some(reponse) = self.pop_rx_if(|messages| {
+                messages.target_id == target_id
+                    && messages.start_byte
+                        == if is_server {
+                            MESSAGE_CLIENT_RSP_START
+                        } else {
+                            MESSAGE_SERVER_RSP_START
+                        }
+            }) {
+                return T::deserialize(&mut reponse.data.as_slice());
+            }
+        }
+    }
+
+    /// Construct a new IpcMessage and add it to the transmit queue
+    pub fn tx_msg<T: PortalConvert>(
+        &mut self,
+        target_id: u64,
+        is_response: bool,
+        data: T,
+    ) -> IpcResult<()> {
+        let start_byte = match () {
+            _ if self.is_server && is_response => MESSAGE_SERVER_RSP_START,
+            _ if self.is_server => MESSAGE_SERVER_REQ_START,
+            _ if is_response => MESSAGE_CLIENT_RSP_START,
+            _ => MESSAGE_CLIENT_REQ_START,
+        };
+
+        let mut data_vec = Vec::with_capacity(256);
+        data.serialize(&mut data_vec)?;
+
+        self.tx_queue.push_back(IpcMessage {
+            start_byte,
+            endpoint_hash: Info::ENDPOINT_HASH,
+            target_id,
+            data: data_vec,
+            end_byte: MESSAGE_END,
+        });
+
+        Ok(())
+    }
+
+    /// Serialize all messages into one large vector, then call `send` from `glue`.
+    ///
+    /// # Note
+    /// This will call multiple times
+    pub fn flush_tx(&mut self) -> IpcResult<()> {
+        let mut holding_cell = Vec::with_capacity(256);
+
+        for ipc_message in self.tx_queue.drain(..) {
+            // If our length is too large, we want to flush the array to glue
+            if holding_cell.len() >= (8 * 1024) - 1 {
+                self.glue.send(&holding_cell)?;
+                holding_cell.clear();
+            }
+
+            ipc_message.serialize(&mut holding_cell)?;
+        }
+
+        self.glue.send(&holding_cell)?;
+        Ok(())
+    }
+
+    pub fn pop_rx(&mut self) -> Option<IpcMessage> {
+        self.rx_queue.pop_front()
+    }
+
+    pub fn pop_rx_if<F>(&mut self, mut f: F) -> Option<IpcMessage>
+    where
+        F: FnMut(&IpcMessage) -> bool,
+    {
+        let index = self
+            .rx_queue
+            .iter()
+            .enumerate()
+            .find_map(|(i, message)| f(message).then_some(i))?;
+
+        self.rx_queue.remove(index)
     }
 }

@@ -24,8 +24,6 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 use crate::ast;
-use crate::ast::ClientServerTokens;
-use crate::ast::ProtocolVarType;
 use proc_macro2::Span;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::ToTokens;
@@ -34,6 +32,11 @@ use quote::format_ident;
 use quote::quote;
 use quote::quote_spanned;
 use syn::Lifetime;
+
+#[cfg(any(feature = "ipc-client", feature = "ipc-server"))]
+use {
+    crate::ast::ClientServerTokens, std::hash::DefaultHasher, std::hash::Hash, std::hash::Hasher,
+};
 
 /// A generator for the portal's trait
 pub struct PortalTrait<'a> {
@@ -159,6 +162,18 @@ impl<'a> PortalClientRequestEnum<'a> {
     }
 }
 
+#[cfg(any(feature = "ipc-client", feature = "ipc-server"))]
+pub struct PortalInfoStruct<'a> {
+    portal: &'a ast::PortalMacro,
+}
+
+#[cfg(any(feature = "ipc-client", feature = "ipc-server"))]
+impl<'a> PortalInfoStruct<'a> {
+    pub fn new(portal: &'a ast::PortalMacro) -> Self {
+        Self { portal }
+    }
+}
+
 /// Generate the Rust portal output tokens
 pub fn generate_rust_portal(portal: &ast::PortalMacro) -> TokenStream2 {
     portal.to_token_stream()
@@ -213,6 +228,12 @@ impl ToTokens for ast::PortalMacro {
                 });
             }
         } else {
+            #[cfg(any(feature = "ipc-client", feature = "ipc-server"))]
+            {
+                let info_trait = PortalInfoStruct::new(self);
+
+                info_trait.to_tokens(tokens);
+            }
             #[cfg(feature = "ipc-client")]
             {
                 let server_enum = PortalServerRequestEnum::new(self);
@@ -229,37 +250,48 @@ impl ToTokens for ast::PortalMacro {
     }
 }
 
-#[cfg(feature = "ipc-client")]
-impl<'a> ToTokens for PortalServerRequestEnum<'a> {
+#[cfg(any(feature = "ipc-client", feature = "ipc-server"))]
+impl<'a> ToTokens for PortalInfoStruct<'a> {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
-        let server_enum = self.portal.get_output_enum_ident();
+        let portal_ident = self.portal.get_info_struct_ident();
+        let endpoint_name = self.portal.get_service_name();
+
+        let mut endpoint_hash = DefaultHasher::new();
+        endpoint_name.hash(&mut endpoint_hash);
+        let endpoint_hash = endpoint_hash.finish();
 
         tokens.append_all(quote! {
-            pub enum #server_enum {
+            pub struct #portal_ident(());
 
+            impl ::portal::ipc::IpcServiceInfo for #portal_ident {
+                const ENDPOINT_NAME: &'static str = #endpoint_name;
+                const ENDPOINT_HASH: u64 = #endpoint_hash;
             }
         });
     }
 }
 
-#[cfg(feature = "ipc-server")]
-impl<'a> ToTokens for PortalClientRequestEnum<'a> {
+#[cfg(feature = "ipc-client")]
+impl<'a> ToTokens for PortalServerRequestEnum<'a> {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
-        let client_enum = self.portal.get_input_enum_ident();
-        let client_requests = self
+        let server_enum = self.portal.get_output_enum_ident();
+        let info_struct = self.portal.get_info_struct_ident();
+
+        let server_requests = self
             .portal
             .endpoints
             .iter()
-            .filter(|endpoint| endpoint.kind == ast::ProtocolEndpointKind::Event)
+            .filter(|endpoint| endpoint.kind == ast::ProtocolEndpointKind::Handle)
             .map(|event| {
                 let name = event.get_enum_ident();
+                let target_id = event.portal_id.0 as u64;
 
                 let type_body = if !event.is_async {
                     let output_type = &event.output_arg.0;
 
                     quote! {
                         {
-                            sender: ::portal::ipc::IpcResponder<'sender, S, #output_type>
+                            sender: ::portal::ipc::IpcResponder<'sender, Glue, #info_struct, #output_type, #target_id>
                         }
                     }
                 } else {
@@ -273,9 +305,52 @@ impl<'a> ToTokens for PortalClientRequestEnum<'a> {
 
         tokens.append_all(quote! {
             #[non_exhaustive]
-            pub enum #client_enum<'sender, S: ::portal::ipc::Sender> {
+            pub enum #server_enum<'sender, Glue: ::portal::ipc::IpcGlue> {
                 #[doc(hidden)]
-                _Unused(::core::marker::PhantomData<&'sender S>),
+                _Unused(::core::marker::PhantomData<&'sender Glue>),
+                #(#server_requests),*
+            }
+        });
+    }
+}
+
+#[cfg(feature = "ipc-server")]
+impl<'a> ToTokens for PortalClientRequestEnum<'a> {
+    fn to_tokens(&self, tokens: &mut TokenStream2) {
+        let client_enum = self.portal.get_input_enum_ident();
+        let info_struct = self.portal.get_info_struct_ident();
+
+        let client_requests = self
+            .portal
+            .endpoints
+            .iter()
+            .filter(|endpoint| endpoint.kind == ast::ProtocolEndpointKind::Event)
+            .map(|event| {
+                let name = event.get_enum_ident();
+                let target_id = event.portal_id.0 as u64;
+
+                let type_body = if !event.is_async {
+                    let output_type = &event.output_arg.0;
+
+                    quote! {
+                        {
+                            sender: ::portal::ipc::IpcResponder<'sender, Glue, #info_struct, #output_type, #target_id>
+                        }
+                    }
+                } else {
+                    quote! {}
+                };
+
+                quote! {
+                    #name #type_body
+                }
+            });
+
+        tokens.append_all(quote! {
+            #[non_exhaustive]
+            pub enum #client_enum<'sender, Glue: ::portal::ipc::IpcGlue> {
+                #[doc(hidden)]
+                _Unused(::core::marker::PhantomData<&'sender Glue>),
                 #(#client_requests),*
             }
         });
@@ -306,12 +381,47 @@ impl<'a> ToTokens for PortalTrait<'a> {
                 .map(|endpoint| endpoint.client_tokens());
 
             let client_enum = self.portal.get_output_enum_ident();
+            let info_struct = self.portal.get_info_struct_ident();
+
+            let target_tokens = self.portal.endpoints
+                .iter()
+                .filter(|endpoint| endpoint.kind == ast::ProtocolEndpointKind::Handle)
+                .map(|endpoint| {
+                    let target_id = endpoint.portal_id.0 as u64;
+                    let enum_name = endpoint.get_enum_ident();
+
+                    if endpoint.is_async {
+                        quote!{
+                            #target_id => return Ok(#client_enum::#enum_name),
+                        }
+                    } else {
+                        quote!{
+                            #target_id => return Ok(#client_enum::#enum_name { sender: ::portal::ipc::IpcResponder::new(&mut self.0)}),
+                        }
+                    }
+                });
 
             tokens.append_all(quote! {
-                pub trait #client_trait : ::portal::ipc::Receiver + ::portal::ipc::Sender {
-                    #(#endpoints)*
+                pub struct #client_trait<Glue: ::portal::ipc::IpcGlue>(::portal::ipc::IpcService<Glue, #info_struct>);
 
-                    fn incoming(&mut self) -> ::portal::ipc::IpcResult<#client_enum>;
+                impl<Glue: ::portal::ipc::IpcGlue> #client_trait<Glue> {
+                    pub fn new(glue: Glue) -> Self {
+                        Self(::portal::ipc::IpcService::new(glue, false))
+                    }
+
+                    #(#endpoints)*
+                    pub fn incoming<'a>(&'a mut self) -> ::portal::ipc::IpcResult<#client_enum<'a, Glue>> {
+                        self.0.drive_rx()?;
+
+                        let Some(ipc_msg) = self.0.pop_rx() else {
+                            return Err(::portal::ipc::IpcError::NotReady);
+                        };
+
+                        match ipc_msg.target_id {
+                            #(#target_tokens)*
+                            _ => return Err(::portal::ipc::IpcError::InvalidTypeConvert),
+                        }
+                    }
                 }
             });
         }
@@ -325,19 +435,55 @@ impl<'a> ToTokens for PortalTrait<'a> {
                 .iter()
                 .map(|endpoint| endpoint.server_tokens());
 
-            let client_enum = self.portal.get_input_enum_ident();
+            let server_enum = self.portal.get_input_enum_ident();
+            let info_struct = self.portal.get_info_struct_ident();
+
+            let target_tokens = self.portal.endpoints
+                .iter()
+                .filter(|endpoint| endpoint.kind == ast::ProtocolEndpointKind::Event)
+                .map(|endpoint| {
+                    let target_id = endpoint.portal_id.0 as u64;
+                    let enum_name = endpoint.get_enum_ident();
+
+                    if endpoint.is_async {
+                        quote!{
+                            #target_id => return Ok(#server_enum::#enum_name),
+                        }
+                    } else {
+                        quote!{
+                            #target_id => return Ok(#server_enum::#enum_name { sender: ::portal::ipc::IpcResponder::new(&mut self.0)}),
+                        }
+                    }
+                });
 
             tokens.append_all(quote! {
-                pub trait #server_trait : ::portal::ipc::Receiver + ::portal::ipc::Sender + Sized  {
-                    #(#endpoints)*
+                pub struct #server_trait<Glue: ::portal::ipc::IpcGlue>(::portal::ipc::IpcService<Glue, #info_struct>);
 
-                    fn incoming(&mut self) -> ::portal::ipc::IpcResult<#client_enum<Self>>;
+                impl<Glue: ::portal::ipc::IpcGlue> #server_trait<Glue> {
+                    pub fn new(glue: Glue) -> Self {
+                        Self(::portal::ipc::IpcService::new(glue, true))
+                    }
+
+                    #(#endpoints)*
+                    pub fn incoming<'a>(&'a mut self) -> ::portal::ipc::IpcResult<#server_enum<'a, Glue>> {
+                        self.0.drive_rx()?;
+
+                        let Some(ipc_msg) = self.0.pop_rx() else {
+                            return Err(::portal::ipc::IpcError::NotReady);
+                        };
+
+                        match ipc_msg.target_id {
+                            #(#target_tokens)*
+                            _ => return Err(::portal::ipc::IpcError::InvalidTypeConvert),
+                        }
+                    }
                 }
             });
         }
     }
 }
 
+#[cfg(any(feature = "ipc-client", feature = "ipc-server"))]
 impl ClientServerTokens for ast::ProtocolEndpoint {
     fn client_tokens(&self) -> TokenStream2 {
         match self.kind {
@@ -346,7 +492,7 @@ impl ClientServerTokens for ast::ProtocolEndpoint {
                 let docs = &self.doc_attributes;
 
                 let fn_name = match &output_ty {
-                    ProtocolVarType::Unit(_) if self.is_async => {
+                    ast::ProtocolVarType::Unit(_) if self.is_async => {
                         format_ident!("{}_async", &self.fn_ident)
                     }
                     invalid_ty if self.is_async => {
@@ -360,9 +506,25 @@ impl ClientServerTokens for ast::ProtocolEndpoint {
                     _ => format_ident!("{}_blocking", &self.fn_ident),
                 };
 
+                let target_id = self.portal_id.0 as u64;
+                let blocking_tokens = if !self.is_async {
+                    quote! {
+                        self.0.blocking_rx(#target_id)
+                    }
+                } else {
+                    quote! {
+                        Ok(())
+                    }
+                };
+
                 quote! {
                     #(#docs)*
-                    fn #fn_name(&mut self) -> ::portal::ipc::IpcResult<#output_ty>;
+                    pub fn #fn_name(&mut self) -> ::portal::ipc::IpcResult<#output_ty> {
+                        const TARGET_ID: u64 = #target_id;
+
+                        self.0.tx_msg(TARGET_ID, false, ())?;
+                        #blocking_tokens
+                    }
                 }
             }
             _ => quote! {},
@@ -376,7 +538,7 @@ impl ClientServerTokens for ast::ProtocolEndpoint {
                 let docs = &self.doc_attributes;
 
                 let fn_name = match &output_args.0 {
-                    ProtocolVarType::Unit(_) if self.is_async => {
+                    ast::ProtocolVarType::Unit(_) if self.is_async => {
                         format_ident!("ask_{}_async", &self.fn_ident)
                     }
                     invalid_ty if self.is_async => {
@@ -392,7 +554,7 @@ impl ClientServerTokens for ast::ProtocolEndpoint {
 
                 quote! {
                     #(#docs)*
-                    fn #fn_name(&mut self) #output_args;
+                    pub fn #fn_name(&mut self) #output_args;
                 }
             }
             _ => quote! {},

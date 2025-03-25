@@ -23,11 +23,15 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use proc_macro2::{Span, TokenStream};
+use proc_macro2::Span;
 use quote::format_ident;
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 use syn::{Attribute, Ident, Visibility};
 
+#[cfg(any(feature = "ipc-client", feature = "ipc-server"))]
+use proc_macro2::TokenStream;
+
+#[cfg(any(feature = "ipc-client", feature = "ipc-server"))]
 pub trait ClientServerTokens {
     fn client_tokens(&self) -> TokenStream;
     fn server_tokens(&self) -> TokenStream;
@@ -635,6 +639,23 @@ impl PortalMacro {
         Ident::new(&new_str, self.trait_ident.span())
     }
 
+    #[cfg(any(feature = "ipc-client", feature = "ipc-server"))]
+    pub fn get_service_name(&self) -> String {
+        let mut new_str = String::new();
+        for old_char in self.trait_ident.to_string().chars() {
+            if old_char.is_uppercase() {
+                if !new_str.is_empty() {
+                    new_str.push('_');
+                }
+                new_str.push(old_char.to_ascii_lowercase());
+            } else {
+                new_str.push(old_char);
+            }
+        }
+
+        new_str
+    }
+
     pub fn get_input_enum_ident(&self) -> Ident {
         if matches!(self.args.as_ref().unwrap().protocol_kind, ProtocolKind::Ipc) {
             Ident::new(
@@ -663,10 +684,19 @@ impl PortalMacro {
         }
     }
 
+    #[cfg(any(feature = "ipc-client", feature = "ipc-server"))]
+    pub fn get_info_struct_ident(&self) -> Ident {
+        Ident::new(
+            &format!("{}Info", self.trait_ident),
+            self.trait_ident.span(),
+        )
+    }
+
     pub fn trait_client_name(&self) -> Ident {
         format_ident!("{}Client", self.trait_ident)
     }
 
+    #[cfg(any(feature = "ipc-server", feature = "syscall-server"))]
     pub fn trait_server_name(&self) -> Ident {
         format_ident!("{}Server", self.trait_ident)
     }
