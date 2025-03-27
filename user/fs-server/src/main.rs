@@ -27,16 +27,32 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #![no_main]
 tiny_std!();
 
-use fs_portal::FsPortalClient;
-use libq::{dbugln, ipc::QuantumGlue, tiny_std};
+use fs_portal::FsPortalServer;
+use libq::{
+    dbugln,
+    ipc::{QuantumGlue, QuantumHost},
+    signal_wait, tiny_std,
+};
 
 fn main() {
-    dbugln!("Starting Dummy");
-    let mut fs = FsPortalClient::new(QuantumGlue::connect_to("fs").unwrap());
+    dbugln!("Starting Filesystem server!");
+
+    let mut server = QuantumHost::<FsPortalServer<QuantumGlue>>::host_on("fs").unwrap();
 
     loop {
-        dbugln!("Ping!");
-        fs.ping_blocking().unwrap();
-        dbugln!("Pong!");
+        let signal = signal_wait();
+
+        server
+            .service_signal(
+                signal,
+                |handle| Ok(FsPortalServer::new(QuantumGlue::new(handle))),
+                |read_cs| match read_cs.incoming()? {
+                    fs_portal::FsPortalClientRequest::Ping { sender } => sender.respond_with(()),
+                    _ => Ok(()),
+                },
+                |_| Ok(()),
+                |_| Ok(()),
+            )
+            .unwrap();
     }
 }

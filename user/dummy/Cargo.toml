@@ -10,3 +10,4 @@ documentation.workspace = true
 libq = { workspace = true }
 portal = { workspace = true, features = ["ipc-client"] }
 hello-portal = { workspace = true, features = ["client"] }
+fs-portal = { workspace = true, features = ["client"] }

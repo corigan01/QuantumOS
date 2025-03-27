@@ -27,6 +27,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 pub mod alloc;
 pub mod debug;
+pub mod ipc;
 pub mod sync;
 
 // Import syscall interface

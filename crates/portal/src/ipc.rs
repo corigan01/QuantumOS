@@ -31,7 +31,6 @@ use convert::{
     MESSAGE_SERVER_RSP_START,
 };
 use core::marker::PhantomData;
-use lldebug::logln;
 
 pub mod convert;
 
@@ -47,6 +46,7 @@ pub enum IpcError {
     Utf8ConvertError,
     InvalidTypeConvert,
     NotReady,
+    AlreadyUsed,
     InvalidMessage(Vec<u8>),
     InvalidHash { given: u64, expected: u64 },
 }

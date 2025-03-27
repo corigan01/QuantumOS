@@ -1,9 +1,9 @@
 /*
-  ____                 __               __  __
- / __ \__ _____ ____  / /___ ____ _    / / / /__ ___ ____
-/ /_/ / // / _ `/ _ \/ __/ // /  ' \  / /_/ (_-</ -_) __/
-\___\_\_,_/\_,_/_//_/\__/\_,_/_/_/_/  \____/___/\__/_/
-  Part of the Quantum OS Kernel
+  ____                 __               __   _ __
+ / __ \__ _____ ____  / /___ ____ _    / /  (_) /
+/ /_/ / // / _ `/ _ \/ __/ // /  ' \  / /__/ / _ \
+\___\_\_,_/\_,_/_//_/\__/\_,_/_/_/_/ /____/_/_.__/
+    Part of the Quantum OS Project
 
 Copyright 2025 Gavin Kellam
 
@@ -24,19 +24,11 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 #![no_std]
-#![no_main]
-tiny_std!();
 
-use fs_portal::FsPortalClient;
-use libq::{dbugln, ipc::QuantumGlue, tiny_std};
+use portal::portal;
 
-fn main() {
-    dbugln!("Starting Dummy");
-    let mut fs = FsPortalClient::new(QuantumGlue::connect_to("fs").unwrap());
-
-    loop {
-        dbugln!("Ping!");
-        fs.ping_blocking().unwrap();
-        dbugln!("Pong!");
-    }
+#[portal(protocol = "ipc")]
+pub trait FsPortal {
+    #[event = 1]
+    fn ping() {}
 }

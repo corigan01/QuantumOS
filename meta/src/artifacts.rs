@@ -239,6 +239,7 @@ pub async fn build_project(multiboot_mode: bool, emit_asm: Option<String>) -> Re
         kernel,
         dummy_userspace,
         hello_server,
+        fs_server,
         boot_cfg,
     ) = tokio::try_join!(
         cargo_helper(
@@ -294,12 +295,20 @@ pub async fn build_project(multiboot_mode: bool, emit_asm: Option<String>) -> Re
             None,
             emit_asm.as_ref().is_some_and(|s| s == "hello-server")
         ),
+        cargo_helper(
+            Some("userspace"),
+            "fs-server",
+            ArchSelect::UserSpace,
+            None,
+            emit_asm.as_ref().is_some_and(|s| s == "fs-server")
+        ),
         build_bootloader_config(),
     )?;
 
     let ue_slice = [
         (hello_server, PathBuf::from("./helloServ")),
-        (dummy_userspace.clone(), PathBuf::from("./dummy")),
+        (dummy_userspace, PathBuf::from("./dummy")),
+        (fs_server, PathBuf::from("./fs-server")),
     ];
 
     let (bootsector, stage_16, stage_32, stage_64, initfs) = tokio::try_join!(

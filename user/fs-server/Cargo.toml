@@ -1,5 +1,5 @@
 [package]
-name = "libq"
+name = "fs-server"
 edition = "2024"
 version.workspace = true
 authors.workspace = true
@@ -8,6 +8,5 @@ documentation.workspace = true
 license.workspace = true
 
 [dependencies]
-quantum-portal = {workspace = true, features = ["client"]}
-lldebug = {workspace = true}
-portal = {workspace = true, features = ["ipc-client", "ipc-server"]}
+libq = { workspace = true }
+fs-portal = { workspace = true, features = ["server"]}

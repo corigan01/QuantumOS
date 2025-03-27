@@ -30,7 +30,9 @@ members = [
   "crates/portal",
   "portals/hello-portal",
   "portals/quantum-portal",
-  "user/libsys"
+  "user/libsys",
+  "user/fs-server",
+  "portals/fs-portal"
 ]
 
 default-members = ["meta"]
@@ -67,6 +69,7 @@ portal-macro = { path = "crates/portal-macro" }
 hello-portal = { path = "portals/hello-portal" }
 quantum-portal = { path = "portals/quantum-portal" }
 libsys = { path = "user/libsys" }
+fs-portal = { path = "portals/fs-portal" }
 
 [profile.stage-bootsector]
 inherits = "release"

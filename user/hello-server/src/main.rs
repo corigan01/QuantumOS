@@ -90,7 +90,6 @@ fn main() {
                     dbugln!("Incoming - handle={handle}");
                     match serv.incoming() {
                         Ok(hello_portal::HelloPortalClientRequest::PingHelloServer { sender }) => {
-                            dbugln!("HELLO!");
                             sender.respond_with(true).unwrap();
                         }
                         Err(err) => dbugln!("IpcError = {:#?}", err),
