@@ -27,6 +27,9 @@ use core::fmt::Error;
 use core::fmt::Write;
 use quantum_portal::sys_client::debug_msg;
 
+#[doc(hidden)]
+pub use lldebug::set_global_debug_fn;
+
 /// Quantum OS's 'kernel' debug output.
 ///
 /// This is used in the `dbug!(...)` and `dbugln!(...)` macros

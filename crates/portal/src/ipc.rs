@@ -31,6 +31,7 @@ use convert::{
     MESSAGE_SERVER_RSP_START,
 };
 use core::marker::PhantomData;
+use lldebug::logln;
 
 pub mod convert;
 
@@ -95,7 +96,10 @@ impl<'a, Glue: IpcGlue, Info: IpcServiceInfo, T: PortalConvert, const TARGET_ID:
     }
 
     pub fn respond_with(self, value: T) -> IpcResult<()> {
-        self.connection.tx_msg(TARGET_ID, true, value)
+        let tx = self.connection.tx_msg(TARGET_ID, true, value)?;
+        self.connection.flush_tx()?;
+
+        Ok(tx)
     }
 }
 
@@ -231,7 +235,7 @@ impl RawIpcBuffer {
         match self.populate_ipc_message() {
             Err(IpcError::NotReady) => Err(IpcError::NotReady),
             Ok(valid) => {
-                self.0.drain(0..=valid.data.len() + 29);
+                self.0.drain(0..valid.data.len() + 29);
                 Ok(valid)
             }
             Err(invalid) => {

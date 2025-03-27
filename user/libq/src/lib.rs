@@ -72,9 +72,19 @@ macro_rules! tiny_std {
             $crate::exit($crate::ExitReason::Failure);
         }
 
+        #[doc(hidden)]
+        mod hidden_debug {
+            pub(super) fn debug_output(args: ::core::fmt::Arguments) {
+                use core::fmt::Write;
+                _ = (::libq::debug::DebugOut {}).write_fmt(args);
+            }
+        }
+
         #[unsafe(link_section = ".start")]
         #[unsafe(no_mangle)]
         extern "C" fn _start() {
+            ::libq::debug::set_global_debug_fn(hidden_debug::debug_output);
+
             let main_result = main();
             let exit_status = $crate::QuantumTermination::exit_status(main_result);
 
