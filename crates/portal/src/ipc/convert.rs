@@ -400,7 +400,7 @@ impl PortalConvert for alloc::string::String {
         send.send(&(self.len() as u64).to_ne_bytes())?;
         send.send(self.as_bytes())?;
 
-        Ok(1 + self.len() + (usize::BITS as usize / 8))
+        Ok(1 + self.len() + size_of::<u64>())
     }
 
     fn deserialize(recv: &mut impl Receiver) -> Result<Self, IpcError> {

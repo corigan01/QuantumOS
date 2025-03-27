@@ -523,6 +523,7 @@ impl ClientServerTokens for ast::ProtocolEndpoint {
                         const TARGET_ID: u64 = #target_id;
 
                         self.0.tx_msg(TARGET_ID, false, ())?;
+                        self.0.flush_tx()?;
                         #blocking_tokens
                     }
                 }

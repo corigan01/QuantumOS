@@ -8,3 +8,5 @@ documentation.workspace = true
 
 [dependencies]
 libq = { workspace = true }
+portal = { workspace = true, features = ["ipc-client"] }
+hello-portal = { workspace = true, features = ["client"] }

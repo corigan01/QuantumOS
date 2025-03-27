@@ -94,8 +94,19 @@ impl VmInjectFillAction for VmElfInject {
                 .saturating_sub(header.expected_vaddr() as usize);
             let vbuffer_offset = (header.expected_vaddr() as usize + buf_start) % PAGE_4K;
 
-            let this_page_buffer = &elf_memory_buffer
-                [buf_start..(buf_start + (PAGE_4K - vbuffer_offset)).min(elf_memory_buffer.len())];
+            let buf_end = (buf_start + (PAGE_4K - vbuffer_offset)).min(elf_memory_buffer.len());
+            if buf_start > buf_end {
+                // panic!(
+                //     "Elf buffer index out of range! start={buf_start} end={buf_end} size={}\nvpage={} expected_vpage={}\n{:#?}",
+                //     elf_memory_buffer.len(),
+                //     vpage.addr(),
+                //     header.expected_vaddr(),
+                //     header
+                // );
+                continue;
+            }
+
+            let this_page_buffer = &elf_memory_buffer[buf_start..buf_end];
 
             vbuffer[vbuffer_offset..vbuffer_offset + this_page_buffer.len()]
                 .copy_from_slice(this_page_buffer);

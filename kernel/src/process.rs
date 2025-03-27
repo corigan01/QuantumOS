@@ -483,6 +483,10 @@ impl Process {
                 let mut rx_lock = host_rx.write(LockEncouragement::Moderate);
                 if rx_lock.len() == 0 {
                     if let Some(client_upgrade) = client.upgrade() {
+                        // FIXME: This can cause the `signals` buffer to overflow the kernel's memory.
+                        //
+                        // We should instead use a bitmap for flags and handles. If we set the `WriteReady`
+                        // flag then we don't need to send another...
                         client_upgrade
                             .signals
                             .write(LockEncouragement::Moderate)

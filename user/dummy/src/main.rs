@@ -27,7 +27,42 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #![no_main]
 tiny_std!();
 
-use libq::{RecvHandleError, close, connect, dbugln, recv, send, tiny_std, yield_now};
+use hello_portal::HelloPortalClient;
+use libq::{
+    RecvHandleError, SendHandleError, close, connect, dbugln, recv, send, tiny_std, yield_now,
+};
+use portal::ipc::{IpcError, IpcResult};
+
+pub struct QuantumGlue(u64);
+
+impl portal::ipc::IpcGlue for QuantumGlue {
+    fn disconnect(&mut self) {
+        close(self.0);
+    }
+}
+
+impl portal::ipc::Sender for QuantumGlue {
+    fn send(&mut self, bytes: &[u8]) -> IpcResult<()> {
+        dbugln!("Sending {:?}", bytes);
+        send(self.0, bytes).map_err(|send_err| match send_err {
+            SendHandleError::InvalidHandle | SendHandleError::SendFailed => IpcError::GlueError,
+            SendHandleError::WouldBlock => IpcError::NotReady,
+        })?;
+
+        Ok(())
+    }
+}
+
+impl portal::ipc::Receiver for QuantumGlue {
+    fn recv(&mut self, bytes: &mut [u8]) -> IpcResult<usize> {
+        recv(self.0, bytes)
+            .map_err(|recv_err| match recv_err {
+                RecvHandleError::InvalidHandle | RecvHandleError::RecvFailed => IpcError::GlueError,
+                RecvHandleError::WouldBlock => IpcError::NotReady,
+            })
+            .inspect(|&amount| dbugln!("Recv {:?}", &bytes[..amount]))
+    }
+}
 
 fn main() {
     dbugln!("Starting Dummy");
@@ -45,22 +80,11 @@ fn main() {
         }
     };
 
-    send(handle, &[0xde, 0xad, 0xbe, 0xef]).unwrap();
+    let quantum_handle = QuantumGlue(handle);
+    let mut portal = HelloPortalClient::new(quantum_handle);
 
-    let mut data_buf = [0; 16];
     loop {
-        match recv(handle, &mut data_buf) {
-            Ok(b) => {
-                dbugln!("Got {b} bytes! {:02x?}", &data_buf[..b]);
-                break;
-            }
-            Err(RecvHandleError::WouldBlock) => yield_now(),
-            Err(err) => {
-                dbugln!("Error {err:?}!");
-                break;
-            }
-        }
+        dbugln!("{:?}", portal.ping_hello_server_blocking());
+        yield_now();
     }
-
-    close(handle);
 }

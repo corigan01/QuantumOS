@@ -38,9 +38,10 @@ pub type IpcString = alloc::string::String;
 pub type IpcVec<T> = Vec<T>;
 pub type IpcResult<T> = ::core::result::Result<T, IpcError>;
 
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum IpcError {
     InvalidMagic { given: u8, expected: u8 },
+    GlueError,
     BufferInvalidSize,
     Utf8ConvertError,
     InvalidTypeConvert,

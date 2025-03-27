@@ -25,7 +25,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 use crate::process::{HandleError, Process, scheduler::Scheduler};
 use alloc::{format, string::String};
-use lldebug::{LogKind, warnln};
+use lldebug::{LogKind, logln, warnln};
 use mem::paging::VmPermissions;
 use quantum_portal::{
     ConnectHandleError, DebugMsgError, ExitReason, MapMemoryError, MemoryLocation,

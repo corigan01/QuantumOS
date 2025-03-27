@@ -105,7 +105,7 @@ impl BuddyAllocator {
                 .prev
                 .is_none_or(|prev| { region.contains(&prev.cast::<u8>()) })
         );
-        debug_assert_ne!(buddy_read.size, 0, "{:#?}", self);
+        debug_assert_ne!(buddy_read.size, 0);
 
         buddy_read
     }
@@ -139,8 +139,8 @@ impl BuddyAllocator {
                     cursor = next_cursor;
                 } else {
                     panic!(
-                        "Reached end of allocation region, no region fits desired allocation. \n{:#?}",
-                        self
+                        "Reached end of allocation region, no region fits desired allocation = {:?}",
+                        layout
                     );
                 }
                 continue;
@@ -294,8 +294,8 @@ impl BuddyAllocator {
             // check that this region is valid
             match cursor_read.state {
                 BuddyState::Free => panic!(
-                    "Double free, ptr={:?}\nlayout={:#?}\nregion={:#?}\nmappings={:#?}",
-                    ptr, layout, cursor_read, self
+                    "Double free, ptr={:?}\nlayout={:#?}\nregion={:#?}",
+                    ptr, layout, cursor_read
                 ),
                 BuddyState::Used {
                     layout: state_layout,

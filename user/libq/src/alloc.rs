@@ -27,7 +27,7 @@ use crate::sync::Mutex;
 use core::{
     alloc::{GlobalAlloc, Layout},
     fmt::{Debug, Display},
-    ptr::{NonNull, dangling_mut},
+    ptr::{NonNull, null_mut},
     sync::atomic::{AtomicPtr, Ordering},
 };
 use quantum_portal::{
@@ -303,7 +303,7 @@ impl BuddyAllocator {
     }
 
     unsafe fn dealloc(&mut self, ptr: *mut u8, layout: Layout) -> Result<()> {
-        if self.region_end.as_ptr() > ptr || self.region_start.as_ptr() < ptr {
+        if self.region_end.as_ptr() < ptr && self.region_start.as_ptr() > ptr {
             return Err(MemoryAllocationError::NotInRegion);
         }
 
@@ -398,7 +398,7 @@ impl MemoryMapRegion {
     pub const fn new() -> Self {
         Self {
             alloc: Mutex::new(None),
-            next: AtomicPtr::new(dangling_mut()),
+            next: AtomicPtr::new(null_mut()),
         }
     }
 
@@ -451,11 +451,11 @@ impl MemoryMapRegion {
 
                         *next_ptr = MemoryMapRegion {
                             alloc: Mutex::new(Some(new_buddy)),
-                            next: AtomicPtr::new(dangling_mut()),
+                            next: AtomicPtr::new(null_mut()),
                         };
 
                         while let Err(failed_set) = self.next.compare_exchange(
-                            dangling_mut(),
+                            null_mut(),
                             next_ptr,
                             Ordering::SeqCst,
                             Ordering::Relaxed,
