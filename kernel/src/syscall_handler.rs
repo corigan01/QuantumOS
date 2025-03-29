@@ -25,6 +25,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 use crate::process::{HandleError, Process, scheduler::Scheduler};
 use alloc::{format, string::String};
+use arch::io::IOPort;
 use lldebug::{LogKind, logln, warnln};
 use mem::paging::VmPermissions;
 use quantum_portal::{
@@ -183,5 +184,21 @@ impl QuantumPortal for KernelSyscalls {
     fn unmap_memory(ptr: *mut u8) {
         // FIXME: Rewrite the virtual memory alloc to be suck
         warnln!("Skipping unmapping of memory region {:?}", ptr);
+    }
+
+    fn fixme_cpuio_read_u8(address: u16) -> u8 {
+        unsafe { IOPort::new(address).read_byte() }
+    }
+
+    fn fixme_cpuio_write_u8(address: u16, data: u8) {
+        unsafe { IOPort::new(address).write_byte(data) }
+    }
+
+    fn fixme_cpuio_read_u16(address: u16) -> u16 {
+        unsafe { IOPort::new(address).read_word() }
+    }
+
+    fn fixme_cpuio_write_u16(address: u16, data: u16) {
+        unsafe { IOPort::new(address).write_word(data) }
     }
 }

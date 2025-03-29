@@ -23,43 +23,13 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-#![no_std]
-#![no_main]
-tiny_std!();
+mod pio_registers;
 
-use fs_portal::FsPortalServer;
-use libq::{
-    dbugln,
-    ipc::{QuantumGlue, QuantumHost},
-    signal_wait, tiny_std,
-};
-
-mod ata;
-
-fn main() {
-    dbugln!("Starting Filesystem server!");
-
-    let mut server = QuantumHost::<FsPortalServer<QuantumGlue>>::host_on("fs").unwrap();
-    loop {
-        let signal = signal_wait();
-
-        server
-            .service_signal(
-                signal,
-                |handle| Ok(FsPortalServer::new(QuantumGlue::new(handle))),
-                |read_cs| match read_cs.incoming()? {
-                    fs_portal::FsPortalClientRequest::Ping { sender } => {
-                        dbugln!("Got Ping, responding with Pong!");
-                        sender.respond_with(())
-                    }
-                    _ => Ok(()),
-                },
-                |_| Ok(()),
-                |_| {
-                    dbugln!("Disconnecting Client");
-                    Ok(())
-                },
-            )
-            .unwrap();
-    }
+pub enum AtaLocation {
+    PrimaryFirst,
+    PrimarySecond,
+    SecondaryFirst,
+    SecondarySecond,
 }
+
+pub struct AtaDisk(());

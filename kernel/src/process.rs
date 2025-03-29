@@ -34,7 +34,7 @@ use alloc::{
 };
 use boolvec::BoolVec;
 use elf::elf_owned::ElfOwned;
-use lldebug::{logln, warnln};
+use lldebug::warnln;
 use mem::{
     addr::VirtAddr,
     page::VirtPage,

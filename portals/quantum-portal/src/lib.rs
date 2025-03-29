@@ -138,6 +138,18 @@ pub trait QuantumPortal {
     #[event = 10]
     fn unmap_memory(ptr: *mut u8) {}
 
+    #[event = 11]
+    unsafe fn fixme_cpuio_read_u8(address: u16) -> u8 {}
+
+    #[event = 12]
+    unsafe fn fixme_cpuio_write_u8(address: u16, data: u8) {}
+
+    #[event = 13]
+    unsafe fn fixme_cpuio_read_u16(address: u16) -> u16 {}
+
+    #[event = 14]
+    unsafe fn fixme_cpuio_write_u16(address: u16, data: u16) {}
+
     #[event = 69]
     fn debug_msg(msg: &str) -> Result<(), DebugMsgError> {
         enum DebugMsgError {

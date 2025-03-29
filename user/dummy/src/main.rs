@@ -34,9 +34,7 @@ fn main() {
     dbugln!("Starting Dummy");
     let mut fs = FsPortalClient::new(QuantumGlue::connect_to("fs").unwrap());
 
-    loop {
-        dbugln!("Ping!");
-        fs.ping_blocking().unwrap();
-        dbugln!("Pong!");
-    }
+    dbugln!("Ping!");
+    fs.ping_blocking().unwrap();
+    dbugln!("Pong!");
 }

@@ -27,93 +27,34 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #![no_main]
 tiny_std!();
 
-use alloc::collections::btree_map::BTreeMap;
-use hello_portal::HelloPortalServer;
+use hello_portal::{HelloPortalClientRequest, HelloPortalServer};
 use libq::{
-    HandleUpdateKind, RecvHandleError, SendHandleError, WaitSignal, close, dbugln, recv, send,
-    serve, signal_wait, tiny_std,
+    dbugln,
+    ipc::{QuantumGlue, QuantumHost},
+    signal_wait, tiny_std,
 };
-use portal::ipc::{IpcError, IpcResult};
-
-pub struct QuantumGlue(u64);
-
-impl portal::ipc::IpcGlue for QuantumGlue {
-    fn disconnect(&mut self) {
-        close(self.0);
-    }
-}
-
-impl portal::ipc::Sender for QuantumGlue {
-    fn send(&mut self, bytes: &[u8]) -> IpcResult<()> {
-        send(self.0, bytes).map_err(|send_err| match send_err {
-            SendHandleError::InvalidHandle => panic!("Invalid handle!"),
-            SendHandleError::SendFailed => IpcError::GlueError,
-            SendHandleError::WouldBlock => IpcError::NotReady,
-        })?;
-
-        Ok(())
-    }
-}
-
-impl portal::ipc::Receiver for QuantumGlue {
-    fn recv(&mut self, bytes: &mut [u8]) -> IpcResult<usize> {
-        recv(self.0, bytes).map_err(|recv_err| match recv_err {
-            RecvHandleError::InvalidHandle => panic!("Invalid handle!"),
-            RecvHandleError::RecvFailed => IpcError::GlueError,
-            RecvHandleError::WouldBlock => IpcError::NotReady,
-        })
-    }
-}
 
 fn main() {
     dbugln!("Hello Server!");
-    let server_handle = serve("hello-server").unwrap();
-    let mut handle_servers = BTreeMap::new();
+
+    let mut server = QuantumHost::<HelloPortalServer<QuantumGlue>>::host_on("hello").unwrap();
 
     loop {
         let signal = signal_wait();
-        // dbugln!("Wakeup with signal ({signal:?})");
 
-        match signal {
-            WaitSignal::HandleUpdate {
-                kind: HandleUpdateKind::NewConnection { new_handle },
-                handle,
-            } if handle == server_handle => {
-                handle_servers.insert(new_handle, HelloPortalServer::new(QuantumGlue(new_handle)));
-                dbugln!("New connection - handle={new_handle} ");
-            }
-            WaitSignal::HandleUpdate {
-                handle,
-                kind: HandleUpdateKind::ReadReady,
-            } => {
-                if let Some(serv) = handle_servers.get_mut(&handle) {
-                    dbugln!("Incoming - handle={handle}");
-                    match serv.incoming() {
-                        Ok(hello_portal::HelloPortalClientRequest::PingHelloServer { sender }) => {
-                            sender.respond_with(true).unwrap();
-                        }
-                        Err(err) => dbugln!("IpcError = {:#?}", err),
-                        _ => todo!(),
+        server
+            .service_signal(
+                signal,
+                |handle| Ok(HelloPortalServer::new(QuantumGlue::new(handle))),
+                |read_cs| match read_cs.incoming()? {
+                    HelloPortalClientRequest::PingHelloServer { sender } => {
+                        sender.respond_with(true)
                     }
-                }
-            }
-            WaitSignal::HandleUpdate {
-                handle,
-                kind: HandleUpdateKind::WriteReady,
-            } => {
-                // let data_buf = [0xde, 0xea, 0xbe, 0xef];
-                // let valid_bytes = send(handle, &data_buf).unwrap();
-
-                // dbugln!(
-                //     "Sent {valid_bytes} from {handle}: {:02x?}",
-                //     &data_buf[..valid_bytes]
-                // );
-            }
-            WaitSignal::TerminationRequest => {
-                dbugln!("Quitting...");
-                return;
-            }
-            _ => (),
-        }
+                    _ => todo!(),
+                },
+                |_| Ok(()),
+                |_| Ok(()),
+            )
+            .unwrap();
     }
 }

@@ -29,6 +29,7 @@ pub mod alloc;
 pub mod debug;
 pub mod ipc;
 pub mod sync;
+pub mod uio;
 
 // Import syscall interface
 pub use quantum_portal::sys_client::*;
