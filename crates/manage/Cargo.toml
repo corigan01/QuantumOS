@@ -1,0 +1,11 @@
+[package]
+name = "manage"
+edition = "2024"
+version.workspace = true
+authors.workspace = true
+description.workspace = true
+documentation.workspace = true
+license.workspace = true
+
+[dependencies]
+boolvec  = {workspace = true}

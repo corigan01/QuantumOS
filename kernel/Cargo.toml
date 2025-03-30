@@ -18,3 +18,4 @@ tar = { workspace = true }
 boolvec = {workspace = true}
 quantum-portal = {workspace = true, features = ["server"]}
 bits = {workspace = true}
+manage = {workspace = true}
