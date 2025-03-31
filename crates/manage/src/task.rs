@@ -23,9 +23,58 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-#![no_std]
+use core::pin::Pin;
 
-pub mod atomic_arc;
-pub mod atomic_list;
-pub mod atomic_option;
-pub mod spin;
+use alloc::{boxed::Box, sync::Arc};
+use sync::spin::mutex::SpinMutex;
+
+use crate::wake::WakeSupport;
+
+/// A future that runs on the executer that doesn't have a return type.
+///
+/// Instead of completing to a value, this future should send its completed
+/// value through the executer back to the join handle.
+type DynDesyncedFuture = dyn Future<Output = ()> + Send + Sync + 'static;
+
+pub enum TaskState {
+    Unfinished(Pin<Box<DynDesyncedFuture>>),
+    Aborted,
+    Finished,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct TaskId(usize);
+
+pub type RefTask = Arc<Task>;
+
+pub struct Task {
+    state: SpinMutex<TaskState>,
+    id: TaskId,
+}
+
+impl Task {
+    fn new(id: TaskId, future: impl Future<Output = ()> + Send + Sync + 'static) -> RefTask {
+        Arc::new(Self {
+            state: SpinMutex::new(TaskState::Unfinished(Box::pin(future))),
+            id,
+        })
+    }
+}
+
+impl WakeSupport for Arc<Task> {
+    fn wake(self) {
+        todo!()
+    }
+
+    fn wake_by_ref(&self) {
+        todo!()
+    }
+
+    unsafe fn into_opaque(self) -> *const () {
+        Arc::into_raw(self).cast()
+    }
+
+    unsafe fn from_opaque(ptr: *const ()) -> Self {
+        unsafe { Arc::from_raw(ptr.cast()) }
+    }
+}

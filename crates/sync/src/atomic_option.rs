@@ -32,20 +32,31 @@ use core::{
     sync::atomic::{AtomicPtr, AtomicUsize, Ordering},
 };
 
-/// An atomic, atomic reference counted ptr of `T`.
-pub struct AtomicArc<T> {
+/// An `Atomic<Option<Arc<T>>>`
+pub struct AtomicOption<T> {
     guard: AtomicUsize,
     ptr: AtomicPtr<T>,
     ph: PhantomData<T>,
 }
 
-impl<T> AtomicArc<T> {
-    /// Create a new AtomicArc
-    pub fn new(value: Arc<T>) -> Self {
-        let begin = Arc::into_raw(value).cast_mut();
+impl<T> AtomicOption<T> {
+    pub const fn none() -> Self {
+        Self {
+            guard: AtomicUsize::new(0),
+            ptr: AtomicPtr::new(core::ptr::null_mut()),
+            ph: PhantomData,
+        }
+    }
+
+    /// Create a new OptionAtomicArc
+    pub fn new(value: Option<Arc<T>>) -> Self {
+        let ptr = match value {
+            Some(value) => Arc::into_raw(value).cast_mut(),
+            None => core::ptr::null_mut(),
+        };
 
         Self {
-            ptr: AtomicPtr::new(begin),
+            ptr: AtomicPtr::new(ptr),
             ph: PhantomData,
             guard: AtomicUsize::new(0),
         }
@@ -55,13 +66,21 @@ impl<T> AtomicArc<T> {
         self.guard.fetch_add(1, Ordering::Acquire);
     }
 
-    fn upgrade(&self, arc: *const T) -> Arc<T> {
+    fn upgrade(&self, arc: *const T) -> Option<Arc<T>> {
         let mut old = self.guard.load(Ordering::Relaxed);
 
-        let upgraded_arc = loop {
+        loop {
             // If someone else already inc the actual value's strong count, then we don't need to do anything!
             if old == 0 {
-                break unsafe { ManuallyDrop::new(Arc::from_raw(arc)).deref().clone() };
+                break if arc.is_null() {
+                    None
+                } else {
+                    let inner_arc =
+                        unsafe { ManuallyDrop::new(Arc::from_raw(arc)).deref().clone() };
+                    assert_ne!(Arc::strong_count(&inner_arc), 0);
+
+                    Some(inner_arc)
+                };
             }
 
             // Otherwise we will try to be the one that inc
@@ -71,32 +90,38 @@ impl<T> AtomicArc<T> {
                 Ordering::Release,
                 Ordering::Relaxed,
             ) {
-                Ok(_) => {
-                    break unsafe { Arc::from_raw(arc) };
+                Ok(_) if !arc.is_null() => {
+                    let inner_arc = unsafe { Arc::from_raw(arc) };
+                    assert_ne!(Arc::strong_count(&inner_arc), 0);
+                    break Some(inner_arc);
                 }
+                Ok(_) => break None,
                 Err(prev) => {
                     old = prev;
                 }
             }
-        };
-        assert_ne!(Arc::strong_count(&upgraded_arc), 0);
-
-        upgraded_arc
+        }
     }
 
     /// Returns a cloned Arc
-    pub fn load(&self) -> Arc<T> {
+    pub fn load(&self) -> Option<Arc<T>> {
         // This will prevent others from dropping the inner arc.
         self.inc_fake_strong();
 
         let arc_ptr = self.ptr.load(Ordering::Acquire);
-        unsafe { Arc::increment_strong_count(arc_ptr) };
+
+        if !arc_ptr.is_null() {
+            unsafe { Arc::increment_strong_count(arc_ptr) };
+        }
 
         self.upgrade(arc_ptr)
     }
 
-    pub fn swap(&self, new: Arc<T>) -> Arc<T> {
-        let new_raw = Arc::into_raw(new).cast_mut();
+    pub fn swap(&self, new: Option<Arc<T>>) -> Option<Arc<T>> {
+        let new_raw = match new {
+            Some(new) => Arc::into_raw(new).cast_mut(),
+            None => core::ptr::null_mut(),
+        };
         let prev_arc = self.ptr.swap(new_raw, Ordering::SeqCst);
 
         // This is required because we are no longer holding the prev arc in our structure, so we shouldn't have
@@ -108,65 +133,14 @@ impl<T> AtomicArc<T> {
     }
 }
 
-impl<T> Drop for AtomicArc<T> {
+impl<T> Drop for AtomicOption<T> {
     fn drop(&mut self) {
         unsafe { Arc::from_raw(self.ptr.load(Ordering::SeqCst)) };
     }
 }
 
-impl<T> Clone for AtomicArc<T> {
+impl<T> Clone for AtomicOption<T> {
     fn clone(&self) -> Self {
         Self::new(self.load())
-    }
-}
-
-#[cfg(test)]
-mod test {
-    extern crate std;
-    use super::*;
-
-    #[test]
-    fn test_single_threaded() {
-        let arc = Arc::new(1);
-        let atomic_arc = AtomicArc::new(arc.clone());
-
-        assert_eq!(*atomic_arc.load(), 1);
-        assert_eq!(Arc::strong_count(&arc), 2);
-
-        assert_eq!(Arc::strong_count(&atomic_arc.load()), 3);
-        assert_eq!(Arc::strong_count(&atomic_arc.swap(Arc::new(2))), 2);
-
-        assert_eq!(*atomic_arc.load(), 2);
-        assert_eq!(Arc::strong_count(&arc), 1);
-        assert_eq!(Arc::strong_count(&atomic_arc.load()), 2);
-    }
-
-    #[test]
-    fn test_multi_threaded() {
-        let atomic_arc = AtomicArc::new(Arc::new(i32::MAX));
-
-        let mut spawned_threads = std::vec::Vec::new();
-        for thread_number in 0..10 {
-            let atomic_arc = atomic_arc.clone();
-            spawned_threads.push(std::thread::spawn(move || {
-                let thread_owned = Arc::new(thread_number);
-                let prev_arc = atomic_arc.swap(thread_owned.clone());
-
-                assert!(Arc::strong_count(&prev_arc) >= 1);
-                assert!(Arc::strong_count(&thread_owned) >= 1);
-
-                atomic_arc.swap(prev_arc);
-
-                assert!(Arc::strong_count(&thread_owned) >= 1);
-            }));
-        }
-
-        for thread in spawned_threads {
-            _ = thread.join();
-        }
-
-        assert_eq!(*atomic_arc.load(), i32::MAX);
-        assert_eq!(Arc::strong_count(&atomic_arc.load()), 2);
-        assert_eq!(Arc::strong_count(&atomic_arc.swap(Arc::new(0))), 1);
     }
 }

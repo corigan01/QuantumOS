@@ -23,9 +23,18 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-#![no_std]
+use core::hint;
 
-pub mod atomic_arc;
-pub mod atomic_list;
-pub mod atomic_option;
-pub mod spin;
+pub mod mutex;
+
+pub trait SpinRelax {
+    fn back_off();
+}
+
+pub struct DefaultSpin(());
+
+impl SpinRelax for DefaultSpin {
+    fn back_off() {
+        hint::spin_loop();
+    }
+}

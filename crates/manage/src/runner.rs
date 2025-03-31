@@ -23,9 +23,32 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-#![no_std]
+use alloc::sync::Arc;
 
-pub mod atomic_arc;
-pub mod atomic_list;
-pub mod atomic_option;
-pub mod spin;
+use crate::{RefRuntime, task::RefTask};
+
+pub enum RunnerState {
+    Running(RefTask),
+    Waiting,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct RunnerId(usize);
+
+pub type RefRunner = Arc<Runner>;
+
+pub struct Runner {
+    id: RunnerId,
+    state: RunnerState,
+    runtime: RefRuntime,
+}
+
+impl Runner {
+    pub(crate) fn new(scheduler: RefRuntime, id: RunnerId) -> Self {
+        Self {
+            id,
+            state: RunnerState::Waiting,
+            runtime: scheduler,
+        }
+    }
+}

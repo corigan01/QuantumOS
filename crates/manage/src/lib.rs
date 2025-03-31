@@ -25,10 +25,41 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 #![no_std]
 
-pub struct Scheduler {}
+use core::sync::atomic::AtomicUsize;
 
-impl Scheduler {
-    pub const fn new() -> Self {
-        Self {}
+use alloc::{
+    collections::{btree_map::BTreeMap, vec_deque::VecDeque},
+    sync::Arc,
+};
+use runner::{RefRunner, RunnerId};
+use sync::spin::mutex::SpinMutex;
+use task::{RefTask, TaskId};
+extern crate alloc;
+
+pub mod runner;
+pub mod task;
+pub mod wake;
+
+pub type RefRuntime = Arc<Runtime>;
+
+pub struct Runtime {
+    next_runner_id: AtomicUsize,
+    next_task_id: AtomicUsize,
+    runners: SpinMutex<BTreeMap<RunnerId, RefRunner>>,
+    tasks: SpinMutex<BTreeMap<TaskId, RefTask>>,
+    needs_runner: SpinMutex<VecDeque<RefTask>>,
+}
+
+impl Runtime {
+    pub fn new() -> RefRuntime {
+        let raw_runtime = Self {
+            next_runner_id: AtomicUsize::new(0),
+            next_task_id: AtomicUsize::new(0),
+            runners: SpinMutex::new(BTreeMap::new()),
+            tasks: SpinMutex::new(BTreeMap::new()),
+            needs_runner: SpinMutex::new(VecDeque::new()),
+        };
+
+        Arc::new(raw_runtime)
     }
 }

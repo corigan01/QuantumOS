@@ -25,59 +25,91 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 extern crate alloc;
 
-use alloc::boxed::Box;
-use core::{
-    ptr::null_mut,
-    sync::atomic::{AtomicPtr, Ordering},
-};
+use crate::atomic_option::AtomicOption;
+use alloc::sync::Arc;
+use core::sync::atomic::{AtomicUsize, Ordering};
 
+/// Non-Locking Doubly Linked List inspired by Hakan Sundell and Philippas Tsigas
+///
 pub struct AtomicLinkedList<T> {
-    node: AtomicPtr<AtomicNode<T>>,
+    node: AtomicOption<AtomicNode<T>>,
 }
 
 pub struct AtomicNode<T> {
-    next: AtomicPtr<Self>,
-    data: T,
+    state: AtomicUsize,
+    next: AtomicOption<AtomicNode<T>>,
+    prev: AtomicOption<AtomicNode<T>>,
+    value: T,
 }
-
-unsafe impl<T: Send> Send for AtomicLinkedList<T> {}
-unsafe impl<T: Send + Sync> Sync for AtomicLinkedList<T> {}
-unsafe impl<T: Send> Send for AtomicNode<T> {}
-unsafe impl<T: Send + Sync> Sync for AtomicNode<T> {}
 
 impl<T> AtomicLinkedList<T> {
     pub const fn new() -> Self {
         Self {
-            node: AtomicPtr::new(null_mut()),
+            node: AtomicOption::none(),
         }
     }
-
-    pub fn push_front(&mut self, value: T) {
-        let mut current = self.node.load(Ordering::Relaxed);
-        let new = AtomicNode::new_packed(value, current);
-
-        while let Err(failed) =
-            self.node
-                .compare_exchange(current, new, Ordering::SeqCst, Ordering::Relaxed)
-        {
-            current = failed;
-            unsafe { new.as_mut().unwrap().next = AtomicPtr::new(current) };
-        }
-    }
-
-    pub fn push_back(&mut self) {}
 }
 
 impl<T> AtomicNode<T> {
-    pub fn new_packed(data: T, next: *mut Self) -> *mut Self {
-        let ptr = Box::into_raw(Box::new(Self {
-            next: AtomicPtr::new(next),
-            data,
-        }));
-        ptr
+    const ALIVE: usize = 1;
+    const DEAD: usize = 0;
+
+    fn new(next: Option<Arc<Self>>, prev: Option<Arc<Self>>, value: T) -> Arc<Self> {
+        Arc::new(Self {
+            state: AtomicUsize::new(Self::ALIVE),
+            next: AtomicOption::new(next),
+            prev: AtomicOption::new(prev),
+            value,
+        })
     }
 
-    pub fn push_after(&mut self, value: T) -> AtomicPtr<Self> {
-        todo!()
+    fn insert_between(left: Option<Arc<Self>>, new: T, right: Option<Arc<Self>>) {
+        let new_node = Self::new(right.clone(), left.clone(), new);
+
+        if let Some(left) = left {
+            // check both before and after trying to swap if the node is dead
+            //
+            // if the node is dead, restore the previous value
+            left.next.swap(Some(new_node.clone()));
+        }
+        if let Some(right) = right {
+            right.prev.swap(Some(new_node.clone()));
+        }
+    }
+
+    pub fn push_left(self: Arc<Self>, value: T) {
+        let left_node = self.prev.load();
+        let right_node = Some(self);
+
+        Self::insert_between(left_node, value, right_node);
+    }
+
+    pub fn push_right(self: Arc<Self>, value: T) {
+        let right_node = self.next.load();
+        let left_node = Some(self);
+
+        Self::insert_between(left_node, value, right_node);
+    }
+
+    pub fn unlink(self: Arc<Self>) {
+        // If we fail to set the marker, we are already being unlinked
+        if let Err(_) = self.state.compare_exchange(
+            Self::ALIVE,
+            Self::DEAD,
+            Ordering::Acquire,
+            Ordering::Relaxed,
+        ) {
+            return;
+        }
+
+        let old_prev = self.prev.load();
+        let old_next = self.next.load();
+
+        if let Some(prev) = old_prev.clone() {
+            prev.next.swap(old_next.clone());
+        }
+        if let Some(next) = old_next {
+            next.prev.swap(old_prev.clone());
+        }
     }
 }

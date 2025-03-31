@@ -73,6 +73,7 @@ quantum-portal = { path = "portals/quantum-portal" }
 libsys = { path = "user/libsys" }
 fs-portal = { path = "portals/fs-portal" }
 manage = { path = "crates/manage" }
+sync = { path = "crates/sync" }
 
 [profile.stage-bootsector]
 inherits = "release"
