@@ -23,58 +23,50 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use core::pin::Pin;
+use core::{
+    pin::Pin,
+    task::{Context, Poll},
+};
 
-use alloc::{boxed::Box, sync::Arc};
-use sync::spin::mutex::SpinMutex;
+use crate::vtask::{RawTask, RunResult, RuntimeSupport};
 
-use crate::wake::WakeSupport;
-
-/// A future that runs on the executer that doesn't have a return type.
-///
-/// Instead of completing to a value, this future should send its completed
-/// value through the executer back to the join handle.
-type DynDesyncedFuture = dyn Future<Output = ()> + Send + Sync + 'static;
-
-pub enum TaskState {
-    Unfinished(Pin<Box<DynDesyncedFuture>>),
-    Aborted,
-    Finished,
+#[derive(Debug)]
+pub struct Task<Fut, Run, Out> {
+    raw: RawTask<Fut, Run, Out>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub struct TaskId(usize);
-
-pub type RefTask = Arc<Task>;
-
-pub struct Task {
-    state: SpinMutex<TaskState>,
-    id: TaskId,
-}
-
-impl Task {
-    fn new(id: TaskId, future: impl Future<Output = ()> + Send + Sync + 'static) -> RefTask {
-        Arc::new(Self {
-            state: SpinMutex::new(TaskState::Unfinished(Box::pin(future))),
-            id,
-        })
+impl<Fut, Run> Task<Fut, Run, Fut::Output>
+where
+    Fut: Future + Send + 'static,
+    Fut::Output: Send + 'static,
+    Run: RuntimeSupport + Send + Sync + 'static,
+{
+    pub fn spawn(future: Fut, runtime: Run) -> Self {
+        Self {
+            raw: RawTask::new_allocated(future, runtime),
+        }
     }
 }
 
-impl WakeSupport for Arc<Task> {
-    fn wake(self) {
-        todo!()
-    }
+impl<Fut, Run> Future for Task<Fut, Run, Fut::Output>
+where
+    Fut: Future + Send + 'static,
+    Fut::Output: Send + 'static,
+    Run: RuntimeSupport + Send + Sync + 'static,
+{
+    type Output = Fut::Output;
 
-    fn wake_by_ref(&self) {
-        todo!()
-    }
-
-    unsafe fn into_opaque(self) -> *const () {
-        Arc::into_raw(self).cast()
-    }
-
-    unsafe fn from_opaque(ptr: *const ()) -> Self {
-        unsafe { Arc::from_raw(ptr.cast()) }
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        self.raw.set_waker(cx.waker().clone());
+        match unsafe { self.raw.clone().downgrade().vtable_run() } {
+            RunResult::Pending => Poll::Pending,
+            RunResult::Finished => Poll::Ready(
+                self.raw
+                    .clone()
+                    .get_output()
+                    .expect("Task polled `Ready` yet no output, was future double-ready polled?"),
+            ),
+            RunResult::Canceled => panic!("Task canceled!"),
+        }
     }
 }

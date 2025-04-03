@@ -124,7 +124,7 @@ overflow-checks = true
 [profile.kernel]
 inherits = "release"
 panic = "abort"
-opt-level=1
+opt-level = 1
 strip = false
 debug = 1
 overflow-checks = true
@@ -132,7 +132,7 @@ overflow-checks = true
 [profile.userspace]
 inherits = "release"
 panic = "abort"
-opt-level=1
+opt-level = 1
 strip = false
-debug = 0
+debug = 1
 overflow-checks = true

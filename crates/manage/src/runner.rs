@@ -22,33 +22,3 @@ NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FO
 DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
-
-use alloc::sync::Arc;
-
-use crate::{RefRuntime, task::RefTask};
-
-pub enum RunnerState {
-    Running(RefTask),
-    Waiting,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub struct RunnerId(usize);
-
-pub type RefRunner = Arc<Runner>;
-
-pub struct Runner {
-    id: RunnerId,
-    state: RunnerState,
-    runtime: RefRuntime,
-}
-
-impl Runner {
-    pub(crate) fn new(scheduler: RefRuntime, id: RunnerId) -> Self {
-        Self {
-            id,
-            state: RunnerState::Waiting,
-            runtime: scheduler,
-        }
-    }
-}

@@ -27,10 +27,10 @@ use core::{
     mem::ManuallyDrop,
     ops::Deref,
     ptr::null,
-    task::{RawWaker, RawWakerVTable},
+    task::{RawWaker, RawWakerVTable, Waker},
 };
 
-pub trait WakeSupport: Send + Clone + Sync + 'static {
+pub trait WakeSupport: Send + Clone + 'static {
     fn wake(self);
     fn wake_by_ref(&self);
 
@@ -39,6 +39,10 @@ pub trait WakeSupport: Send + Clone + Sync + 'static {
 
     fn get_raw_waker(self) -> RawWaker {
         RawWaker::new(unsafe { Self::into_opaque(self) }, get_vtable::<Self>())
+    }
+
+    fn get_waker(self) -> Waker {
+        unsafe { Waker::from_raw(self.get_raw_waker()) }
     }
 }
 

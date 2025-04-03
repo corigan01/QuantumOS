@@ -25,41 +25,36 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 #![no_std]
 
-use core::sync::atomic::AtomicUsize;
+use vtask::RuntimeSupport;
 
-use alloc::{
-    collections::{btree_map::BTreeMap, vec_deque::VecDeque},
-    sync::Arc,
-};
-use runner::{RefRunner, RunnerId};
-use sync::spin::mutex::SpinMutex;
-use task::{RefTask, TaskId};
 extern crate alloc;
 
 pub mod runner;
 pub mod task;
+pub mod vtask;
 pub mod wake;
 
-pub type RefRuntime = Arc<Runtime>;
-
-pub struct Runtime {
-    next_runner_id: AtomicUsize,
-    next_task_id: AtomicUsize,
-    runners: SpinMutex<BTreeMap<RunnerId, RefRunner>>,
-    tasks: SpinMutex<BTreeMap<TaskId, RefTask>>,
-    needs_runner: SpinMutex<VecDeque<RefTask>>,
+async fn test_async(dingus: i32) -> i32 {
+    dingus + 10
 }
 
-impl Runtime {
-    pub fn new() -> RefRuntime {
-        let raw_runtime = Self {
-            next_runner_id: AtomicUsize::new(0),
-            next_task_id: AtomicUsize::new(0),
-            runners: SpinMutex::new(BTreeMap::new()),
-            tasks: SpinMutex::new(BTreeMap::new()),
-            needs_runner: SpinMutex::new(VecDeque::new()),
-        };
+struct Runtime {}
 
-        Arc::new(raw_runtime)
+impl RuntimeSupport for Runtime {
+    fn schedule_task(&self, task: vtask::AnonTask) {
+        todo!()
+    }
+}
+
+fn test() {
+    let raw = vtask::RawTask::new_allocated(test_async(10), Runtime {});
+}
+
+#[cfg(test)]
+mod test {
+    #[test]
+    fn test_runtiem() {
+        let future_1 = || async { 1 + 2 };
+        let future_2 = async { future_1().await + future_1().await };
     }
 }
