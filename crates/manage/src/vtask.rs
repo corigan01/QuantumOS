@@ -27,7 +27,7 @@ use core::{
     alloc::Layout,
     cell::UnsafeCell,
     fmt::Debug,
-    mem::ManuallyDrop,
+    mem::{self, ManuallyDrop},
     pin::Pin,
     ptr::drop_in_place,
     sync::atomic::{AtomicUsize, Ordering},
@@ -36,6 +36,7 @@ use core::{
 
 type OpaquePtr = *const ();
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum RunResult {
     Pending,
     Finished,
@@ -65,7 +66,8 @@ struct TaskMem<Fut, Run, Out> {
 pub struct TaskState(AtomicUsize);
 
 impl TaskState {
-    const REF_COUNT_MAX: usize = usize::MAX >> 4;
+    const REF_COUNT_MAX: usize = usize::MAX >> 5;
+    const REF_COUNT_MASK: usize = usize::MAX >> 4;
 
     const FINISHED_BIT: usize = 1 << usize::BITS - 1;
     const RUNNING_BIT: usize = 1 << usize::BITS - 2;
@@ -73,19 +75,23 @@ impl TaskState {
     const CONSUMED_BIT: usize = 1 << usize::BITS - 4;
 
     pub const fn new() -> Self {
-        Self(AtomicUsize::new(0))
+        Self(AtomicUsize::new(1))
     }
 
     pub fn add_ref(&self) -> usize {
-        let old_count = self.0.fetch_add(1, Ordering::SeqCst);
+        let old_count = self.0.fetch_add(1, Ordering::SeqCst) & Self::REF_COUNT_MASK;
         assert!(old_count < Self::REF_COUNT_MAX);
 
         old_count + 1
     }
 
     pub fn sub_ref(&self) -> usize {
-        let old_count = self.0.fetch_sub(1, Ordering::SeqCst);
-        assert!(old_count > 0);
+        let old_count = self.0.fetch_sub(1, Ordering::SeqCst) & Self::REF_COUNT_MASK;
+
+        assert!(
+            old_count > 0 || old_count > Self::REF_COUNT_MAX,
+            "Tried to subtract from a dead reference!"
+        );
 
         old_count - 1
     }
@@ -126,7 +132,7 @@ impl TaskState {
         let mut current = self.0.load(Ordering::Relaxed);
 
         while let Err(failed) = self.0.compare_exchange_weak(
-            (current & Self::REF_COUNT_MAX),
+            current & Self::REF_COUNT_MAX,
             current | Self::RUNNING_BIT,
             Ordering::Acquire,
             Ordering::Relaxed,
@@ -243,6 +249,10 @@ impl AnonTask {
     pub unsafe fn vtable_output<Output>(&self) -> *const UnsafeCell<Option<Output>> {
         unsafe { ((&*self.mem_ptr).vtable.output)(self.mem_ptr.cast()).cast() }
     }
+
+    pub unsafe fn vtable_set_waker(&self, waker: Waker) {
+        unsafe { ((&*self.mem_ptr).vtable.set_waker)(self.mem_ptr.cast(), waker) }
+    }
 }
 
 impl Drop for AnonTask {
@@ -320,9 +330,10 @@ where
     /// often does not need this info. So, this function serves to convert this type into one that can
     /// just call the `vtable`.
     pub fn downgrade(self) -> AnonTask {
-        AnonTask {
-            mem_ptr: self.mem_ptr.cast(),
-        }
+        let mem_ptr = self.mem_ptr.cast();
+        mem::forget(self);
+
+        AnonTask { mem_ptr }
     }
 
     /// Wake this future
@@ -345,12 +356,12 @@ where
         unsafe {
             let poll_lifecycle = (&*self.mem_ptr).state.poll_lifecycle(|| {
                 let future = Pin::new_unchecked(&mut *(&*self.mem_ptr).future.get());
-                let waker = self.waker();
+                let waker = self.clone().waker();
 
                 let mut context = Context::from_waker(&waker);
                 match future.poll(&mut context) {
-                    Poll::Ready(output) => {
-                        (&*self.mem_ptr).output.get().write(Some(output));
+                    Poll::Ready(val) => {
+                        (&*self.mem_ptr).output.get().write(Some(val));
 
                         RunResult::Finished
                     }
@@ -371,8 +382,8 @@ where
     /// Get a cloned waker instance from this task
     ///
     /// Increases the ref count (clone)'s the inner value.
-    fn waker(&self) -> Waker {
-        unsafe { Waker::from_raw(Self::clone_waker_raw(self as *const _ as *const ())) }
+    fn waker(self) -> Waker {
+        unsafe { Waker::from_raw(Self::clone_waker_raw(self.mem_ptr as *const _ as *const ())) }
     }
 
     /// Calls the waker set for this task if one exists
@@ -399,7 +410,7 @@ where
     ///
     /// This will consume the output value from the future. This future once consumed
     /// cannot return its output again.
-    pub fn get_output(self) -> Option<Fut::Output> {
+    pub fn get_output(&self) -> Option<Fut::Output> {
         unsafe {
             if (&*self.mem_ptr).state.try_consume() {
                 let inner_ptr = (&*self.mem_ptr).output.get();
@@ -465,7 +476,7 @@ where
     unsafe fn raw_output(ptr: OpaquePtr) -> OpaquePtr {
         unsafe {
             let s = Self::upgrade_opaque(ptr);
-            let output_ptr = &raw const ((*s.mem_ptr).output);
+            let output_ptr = &raw const ((&*s.mem_ptr).output);
 
             output_ptr.cast()
         }
@@ -503,6 +514,7 @@ impl Debug for TaskState {
             .field("running", &(inner_value & Self::RUNNING_BIT != 0))
             .field("canceled", &(inner_value & Self::CANCEL_BIT != 0))
             .field("finished", &(inner_value & Self::FINISHED_BIT != 0))
+            .field("consumed", &(inner_value & Self::CONSUMED_BIT != 0))
             .field("ref_count", &(inner_value & Self::REF_COUNT_MAX))
             .finish()
     }

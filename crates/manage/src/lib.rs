@@ -46,15 +46,21 @@ impl RuntimeSupport for Runtime {
     }
 }
 
-fn test() {
-    let raw = vtask::RawTask::new_allocated(test_async(10), Runtime {});
-}
-
 #[cfg(test)]
 mod test {
+    use lldebug::{logln, testing_stdout};
+
+    use super::*;
+
     #[test]
     fn test_runtiem() {
-        let future_1 = || async { 1 + 2 };
-        let future_2 = async { future_1().await + future_1().await };
+        testing_stdout!();
+
+        let raw = vtask::RawTask::new_allocated(test_async(10), Runtime {});
+        logln!("{:#?}", raw);
+        logln!("{:#?}", unsafe { raw.clone().downgrade().vtable_run() });
+        logln!("{:#?}", raw.get_output());
+
+        logln!("\n ");
     }
 }

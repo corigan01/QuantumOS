@@ -10,3 +10,4 @@ license.workspace = true
 [dependencies]
 boolvec  = {workspace = true}
 sync = {workspace = true}
+lldebug = { workspace = true }
