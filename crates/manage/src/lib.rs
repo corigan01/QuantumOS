@@ -25,16 +25,10 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 #![no_std]
 
-use core::{
-    pin::Pin,
-    task::{Context, Poll},
-};
-
 use alloc::{
     collections::{btree_set::BTreeSet, vec_deque::VecDeque},
     sync::Arc,
 };
-use lldebug::logln;
 use runner::TaskRunner;
 use runtime::{GuardedJob, GuardedJobStatus, RuntimeSupport};
 use sync::spin::mutex::SpinMutex;
@@ -47,36 +41,8 @@ pub mod runtime;
 pub mod task;
 pub mod vtask;
 
-#[derive(Debug)]
-pub struct Yield(bool);
-
-impl Future for Yield {
-    type Output = ();
-
-    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        if !self.0 {
-            self.0 = true;
-            cx.waker().wake_by_ref();
-
-            Poll::Pending
-        } else {
-            Poll::Ready(())
-        }
-    }
-}
-
-impl Yield {
-    pub const fn new() -> Self {
-        Self(false)
-    }
-}
-
-async fn test_async(dingus: i32) -> i32 {
-    dingus + 10
-}
-
 #[derive(Clone)]
-struct Runtime {
+pub struct Runtime {
     needs_poll: Arc<SpinMutex<VecDeque<vtask::AnonTask>>>,
     waiting: Arc<SpinMutex<BTreeSet<vtask::AnonTask>>>,
 }
@@ -160,7 +126,40 @@ impl Runtime {
 
 #[cfg(test)]
 mod test {
+    use core::{
+        pin::Pin,
+        task::{Context, Poll},
+    };
+
     use super::*;
+
+    #[derive(Debug)]
+    pub struct Yield(bool);
+
+    impl Future for Yield {
+        type Output = ();
+
+        fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+            if !self.0 {
+                self.0 = true;
+                cx.waker().wake_by_ref();
+
+                Poll::Pending
+            } else {
+                Poll::Ready(())
+            }
+        }
+    }
+
+    impl Yield {
+        pub const fn new() -> Self {
+            Self(false)
+        }
+    }
+
+    async fn test_async(dingus: i32) -> i32 {
+        dingus + 10
+    }
 
     #[test]
     fn test_runtime() {
