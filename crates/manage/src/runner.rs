@@ -24,7 +24,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 */
 
 use crate::{
-    runtime::RuntimeSupport,
+    runtime::{RuntimeStatus, RuntimeSupport},
     vtask::{self},
 };
 
@@ -47,6 +47,13 @@ impl<Run: RuntimeSupport> TaskRunner<Run> {
         };
 
         match unsafe { next_job.vtable_run() } {
+            vtask::RunResult::Pending
+                if self.runtime.runtime_status() == RuntimeStatus::ShuttingDown =>
+            {
+                // If the runtime is shutting down, we should mark that in the task
+                unsafe { next_job.vtable_override_status(vtask::RunResult::Canceled) };
+                next_job.mark_canceled();
+            }
             vtask::RunResult::Pending => (),
             vtask::RunResult::Finished => next_job.mark_completed(),
             vtask::RunResult::Canceled => next_job.mark_canceled(),

@@ -55,6 +55,7 @@ pub struct FnTable {
     run: unsafe fn(OpaquePtr) -> RunResult,
     output: unsafe fn(OpaquePtr) -> OpaquePtr,
     set_waker: unsafe fn(OpaquePtr, Waker),
+    override_status: unsafe fn(OpaquePtr, RunResult),
 }
 
 #[repr(C)]
@@ -200,6 +201,18 @@ impl TaskState {
 
         return RunResult::Pending;
     }
+
+    pub unsafe fn override_status(&self, status: RunResult) {
+        match status {
+            RunResult::Pending => (),
+            RunResult::Finished => {
+                self.0.fetch_or(Self::FINISHED_BIT, Ordering::SeqCst);
+            }
+            RunResult::Canceled => {
+                self.0.fetch_or(Self::CANCEL_BIT, Ordering::SeqCst);
+            }
+        }
+    }
 }
 
 impl<Fut, Run, Out> TaskMem<Fut, Run, Out> {
@@ -276,6 +289,12 @@ impl AnonTask {
     pub unsafe fn vtable_set_waker(&self, waker: Waker) {
         unsafe { (self.mem_ptr.as_ref().vtable.set_waker)(self.mem_ptr.as_ptr().cast(), waker) }
     }
+
+    pub unsafe fn vtable_override_status(&self, status: RunResult) {
+        unsafe {
+            (self.mem_ptr.as_ref().vtable.override_status)(self.mem_ptr.as_ptr().cast(), status)
+        }
+    }
 }
 
 impl Drop for AnonTask {
@@ -329,6 +348,7 @@ where
                     run: Self::run_raw,
                     output: Self::raw_output,
                     set_waker: Self::raw_set_waker,
+                    override_status: Self::raw_override_status,
                 },
                 future,
                 runtime,
@@ -523,6 +543,13 @@ where
         unsafe {
             let s = Self::upgrade_opaque(ptr);
             s.set_waker(waker);
+        }
+    }
+
+    unsafe fn raw_override_status(ptr: OpaquePtr, status: RunResult) {
+        unsafe {
+            let s = Self::upgrade_opaque(ptr);
+            (&*s.mem_ptr).state.override_status(status);
         }
     }
 }
