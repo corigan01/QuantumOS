@@ -28,7 +28,10 @@ use core::{
     task::{Context, Poll},
 };
 
-use crate::vtask::{self, RawTask, RunResult, RuntimeSupport};
+use crate::{
+    runtime::RuntimeSupport,
+    vtask::{self, RawTask, RunResult},
+};
 
 #[derive(Debug)]
 pub struct Task<Fut, Run, Out> {
@@ -41,7 +44,7 @@ where
     Fut::Output: Send + 'static,
     Run: RuntimeSupport + Send + Sync + 'static,
 {
-    pub fn spawn(future: Fut, runtime: Run) -> Self {
+    pub fn new(future: Fut, runtime: Run) -> Self {
         Self {
             raw: RawTask::new_allocated(future, runtime),
         }

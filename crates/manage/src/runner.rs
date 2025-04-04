@@ -22,3 +22,34 @@ NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FO
 DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+
+use crate::{
+    runtime::RuntimeSupport,
+    vtask::{self},
+};
+
+/// Single execution unit for the runtime.
+///
+/// A `TaskRunner` is a work-stealing single execution enviroment for tasks
+/// to be ran within.
+pub struct TaskRunner<Run> {
+    runtime: Run,
+}
+
+impl<Run: RuntimeSupport> TaskRunner<Run> {
+    pub fn new(runtime: Run) -> Self {
+        Self { runtime }
+    }
+
+    pub fn drive_execution(&mut self) {
+        let Some(next_job) = self.runtime.next_awaiting_task() else {
+            return;
+        };
+
+        match unsafe { next_job.vtable_run() } {
+            vtask::RunResult::Pending => (),
+            vtask::RunResult::Finished => next_job.mark_completed(),
+            vtask::RunResult::Canceled => next_job.mark_canceled(),
+        }
+    }
+}

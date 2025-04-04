@@ -30,18 +30,22 @@ use core::{
     task::{Context, Poll},
 };
 
-use alloc::{collections::vec_deque::VecDeque, sync::Arc, vec::Vec};
+use alloc::{
+    collections::{btree_set::BTreeSet, vec_deque::VecDeque},
+    sync::Arc,
+};
 use lldebug::logln;
+use runner::TaskRunner;
+use runtime::{GuardedJob, GuardedJobStatus, RuntimeSupport};
 use sync::spin::mutex::SpinMutex;
 use task::Task;
-use vtask::RuntimeSupport;
 
 extern crate alloc;
 
 pub mod runner;
+pub mod runtime;
 pub mod task;
 pub mod vtask;
-pub mod wake;
 
 #[derive(Debug)]
 pub struct Yield(bool);
@@ -50,15 +54,12 @@ impl Future for Yield {
     type Output = ();
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        logln!("Yield is being polled!");
         if !self.0 {
             self.0 = true;
             cx.waker().wake_by_ref();
 
-            logln!("Yield -> Pending");
             Poll::Pending
         } else {
-            logln!("Yield -> Ready");
             Poll::Ready(())
         }
     }
@@ -74,59 +75,128 @@ async fn test_async(dingus: i32) -> i32 {
     dingus + 10
 }
 
+#[derive(Clone)]
 struct Runtime {
-    tasks: SpinMutex<VecDeque<vtask::AnonTask>>,
+    needs_poll: Arc<SpinMutex<VecDeque<vtask::AnonTask>>>,
+    waiting: Arc<SpinMutex<BTreeSet<vtask::AnonTask>>>,
 }
 
-impl RuntimeSupport for Arc<Runtime> {
-    fn schedule_task(&self, task: vtask::AnonTask) {
-        logln!("Wake called!");
-        self.tasks.lock().push_back(task);
+impl RuntimeSupport for Runtime {
+    fn task_awoken(&self, task: vtask::AnonTask) {
+        self.needs_poll.lock().push_back(task);
+    }
+
+    fn next_awaiting_task(&self) -> Option<GuardedJob> {
+        { self.needs_poll.lock().pop_front() }.map(|job| {
+            let tasks_clone = self.waiting.clone();
+            GuardedJob::new(
+                job,
+                Some(move |reason, job| match reason {
+                    GuardedJobStatus::Finished => {
+                        tasks_clone.lock().remove(&job);
+                    }
+                    GuardedJobStatus::Dropped => {
+                        tasks_clone.lock().insert(job);
+                    }
+                    GuardedJobStatus::Canceled => {
+                        tasks_clone.lock().remove(&job);
+                    }
+                }),
+            )
+        })
+    }
+
+    fn runtime_status(&self) -> runtime::RuntimeStatus {
+        runtime::RuntimeStatus::Running
     }
 }
 
 impl Runtime {
     pub fn new() -> Self {
         Self {
-            tasks: SpinMutex::new(VecDeque::new()),
+            needs_poll: Arc::new(SpinMutex::new(VecDeque::new())),
+            waiting: Arc::new(SpinMutex::new(BTreeSet::new())),
         }
     }
 
-    pub fn spawn<F>(self: &Arc<Self>, future: F) -> Task<F, Arc<Self>, F::Output>
+    pub fn spawn<F>(&self, future: F) -> Task<F, Self, F::Output>
     where
         F: Future + Send + 'static,
         F::Output: Send + 'static,
     {
-        let new_task = Task::spawn(future, self.clone());
-        self.tasks.lock().push_back(new_task.anon_task());
+        let new_task = Task::new(future, self.clone());
+        self.needs_poll.lock().push_back(new_task.anon_task());
 
         new_task
     }
 
-    pub fn block_all(self: &Arc<Self>) {
-        while let Some(next) = { self.tasks.lock().pop_front() } {
-            unsafe { next.vtable_run() };
+    pub fn new_runner(&self) -> TaskRunner<Self> {
+        TaskRunner::new(self.clone())
+    }
+
+    pub fn is_work_finished(&self) -> bool {
+        self.needs_poll.lock().len() == 0 && self.waiting.lock().len() == 0
+    }
+
+    pub fn block_on<F>(&self, future: F) -> F::Output
+    where
+        F: Future + Send + 'static,
+        F::Output: Send + 'static,
+    {
+        let new_task = Task::new(future, self.clone());
+        self.needs_poll.lock().push_back(new_task.anon_task());
+
+        let mut runner = self.new_runner();
+        while !self.is_work_finished() {
+            runner.drive_execution();
         }
+
+        new_task
+            .raw_task()
+            .get_output()
+            .expect("Expected task to return output!")
     }
 }
 
 #[cfg(test)]
 mod test {
-    use lldebug::{logln, testing_stdout};
-
     use super::*;
 
     #[test]
     fn test_runtime() {
-        testing_stdout!();
         let yielding_future = Yield::new();
 
-        let runtime = Arc::new(Runtime::new());
-        let task = runtime.clone().spawn(yielding_future);
-        runtime.block_all();
+        let runtime = Runtime::new();
+        runtime.spawn(async move {
+            yielding_future.await;
+            assert_eq!(test_async(10).await, 20);
+        });
 
-        logln!("{:#?}", task.raw_task());
+        runtime.spawn(async move {
+            Yield::new().await;
+            Yield::new().await;
+            assert_eq!(test_async(0).await, 10);
+        });
 
-        logln!("\n ");
+        let mut runner = runtime.new_runner();
+        while !runtime.is_work_finished() {
+            runner.drive_execution();
+        }
+    }
+
+    #[test]
+    fn test_runtime_blocking() {
+        let runtime = Runtime::new();
+
+        assert_eq!(
+            runtime.block_on(async {
+                for _ in 0..10 {
+                    Yield::new().await;
+                }
+
+                test_async(10).await
+            }),
+            20
+        );
     }
 }

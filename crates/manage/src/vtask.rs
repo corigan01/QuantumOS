@@ -27,12 +27,15 @@ use core::{
     alloc::Layout,
     cell::UnsafeCell,
     fmt::Debug,
+    marker::PhantomPinned,
     mem::{self, ManuallyDrop},
     pin::Pin,
-    ptr::drop_in_place,
+    ptr::{NonNull, drop_in_place},
     sync::atomic::{AtomicUsize, Ordering},
     task::{Context, Poll, RawWaker, RawWakerVTable, Waker},
 };
+
+use crate::runtime::RuntimeSupport;
 
 type OpaquePtr = *const ();
 
@@ -43,6 +46,7 @@ pub enum RunResult {
     Canceled,
 }
 
+#[derive(Debug)]
 pub struct FnTable {
     wake: unsafe fn(OpaquePtr),
     wake_ref: unsafe fn(OpaquePtr),
@@ -61,6 +65,7 @@ struct TaskMem<Fut, Run, Out> {
     future: UnsafeCell<Fut>,
     output: UnsafeCell<Option<Out>>,
     runtime: UnsafeCell<Run>,
+    _ph: PhantomPinned,
 }
 
 pub struct TaskState(AtomicUsize);
@@ -221,9 +226,10 @@ impl<Fut, Run, Out> TaskMem<Fut, Run, Out> {
     }
 }
 
+#[derive(PartialEq, Eq, PartialOrd, Ord)]
 #[repr(transparent)]
 pub struct AnonTask {
-    mem_ptr: *mut TaskMem<(), (), ()>,
+    mem_ptr: NonNull<TaskMem<(), (), ()>>,
 }
 
 unsafe impl Send for AnonTask {}
@@ -232,40 +238,48 @@ unsafe impl Sync for AnonTask {}
 impl AnonTask {
     pub unsafe fn vtable_wake(self) {
         unsafe {
-            ((&*self.mem_ptr).vtable.wake)(self.mem_ptr.cast());
+            (self.mem_ptr.as_ref().vtable.wake)(self.mem_ptr.as_ptr().cast());
             mem::forget(self);
         }
     }
 
     pub unsafe fn vtable_wake_ref(&self) {
-        unsafe { ((&*self.mem_ptr).vtable.wake_ref)(self.mem_ptr.cast()) }
+        unsafe { (self.mem_ptr.as_ref().vtable.wake_ref)(self.mem_ptr.as_ptr().cast()) }
     }
 
     pub unsafe fn vtable_clone_waker(&self) -> RawWaker {
-        unsafe { ((&*self.mem_ptr).vtable.clone_waker)(self.mem_ptr.cast()) }
+        unsafe { (self.mem_ptr.as_ref().vtable.clone_waker)(self.mem_ptr.as_ptr().cast()) }
     }
 
     pub unsafe fn vtable_run(&self) -> RunResult {
-        unsafe { ((&*self.mem_ptr).vtable.run)(self.mem_ptr.cast()) }
+        unsafe { (self.mem_ptr.as_ref().vtable.run)(self.mem_ptr.as_ptr().cast()) }
     }
 
     pub unsafe fn vtable_output<Output>(&self) -> *const UnsafeCell<Option<Output>> {
-        unsafe { ((&*self.mem_ptr).vtable.output)(self.mem_ptr.cast()).cast() }
+        unsafe { (self.mem_ptr.as_ref().vtable.output)(self.mem_ptr.as_ptr().cast()).cast() }
     }
 
     pub unsafe fn vtable_set_waker(&self, waker: Waker) {
-        unsafe { ((&*self.mem_ptr).vtable.set_waker)(self.mem_ptr.cast(), waker) }
+        unsafe { (self.mem_ptr.as_ref().vtable.set_waker)(self.mem_ptr.as_ptr().cast(), waker) }
     }
 }
 
 impl Drop for AnonTask {
     fn drop(&mut self) {
-        unsafe { ((&*self.mem_ptr).vtable.drop)(self.mem_ptr.cast()) }
+        unsafe { (self.mem_ptr.as_ref().vtable.drop)(self.mem_ptr.as_ptr().cast()) }
     }
 }
 
-pub trait RuntimeSupport {
-    fn schedule_task(&self, task: AnonTask);
+impl Clone for AnonTask {
+    fn clone(&self) -> Self {
+        unsafe {
+            (self.mem_ptr.as_ref().state.add_ref());
+
+            Self {
+                mem_ptr: self.mem_ptr,
+            }
+        }
+    }
 }
 
 #[repr(transparent)]
@@ -336,7 +350,9 @@ where
         let mem_ptr = self.mem_ptr.cast();
         mem::forget(self);
 
-        AnonTask { mem_ptr }
+        AnonTask {
+            mem_ptr: NonNull::new(mem_ptr).expect("Self should always contain a non-null ptr!"),
+        }
     }
 
     /// Wake this future
@@ -345,7 +361,7 @@ where
     fn wake(&self) {
         let runtime_ref = unsafe { &*(&*self.mem_ptr).runtime.get() };
         let downgrade_self = self.clone().downgrade();
-        Run::schedule_task(runtime_ref, downgrade_self)
+        Run::task_awoken(runtime_ref, downgrade_self)
     }
 
     /// Poll the future
@@ -523,30 +539,17 @@ impl Debug for TaskState {
     }
 }
 
-impl Debug for FnTable {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.debug_struct("FnTable").finish_non_exhaustive()
-    }
-}
-
-impl<Fut, Run, Out> Debug for RawTask<Fut, Run, Out> {
+impl<Fut, Run, Out: Debug> Debug for RawTask<Fut, Run, Out> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         unsafe {
             f.debug_struct("RawTask")
                 .field("state", &(&*self.mem_ptr).state)
                 .field("vtable", &(&*self.mem_ptr).vtable)
-                .field("future", &"...")
-                .field(
-                    "output",
-                    if (&*((&*self.mem_ptr).output.get())).is_some() {
-                        &"Some(...)"
-                    } else {
-                        &"None"
-                    },
-                )
-                .field("future", &"...")
-                .field("runtime", &"...")
-                .finish_non_exhaustive()
+                .field("output", &*((&*self.mem_ptr).output.get()))
+                .field("future", &(&*self.mem_ptr).future.get())
+                .field("runtime", &(&*self.mem_ptr).runtime.get())
+                .field("waker", &*((&*self.mem_ptr).waker.get()))
+                .finish()
         }
     }
 }
