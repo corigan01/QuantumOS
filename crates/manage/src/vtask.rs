@@ -226,20 +226,23 @@ pub struct AnonTask {
     mem_ptr: *mut TaskMem<(), (), ()>,
 }
 
+unsafe impl Send for AnonTask {}
+unsafe impl Sync for AnonTask {}
+
 impl AnonTask {
-    pub unsafe fn vtable_wake(&self) {
-        unsafe { ((&*self.mem_ptr).vtable.wake)(self.mem_ptr.cast()) }
+    pub unsafe fn vtable_wake(self) {
+        unsafe {
+            ((&*self.mem_ptr).vtable.wake)(self.mem_ptr.cast());
+            mem::forget(self);
+        }
     }
+
     pub unsafe fn vtable_wake_ref(&self) {
         unsafe { ((&*self.mem_ptr).vtable.wake_ref)(self.mem_ptr.cast()) }
     }
 
     pub unsafe fn vtable_clone_waker(&self) -> RawWaker {
         unsafe { ((&*self.mem_ptr).vtable.clone_waker)(self.mem_ptr.cast()) }
-    }
-
-    pub unsafe fn vtable_drop(&self) {
-        unsafe { ((&*self.mem_ptr).vtable.drop)(self.mem_ptr.cast()) }
     }
 
     pub unsafe fn vtable_run(&self) -> RunResult {
@@ -356,7 +359,7 @@ where
         unsafe {
             let poll_lifecycle = (&*self.mem_ptr).state.poll_lifecycle(|| {
                 let future = Pin::new_unchecked(&mut *(&*self.mem_ptr).future.get());
-                let waker = self.clone().waker();
+                let waker = self.waker();
 
                 let mut context = Context::from_waker(&waker);
                 match future.poll(&mut context) {
@@ -382,7 +385,7 @@ where
     /// Get a cloned waker instance from this task
     ///
     /// Increases the ref count (clone)'s the inner value.
-    fn waker(self) -> Waker {
+    fn waker(&self) -> Waker {
         unsafe { Waker::from_raw(Self::clone_waker_raw(self.mem_ptr as *const _ as *const ())) }
     }
 

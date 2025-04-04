@@ -28,7 +28,7 @@ use core::{
     task::{Context, Poll},
 };
 
-use crate::vtask::{RawTask, RunResult, RuntimeSupport};
+use crate::vtask::{self, RawTask, RunResult, RuntimeSupport};
 
 #[derive(Debug)]
 pub struct Task<Fut, Run, Out> {
@@ -45,6 +45,14 @@ where
         Self {
             raw: RawTask::new_allocated(future, runtime),
         }
+    }
+
+    pub fn anon_task(&self) -> vtask::AnonTask {
+        self.raw.clone().downgrade()
+    }
+
+    pub fn raw_task(&self) -> vtask::RawTask<Fut, Run, Fut::Output> {
+        self.raw.clone()
     }
 }
 

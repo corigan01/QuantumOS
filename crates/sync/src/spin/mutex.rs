@@ -58,7 +58,6 @@ impl<T: ?Sized, R: SpinRelax> Drop for SpinMutex<T, R> {
             0,
             "UB: Dropping SpinMutex with aquired lock!"
         );
-        unsafe { drop_in_place(self.get()) };
     }
 }
 

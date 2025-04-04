@@ -25,6 +25,15 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 #![no_std]
 
+use core::{
+    pin::Pin,
+    task::{Context, Poll},
+};
+
+use alloc::{collections::vec_deque::VecDeque, sync::Arc, vec::Vec};
+use lldebug::logln;
+use sync::spin::mutex::SpinMutex;
+use task::Task;
 use vtask::RuntimeSupport;
 
 extern crate alloc;
@@ -34,15 +43,70 @@ pub mod task;
 pub mod vtask;
 pub mod wake;
 
+#[derive(Debug)]
+pub struct Yield(bool);
+
+impl Future for Yield {
+    type Output = ();
+
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        logln!("Yield is being polled!");
+        if !self.0 {
+            self.0 = true;
+            cx.waker().wake_by_ref();
+
+            logln!("Yield -> Pending");
+            Poll::Pending
+        } else {
+            logln!("Yield -> Ready");
+            Poll::Ready(())
+        }
+    }
+}
+
+impl Yield {
+    pub const fn new() -> Self {
+        Self(false)
+    }
+}
+
 async fn test_async(dingus: i32) -> i32 {
     dingus + 10
 }
 
-struct Runtime {}
+struct Runtime {
+    tasks: SpinMutex<VecDeque<vtask::AnonTask>>,
+}
 
-impl RuntimeSupport for Runtime {
+impl RuntimeSupport for Arc<Runtime> {
     fn schedule_task(&self, task: vtask::AnonTask) {
-        todo!()
+        logln!("Wake called!");
+        self.tasks.lock().push_back(task);
+    }
+}
+
+impl Runtime {
+    pub fn new() -> Self {
+        Self {
+            tasks: SpinMutex::new(VecDeque::new()),
+        }
+    }
+
+    pub fn spawn<F>(self: &Arc<Self>, future: F) -> Task<F, Arc<Self>, F::Output>
+    where
+        F: Future + Send + 'static,
+        F::Output: Send + 'static,
+    {
+        let new_task = Task::spawn(future, self.clone());
+        self.tasks.lock().push_back(new_task.anon_task());
+
+        new_task
+    }
+
+    pub fn block_all(self: &Arc<Self>) {
+        while let Some(next) = { self.tasks.lock().pop_front() } {
+            unsafe { next.vtable_run() };
+        }
     }
 }
 
@@ -53,13 +117,15 @@ mod test {
     use super::*;
 
     #[test]
-    fn test_runtiem() {
+    fn test_runtime() {
         testing_stdout!();
+        let yielding_future = Yield::new();
 
-        let raw = vtask::RawTask::new_allocated(test_async(10), Runtime {});
-        logln!("{:#?}", raw);
-        logln!("{:#?}", unsafe { raw.clone().downgrade().vtable_run() });
-        logln!("{:#?}", raw.get_output());
+        let runtime = Arc::new(Runtime::new());
+        let task = runtime.clone().spawn(yielding_future);
+        runtime.block_all();
+
+        logln!("{:#?}", task.raw_task());
 
         logln!("\n ");
     }
