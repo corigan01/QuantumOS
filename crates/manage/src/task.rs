@@ -50,6 +50,10 @@ where
         }
     }
 
+    pub fn is_completed(&self) -> bool {
+        self.raw.is_completed()
+    }
+
     pub fn anon_task(&self) -> vtask::AnonTask {
         self.raw.clone().downgrade()
     }

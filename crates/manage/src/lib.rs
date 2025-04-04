@@ -29,6 +29,7 @@ use alloc::{
     collections::{btree_set::BTreeSet, vec_deque::VecDeque},
     sync::Arc,
 };
+use core::sync::atomic::{AtomicBool, Ordering};
 use runner::TaskRunner;
 use runtime::{GuardedJob, GuardedJobStatus, RuntimeSupport};
 use sync::spin::mutex::SpinMutex;
@@ -45,6 +46,7 @@ pub mod vtask;
 pub struct Runtime {
     needs_poll: Arc<SpinMutex<VecDeque<vtask::AnonTask>>>,
     waiting: Arc<SpinMutex<BTreeSet<vtask::AnonTask>>>,
+    shutting_down: Arc<AtomicBool>,
 }
 
 impl RuntimeSupport for Runtime {
@@ -73,7 +75,11 @@ impl RuntimeSupport for Runtime {
     }
 
     fn runtime_status(&self) -> runtime::RuntimeStatus {
-        runtime::RuntimeStatus::Running
+        if self.shutting_down.load(Ordering::Relaxed) {
+            runtime::RuntimeStatus::ShuttingDown
+        } else {
+            runtime::RuntimeStatus::Running
+        }
     }
 }
 
@@ -82,6 +88,7 @@ impl Runtime {
         Self {
             needs_poll: Arc::new(SpinMutex::new(VecDeque::new())),
             waiting: Arc::new(SpinMutex::new(BTreeSet::new())),
+            shutting_down: Arc::new(AtomicBool::new(false)),
         }
     }
 
@@ -101,7 +108,7 @@ impl Runtime {
     }
 
     pub fn is_work_finished(&self) -> bool {
-        self.needs_poll.lock().len() == 0 && self.waiting.lock().len() == 0
+        self.needs_poll.lock().len() == 0 && self.shutting_down.load(Ordering::Relaxed)
     }
 
     pub fn block_on<F>(&self, future: F) -> F::Output
@@ -113,7 +120,7 @@ impl Runtime {
         self.needs_poll.lock().push_back(new_task.anon_task());
 
         let mut runner = self.new_runner();
-        while !self.is_work_finished() {
+        while !new_task.is_completed() {
             runner.drive_execution();
         }
 
@@ -121,6 +128,16 @@ impl Runtime {
             .raw_task()
             .get_output()
             .expect("Expected task to return output!")
+    }
+
+    pub fn shutdown(&self) {
+        self.shutting_down.store(true, Ordering::SeqCst);
+    }
+}
+
+impl Drop for Runtime {
+    fn drop(&mut self) {
+        self.shutdown();
     }
 }
 
@@ -130,6 +147,8 @@ mod test {
         pin::Pin,
         task::{Context, Poll},
     };
+    extern crate std;
+    use alloc::vec::Vec;
 
     use super::*;
 
@@ -197,5 +216,36 @@ mod test {
             }),
             20
         );
+    }
+
+    #[test]
+    fn test_multi_threading() {
+        let runtime = Runtime::new();
+
+        let mut threads = Vec::new();
+        for _ in 0..4 {
+            let runtime = runtime.clone();
+            threads.push(std::thread::spawn(move || {
+                let mut runner = runtime.new_runner();
+
+                while !runtime.is_work_finished() {
+                    runner.drive_execution();
+                }
+            }));
+        }
+
+        for _ in 0..100 {
+            runtime.spawn(async move {
+                for _ in 0..10 {
+                    Yield::new().await;
+                }
+            });
+        }
+
+        runtime.shutdown();
+
+        for thread in threads {
+            thread.join().unwrap();
+        }
     }
 }

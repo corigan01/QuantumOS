@@ -186,6 +186,20 @@ impl TaskState {
             }
         }
     }
+
+    pub fn status(&self) -> RunResult {
+        let result = self.0.load(Ordering::Relaxed);
+
+        if result & Self::FINISHED_BIT != 0 {
+            return RunResult::Finished;
+        }
+
+        if result & Self::CANCEL_BIT != 0 {
+            return RunResult::Canceled;
+        }
+
+        return RunResult::Pending;
+    }
 }
 
 impl<Fut, Run, Out> TaskMem<Fut, Run, Out> {
@@ -443,6 +457,10 @@ where
                 None
             }
         }
+    }
+
+    pub fn is_completed(&self) -> bool {
+        unsafe { (&*self.mem_ptr).state.status() != RunResult::Pending }
     }
 
     unsafe fn wake_raw(ptr: OpaquePtr) {
