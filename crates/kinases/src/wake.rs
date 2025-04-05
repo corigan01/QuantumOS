@@ -1,9 +1,8 @@
 /*
-  ____                 __               __   _ __
- / __ \__ _____ ____  / /___ ____ _    / /  (_) /
-/ /_/ / // / _ `/ _ \/ __/ // /  ' \  / /__/ / _ \
-\___\_\_,_/\_,_/_//_/\__/\_,_/_/_/_/ /____/_/_.__/
-    Part of the Quantum OS Project
+   ___   __        _   __
+  / _ | / /__  ___| | / /__ _______ _
+ / __ |/ / _ \/ -_) |/ / -_) __/ _ `/
+/_/ |_/_/\___/\__/|___/\__/_/  \_,_/
 
 Copyright 2025 Gavin Kellam
 
@@ -23,10 +22,18 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-#![no_std]
+extern crate alloc;
 
-pub mod atomic_arc;
-pub mod atomic_list;
-pub mod atomic_option;
-pub mod spin;
-pub mod wake;
+use crate::spin::mutex::SpinMutex;
+use alloc::collections::VecDeque;
+use core::{cell::UnsafeCell, sync::atomic::AtomicUsize, task::Waker};
+
+pub struct WakeCell {
+    lock: AtomicUsize,
+    waker: UnsafeCell<Waker>,
+}
+
+pub struct WakeQueue {
+    // TODO: Upgrade to a non-blocking queue in the future
+    queue: SpinMutex<VecDeque<Waker>>,
+}

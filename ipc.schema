@@ -1,0 +1,49 @@
+
+// Example
+let s = IpcSchema::builder()
+    .route("hello", args![hi_amount: usize]), returns![Array<u32>]);
+
+// Goes into
+s.send(route![hello(hi_amount: 10)]).await?;
+       //Route("hello", Args([("hi_amount", Value::Number(10))])
+
+
+// First thing that gets sent over this is the routing info:
+// 
+//  Name   Arg Name  Return     End
+//  ++++   ++++++++  +++         +
+// Rhello!Ahi_amount:u64OArrayu32!
+// ^     ^          ^   ^
+// Route |         End  |
+//    End of Name   Output Type
+//
+
+
+// Maybe syscalls too ? Really need something to bridge the gap with async
+
+type BytesRead = usize;
+type BytesWritten = usize;
+type WakeupCall<Arg> = unsafe extern "C" fn(Arg);
+
+fn vera_read(handle: VeraHandle, buf: &mut [u8], sync: VeraSync) -> VeraResult<BytesRead> { /* ... */ }
+fn vera_write(handle: VeraHandle, buf: &[u8], sync: VeraSync) -> VeraResult<BytesWritten> { /* ... */ }
+
+/// This function will use the `VeraSync::Wakeup` internally when called
+async fn vera_read(handle: VeraHandle, buf: &mut [u8]) -> VeraResult<BytesRead> { /* ... */ }
+
+
+enum VeraSync {
+    /// Do this operation blocking
+    Blocking,
+    /// Generate a signal when this operation is ready to be retried
+    Signal,
+    /// Try to read as much as possible, but non-blocking.
+    ///
+    /// If no bytes are able to be read, it returns 0
+    Attempt,
+    /// Call this function when the operation is ready to be retried.
+    ///
+    /// This will be treated as if the current function had called this function.
+    /// Which can cause some side effects if not used correctly. 
+    Wakeup(WakeupCall<VeraHandle>)
+}
