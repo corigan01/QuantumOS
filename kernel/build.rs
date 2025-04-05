@@ -28,9 +28,9 @@ use std::path::Path;
 fn main() {
     let local_path = Path::new(env!("CARGO_MANIFEST_DIR"));
     println!("cargo:rerun-if-changed=build.rs");
-    println!("cargo:rerun-if-changed=x86-64-quantum_kernel.ld");
+    println!("cargo:rerun-if-changed=x86-64-vera_kernel.ld");
     println!(
         "cargo:rustc-link-arg-bins=--script={}",
-        local_path.join("x86-64-quantum_kernel.ld").display()
+        local_path.join("x86-64-vera_kernel.ld").display()
     )
 }

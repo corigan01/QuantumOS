@@ -26,9 +26,9 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 use crate::process::{HandleError, Process, scheduler::Scheduler};
 use alloc::{format, string::String};
 use arch::io::IOPort;
-use lldebug::{LogKind, logln, warnln};
+use lignan::{LogKind, logln, warnln};
 use mem::paging::VmPermissions;
-use quantum_portal::{
+use vera_portal::{
     ConnectHandleError, DebugMsgError, ExitReason, MapMemoryError, MemoryLocation,
     MemoryProtections, QuantumPortal, RecvHandleError, SendHandleError, ServeHandleError,
     WaitSignal, sys_server::QuantumPortalServer,
@@ -109,7 +109,7 @@ impl QuantumPortal for KernelSyscalls {
             current_thread.process.name, current_thread.process.id, current_thread.id
         );
 
-        lldebug::priv_print(LogKind::Log, &process_fmt, format_args!("{}", msg));
+        lignan::priv_print(LogKind::Log, &process_fmt, format_args!("{}", msg));
 
         Ok(())
     }

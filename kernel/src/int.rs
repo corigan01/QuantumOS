@@ -33,7 +33,7 @@ use arch::{
     pic8259::{pic_eoi, pic_remap},
     registers::Segment,
 };
-use lldebug::{errorln, log, logln};
+use lignan::{errorln, log, logln};
 use mem::{
     addr::VirtAddr,
     vm::{PageFaultInfo, call_page_fault_handler},

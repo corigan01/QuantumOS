@@ -1,5 +1,5 @@
 [package]
-name = "kernel"
+name = "vera"
 version = "0.1.0"
 edition = "2024"
 authors.workspace = true
@@ -8,7 +8,7 @@ documentation.workspace = true
 
 [dependencies]
 bootloader = { workspace = true }
-lldebug = { workspace = true }
+lignan = { workspace = true }
 serial = { workspace = true }
 util = {workspace = true}
 mem = {workspace = true, features = ["alloc"]}
@@ -16,6 +16,6 @@ arch = {workspace = true}
 elf = {workspace = true, features = ["alloc"]}
 tar = { workspace = true }
 boolvec = {workspace = true}
-quantum-portal = {workspace = true, features = ["server"]}
+vera-portal = {workspace = true, features = ["server"]}
 bits = {workspace = true}
-manage = {workspace = true}
+chloroplast = {workspace = true}

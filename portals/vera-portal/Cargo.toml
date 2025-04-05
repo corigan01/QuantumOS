@@ -1,5 +1,5 @@
 [package]
-name = "quantum-portal"
+name = "vera-portal"
 edition = "2024"
 version.workspace = true
 authors.workspace = true

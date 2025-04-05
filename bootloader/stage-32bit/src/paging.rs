@@ -29,7 +29,7 @@ use arch::{
     CpuPrivilege,
 };
 use core::cell::SyncUnsafeCell;
-use lldebug::{log, logln};
+use lignan::{log, logln};
 use util::consts::{GIB, MIB};
 
 /// Amount of Gib to identity map

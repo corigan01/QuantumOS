@@ -10,4 +10,4 @@ documentation.workspace = true
 bits = {workspace = true}
 util = {workspace = true}
 arch-macro = {workspace = true}
-lldebug = {workspace = true}
+lignan = {workspace = true}

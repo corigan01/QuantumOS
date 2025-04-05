@@ -30,8 +30,8 @@ use core::sync::atomic::AtomicBool;
 use core::sync::atomic::Ordering;
 
 // Re-export the macro
-pub use lldebug_macro::debug_ready;
-pub use lldebug_macro::make_debug;
+pub use lignan_macro::debug_ready;
+pub use lignan_macro::make_debug;
 use lock::DebugMutex;
 use lock::DEBUG_LOCKS;
 use lock::UNLOCK_OVERRIDE;
@@ -135,7 +135,7 @@ pub fn priv_print(kind: LogKind, crate_name: &str, args: core::fmt::Arguments) {
 #[macro_export]
 macro_rules! log {
     ($($arg:tt)*) => {{
-        $crate::priv_print(::lldebug::LogKind::Log, ::core::module_path!(), format_args!($($arg)*));
+        $crate::priv_print(::lignan::LogKind::Log, ::core::module_path!(), format_args!($($arg)*));
     }};
 }
 
@@ -144,7 +144,7 @@ macro_rules! log {
 macro_rules! logln {
     () => {{ $crate::log!("\n") }};
     ($($arg:tt)*) => {{
-        $crate::priv_print(::lldebug::LogKind::Log, ::core::module_path!(), format_args!($($arg)*));
+        $crate::priv_print(::lignan::LogKind::Log, ::core::module_path!(), format_args!($($arg)*));
         $crate::log!("\n");
     }};
 }
@@ -153,7 +153,7 @@ macro_rules! logln {
 #[macro_export]
 macro_rules! warn {
     ($($arg:tt)*) => {{
-        $crate::priv_print(::lldebug::LogKind::Warn, ::core::module_path!(), format_args!($($arg)*));
+        $crate::priv_print(::lignan::LogKind::Warn, ::core::module_path!(), format_args!($($arg)*));
     }};
 }
 
@@ -162,7 +162,7 @@ macro_rules! warn {
 macro_rules! warnln {
     () => {{ $crate::warn!("\n") }};
     ($($arg:tt)*) => {{
-        $crate::priv_print(::lldebug::LogKind::Warn, ::core::module_path!(), format_args!($($arg)*));
+        $crate::priv_print(::lignan::LogKind::Warn, ::core::module_path!(), format_args!($($arg)*));
         $crate::warn!("\n");
     }};
 }
@@ -171,7 +171,7 @@ macro_rules! warnln {
 #[macro_export]
 macro_rules! error {
     ($($arg:tt)*) => {{
-        $crate::priv_print(::lldebug::LogKind::Error, ::core::module_path!(), format_args!($($arg)*));
+        $crate::priv_print(::lignan::LogKind::Error, ::core::module_path!(), format_args!($($arg)*));
     }};
 }
 
@@ -180,12 +180,12 @@ macro_rules! error {
 macro_rules! errorln {
     () => {{ $crate::error!("\n") }};
     ($($arg:tt)*) => {{
-        $crate::priv_print(::lldebug::LogKind::Error, ::core::module_path!(), format_args!($($arg)*));
+        $crate::priv_print(::lignan::LogKind::Error, ::core::module_path!(), format_args!($($arg)*));
         $crate::error!("\n");
     }};
 }
 
-/// Setup lldebug for stdout only in testing mode.
+/// Setup lignan for stdout only in testing mode.
 #[macro_export]
 macro_rules! testing_stdout {
     () => {
@@ -198,7 +198,7 @@ macro_rules! testing_stdout {
                 let _ = stdout().write_fmt(args);
             }
 
-            ::lldebug::set_global_debug_fn(all_print);
+            ::lignan::set_global_debug_fn(all_print);
         }
     };
 }

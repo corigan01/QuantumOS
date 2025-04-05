@@ -8,6 +8,6 @@ documentation.workspace = true
 license.workspace = true
 
 [dependencies]
-quantum-portal = {workspace = true, features = ["client"]}
-lldebug = {workspace = true}
+vera-portal = {workspace = true, features = ["client"]}
+lignan = {workspace = true}
 portal = {workspace = true, features = ["ipc-client", "ipc-server"]}

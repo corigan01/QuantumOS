@@ -23,6 +23,7 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use crate::runtime::RuntimeSupport;
 use core::{
     alloc::Layout,
     cell::UnsafeCell,
@@ -34,8 +35,6 @@ use core::{
     sync::atomic::{AtomicUsize, Ordering},
     task::{Context, Poll, RawWaker, RawWakerVTable, Waker},
 };
-
-use crate::runtime::RuntimeSupport;
 
 type OpaquePtr = *const ();
 

@@ -749,7 +749,7 @@ mod test {
 
     #[test]
     fn test_add_one_region() {
-        lldebug::testing_stdout!();
+        lignan::testing_stdout!();
         let mut mm = PhysMemoryMap::<4>::new();
 
         assert_eq!(
@@ -878,7 +878,7 @@ mod test {
 
     #[test]
     fn test_complex_overlap_region() {
-        lldebug::testing_stdout!();
+        lignan::testing_stdout!();
         let mut mm = PhysMemoryMap::<10>::new();
 
         mm.add_region(PhysMemoryEntry {

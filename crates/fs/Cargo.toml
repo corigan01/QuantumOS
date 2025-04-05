@@ -11,4 +11,4 @@ default = ["fatfs"]
 fatfs = []
 
 [dependencies]
-lldebug = {workspace = true}
+lignan = {workspace = true}

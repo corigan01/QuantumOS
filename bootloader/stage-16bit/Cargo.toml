@@ -11,6 +11,6 @@ bios = { workspace = true }
 fs = { workspace = true, features = ["fatfs"]}
 arch = { workspace = true }
 bootloader = {workspace = true}
-lldebug = {workspace = true}
+lignan = {workspace = true}
 serial = {workspace = true}
 util ={workspace = true}

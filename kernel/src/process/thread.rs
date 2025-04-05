@@ -32,7 +32,7 @@ use super::{ProcessEntry, RefProcess, scheduler::Scheduler, task::Task};
 use crate::{context::set_syscall_rsp, gdt, locks::ThreadCell};
 use alloc::sync::{Arc, Weak};
 use arch::interrupts;
-use lldebug::logln;
+use lignan::logln;
 use mem::{addr::VirtAddr, paging::VmPermissions, vm::VmRegion};
 use util::consts::PAGE_4K;
 

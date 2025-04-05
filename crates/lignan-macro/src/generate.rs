@@ -90,7 +90,7 @@ pub fn generate_stream(enumeration: usize, stream: &DebugStream) -> proc_macro2:
                 #stream_init
             }
 
-            pub static mut #name: ::lldebug::lock::DebugMutex<::core::option::Option<#stream_type>> = ::lldebug::lock::DebugMutex::new(None);
+            pub static mut #name: ::lignan::lock::DebugMutex<::core::option::Option<#stream_type>> = ::lignan::lock::DebugMutex::new(None);
         }
     } else {
         quote! {
@@ -98,7 +98,7 @@ pub fn generate_stream(enumeration: usize, stream: &DebugStream) -> proc_macro2:
                 #stream_init
             }
 
-            pub static mut #name: ::lldebug::lock::DebugMutex<#stream_type> = ::lldebug::lock::DebugMutex::new(None);
+            pub static mut #name: ::lignan::lock::DebugMutex<#stream_type> = ::lignan::lock::DebugMutex::new(None);
         }
     }
 }
@@ -172,7 +172,7 @@ pub fn generate_init_function(macro_input: &DebugMacroInput) -> proc_macro2::Tok
         }
 
         pub(crate) fn debug_macro_init() {
-            ::lldebug::set_global_debug_fn(all_print);
+            ::lignan::set_global_debug_fn(all_print);
         }
     }
 }

@@ -9,7 +9,7 @@ documentation.workspace = true
 [dependencies]
 portal-macro = { workspace = true }
 libsys = { workspace = true, optional = true }
-lldebug = { workspace = true }
+lignan = { workspace = true }
 
 [features]
 default = []

@@ -99,7 +99,7 @@ pub mod client {
 
 #[cfg(feature = "syscall-server")]
 pub mod server {
-    use lldebug::warnln;
+    use lignan::warnln;
 
     /// Convert out of the syscall interface, and back into 'SyscallInput' and 'SyscallOutput'.
     ///

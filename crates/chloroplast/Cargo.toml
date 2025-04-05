@@ -1,5 +1,5 @@
 [package]
-name = "manage"
+name = "chloroplast"
 edition = "2024"
 version.workspace = true
 authors.workspace = true
@@ -8,6 +8,6 @@ documentation.workspace = true
 license.workspace = true
 
 [dependencies]
-boolvec  = {workspace = true}
-sync = {workspace = true}
-lldebug = { workspace = true }
+boolvec = {workspace = true}
+kinases = {workspace = true}
+lignan = { workspace = true }

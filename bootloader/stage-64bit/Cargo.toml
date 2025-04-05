@@ -9,7 +9,7 @@ documentation.workspace = true
 [dependencies]
 bootloader = {workspace = true}
 serial = {workspace = true}
-lldebug = {workspace = true}
+lignan = {workspace = true}
 elf = {workspace = true}
 mem = {workspace = true}
 util = {workspace = true}

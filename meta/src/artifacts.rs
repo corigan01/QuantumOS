@@ -43,29 +43,29 @@ impl Display for ArchSelect {
             Self::I386 => f.write_fmt(format_args!(
                 "{}",
                 current_dir
-                    .join("linkerscripts/i386-quantum_loader.json")
+                    .join("linkerscripts/i386-vera_loader.json")
                     .to_string_lossy(),
             )),
             Self::I686 => f.write_fmt(format_args!(
                 "{}",
                 current_dir
-                    .join("linkerscripts/i686-quantum_loader.json")
+                    .join("linkerscripts/i686-vera_loader.json")
                     .to_string_lossy(),
             )),
             Self::X64 => f.write_fmt(format_args!(
                 "{}",
                 current_dir
-                    .join("linkerscripts/x86-64-quantum_loader.json")
+                    .join("linkerscripts/x86-64-vera_loader.json")
                     .to_string_lossy(),
             )),
             Self::Kernel => f.write_fmt(format_args!(
                 "{}",
                 current_dir
-                    .join("../kernel/x86-64-quantum_kernel.json")
+                    .join("../kernel/x86-64-vera_kernel.json")
                     .to_string_lossy(),
             )),
             Self::UserSpace => {
-                f.write_fmt(format_args!("{}", "./user/x86_64-unknown-quantum.json",))
+                f.write_fmt(format_args!("{}", "./user/x86_64-unknown-aloevera.json",))
             }
         }
     }
@@ -80,7 +80,7 @@ async fn cargo_helper(
 ) -> Result<PathBuf> {
     let compile_mode = profile.unwrap_or("release");
 
-    let build_std_options: &[&str] = if package == "kernel" || profile == Some("userspace") {
+    let build_std_options: &[&str] = if package == "vera" || profile == Some("userspace") {
         &["-Zbuild-std=core,alloc"]
     } else {
         &["-Zbuild-std=core"]
@@ -275,8 +275,8 @@ pub async fn build_project(multiboot_mode: bool, emit_asm: Option<String>) -> Re
             emit_asm.as_ref().is_some_and(|s| s == "stage-64bit")
         ),
         cargo_helper(
-            Some("kernel"),
-            "kernel",
+            Some("vera"),
+            "vera",
             ArchSelect::Kernel,
             None,
             emit_asm.as_ref().is_some_and(|s| s == "kernel")

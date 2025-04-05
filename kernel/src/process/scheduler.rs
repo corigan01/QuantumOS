@@ -48,7 +48,7 @@ use alloc::{
 };
 use boolvec::BoolVec;
 use elf::elf_owned::ElfOwned;
-use lldebug::{current_debug_locks, log, logln};
+use lignan::{current_debug_locks, log, logln};
 use mem::{
     addr::{PhysAddr, VirtAddr},
     page::{PhysPage, VirtPage},

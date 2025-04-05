@@ -31,7 +31,7 @@ use arch::{
     idt64::InterruptInfo,
     pit825x::{PitAccessMode, PitOperatingMode, PitSelectChannel, pit_command, set_pit_hz},
 };
-use lldebug::{log, logln};
+use lignan::{log, logln};
 
 const TIMER_HZ: f32 = 1000_f32;
 

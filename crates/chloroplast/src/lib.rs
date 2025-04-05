@@ -30,9 +30,9 @@ use alloc::{
     sync::Arc,
 };
 use core::sync::atomic::{AtomicBool, Ordering};
+use kinases::spin::mutex::SpinMutex;
 use runner::TaskRunner;
 use runtime::{GuardedJob, GuardedJobStatus, RuntimeSupport};
-use sync::spin::mutex::SpinMutex;
 use task::Task;
 
 extern crate alloc;
@@ -43,13 +43,13 @@ pub mod task;
 pub mod vtask;
 
 #[derive(Clone)]
-pub struct Runtime {
+pub struct Chloroplast {
     needs_poll: Arc<SpinMutex<VecDeque<vtask::AnonTask>>>,
     waiting: Arc<SpinMutex<BTreeSet<vtask::AnonTask>>>,
     shutting_down: Arc<AtomicBool>,
 }
 
-impl RuntimeSupport for Runtime {
+impl RuntimeSupport for Chloroplast {
     fn task_awoken(&self, task: vtask::AnonTask) {
         self.needs_poll.lock().push_back(task);
     }
@@ -83,7 +83,7 @@ impl RuntimeSupport for Runtime {
     }
 }
 
-impl Runtime {
+impl Chloroplast {
     pub fn new() -> Self {
         Self {
             needs_poll: Arc::new(SpinMutex::new(VecDeque::new())),
@@ -135,7 +135,7 @@ impl Runtime {
     }
 }
 
-impl Drop for Runtime {
+impl Drop for Chloroplast {
     fn drop(&mut self) {
         self.shutdown();
     }
@@ -184,7 +184,7 @@ mod test {
     fn test_runtime() {
         let yielding_future = Yield::new();
 
-        let runtime = Runtime::new();
+        let runtime = Chloroplast::new();
         runtime.spawn(async move {
             yielding_future.await;
             assert_eq!(test_async(10).await, 20);
@@ -204,7 +204,7 @@ mod test {
 
     #[test]
     fn test_runtime_blocking() {
-        let runtime = Runtime::new();
+        let runtime = Chloroplast::new();
 
         assert_eq!(
             runtime.block_on(async {
@@ -220,7 +220,7 @@ mod test {
 
     #[test]
     fn test_multi_threading() {
-        let runtime = Runtime::new();
+        let runtime = Chloroplast::new();
 
         let mut threads = Vec::new();
         for _ in 0..4 {

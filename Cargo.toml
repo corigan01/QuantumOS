@@ -1,6 +1,6 @@
 [workspace]
 members = [
-  "kernel", 
+  "kernel",
   "meta", 
   "bootloader", 
   "bootloader/stage-bootsector", 
@@ -13,9 +13,9 @@ members = [
   "crates/bits", 
   "crates/binfont",
   "crates/bootgfx", 
-  "crates/lldebug", 
+  "crates/lignan", 
   "crates/serial", 
-  "crates/lldebug-macro", 
+  "crates/lignan-macro", 
   "crates/bits-macro", 
   "crates/util", 
   "crates/elf", 
@@ -29,21 +29,21 @@ members = [
   "crates/portal-macro",
   "crates/portal",
   "portals/hello-portal",
-  "portals/quantum-portal",
+  "portals/vera-portal",
   "user/libsys",
   "user/fs-server",
   "portals/fs-portal",
-  "crates/manage",
-  "crates/sync"
+  "crates/chloroplast",
+  "crates/kinases"
 ]
 
 default-members = ["meta"]
 resolver = "3"
 
 [workspace.package]
-version = "0.1.0"
+version = "0.2.0"
 authors = ["corigan01 <corigan01@gmail.com>"]
-description = "Quantum Operating System"
+description = "AloeVera Operating System"
 documentation = "https://github.com/corigan01/QuantumOS"
 license = "MIT"
 
@@ -57,8 +57,8 @@ bootloader = { path = "bootloader/" }
 binfont = { path = "crates/binfont" }
 bootgfx = { path = "crates/bootgfx" }
 serial = { path = "crates/serial" }
-lldebug = { path = "crates/lldebug" }
-lldebug-macro = { path = "crates/lldebug-macro" }
+lignan = { path = "crates/lignan" }
+lignan-macro = { path = "crates/lignan-macro" }
 bits-macro = { path = "crates/bits-macro" }
 util = { path = "crates/util" }
 elf = { path = "crates/elf" }
@@ -69,11 +69,12 @@ tar = { path = "crates/tar" }
 portal = { path = "crates/portal" }
 portal-macro = { path = "crates/portal-macro" }
 hello-portal = { path = "portals/hello-portal" }
-quantum-portal = { path = "portals/quantum-portal" }
+vera-portal = { path = "portals/vera-portal" }
 libsys = { path = "user/libsys" }
 fs-portal = { path = "portals/fs-portal" }
-manage = { path = "crates/manage" }
-sync = { path = "crates/sync" }
+chloroplast = { path = "crates/chloroplast" }
+kinases = { path = "crates/kinases" }
+vera = { path = "kernel/" }
 
 [profile.stage-bootsector]
 inherits = "release"
@@ -113,7 +114,7 @@ lto = true
 debug = 0
 overflow-checks = true
 
-[profile.kernel-dev]
+[profile.vera-dev]
 inherits = "dev"
 panic = "abort"
 opt-level=0
@@ -121,7 +122,7 @@ strip = false
 debug = 1
 overflow-checks = true
 
-[profile.kernel]
+[profile.vera]
 inherits = "release"
 panic = "abort"
 opt-level = 1

@@ -386,7 +386,7 @@ pub fn provide_init_region(region: &'static mut [u8]) {
 
 pub fn dump_allocator() {
     let inner = INNER_ALLOC.lock();
-    lldebug::logln!("{:#?}", inner);
+    lignan::logln!("{:#?}", inner);
 }
 
 pub struct KernelAllocator {}
@@ -418,7 +418,7 @@ mod test {
 
     #[test]
     fn test_buddy_new() {
-        lldebug::testing_stdout!();
+        lignan::testing_stdout!();
         let len = 10 * util::consts::KIB;
         let layout = Layout::from_size_align(len, 1).unwrap();
         let mem_region = unsafe { std::alloc::alloc_zeroed(layout) };
@@ -444,7 +444,7 @@ mod test {
 
     #[test]
     fn alloc_random() {
-        lldebug::testing_stdout!();
+        lignan::testing_stdout!();
         let len = 32 * util::consts::KIB;
         let layout = Layout::from_size_align(len, 1).unwrap();
         let mem_region = unsafe { std::alloc::alloc_zeroed(layout) };

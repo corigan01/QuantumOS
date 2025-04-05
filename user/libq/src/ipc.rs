@@ -26,7 +26,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 extern crate alloc;
 
 use portal::ipc::{IpcError, IpcResult};
-use quantum_portal::{
+use vera_portal::{
     ConnectHandleError, HandleUpdateKind, RecvHandleError, SendHandleError, ServeHandleError,
     WaitSignal,
     sys_client::{close, connect, recv, send, serve, yield_now},

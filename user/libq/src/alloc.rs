@@ -30,7 +30,7 @@ use core::{
     ptr::{NonNull, null_mut},
     sync::atomic::{AtomicPtr, Ordering},
 };
-use quantum_portal::{
+use vera_portal::{
     MapMemoryError, MemoryLocation, MemoryProtections,
     sys_client::{map_memory, unmap_memory},
 };

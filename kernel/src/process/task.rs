@@ -29,7 +29,7 @@ use core::{
     arch::{asm, naked_asm},
     cell::UnsafeCell,
 };
-use lldebug::logln;
+use lignan::logln;
 use mem::addr::{AlignedTo, VirtAddr};
 use util::consts::PAGE_4K;
 

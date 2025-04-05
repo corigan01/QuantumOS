@@ -26,7 +26,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 use core::marker::PhantomData;
 
 use private::IoInterface;
-use quantum_portal::sys_client::{
+use vera_portal::sys_client::{
     fixme_cpuio_read_u8, fixme_cpuio_read_u16, fixme_cpuio_write_u8, fixme_cpuio_write_u16,
 };
 

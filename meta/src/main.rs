@@ -298,7 +298,7 @@ async fn run_mk_image(img_file: &Path) -> Result<()> {
         .arg("-O")
         .arg("qcow2")
         .arg(img_file)
-        .arg("quantum_os.qcow2")
+        .arg("AloeVera.qcow2")
         .stdout(std::process::Stdio::inherit())
         .status()
         .context(anyhow!("Could not start qemu-img!"))?

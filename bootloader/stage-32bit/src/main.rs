@@ -36,7 +36,7 @@ use arch::{
 };
 use bootgfx::{Color, Framebuffer};
 use bootloader::{Stage16toStage32, Stage32toStage64};
-use lldebug::{debug_ready, logln, make_debug};
+use lignan::{debug_ready, logln, make_debug};
 use serial::{baud::SerialBaud, Serial};
 
 #[cfg(feature = "multiboot")]

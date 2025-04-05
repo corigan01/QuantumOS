@@ -34,14 +34,14 @@ use alloc::{
 };
 use boolvec::BoolVec;
 use elf::elf_owned::ElfOwned;
-use lldebug::warnln;
+use lignan::warnln;
 use mem::{
     addr::VirtAddr,
     page::VirtPage,
     paging::VmPermissions,
     vm::{VmFillAction, VmProcess, VmRegion},
 };
-use quantum_portal::{HandleUpdateKind, MapMemoryError, WaitSignal};
+use vera_portal::{HandleUpdateKind, MapMemoryError, WaitSignal};
 use scheduler::Scheduler;
 use thread::{ThreadId, WeakThread};
 use util::consts::PAGE_1G;

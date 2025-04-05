@@ -7,7 +7,7 @@ description.workspace = true
 documentation.workspace = true
 
 [dependencies]
-lldebug = {workspace = true}
+lignan = {workspace = true}
 util = {workspace = true}
 boolvec = {workspace = true, optional = true}
 arch = {workspace = true}

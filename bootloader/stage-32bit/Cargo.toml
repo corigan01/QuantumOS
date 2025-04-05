@@ -10,7 +10,7 @@ documentation.workspace = true
 bootloader = {workspace = true}
 bootgfx = {workspace = true}
 serial = {workspace = true}
-lldebug = {workspace = true}
+lignan = {workspace = true}
 arch = {workspace = true}
 util = {workspace = true}
 bios = { workspace = true, optional = true }

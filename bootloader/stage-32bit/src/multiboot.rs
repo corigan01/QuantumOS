@@ -25,7 +25,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 use bootloader::{Stage16toStage32, MAX_MEMORY_MAP_ENTRIES};
 use core::{mem::ManuallyDrop, ptr::null};
-use lldebug::logln;
+use lignan::logln;
 
 // TODO: impl multiboot2 structures
 #[allow(dead_code)]

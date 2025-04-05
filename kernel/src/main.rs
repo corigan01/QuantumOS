@@ -46,7 +46,7 @@ use core::cell::SyncUnsafeCell;
 
 use arch::supports::cpu_vender;
 use bootloader::KernelBootHeader;
-use lldebug::{debug_ready, logln, make_debug};
+use lignan::{debug_ready, logln, make_debug};
 use mem::{
     alloc::{KernelAllocator, provide_init_region},
     pmm::Pmm,

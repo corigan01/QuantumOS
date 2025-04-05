@@ -25,10 +25,10 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 use core::fmt::Error;
 use core::fmt::Write;
-use quantum_portal::sys_client::debug_msg;
+use vera_portal::sys_client::debug_msg;
 
 #[doc(hidden)]
-pub use lldebug::set_global_debug_fn;
+pub use lignan::set_global_debug_fn;
 
 /// Quantum OS's 'kernel' debug output.
 ///

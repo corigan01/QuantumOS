@@ -33,7 +33,7 @@ use elf::{
     Elf,
     tables::{ArchKind, SegmentKind},
 };
-use lldebug::{debug_ready, log, logln, make_debug};
+use lignan::{debug_ready, log, logln, make_debug};
 use mem::{
     addr::PhysAddr,
     phys::{PhysMemoryEntry, PhysMemoryKind, PhysMemoryMap},

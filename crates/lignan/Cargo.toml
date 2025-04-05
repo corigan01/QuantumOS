@@ -1,14 +1,13 @@
 [package]
-name = "lldebug"
-edition = "2021"
+name = "lignan"
+edition = "2024"
 version.workspace = true
 authors.workspace = true
 description.workspace = true
 documentation.workspace = true
 
 [dependencies]
-lldebug-macro = {workspace = true}
-spin = "0.9.8"
+lignan-macro = {workspace = true}
 
 [dev-dependencies]
 trybuild = "1.0"

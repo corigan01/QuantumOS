@@ -1,4 +1,4 @@
-use lldebug_macro::make_debug;
+use lignan_macro::make_debug;
 
 make_debug! {
     /// # Debug Thing

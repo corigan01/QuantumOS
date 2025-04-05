@@ -1,5 +1,5 @@
 [package]
-name = "lldebug-macro"
+name = "lignan-macro"
 edition = "2021"
 version.workspace = true
 authors.workspace = true

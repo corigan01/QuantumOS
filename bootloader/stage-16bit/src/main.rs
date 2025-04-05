@@ -34,8 +34,8 @@ use bump_alloc::BumpAlloc;
 use config::BootloaderConfig;
 use fs::fatfs::Fat;
 use fs::io::Read;
-use lldebug::make_debug;
-use lldebug::{debug_ready, logln};
+use lignan::make_debug;
+use lignan::{debug_ready, logln};
 use serial::Serial;
 use unreal::enter_unreal;
 

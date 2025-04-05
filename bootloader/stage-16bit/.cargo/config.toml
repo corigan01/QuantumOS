@@ -1,5 +1,5 @@
 [build]
-target = "../linkerscripts/i386-quantum_loader.json"
+target = "../linkerscripts/i386-vera_loader.json"
 
 [unstable]
 build-std = ["core"]

@@ -32,8 +32,8 @@ pub mod sync;
 pub mod uio;
 
 // Import syscall interface
-pub use quantum_portal::sys_client::*;
-pub use quantum_portal::*;
+pub use vera_portal::sys_client::*;
+pub use vera_portal::*;
 
 /// Termination trait for `main` to convert `()` or `Result<O, E>` to an exit status.
 pub trait QuantumTermination {
