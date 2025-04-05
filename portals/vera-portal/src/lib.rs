@@ -28,7 +28,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 use portal::portal;
 
 #[portal(protocol = "syscall", global = true)]
-pub trait QuantumPortal {
+pub trait VeraPortal {
     #[event = 0]
     fn exit(exit_reason: ExitReason) -> ! {
         enum ExitReason {

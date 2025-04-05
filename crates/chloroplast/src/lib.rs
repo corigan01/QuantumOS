@@ -25,6 +25,8 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 #![no_std]
 
+extern crate alloc;
+
 use alloc::{
     collections::{btree_set::BTreeSet, vec_deque::VecDeque},
     sync::Arc,
@@ -34,8 +36,6 @@ use kinases::spin::mutex::SpinMutex;
 use runner::TaskRunner;
 use runtime::{GuardedJob, GuardedJobStatus, RuntimeSupport};
 use task::Task;
-
-extern crate alloc;
 
 pub mod runner;
 pub mod runtime;

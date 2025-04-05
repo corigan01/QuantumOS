@@ -30,6 +30,8 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #![feature(allocator_api)]
 #![feature(naked_functions)]
 
+extern crate alloc;
+
 mod context;
 mod gdt;
 mod int;
@@ -40,12 +42,10 @@ mod processor;
 mod qemu;
 mod syscall_handler;
 mod timer;
-extern crate alloc;
-
-use core::cell::SyncUnsafeCell;
 
 use arch::supports::cpu_vender;
 use bootloader::KernelBootHeader;
+use core::cell::SyncUnsafeCell;
 use lignan::{debug_ready, logln, make_debug};
 use mem::{
     alloc::{KernelAllocator, provide_init_region},
@@ -76,7 +76,7 @@ extern "C" fn _start(kbh: u64) -> ! {
 
 #[debug_ready]
 fn main(kbh: &KernelBootHeader) {
-    logln!("Welcome to the Quantum Kernel!");
+    logln!("Welcome to the Vera Kernel!");
     logln!(
         "Free Memory : {}",
         HumanBytes::from(kbh.phys_mem_map.bytes_of(mem::phys::PhysMemoryKind::Free))

@@ -26,14 +26,14 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 use crate::process::{HandleError, Process, scheduler::Scheduler};
 use alloc::{format, string::String};
 use arch::io::IOPort;
-use lignan::{LogKind, logln, warnln};
+use lignan::{LogKind, warnln};
 use mem::paging::VmPermissions;
+use util::consts::PAGE_4K;
 use vera_portal::{
     ConnectHandleError, DebugMsgError, ExitReason, MapMemoryError, MemoryLocation,
-    MemoryProtections, QuantumPortal, RecvHandleError, SendHandleError, ServeHandleError,
-    WaitSignal, sys_server::QuantumPortalServer,
+    MemoryProtections, RecvHandleError, SendHandleError, ServeHandleError, VeraPortal, WaitSignal,
+    sys_server::VeraPortalServer,
 };
-use util::consts::PAGE_4K;
 
 #[unsafe(no_mangle)]
 extern "C" fn syscall_handler(
@@ -51,13 +51,13 @@ extern "C" fn syscall_handler(
 
 pub struct KernelSyscalls {}
 
-impl QuantumPortalServer for KernelSyscalls {
+impl VeraPortalServer for KernelSyscalls {
     fn verify_user_ptr<T: Sized>(_ptr: *const T) -> bool {
         true
     }
 }
 
-impl QuantumPortal for KernelSyscalls {
+impl VeraPortal for KernelSyscalls {
     fn exit(exit_reason: ExitReason) -> ! {
         let current_thread = Scheduler::get().current_thread().upgrade().unwrap();
         warnln!(
@@ -90,7 +90,7 @@ impl QuantumPortal for KernelSyscalls {
 
         match location {
             MemoryLocation::Anywhere => current_thread.process.map_anon_anywhere(n_pages, vperm),
-            MemoryLocation::PhysicalLoc(physical_ptr) => {
+            MemoryLocation::PhysicalLoc(_) => {
                 todo!()
             }
         }
