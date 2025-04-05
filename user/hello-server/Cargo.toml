@@ -7,6 +7,6 @@ description.workspace = true
 documentation.workspace = true
 
 [dependencies]
-libq = { workspace = true }
+aloe = { workspace = true }
 hello-portal = { workspace = true, features = ["server"]}
 portal = { workspace = true, features = ["ipc-server"] }

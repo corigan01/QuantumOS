@@ -23,7 +23,7 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use libq::uio::{CpuIO, UserIO, opt};
+use aloe::uio::{CpuIO, UserIO, opt};
 
 type IoRw<OwnKind> = UserIO<CpuIO, opt::ReadWrite, OwnKind>;
 type IoRo<OwnKind> = UserIO<CpuIO, opt::ReadOnly, OwnKind>;

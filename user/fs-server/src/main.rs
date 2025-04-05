@@ -28,7 +28,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 tiny_std!();
 
 use fs_portal::FsPortalServer;
-use libq::{
+use aloe::{
     dbugln,
     ipc::{QuantumGlue, QuantumHost},
     signal_wait, tiny_std,

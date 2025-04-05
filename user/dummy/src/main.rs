@@ -28,7 +28,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 tiny_std!();
 
 use fs_portal::FsPortalClient;
-use libq::{dbugln, ipc::QuantumGlue, tiny_std};
+use aloe::{dbugln, ipc::QuantumGlue, tiny_std};
 
 fn main() {
     dbugln!("Starting Dummy");

@@ -8,5 +8,5 @@ documentation.workspace = true
 license.workspace = true
 
 [dependencies]
-libq = { workspace = true }
+aloe = { workspace = true }
 fs-portal = { workspace = true, features = ["server"]}

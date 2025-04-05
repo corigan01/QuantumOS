@@ -28,7 +28,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 tiny_std!();
 
 use hello_portal::{HelloPortalClientRequest, HelloPortalServer};
-use libq::{
+use aloe::{
     dbugln,
     ipc::{QuantumGlue, QuantumHost},
     signal_wait, tiny_std,

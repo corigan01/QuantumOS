@@ -23,7 +23,7 @@ members = [
   "crates/arch-macro",
   "crates/boolvec",
   "user/dummy",
-  "user/libq",
+  "user/aloe",
   "crates/tar",
   "user/hello-server",
   "crates/portal-macro",
@@ -64,7 +64,7 @@ util = { path = "crates/util" }
 elf = { path = "crates/elf" }
 mem = { path = "crates/mem" }
 boolvec = { path = "crates/boolvec" }
-libq = { path = "user/libq" }
+aloe = { path = "user/aloe" }
 tar = { path = "crates/tar" }
 portal = { path = "crates/portal" }
 portal-macro = { path = "crates/portal-macro" }
