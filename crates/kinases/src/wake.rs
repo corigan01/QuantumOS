@@ -119,13 +119,24 @@ impl WakeCell {
     pub fn take_waker(&self) -> Option<Waker> {
         let mut current = self.lock.load(Ordering::Relaxed);
 
+        // Optimization: If no waker exists, we don't need to continue trying to aquire
+        // the lock. We can simply return None!
+        if current & Self::SOME == 0 {
+            return None;
+        }
+
         // Aquire the `None` lock
         while let Err(failed) = self.lock.compare_exchange_weak(
-            current & !Self::LOCKING,
+            (current & !Self::LOCKING) | Self::SOME,
             Self::NONE | Self::LOCKING,
             Ordering::Acquire,
             Ordering::Relaxed,
         ) {
+            // We need to do it here too to ensure it never goes None during the aquire.
+            if failed & Self::SOME == 0 {
+                return None;
+            }
+
             current = failed;
         }
 
