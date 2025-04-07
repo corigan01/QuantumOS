@@ -29,25 +29,11 @@ use crate::atomic_option::AtomicOption;
 use alloc::sync::Arc;
 use core::sync::atomic::{AtomicUsize, Ordering};
 
-/// Non-Locking Doubly Linked List inspired by Hakan Sundell and Philippas Tsigas
-///
-pub struct AtomicLinkedList<T> {
-    node: AtomicOption<AtomicNode<T>>,
-}
-
 pub struct AtomicNode<T> {
     state: AtomicUsize,
     next: AtomicOption<AtomicNode<T>>,
     prev: AtomicOption<AtomicNode<T>>,
     value: T,
-}
-
-impl<T> AtomicLinkedList<T> {
-    pub const fn new() -> Self {
-        Self {
-            node: AtomicOption::none(),
-        }
-    }
 }
 
 impl<T> AtomicNode<T> {

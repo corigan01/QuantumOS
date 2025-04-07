@@ -1,9 +1,8 @@
 /*
-  ____                 __               __   _ __
- / __ \__ _____ ____  / /___ ____ _    / /  (_) /
-/ /_/ / // / _ `/ _ \/ __/ // /  ' \  / /__/ / _ \
-\___\_\_,_/\_,_/_//_/\__/\_,_/_/_/_/ /____/_/_.__/
-    Part of the Quantum OS Project
+   ___   __        _   __
+  / _ | / /__  ___| | / /__ _______ _
+ / __ |/ / _ \/ -_) |/ / -_) __/ _ `/
+/_/ |_/_/\___/\__/|___/\__/_/  \_,_/
 
 Copyright 2025 Gavin Kellam
 
@@ -23,11 +22,4 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-#![no_std]
-
-pub mod atomic_arc;
-pub mod atomic_list;
-pub mod atomic_option;
-pub mod nonblocking;
-pub mod spin;
-pub mod wake;
+pub mod semaphore;
