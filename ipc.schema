@@ -47,3 +47,12 @@ enum VeraSync {
     /// Which can cause some side effects if not used correctly. 
     Wakeup(WakeupCall<VeraHandle>)
 }
+
+// ALL IPC COMS should be streams
+//
+// When you launch a program, you let the kernel adopt your stream for bytes. Or you can adopt a foreign stream to
+// lets say a file system server on where to get the bytes.
+//
+// All streams work like mpsc::UnbounedChannels(), they are async and can be shared or transfered.
+//
+// IPC is just rpc ontop of these channels. 

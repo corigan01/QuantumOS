@@ -190,3 +190,11 @@ pub struct WakeQueue {
     // TODO: Upgrade to a non-blocking queue in the future
     queue: SpinMutex<VecDeque<Waker>>,
 }
+
+impl WakeQueue {
+    pub const fn new() -> Self {
+        Self {
+            queue: SpinMutex::new(VecDeque::new()),
+        }
+    }
+}

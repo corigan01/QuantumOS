@@ -24,64 +24,261 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 extern crate alloc;
 
-use crate::{spin::mutex::SpinMutex, wake::WakeQueue};
-use alloc::collections::{BTreeMap, VecDeque};
-use core::sync::atomic::AtomicUsize;
-use core::task::Waker;
+use crate::spin::mutex::SpinMutex;
+use core::cell::UnsafeCell;
+use core::mem::MaybeUninit;
+use core::pin::Pin;
+use core::ptr::NonNull;
+use core::sync::atomic::{AtomicU64, Ordering};
+use core::task::{Context, Poll, Waker};
 
 pub struct Semaphore {
-    state: AtomicUsize,
-    fair: SpinMutex<VecDeque<(usize, Option<Waker>)>>,
-    unfair: SpinMutex<BTreeMap<usize, WakeQueue>>,
+    state: SemaphoreState,
+    // FIXME: This should be lock-less in the future.
+    //
+    // We could use a double ended linked-list where the tail is actually the 'start' of the queue, and
+    // each time we enque an item, we CAS the 'head'-ptr with our new node.
+    waker_queue: SpinMutex<Option<NonNull<PendingSemaphoreAquire<'static>>>>,
 }
 
-impl Semaphore {
-    const POISONED_BIT: usize = 1 << usize::BITS - 1;
-    const TICKETS_MASK: usize = usize::MAX >> 1;
+struct SemaphoreState(AtomicU64);
 
-    pub const fn new(inital_tickets: usize) -> Self {
-        assert!(inital_tickets < Self::TICKETS_MASK);
+impl SemaphoreState {
+    const POISONED_BIT: u64 = 1 << u64::BITS - 1;
+    const CLOSED_BIT: u64 = 1 << u64::BITS - 2;
 
-        Self {
-            state: AtomicUsize::new(inital_tickets),
-            fair: SpinMutex::new(VecDeque::new()),
-            unfair: SpinMutex::new(BTreeMap::new()),
+    const CURRENT_TICKETS_OFFSET: usize = 0;
+    const CURRENT_TICKETS_MASK: u64 =
+        (u64::MAX >> ((u64::BITS / 2) + 1)) << Self::CURRENT_TICKETS_OFFSET;
+    const TOTAL_TICKETS_OFFSET: usize = 32;
+    const TOTAL_TICKETS_MASK: u64 = Self::CURRENT_TICKETS_MASK << Self::TOTAL_TICKETS_OFFSET;
+
+    const MAX_TICKETS: usize = Self::CURRENT_TICKETS_MASK as usize;
+
+    const fn new(inital_tickets: usize) -> Self {
+        Self(AtomicU64::new(
+            inital_tickets as u64 | ((inital_tickets as u64) << Self::TOTAL_TICKETS_OFFSET),
+        ))
+    }
+
+    fn close(&self) {
+        self.0.fetch_or(Self::CLOSED_BIT, Ordering::SeqCst);
+    }
+
+    fn poison(&self) {
+        self.0.fetch_or(Self::POISONED_BIT, Ordering::SeqCst);
+    }
+
+    unsafe fn unpoison(&self) {
+        self.0.fetch_and(!Self::POISONED_BIT, Ordering::SeqCst);
+    }
+
+    fn try_take_tickets(&self, n: usize) -> Result<(), SemaphoreError> {
+        let n = n as u64;
+        let cal_new_current = |current: u64| {
+            if current & Self::CLOSED_BIT != 0 {
+                return Err(SemaphoreError::Closed);
+            }
+
+            if current & Self::POISONED_BIT != 0 {
+                return Err(SemaphoreError::Poisoned);
+            }
+
+            let total_tickets = (current & Self::TOTAL_TICKETS_MASK) >> Self::TOTAL_TICKETS_OFFSET;
+
+            if total_tickets < n {
+                return Err(SemaphoreError::NotEnoughTotalTickets);
+            }
+
+            let available_tickets =
+                (current & Self::CURRENT_TICKETS_MASK) >> Self::CURRENT_TICKETS_OFFSET;
+
+            if available_tickets < n {
+                return Err(SemaphoreError::WaitingOnEnoughTickets);
+            }
+
+            Ok(available_tickets - n)
+        };
+
+        let mut current = self.0.load(Ordering::Relaxed);
+        let mut new_current = cal_new_current(current)?;
+
+        while let Err(failed) =
+            self.0
+                .compare_exchange_weak(current, new_current, Ordering::SeqCst, Ordering::Relaxed)
+        {
+            current = failed;
+            new_current = cal_new_current(current)?;
+        }
+
+        Ok(())
+    }
+
+    fn return_tickets(&self, n: usize) {
+        let n = n as u64;
+        let cal_new_current = |current: u64| {
+            let total_tickets = (current & Self::TOTAL_TICKETS_MASK) >> Self::TOTAL_TICKETS_OFFSET;
+            let available_tickets =
+                (current & Self::CURRENT_TICKETS_MASK) >> Self::CURRENT_TICKETS_OFFSET;
+
+            assert!(
+                total_tickets >= available_tickets + n,
+                "Cannot return more tickets then the total! (Overflow)"
+            );
+            assert!(
+                Self::MAX_TICKETS as u64 >= available_tickets + n,
+                "Cannot have more tickets then MAX_TICKETS! (Overflow)"
+            );
+
+            available_tickets + n
+        };
+
+        let mut current = self.0.load(Ordering::Relaxed);
+        let mut new_current = cal_new_current(current);
+
+        while let Err(failed) =
+            self.0
+                .compare_exchange_weak(current, new_current, Ordering::SeqCst, Ordering::Relaxed)
+        {
+            current = failed;
+            new_current = cal_new_current(current);
         }
     }
 
-    pub async fn aquire(&self, quantity: usize) -> AquiredTickets<'_> {
-        todo!()
+    fn add_total_tickets(&self, n: usize) {
+        let n = n as u64;
+        let previous_value = self
+            .0
+            .fetch_add(n << Self::TOTAL_TICKETS_OFFSET, Ordering::SeqCst);
+
+        assert!(
+            Self::MAX_TICKETS as u64 >= (previous_value & Self::TOTAL_TICKETS_MASK) + n,
+            "Cannot add more than MAX_TICKETS! (Overflow)"
+        );
     }
 
-    pub async fn unfairly_aquire(&self, quantity: usize) -> AquiredTickets<'_> {
-        todo!()
+    fn sub_total_tickets(&self, n: usize) {
+        let n = n as u64;
+        let previous_value = self
+            .0
+            .fetch_sub(n << Self::TOTAL_TICKETS_OFFSET, Ordering::SeqCst);
+
+        assert!(
+            (previous_value & Self::TOTAL_TICKETS_MASK) <= n,
+            "Cannot subtract more than the current max amount of tickets! (Underflow)"
+        );
     }
 
-    pub fn try_aquire(&self, quantity: usize) -> Option<AquiredTickets<'_>> {
-        todo!()
+    fn total_tickets(&self) -> usize {
+        (self.0.load(Ordering::Relaxed) & Self::TOTAL_TICKETS_MASK >> Self::TOTAL_TICKETS_MASK)
+            as usize
     }
 
-    pub fn try_unfairly_aquire(&self, quantity: usize) -> Option<AquiredTickets<'_>> {
-        todo!()
+    fn available_tickets(&self) -> usize {
+        (self.0.load(Ordering::Relaxed) & Self::CURRENT_TICKETS_MASK >> Self::CURRENT_TICKETS_MASK)
+            as usize
+    }
+}
+
+impl Semaphore {
+    pub const MAX_TICKETS: usize = SemaphoreState::MAX_TICKETS;
+
+    pub const fn new(inital_tickets: usize) -> Self {
+        assert!(inital_tickets <= Self::MAX_TICKETS);
+
+        Self {
+            state: SemaphoreState::new(inital_tickets),
+            waker_queue: SpinMutex::new(None),
+        }
     }
 
-    pub fn blocking_aquire(&self, quantity: usize) -> AquiredTickets<'_> {
-        todo!()
+    pub fn poison_semaphore(&self) {
+        self.state.poison();
     }
 
-    pub fn blocking_unfairly_aquire(&self, quantity: usize) -> AquiredTickets<'_> {
-        todo!()
+    pub unsafe fn unpoison_semaphore(&self) {
+        unsafe { self.state.unpoison() };
+    }
+
+    pub fn aquire(&self, quantity: usize) -> PendingSemaphoreAquire<'_> {
+        PendingSemaphoreAquire::new(self, quantity)
     }
 
     pub fn release(&self, quantity: usize) {
-        todo!()
+        self.state.return_tickets(quantity);
     }
 
-    pub fn forget_tickets(&self, quantity: usize) {
-        todo!()
+    /// Remove tickets from the maxium possible tickets
+    pub fn remove_tickets(&self, quantity: usize) {
+        self.state.sub_total_tickets(quantity);
+    }
+
+    pub fn add_tickets(&self, quantity: usize) {
+        self.state.add_total_tickets(quantity);
     }
 
     pub fn quantity_available(&self) -> usize {
+        self.state.available_tickets()
+    }
+
+    pub fn quantity_total(&self) -> usize {
+        self.state.total_tickets()
+    }
+}
+
+impl Drop for Semaphore {
+    fn drop(&mut self) {
+        self.state.close();
+    }
+}
+
+pub struct PendingSemaphoreAquire<'a> {
+    semaphore: &'a Semaphore,
+    state: AtomicU64,
+    waker: UnsafeCell<MaybeUninit<Waker>>,
+
+    next: Option<NonNull<Self>>,
+    prev: Option<NonNull<Self>>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum SemaphoreError {
+    NotEnoughTotalTickets,
+    WaitingOnEnoughTickets,
+    Poisoned,
+    Closed,
+}
+
+impl<'a> PendingSemaphoreAquire<'a> {
+    const DESIRED_TICKETS_MASK: usize = SemaphoreState::MAX_TICKETS;
+
+    const WAITING_BIT: usize = 1 << u64::BITS - 1;
+    const SOME_WAKER_BIT: usize = 1 << u64::BITS - 2;
+    const IN_LIST_BIT: usize = 1 << u64::BITS - 3;
+
+    fn new(semaphore: &'a Semaphore, desired_tickets: usize) -> Self {
+        Self {
+            semaphore,
+            state: AtomicU64::new(desired_tickets as u64),
+            waker: UnsafeCell::new(MaybeUninit::uninit()),
+            next: None,
+            prev: None,
+        }
+    }
+
+    pub fn blocking_aquire(self) -> AquiredTickets<'a> {
+        todo!()
+    }
+
+    pub fn try_aquire(self) -> Result<AquiredTickets<'a>, (Self, SemaphoreError)> {
+        todo!()
+    }
+}
+
+impl<'a> Future for PendingSemaphoreAquire<'a> {
+    type Output = Result<AquiredTickets<'a>, SemaphoreError>;
+
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         todo!()
     }
 }
