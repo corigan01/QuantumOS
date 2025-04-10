@@ -224,6 +224,10 @@ impl Semaphore {
     pub fn quantity_total(&self) -> usize {
         self.state.total_tickets()
     }
+
+    pub fn queue_pending<'a>(&self, pending: &mut PendingSemaphoreAquire<'a>) {
+        todo!()
+    }
 }
 
 impl Drop for Semaphore {
@@ -247,6 +251,7 @@ pub enum SemaphoreError {
     WaitingOnEnoughTickets,
     Poisoned,
     Closed,
+    AlreadyWaiting,
 }
 
 impl<'a> PendingSemaphoreAquire<'a> {
@@ -255,6 +260,7 @@ impl<'a> PendingSemaphoreAquire<'a> {
     const WAITING_BIT: usize = 1 << u64::BITS - 1;
     const SOME_WAKER_BIT: usize = 1 << u64::BITS - 2;
     const IN_LIST_BIT: usize = 1 << u64::BITS - 3;
+    const WAKEUP_BIT: usize = 1 << u64::BITS - 4;
 
     fn new(semaphore: &'a Semaphore, desired_tickets: usize) -> Self {
         Self {
@@ -266,11 +272,96 @@ impl<'a> PendingSemaphoreAquire<'a> {
         }
     }
 
+    /// Called remotely to wakeup self
+    fn from_semaphore_wakeup(&self) {
+        let mut current = self.state.load(Ordering::Relaxed) & (!Self::WAKEUP_BIT as u64);
+        let mut new = (current & !(Self::WAITING_BIT as u64)) | Self::WAKEUP_BIT as u64;
+
+        while let Err(failed) =
+            self.state
+                .compare_exchange_weak(current, new, Ordering::SeqCst, Ordering::Relaxed)
+        {
+            // If we have already woken up, we don't need to do it again
+            if failed & Self::WAKEUP_BIT as u64 != 0 {
+                return;
+            }
+
+            current = failed;
+            new = (current & !(Self::WAITING_BIT as u64 | Self::SOME_WAKER_BIT as u64))
+                | Self::WAKEUP_BIT as u64;
+        }
+
+        // At this point we should have the wake-up bit set, so other wake-up calls should
+        // never come through.
+        //
+        // Here we need to call the waker if one exists. No data races should be possible
+        // since we are the only ones allowed to call the waker.
+        if current & Self::SOME_WAKER_BIT as u64 == 0 {
+            // Our waker is None
+            return;
+        }
+
+        let read_waker = unsafe { self.waker.get().read() };
+
+        // Remove the waker bit
+        let previous_state = self
+            .state
+            .fetch_and(!Self::SOME_WAKER_BIT as u64, Ordering::SeqCst);
+
+        assert!(
+            previous_state & Self::SOME_WAKER_BIT as u64 != 0,
+            "No other thread should try to write the waker bit during this time!"
+        );
+
+        // Call the waker, and drop our ref
+        unsafe { read_waker.assume_init_read().wake() };
+    }
+
     pub fn blocking_aquire(self) -> AquiredTickets<'a> {
         todo!()
     }
 
-    pub fn try_aquire(self) -> Result<AquiredTickets<'a>, (Self, SemaphoreError)> {
+    pub fn try_aquire(
+        &mut self,
+        waker: Option<Waker>,
+    ) -> Result<AquiredTickets<'a>, SemaphoreError> {
+        let mut current = self.state.load(Ordering::Relaxed)
+            & !(Self::WAITING_BIT as u64 | Self::WAKEUP_BIT as u64);
+        let mut new = current | Self::WAITING_BIT as u64;
+
+        while let Err(failed) =
+            self.state
+                .compare_exchange_weak(current, new, Ordering::SeqCst, Ordering::Relaxed)
+        {
+            // If we are already waiting on this ticket, we shouldn't begin waiting again.
+            if failed & Self::WAITING_BIT as u64 != 0 {
+                return Err(SemaphoreError::AlreadyWaiting);
+            }
+
+            // We have the wake up bit set, and can return the result
+            if failed & Self::WAKEUP_BIT as u64 != 0 {
+                return Ok(AquiredTickets {
+                    amount: failed as usize & Self::DESIRED_TICKETS_MASK,
+                    owner: self.semaphore,
+                });
+            }
+
+            current = failed;
+            new = current | Self::WAITING_BIT as u64;
+        }
+
+        // Here we should've set the WAITING_BIT, and now we should have exclusive access
+        // to write to the structure.
+
+        // Set the waker if we have one
+        if let Some(waker) = waker {
+            unsafe { self.waker.get().write(MaybeUninit::new(waker)) };
+            self.state
+                .fetch_or(Self::SOME_WAKER_BIT as u64, Ordering::SeqCst);
+        }
+
+        self.semaphore.queue_pending(self);
+
         todo!()
     }
 }
@@ -279,6 +370,8 @@ impl<'a> Future for PendingSemaphoreAquire<'a> {
     type Output = Result<AquiredTickets<'a>, SemaphoreError>;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        let mut current = self.state.load(Ordering::Relaxed);
+
         todo!()
     }
 }

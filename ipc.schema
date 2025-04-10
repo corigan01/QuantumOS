@@ -56,3 +56,39 @@ enum VeraSync {
 // All streams work like mpsc::UnbounedChannels(), they are async and can be shared or transfered.
 //
 // IPC is just rpc ontop of these channels. 
+
+// It would be cool to have something like an AtomicState struct where you could define these CAS state machines.
+//
+// Something Like this:
+
+const OPEN_DOOR_BIT: usize = 0;
+const AWAY_FROM_ROOM_BIT: usize = 1;
+const LOCKED_DOOR_BIT: usize = 2;
+
+let sm = AtomicState::builder()
+    .bit(OPEN_DOOR_BIT, bit_if(&[!LOCKED_DOOR_BIT, !AWAY_FROM_ROOM_BIT], DoorError::CannotOpenDoor))
+    .bit(AWAY_FROM_ROOM_BIT, bit_if(&[LOCKED_DOOR_BIT], DoorError::CannotLeaveWithoutLockingDoor))
+    .bit(LOCKED_DOOR_BIT, bit_if(&[!OPEN_DOOR_BIT], DoorError::DoorMustBeClosedToLock))
+    .build(0);
+
+// Open and close the door
+sm.into_state(OPEN_DOOR_BIT)?;
+sm.into_state(!OPEN_DOOR_BIT)?;
+
+// Lock the door
+sm.into_state(LOCKED_DOOR_BIT)?;
+
+// Leave Room
+sm.into_state(AWAY_FROM_ROOM_BIT)?;
+
+// Or maybe we could do something neat with macros?
+let sm = atomic_state! {
+    OpenDoor { bit: +0 } => [
+        bit_must(!AwayFromRoom, Error::ConnotOpenWhileAway),
+    ],
+    ClosedDoor { bit: -0 } => [
+        
+    ]
+    
+    
+};
