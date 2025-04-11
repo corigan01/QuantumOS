@@ -4,6 +4,10 @@ Welcome to AloeVera OS! This isn't your average operating system; it's a **hobby
 
 Like our namesake plant, we aim for simplicity and resilience.
 
+[Documentation] `rustdoc` for all crates used in the project are hosted on GitHub Pages.
+
+[Documentation]: https://corigan01.github.io/AloeVera/aloe/index.html
+
 ## Our Philosophy: How AloeVera Thrives 🪴
 
 AloeVera's growth is guided by a few key principles:
