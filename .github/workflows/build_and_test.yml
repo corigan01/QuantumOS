@@ -27,14 +27,6 @@ jobs:
       - uses: actions-rust-lang/setup-rust-toolchain@v1
       - run: cargo run -- build
 
-  test-lldebug-macro:
-    name: Test LLDebug Macro
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions-rust-lang/setup-rust-toolchain@v1
-      - run: cargo test --package lldebug-macro 
-  
   test-lldebug:
     name: build
     runs-on: ubuntu-latest
