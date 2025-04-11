@@ -23,12 +23,12 @@ jobs:
       - name: Setup pages
         id: pages
         uses: actions/configure-pages@v5
-      - name: Clean docs folder
-        run: cargo clean --doc
-      - name: Build docs
+      - name: Clean
+        run: cargo clean
+      - name: Build Docs
         run: cargo doc --no-deps --workspace
       - name: Add redirect
-        run: echo '<meta http-equiv="refresh" content="0;url=vera/index.html">' > target/doc/index.html
+        run: echo '<meta http-equiv="refresh" content="0;url=aloe/index.html">' > target/doc/index.html
       - name: Remove lock file
         run: rm target/doc/.lock
       - name: Upload artifact
