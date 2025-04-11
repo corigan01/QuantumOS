@@ -6,6 +6,9 @@ Like our namesake plant, we aim for simplicity and resilience.
 
 [Documentation] `rustdoc` for all crates used in the project are hosted on GitHub Pages.
 
+> [!WARNING]  
+> This project is currently in **very early** development. Furthermore, the project has recently been renamed from `QuantumOS` and might still contain references to such.  
+
 [Documentation]: https://corigan01.github.io/AloeVera/aloe/index.html
 
 ## Our Philosophy: How AloeVera Thrives 🪴
@@ -33,7 +36,7 @@ AloeVera is currently a budding hobby project, so expect rough edges! If you'd l
 2.  **Building and Running:** `cargo run` is all you need to get up and running in QEMU! For more configuration options, check `cargo run -- --help`.
 3.  **Exporting:** Once built, `meta` can be used to generate a `qcow2` disk image using `cargo run -- build-disk`.
 
-**Disclaimer:** Building a custom OS can be tricky! Check (build instructions)[/BUILD.md] first. Feedback via GitHub Issues is welcome!
+**Disclaimer:** Building a custom OS can be tricky! Check [build instructions](/BUILD.md) first. Feedback via GitHub Issues is welcome!
 
 ## Help Cultivate AloeVera (Contributing) 🤝💧
 
