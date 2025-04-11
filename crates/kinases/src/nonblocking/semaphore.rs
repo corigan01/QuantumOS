@@ -170,13 +170,13 @@ impl SemaphoreState {
     }
 
     fn total_tickets(&self) -> usize {
-        (self.0.load(Ordering::Relaxed) & Self::TOTAL_TICKETS_MASK >> Self::TOTAL_TICKETS_MASK)
+        (self.0.load(Ordering::Relaxed) & Self::TOTAL_TICKETS_MASK >> Self::TOTAL_TICKETS_OFFSET)
             as usize
     }
 
     fn available_tickets(&self) -> usize {
-        (self.0.load(Ordering::Relaxed) & Self::CURRENT_TICKETS_MASK >> Self::CURRENT_TICKETS_MASK)
-            as usize
+        (self.0.load(Ordering::Relaxed)
+            & Self::CURRENT_TICKETS_MASK >> Self::CURRENT_TICKETS_OFFSET) as usize
     }
 }
 
