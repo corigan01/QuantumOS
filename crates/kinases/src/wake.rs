@@ -52,6 +52,9 @@ pub struct WakeCell {
     waker: UnsafeCell<MaybeUninit<Waker>>,
 }
 
+unsafe impl Send for WakeCell {}
+unsafe impl Sync for WakeCell {}
+
 impl WakeCell {
     const NONE: usize = 0;
     const SOME: usize = 1 << 0;
