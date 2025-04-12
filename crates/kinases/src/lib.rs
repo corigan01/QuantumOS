@@ -29,6 +29,6 @@ pub mod atomic_arc;
 pub mod atomic_list;
 pub mod atomic_option;
 pub mod linkedlist;
-pub mod nonblocking;
 pub mod spin;
+pub mod sync;
 pub mod wake;

@@ -31,7 +31,7 @@ pub trait SpinRelax {
     fn back_off();
 }
 
-pub struct DefaultSpin(());
+pub struct DefaultSpin;
 
 impl SpinRelax for DefaultSpin {
     fn back_off() {

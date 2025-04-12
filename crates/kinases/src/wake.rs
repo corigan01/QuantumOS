@@ -155,16 +155,7 @@ impl WakeCell {
 
     /// Directly call the contained waker (if exists) replacing it with `None`.
     ///
-    /// This function calls `take_waker` internally, and thus has the same behavior
-    /// as:
-    /// ```rust
-    /// use kinases::wake::WakeCell;
-    ///
-    /// let waker = WakeCell::new();
-    /// if let Some(contained_waker) = self.take_waker() {
-    ///    contained_waker.wake();
-    /// }
-    /// ```
+    /// This function calls `take_waker` internally, and thus has the same behavior.
     pub fn wake(&self) {
         if let Some(waker) = self.take_waker() {
             waker.wake();
@@ -173,14 +164,7 @@ impl WakeCell {
 
     /// Drop the contained waker (if exists) replacing it with `None`.
     ///
-    /// This function calls `take_waker` internally, and thus has the same behavior
-    /// as:
-    /// ```rust
-    /// use kinases::wake::WakeCell;
-    ///
-    /// let waker = WakeCell::new();
-    /// let _ = self.take_waker();
-    /// ```
+    /// This function calls `take_waker` internally, and thus has the same behavior.
     pub fn empty(&self) {
         _ = self.take_waker();
     }
