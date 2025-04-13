@@ -23,7 +23,7 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use super::{DefaultSpin, SpinRelax};
+use super::{AcquireRelax, DefaultSpin};
 use core::{
     cell::UnsafeCell,
     fmt::{Debug, Display},
@@ -33,13 +33,13 @@ use core::{
 };
 
 /// A Spin based Mutex
-pub struct SpinMutex<T: ?Sized, R: SpinRelax = DefaultSpin> {
+pub struct SpinMutex<T: ?Sized, R: AcquireRelax = DefaultSpin> {
     lock: AtomicUsize,
     ph: PhantomData<R>,
     cell: UnsafeCell<T>,
 }
 
-impl<T: Clone, R: SpinRelax> Clone for SpinMutex<T, R> {
+impl<T: Clone, R: AcquireRelax> Clone for SpinMutex<T, R> {
     fn clone(&self) -> Self {
         SpinMutex::new(self.lock().deref().clone())
     }
@@ -48,7 +48,7 @@ impl<T: Clone, R: SpinRelax> Clone for SpinMutex<T, R> {
 unsafe impl<T: ?Sized + Send> Send for SpinMutex<T> {}
 unsafe impl<T: ?Sized + Send + Sync> Sync for SpinMutex<T> {}
 
-impl<T: ?Sized, R: SpinRelax> Drop for SpinMutex<T, R> {
+impl<T: ?Sized, R: AcquireRelax> Drop for SpinMutex<T, R> {
     fn drop(&mut self) {
         // This should be save because if the mutex is being dropped, there should never be any
         // threads aquired.
@@ -60,7 +60,7 @@ impl<T: ?Sized, R: SpinRelax> Drop for SpinMutex<T, R> {
     }
 }
 
-impl<T, R: SpinRelax> SpinMutex<T, R> {
+impl<T, R: AcquireRelax> SpinMutex<T, R> {
     pub const fn new(value: T) -> Self {
         Self {
             lock: AtomicUsize::new(0),
@@ -70,7 +70,7 @@ impl<T, R: SpinRelax> SpinMutex<T, R> {
     }
 }
 
-impl<T: ?Sized, R: SpinRelax> SpinMutex<T, R> {
+impl<T: ?Sized, R: AcquireRelax> SpinMutex<T, R> {
     const LOCKED: usize = 1;
 
     pub fn try_lock<'a>(&'a self) -> Option<SpinMutexGuard<'a, T>> {
@@ -134,5 +134,53 @@ impl<'a, T: ?Sized + Debug> Debug for SpinMutexGuard<'a, T> {
 impl<'a, T: ?Sized + Display> Display for SpinMutexGuard<'a, T> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         unsafe { &*self.cell }.fmt(f)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use std::{sync::Arc, thread, vec::Vec};
+
+    extern crate std;
+
+    #[test]
+    fn test_spin_mutex_locks() {
+        let m = Arc::new(SpinMutex::<i32>::new(0));
+
+        #[cfg(not(miri))]
+        const MAX_THREADS: usize = 32;
+        #[cfg(not(miri))]
+        const MAX_THREAD_ITER: usize = 1000;
+
+        // This is used otherwise miri takes forever to run
+        #[cfg(miri)]
+        const MAX_THREADS: usize = 2;
+        #[cfg(miri)]
+        const MAX_THREAD_ITER: usize = 100;
+
+        let mut thread_joins = Vec::new();
+        for _ in 0..MAX_THREADS {
+            let m = m.clone();
+            thread_joins.push(thread::spawn(move || {
+                // Make sure all the threads stay busy for a bit
+                for _ in 0..MAX_THREAD_ITER {
+                    let mut value = m.lock();
+                    assert_eq!(*value, 0);
+
+                    *value += 1;
+                    assert_eq!(*value, 1);
+
+                    *value = 0;
+                    assert_eq!(*value, 0);
+
+                    drop(value);
+                }
+            }));
+        }
+
+        for thread in thread_joins {
+            thread.join().unwrap();
+        }
     }
 }

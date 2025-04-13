@@ -27,14 +27,25 @@ use core::hint;
 
 pub mod mutex;
 
-pub trait SpinRelax {
+pub trait AcquireRelax {
     fn back_off();
 }
 
 pub struct DefaultSpin;
 
-impl SpinRelax for DefaultSpin {
+#[cfg(not(test))]
+impl AcquireRelax for DefaultSpin {
     fn back_off() {
         hint::spin_loop();
+    }
+}
+
+#[cfg(test)]
+impl AcquireRelax for DefaultSpin {
+    fn back_off() {
+        extern crate std;
+
+        hint::spin_loop();
+        std::thread::yield_now();
     }
 }

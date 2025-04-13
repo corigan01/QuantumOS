@@ -8,3 +8,12 @@ documentation.workspace = true
 license.workspace = true
 
 [dependencies]
+lignan = { workspace = true }
+
+[dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports", "async_futures"] }
+futures = { version = "0.3.31" }
+
+[[bench]]
+name = "mutex_benchmark"
+harness = false

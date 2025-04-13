@@ -28,7 +28,7 @@ use alloc::collections::VecDeque;
 use alloc::sync::{Arc, Weak};
 
 use crate::spin::mutex::SpinMutex;
-use crate::spin::{DefaultSpin, SpinRelax};
+use crate::spin::{AcquireRelax, DefaultSpin};
 use crate::wake::WakeCell;
 use core::marker::PhantomData;
 use core::mem;
@@ -48,8 +48,8 @@ pub struct Semaphore {
 struct SemaphoreState(AtomicU64);
 
 impl SemaphoreState {
-    const POISONED_BIT: u64 = 1 << u64::BITS - 1;
-    const CLOSED_BIT: u64 = 1 << u64::BITS - 2;
+    const POISONED_BIT: u64 = 1 << (u64::BITS - 1);
+    const CLOSED_BIT: u64 = 1 << (u64::BITS - 2);
 
     const CURRENT_TICKETS_OFFSET: usize = 0;
     const CURRENT_TICKETS_MASK: u64 =
@@ -150,8 +150,7 @@ impl SemaphoreState {
             new_current = cal_new_current(current);
         }
 
-        return ((new_current & Self::CURRENT_TICKETS_MASK) >> Self::CURRENT_TICKETS_OFFSET)
-            as usize;
+        ((new_current & Self::CURRENT_TICKETS_MASK) >> Self::CURRENT_TICKETS_OFFSET) as usize
     }
 
     fn add_total_tickets(&self, n: usize) {
@@ -210,23 +209,22 @@ impl Semaphore {
         unsafe { self.state.unpoison() };
     }
 
-    pub fn aquire(&self, quantity: usize) -> PendingSemaphoreAquire<'_> {
-        PendingSemaphoreAquire::new(self, quantity)
+    pub fn acquire(&self, quantity: usize) -> PendingSemaphoreAcquire<'_> {
+        PendingSemaphoreAcquire::new(self, quantity)
+    }
+
+    pub fn acquire_with<R: AcquireRelax>(&self, quantity: usize) -> PendingSemaphoreAcquire<'_, R> {
+        PendingSemaphoreAcquire::new(self, quantity)
     }
 
     pub fn release(&self, quantity: usize) {
         let mut waker_queue = self.waker_queue.lock();
 
-        let Some(mut next_waker) = waker_queue.pop_front() else {
-            // If our waker queue is empty, we can drop the lock now and return the tickets
-            // without holding the lock.
-            drop(waker_queue);
+        let current_tickets = self.state.return_tickets(quantity);
 
-            self.state.return_tickets(quantity);
+        let Some(mut next_waker) = waker_queue.pop_front() else {
             return;
         };
-
-        let current_tickets = self.state.return_tickets(quantity);
 
         loop {
             // Keep polling from the dequeue until we get a valid (non-dropped) waker
@@ -249,7 +247,7 @@ impl Semaphore {
                 return;
             }
 
-            // Otherwise if we have a waker that can accept the new tickets, we will aquire them now.
+            // Otherwise if we have a waker that can accept the new tickets, we will acquire them now.
             //
             // This should always be valid, but if it fails we should just ignore it.
             if let Err(_) = self.state.try_take_tickets(requested_tickets) {
@@ -292,7 +290,7 @@ impl Semaphore {
     fn queue_task(
         &self,
         task: Arc<SemaphoreRequestInner>,
-    ) -> Result<Option<AquiredTickets<'_>>, SemaphoreError> {
+    ) -> Result<AcquiredTickets<'_>, SemaphoreError> {
         let mut waker_queue = self.waker_queue.lock();
         let requested_tickets = task.requested_tickets();
 
@@ -307,7 +305,7 @@ impl Semaphore {
             waker_queue.push_back(Arc::downgrade(&task));
 
             // Return that we are not ready yet!
-            return Ok(None);
+            return Err(SemaphoreError::WaitingOnEnoughTickets);
         }
 
         // If there are no wakers in the queue, then lets attempt to make this request now.
@@ -315,15 +313,15 @@ impl Semaphore {
             Ok(_) => {
                 task.set_dropping();
 
-                Ok(Some(AquiredTickets {
+                Ok(AcquiredTickets {
                     amount: requested_tickets,
                     owner: self,
-                }))
+                })
             }
             Err(SemaphoreError::WaitingOnEnoughTickets) => {
                 waker_queue.push_back(Arc::downgrade(&task));
 
-                Ok(None)
+                Err(SemaphoreError::WaitingOnEnoughTickets)
             }
             Err(err) => Err(err),
         }
@@ -422,6 +420,10 @@ impl SemaphoreRequestInner {
             return Err(SemaphoreError::Closed);
         }
 
+        if current & Self::READY_BIT == 0 {
+            return Ok(false);
+        }
+
         while let Err(failed) = self.state.compare_exchange_weak(
             current | Self::READY_BIT,
             current | Self::ACK_BIT,
@@ -448,7 +450,7 @@ impl SemaphoreRequestInner {
 
         // If we exit the CAS loop, then that means we are the ones that ACK'ed the ready state,
         // so we get to return true!
-        return Ok(true);
+        Ok(true)
     }
 
     fn set_dropping(&self) {
@@ -456,8 +458,8 @@ impl SemaphoreRequestInner {
     }
 }
 
-#[must_use = "Aquire operations are lazy until polled or blocked."]
-pub struct PendingSemaphoreAquire<'a, R: SpinRelax = DefaultSpin> {
+#[must_use = "acquire operations are lazy until polled or blocked."]
+pub struct PendingSemaphoreAcquire<'a, R: AcquireRelax = DefaultSpin> {
     semaphore: &'a Semaphore,
     n_tickets: usize,
     request: Option<Arc<SemaphoreRequestInner>>,
@@ -474,7 +476,7 @@ pub enum SemaphoreError {
     AlreadyWaiting,
 }
 
-impl<'a, R: SpinRelax> PendingSemaphoreAquire<'a, R> {
+impl<'a, R: AcquireRelax> PendingSemaphoreAcquire<'a, R> {
     fn new(semaphore: &'a Semaphore, n_tickets: usize) -> Self {
         Self {
             semaphore,
@@ -487,7 +489,7 @@ impl<'a, R: SpinRelax> PendingSemaphoreAquire<'a, R> {
     fn enqueue_in_semaphore(
         &mut self,
         waker: Option<Waker>,
-    ) -> Result<Option<AquiredTickets<'a>>, SemaphoreError> {
+    ) -> Result<AcquiredTickets<'a>, SemaphoreError> {
         assert!(
             self.request.is_none(),
             "Making a request should only be called by the future impl."
@@ -504,26 +506,26 @@ impl<'a, R: SpinRelax> PendingSemaphoreAquire<'a, R> {
         self.semaphore.queue_task(waker_arc)
     }
 
-    pub fn try_aquire(&mut self) -> Result<Option<AquiredTickets<'a>>, SemaphoreError> {
+    pub fn try_acquire(&mut self) -> Result<AcquiredTickets<'a>, SemaphoreError> {
         let Some(ref request) = self.request else {
             return self.enqueue_in_semaphore(None);
         };
 
         match request.is_ready() {
-            Ok(true) => Ok(Some(AquiredTickets {
+            Ok(true) => Ok(AcquiredTickets {
                 amount: self.n_tickets,
                 owner: self.semaphore,
-            })),
-            Ok(false) => Ok(None),
+            }),
+            Ok(false) => Err(SemaphoreError::WaitingOnEnoughTickets),
             Err(err) => Err(err),
         }
     }
 
-    pub fn blocking_aquire(mut self) -> Result<AquiredTickets<'a>, SemaphoreError> {
+    pub fn blocking_acquire(mut self) -> Result<AcquiredTickets<'a>, SemaphoreError> {
         loop {
-            match self.try_aquire() {
-                Ok(Some(aquired)) => break Ok(aquired),
-                Ok(None) => (),
+            match self.try_acquire() {
+                Ok(acquired) => break Ok(acquired),
+                Err(SemaphoreError::WaitingOnEnoughTickets) => (),
                 Err(err) => break Err(err),
             }
 
@@ -532,8 +534,8 @@ impl<'a, R: SpinRelax> PendingSemaphoreAquire<'a, R> {
     }
 }
 
-impl<'a> Future for PendingSemaphoreAquire<'a> {
-    type Output = Result<AquiredTickets<'a>, SemaphoreError>;
+impl<'a> Future for PendingSemaphoreAcquire<'a> {
+    type Output = Result<AcquiredTickets<'a>, SemaphoreError>;
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let Some(ref request) = self.request else {
@@ -544,8 +546,8 @@ impl<'a> Future for PendingSemaphoreAquire<'a> {
             //  2. The request is valid but needs to be woken up.
             //  3. The request is invalid.
             match self.enqueue_in_semaphore(Some(cx.waker().clone())) {
-                Ok(Some(aquired_tickets)) => return Poll::Ready(Ok(aquired_tickets)),
-                Ok(None) => return Poll::Pending,
+                Ok(acquired_tickets) => return Poll::Ready(Ok(acquired_tickets)),
+                Err(SemaphoreError::WaitingOnEnoughTickets) => return Poll::Pending,
                 Err(err) => return Poll::Ready(Err(err)),
             }
         };
@@ -553,7 +555,7 @@ impl<'a> Future for PendingSemaphoreAquire<'a> {
         // If we have already made a request, then we just have to check if its
         // ready.
         match request.is_ready() {
-            Ok(true) => Poll::Ready(Ok(AquiredTickets {
+            Ok(true) => Poll::Ready(Ok(AcquiredTickets {
                 amount: self.n_tickets,
                 owner: self.semaphore,
             })),
@@ -563,18 +565,17 @@ impl<'a> Future for PendingSemaphoreAquire<'a> {
     }
 }
 
-impl<'a, R: SpinRelax> Drop for PendingSemaphoreAquire<'a, R> {
+impl<'a, R: AcquireRelax> Drop for PendingSemaphoreAcquire<'a, R> {
     fn drop(&mut self) {
         // If the semaphore gave us tickets and we had not ack'ed them, we need to give them back now.
         if let Some(ref request) = self.request {
-            match request.is_ready() {
-                // If we are 'ready' that means we had not accepted our tickets, we lets do that now
-                // and release them.
-                Ok(true) => {
-                    self.semaphore.release(self.n_tickets);
-                }
-                _ => (),
+            // If we are 'ready' that means we had not accepted our tickets, we lets do that now
+            // and release them.
+            if let Ok(true) = request.is_ready() {
+                self.semaphore.release(self.n_tickets);
             }
+
+            request.set_dropping();
         }
     }
 }
@@ -585,14 +586,14 @@ impl<'a, R: SpinRelax> Drop for PendingSemaphoreAquire<'a, R> {
 /// manual clean-up is required for giving tickets back.
 ///
 /// # Note
-/// Semaphore's will use 'release' as a wake point for next `PendingSemaphoreAquire` requests, and
+/// Semaphore's will use 'release' as a wake point for next `PendingSemaphoreacquire` requests, and
 /// this is no exception. The drop duration of this type could be significant.
-pub struct AquiredTickets<'a> {
+pub struct AcquiredTickets<'a> {
     amount: usize,
     owner: &'a Semaphore,
 }
 
-impl<'a> Drop for AquiredTickets<'a> {
+impl<'a> Drop for AcquiredTickets<'a> {
     fn drop(&mut self) {
         self.owner.release(self.amount);
     }
@@ -606,25 +607,23 @@ impl<'a> Drop for AquiredTickets<'a> {
 /// ```rust
 /// use kinases::sync::semaphore::Semaphore;
 ///
-/// fn main() {
-///    let s = Semaphore::new(10);
+/// let s = Semaphore::new(10);
 ///
-///    let borrowed_ticket = s.aquire(1).blocking_aquire().unwrap();
-///    let owned_ticket = borrowed_ticket.to_owned();
+/// let borrowed_ticket = s.acquire(1).blocking_acquire().unwrap();
+/// let owned_ticket = borrowed_ticket.to_owned();
 ///
-///    // Owned tickets 'forget' the tickets from their parent semaphore
-///    assert_eq!(s.quantity_total(), 9);
+/// // Owned tickets 'forget' the tickets from their parent semaphore
+/// assert_eq!(s.quantity_total(), 9);
 ///
-///    // Add them back
-///    s.add_tickets(owned_ticket.0);
-/// }
+/// // Add them back
+/// s.add_tickets(owned_ticket.0);
 /// ```
 pub struct OwnedTickets(pub usize);
 
-impl<'a> AquiredTickets<'a> {
+impl<'a> AcquiredTickets<'a> {
     /// Removes tickets from the owner's semaphore's total quanity of tickets.
     ///
-    /// This is not a normal aquire/release, this consumes the tickets!
+    /// This is not a normal acquire/release, this consumes the tickets!
     pub fn to_owned(self) -> OwnedTickets {
         let amount = self.amount;
         let owner = self.owner;
@@ -646,21 +645,21 @@ mod test {
     extern crate std;
 
     #[test]
-    fn semaphore_aquire() {
+    fn semaphore_acquire() {
         let s = Semaphore::new(10);
 
         assert_eq!(s.quantity_total(), 10);
         assert_eq!(s.quantity_available(), 10);
 
         for q in 0..10 {
-            // Aquires are lazy
-            let aquire = s.aquire(q);
+            // acquires are lazy
+            let acquire = s.acquire(q);
 
             assert_eq!(s.quantity_total(), 10);
             assert_eq!(s.quantity_available(), 10);
 
             {
-                let borrowed_tickets = aquire.blocking_aquire().unwrap();
+                let borrowed_tickets = acquire.blocking_acquire().unwrap();
 
                 assert_eq!(s.quantity_total(), 10);
                 assert_eq!(s.quantity_available(), 10 - q);
@@ -677,7 +676,7 @@ mod test {
     fn semaphore_subtract_total() {
         let s = Semaphore::new(10);
 
-        s.aquire(10).blocking_aquire().unwrap().to_owned();
+        s.acquire(10).blocking_acquire().unwrap().to_owned();
     }
 
     #[test]
@@ -701,7 +700,7 @@ mod test {
             thread_joins.push(thread::spawn(move || {
                 // Make sure all the threads stay busy for a bit
                 for _ in 0..MAX_THREAD_ITER {
-                    let holding_tickets = s.aquire(1).blocking_aquire().unwrap();
+                    let holding_tickets = s.acquire(1).blocking_acquire().unwrap();
 
                     assert_eq!(s.quantity_total(), 10);
                     assert!(s.quantity_available() <= 9);
@@ -720,13 +719,52 @@ mod test {
     }
 
     #[test]
+    fn test_multithreaded_single() {
+        let s = Arc::new(Semaphore::new(1));
+
+        #[cfg(not(miri))]
+        const MAX_THREADS: usize = 32;
+        #[cfg(not(miri))]
+        const MAX_THREAD_ITER: usize = 1000;
+
+        // This is used otherwise miri takes forever to run
+        #[cfg(miri)]
+        const MAX_THREADS: usize = 2;
+        #[cfg(miri)]
+        const MAX_THREAD_ITER: usize = 100;
+
+        let mut thread_joins = Vec::new();
+        for _ in 0..MAX_THREADS {
+            let s = s.clone();
+            thread_joins.push(thread::spawn(move || {
+                // Make sure all the threads stay busy for a bit
+                for _ in 0..MAX_THREAD_ITER {
+                    let holding_tickets = s.acquire(1).blocking_acquire().unwrap();
+
+                    assert_eq!(s.quantity_total(), 1);
+                    assert_eq!(s.quantity_available(), 0);
+
+                    drop(holding_tickets);
+                }
+            }));
+        }
+
+        for thread in thread_joins {
+            thread.join().unwrap();
+        }
+
+        assert_eq!(s.quantity_total(), 1);
+        assert_eq!(s.quantity_available(), 1);
+    }
+
+    #[test]
     fn test_fails() {
         let s = Semaphore::new(100);
 
         {
-            let mut pending = s.aquire(200);
+            let mut pending = s.acquire(200);
             assert!(matches!(
-                pending.try_aquire(),
+                pending.try_acquire(),
                 Err(SemaphoreError::NotEnoughTotalTickets)
             ));
         }
@@ -734,9 +772,9 @@ mod test {
         s.poison_semaphore();
 
         {
-            let mut pending = s.aquire(20);
+            let mut pending = s.acquire(20);
             assert!(matches!(
-                pending.try_aquire(),
+                pending.try_acquire(),
                 Err(SemaphoreError::Poisoned)
             ));
         }
@@ -744,8 +782,8 @@ mod test {
         unsafe { s.unpoison_semaphore() };
 
         {
-            let mut pending = s.aquire(20);
-            assert!(matches!(pending.try_aquire(), Ok(_)));
+            let mut pending = s.acquire(20);
+            assert!(matches!(pending.try_acquire(), Ok(_)));
         }
     }
 
@@ -753,29 +791,41 @@ mod test {
     fn test_ordering() {
         let s = Semaphore::new(10);
 
-        let mut a = s.aquire(5);
-        let mut b = s.aquire(10);
-        let mut c = s.aquire(1);
+        let mut a = s.acquire(5);
+        let mut b = s.acquire(10);
+        let mut c = s.acquire(1);
 
-        let aquired_a = a.try_aquire().unwrap().unwrap();
+        let acquired_a = a.try_acquire().unwrap();
 
-        assert!(matches!(b.try_aquire(), Ok(None)));
+        assert!(matches!(
+            b.try_acquire(),
+            Err(SemaphoreError::WaitingOnEnoughTickets)
+        ));
 
         // Ordering should make sure we wake `b` before `c` even though we could
         // populate `c` right now!
-        assert!(matches!(c.try_aquire(), Ok(None)));
+        assert!(matches!(
+            c.try_acquire(),
+            Err(SemaphoreError::WaitingOnEnoughTickets)
+        ));
 
-        drop(aquired_a);
+        drop(acquired_a);
 
         // Ordering should make sure we wake `b` before `c`
-        assert!(matches!(c.try_aquire(), Ok(None)));
+        assert!(matches!(
+            c.try_acquire(),
+            Err(SemaphoreError::WaitingOnEnoughTickets)
+        ));
 
-        let aquired_b = b.try_aquire().unwrap().unwrap();
+        let acquired_b = b.try_acquire().unwrap();
 
-        assert!(matches!(c.try_aquire(), Ok(None)));
+        assert!(matches!(
+            c.try_acquire(),
+            Err(SemaphoreError::WaitingOnEnoughTickets)
+        ));
 
-        drop(aquired_b);
+        drop(acquired_b);
 
-        let _ = c.try_aquire().unwrap().unwrap();
+        let _ = c.try_acquire().unwrap();
     }
 }
