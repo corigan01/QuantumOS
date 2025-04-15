@@ -17,3 +17,11 @@ spin = "0.9.8"
 [features]
 alloc = ["dep:boolvec"]
 default = []
+
+[dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports", "async_futures"] }
+
+[[bench]]
+name = "pmm_benchmark"
+harness = false
+required-features = ["alloc"]

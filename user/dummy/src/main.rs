@@ -27,14 +27,18 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #![no_main]
 tiny_std!();
 
-use fs_portal::FsPortalClient;
 use aloe::{dbugln, ipc::QuantumGlue, tiny_std};
+use chloroplast::Chloroplast;
+use fs_portal::FsPortalClient;
 
 fn main() {
-    dbugln!("Starting Dummy");
-    let mut fs = FsPortalClient::new(QuantumGlue::connect_to("fs").unwrap());
+    let runtime = Chloroplast::new();
+    runtime.block_on(async {
+        dbugln!("Starting Dummy");
+        let mut fs = FsPortalClient::new(QuantumGlue::connect_to("fs").unwrap());
 
-    dbugln!("Ping!");
-    fs.ping_blocking().unwrap();
-    dbugln!("Pong!");
+        dbugln!("Ping!");
+        fs.ping_blocking().unwrap();
+        dbugln!("Pong!");
+    });
 }

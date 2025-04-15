@@ -160,3 +160,99 @@ impl SharedPhysPage {
         Arc::strong_count(&self.0)
     }
 }
+
+#[cfg(test)]
+mod test {
+    use crate::{addr::PhysAddr, phys::PhysMemoryEntry, pmm::backing::TABLE_SIZE};
+
+    use super::*;
+    extern crate std;
+
+    const REAL_MEM_MAP: [PhysMemoryEntry; 7] = [
+        PhysMemoryEntry {
+            kind: PhysMemoryKind::Free,
+            start: PhysAddr::new(0),
+            end: PhysAddr::new(654336),
+        },
+        PhysMemoryEntry {
+            kind: PhysMemoryKind::Reserved,
+            start: PhysAddr::new(654336),
+            end: PhysAddr::new(654336 + 1024),
+        },
+        PhysMemoryEntry {
+            kind: PhysMemoryKind::Reserved,
+            start: PhysAddr::new(983040),
+            end: PhysAddr::new(983040 + 65536),
+        },
+        PhysMemoryEntry {
+            kind: PhysMemoryKind::Free,
+            start: PhysAddr::new(1048576),
+            end: PhysAddr::new(1048576 + 267255808),
+        },
+        PhysMemoryEntry {
+            kind: PhysMemoryKind::Reserved,
+            start: PhysAddr::new(268304384),
+            end: PhysAddr::new(268304384 + 131072),
+        },
+        PhysMemoryEntry {
+            kind: PhysMemoryKind::Reserved,
+            start: PhysAddr::new(4294705152),
+            end: PhysAddr::new(4294705152 + 262144),
+        },
+        PhysMemoryEntry {
+            kind: PhysMemoryKind::Reserved,
+            start: PhysAddr::new(1086626725888),
+            end: PhysAddr::new(1086626725888 + 12884901888),
+        },
+    ];
+
+    #[test]
+    fn ensure_pmm_doesnt_run_out_of_memory() {
+        const BYTES: usize = 4096 * TABLE_SIZE * 4;
+
+        const MEM_MAP: [PhysMemoryEntry; 1] = [PhysMemoryEntry {
+            kind: PhysMemoryKind::Free,
+            start: PhysAddr::new(0),
+            end: PhysAddr::new(BYTES),
+        }];
+
+        let mut mm = Box::new(PhysMemoryMap::<20>::new());
+
+        for entry in MEM_MAP.iter() {
+            mm.add_region(entry.clone()).unwrap();
+        }
+
+        assert_eq!(mm.bytes_of(PhysMemoryKind::Free), BYTES);
+
+        let mut pmm = Pmm::new(&mm).unwrap();
+        let mut pages_allocated = std::vec![PhysPage::new(0); TABLE_SIZE * 2];
+
+        assert_eq!(pmm.pages_free().unwrap(), BYTES / 4096);
+
+        for attempt in 0..1_000_000 {
+            for iter in 0..(TABLE_SIZE * 2) {
+                pages_allocated[iter] = match pmm.allocate_page() {
+                    Ok(page) => page,
+                    Err(err) => {
+                        panic!(
+                            "[ALLOC] Failed on iteration {}/{}: {:#?}",
+                            attempt, iter, err
+                        );
+                    }
+                };
+            }
+
+            for iter in 0..(TABLE_SIZE * 2) {
+                match pmm.free_page(pages_allocated[iter]) {
+                    Ok(_) => (),
+                    Err(err) => {
+                        panic!(
+                            "[FREE] Failed on iteration {}/{}: {:#?}",
+                            attempt, iter, err
+                        );
+                    }
+                }
+            }
+        }
+    }
+}
